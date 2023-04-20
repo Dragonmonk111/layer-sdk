@@ -1,0 +1,22 @@
+[workspace]
+members = ["app/*"]
+
+[workspace.package]
+edition       = "2021"
+version       = "0.1.0"
+license       = "CC-BY-NC-ND-4.0"
+repository    = "https://github.com/ethanfrey/pulsarium"
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+
+[workspace.dependencies]
+thiserror        = "1.0.38"
+
+[profile.release]
+lto              = true
+opt-level        = 3
+overflow-checks  = true
