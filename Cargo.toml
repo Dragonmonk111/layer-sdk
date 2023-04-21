@@ -14,7 +14,8 @@ exclude = [
 ]
 
 [workspace.dependencies]
-thiserror        = "1.0.38"
+thiserror    = "1.0.38"
+cosmwasm-std = "1.2.4"
 
 [profile.release]
 lto              = true
