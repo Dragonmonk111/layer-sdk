@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate rocket;
 
+use clap::Parser;
+
 mod routes;
 mod types;
 
@@ -14,8 +16,18 @@ fn index() -> &'static str {
     "Rust LCD Daemon"
 }
 
+#[derive(Parser, Debug)]
+#[command(version)]
+struct Arguments {
+    #[clap(short, long, default_value = "http://localhost:26657")]
+    rpc_server: String,
+}
+
 #[launch]
 fn rocket() -> _ {
+    let args = Arguments::parse();
+    println!("RPC Server: {}", args.rpc_server);
+
     rocket::build().mount(
         "/",
         routes![
