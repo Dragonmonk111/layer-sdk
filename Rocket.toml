@@ -1,0 +1,13 @@
+# This is for the LCD server
+
+[default]
+# standard for LCD port in Cosmos
+port = 1317
+
+[debug]
+address = "127.0.0.1"
+log_level = "normal"
+
+[release]
+address = "0.0.0.0"
+log_level = "critical"
