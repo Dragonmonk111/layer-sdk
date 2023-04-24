@@ -1,21 +1,21 @@
-use cosmwasm_std::{coin, coins, Binary, Coin, Decimal, Uint128, Uint64};
+use cosmwasm_std::{coin, Binary, Coin, Decimal, Uint128, Uint64};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_SUPPLY: u128 = 200_000_000_000;
-pub const DEFAULT_DENOM: &str = "upulse";
 
+// Some weird type only used by basecoin json
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct BaseCoin {
     pub denom: String,
     pub amount: String,
 }
 
-impl Into<Coin> for BaseCoin {
-    fn into(self) -> Coin {
-        let amount: u128 = parse_int::parse(&self.amount).unwrap();
+impl From<BaseCoin> for Coin {
+    fn from(value: BaseCoin) -> Self {
+        let amount: u128 = parse_int::parse(&value.amount).unwrap();
 
         Coin {
-            denom: self.denom,
+            denom: value.denom,
             amount: amount.into(),
         }
     }
@@ -86,9 +86,9 @@ pub struct BalancesResponse {
 }
 
 impl BalancesResponse {
-    pub fn new(amount: u128) -> Self {
+    pub fn new(balances: Vec<Coin>) -> Self {
         BalancesResponse {
-            balances: coins(amount, DEFAULT_DENOM),
+            balances,
             pagination: Pagination::default(),
         }
     }

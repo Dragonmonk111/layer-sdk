@@ -7,7 +7,10 @@ use tendermint_rpc::{Client, HttpClient};
 mod routes;
 mod types;
 
-use crate::routes::{annual_provisions, auth_account, balances, broadcast, delegations, distro_params, grants, inflation, rewards, simulate, staking_pool, supply, transfer_params, unbonding, State, query_balances};
+use crate::routes::{
+    annual_provisions, auth_account, balances, broadcast, delegations, distro_params, grants,
+    inflation, rewards, simulate, staking_pool, supply, transfer_params, unbonding, MyState,
+};
 
 #[get("/")]
 fn index() -> &'static str {
@@ -26,13 +29,11 @@ async fn rocket() -> _ {
     let args = Arguments::parse();
     println!("RPC Server: {}", args.rpc_server);
 
-    // let client = HttpClient::new("http://127.0.0.1:26657").unwrap();
     let client = HttpClient::new(args.rpc_server.as_str()).unwrap();
-    let abci_info = client.abci_info().await.unwrap();
-    println!("ABCI Info: {:?}", abci_info);
-
-    let balance = query_balances(&client, "cosmos1eaulhtty6er8e3huz8c4wktz82vf8krnqtl8vr").await.unwrap();
-    println!("Balance: {:?}", balance);
+    match client.abci_info().await {
+        Ok(abci_info) => println!("Connected to: {:?}", abci_info),
+        Err(_) => panic!("Couldn't connect to Tendermint at {}", args.rpc_server),
+    }
 
     let my_routes = routes![
         index,
@@ -53,6 +54,6 @@ async fn rocket() -> _ {
     ];
 
     rocket::build()
-        .manage(State { client })
+        .manage(MyState { client })
         .mount("/", my_routes)
 }
