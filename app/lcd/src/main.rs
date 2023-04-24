@@ -7,8 +7,8 @@ mod routes;
 mod types;
 
 use crate::routes::{
-    annual_provisions, auth_account, balances, delegations, distro_params, grants, inflation,
-    rewards, staking_pool, supply, unbonding,
+    annual_provisions, auth_account, balances, broadcast, delegations, distro_params, grants,
+    inflation, rewards, simulate, staking_pool, supply, transfer_params, unbonding,
 };
 
 #[get("/")]
@@ -42,7 +42,10 @@ fn rocket() -> _ {
             staking_pool,
             distro_params,
             inflation,
-            supply
+            supply,
+            simulate,
+            transfer_params,
+            broadcast,
         ],
     )
 }

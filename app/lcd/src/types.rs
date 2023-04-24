@@ -42,7 +42,7 @@ impl AuthAccount {
             typ: "/cosmos.auth.v1beta1.BaseAccount".to_string(),
             address: addr.to_string(),
             pub_key: None,
-            account_number: Uint64::new(0),
+            account_number: Uint64::new(4321),
             sequence: sequence.into(),
         }
     }
@@ -187,6 +187,101 @@ impl SupplyResponse {
     pub fn new(denom: &str) -> Self {
         SupplyResponse {
             amount: coin(DEFAULT_SUPPLY, denom),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct TransferResponse {
+    pub params: TransferParams,
+}
+
+// Note: Default will set both as false, which is what we want (for now)
+#[derive(Serialize, Deserialize, Default)]
+pub struct TransferParams {
+    pub send_enabled: bool,
+    pub receive_enabled: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SimulateResponse {
+    pub gas_info: GasInfo,
+    pub result: SimResult,
+}
+
+impl Default for SimulateResponse {
+    fn default() -> Self {
+        SimulateResponse {
+            gas_info: GasInfo {
+                gas_used: Uint64::new(123000),
+                gas_wanted: Uint64::new(10000000),
+            },
+            result: SimResult {
+                data: Binary::from(b"\x0a\x1e"),
+                log: "[{\"events\":[]}]".to_string(),
+                events: vec![],
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GasInfo {
+    pub gas_wanted: Uint64,
+    pub gas_used: Uint64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SimResult {
+    pub data: Binary,
+    pub log: String,
+    pub events: Vec<SimEvent>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SimEvent {
+    #[serde(rename = "type")]
+    pub typ: String,
+    pub attributes: Vec<SimAttr>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SimAttr {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BroadcastResponse {
+    pub tx_response: TxResponse,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TxResponse {
+    pub height: Uint64,
+    /// SHA-256 Transaction hash
+    pub txhash: [u8; 32],
+    pub data: Binary,
+    pub code: u32,
+    pub codespace: String,
+    pub raw_log: String,
+    pub gas_wanted: Uint64,
+    pub gas_used: Uint64,
+}
+
+impl Default for BroadcastResponse {
+    fn default() -> Self {
+        BroadcastResponse {
+            tx_response: TxResponse {
+                txhash: [2u8; 32],
+                height: Uint64::new(123),
+                code: 0,
+                codespace: "sdk".to_string(),
+                data: Binary::from(b"\x0a\x1e"),
+                raw_log: "[{\"events\":[]}]".to_string(),
+                gas_used: Uint64::new(77000),
+                gas_wanted: Uint64::new(123000),
+            },
         }
     }
 }

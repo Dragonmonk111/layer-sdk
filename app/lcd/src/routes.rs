@@ -1,9 +1,11 @@
+use rocket::data::ToByteUnit;
 use rocket::serde::json::Json;
+use rocket::{tokio, Data};
 
 use crate::types::{
-    AnnualProvisionsResponse, AuthAccountResponse, BalancesResponse, DelegationResponse,
-    DistroParamsResponse, GrantsResponse, InflationResponse, PoolResponse, RewardsResponse,
-    SupplyResponse, UnbondingResponse,
+    AnnualProvisionsResponse, AuthAccountResponse, BalancesResponse, BroadcastResponse,
+    DelegationResponse, DistroParamsResponse, GrantsResponse, InflationResponse, PoolResponse,
+    RewardsResponse, SimulateResponse, SupplyResponse, TransferResponse, UnbondingResponse,
 };
 
 #[get("/cosmos/auth/v1beta1/accounts/<addr>")]
@@ -66,4 +68,26 @@ pub fn inflation() -> Json<InflationResponse> {
 #[get("/cosmos/bank/v1beta1/supply/<denom>")]
 pub fn supply(denom: &str) -> Json<SupplyResponse> {
     Json(SupplyResponse::new(denom))
+}
+
+#[get("/ibc/apps/transfer/v1/params")]
+pub fn transfer_params() -> Json<TransferResponse> {
+    Json(TransferResponse::default())
+}
+
+// TODO: use the data
+#[post("/cosmos/tx/v1beta1/simulate")]
+pub fn simulate() -> Json<SimulateResponse> {
+    Json(SimulateResponse::default())
+}
+
+// TODO: use the data
+#[post("/cosmos/tx/v1beta1/txs", data = "<data>")]
+pub async fn broadcast(data: Data<'_>) -> std::io::Result<Json<BroadcastResponse>> {
+    data.open(512.kibibytes())
+        .stream_to(tokio::io::stdout())
+        .await?;
+    let res = BroadcastResponse::default();
+    println!("{:?}", res);
+    Ok(Json(res))
 }
