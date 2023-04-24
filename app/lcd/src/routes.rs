@@ -1,12 +1,36 @@
+use cosmwasm_std::Coin;
+
 use rocket::data::ToByteUnit;
 use rocket::serde::json::Json;
-use rocket::{tokio, Data};
+use rocket::{tokio, Data, State};
+
+use tendermint_rpc::{Client, Error as TmError, HttpClient};
 
 use crate::types::{
     AnnualProvisionsResponse, AuthAccountResponse, BalancesResponse, BroadcastResponse,
     DelegationResponse, DistroParamsResponse, GrantsResponse, InflationResponse, PoolResponse,
     RewardsResponse, SimulateResponse, SupplyResponse, TransferResponse, UnbondingResponse,
 };
+
+pub struct MyState {
+    pub client: HttpClient,
+}
+
+// use cosmrs::proto::cosmos::bank::v1beta1::{QueryAllBalancesRequest, QueryAllBalancesResponse};
+// TODO: this is horrible hack for basecoin-rs not implementing sdk...
+// later use the proper grpc types and path
+pub async fn query_balances(client: &HttpClient, addr: &str) -> Result<Vec<Coin>, TmError> {
+    // let query = QueryAllBalancesRequest{ address: addr.to_string(), pagination: None };
+    let query = addr.as_bytes();
+    let res = client
+        .abci_query(Some("/custom/bank/???".to_string()), query, None, false)
+        .await?;
+    if res.code.is_err() {
+        return Err(TmError::server(format!("Query Error Code: {:?}", res.code)));
+    }
+    let res: Vec<crate::types::BaseCoin> = serde_json::from_slice(&res.value).unwrap();
+    Ok(res.into_iter().map(Into::into).collect())
+}
 
 #[get("/cosmos/auth/v1beta1/accounts/<addr>")]
 pub fn auth_account(addr: &str) -> Json<AuthAccountResponse> {
@@ -15,9 +39,9 @@ pub fn auth_account(addr: &str) -> Json<AuthAccountResponse> {
 }
 
 #[get("/cosmos/bank/v1beta1/balances/<addr>")]
-pub fn balances(addr: &str) -> Json<BalancesResponse> {
-    let _ = addr; // explicitly ignore
-    let balances = BalancesResponse::new(12345678);
+pub async fn balances(state: &State<MyState>, addr: &str) -> Json<BalancesResponse> {
+    let balances = query_balances(&state.client, addr).await.unwrap();
+    let balances = BalancesResponse::new(balances);
     Json(balances)
 }
 
