@@ -4,6 +4,23 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_SUPPLY: u128 = 200_000_000_000;
 pub const DEFAULT_DENOM: &str = "upulse";
 
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct BaseCoin {
+    pub denom: String,
+    pub amount: String,
+}
+
+impl Into<Coin> for BaseCoin {
+    fn into(self) -> Coin {
+        let amount: u128 = parse_int::parse(&self.amount).unwrap();
+
+        Coin {
+            denom: self.denom,
+            amount: amount.into(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct AuthAccountResponse {
     pub account: AuthAccount,

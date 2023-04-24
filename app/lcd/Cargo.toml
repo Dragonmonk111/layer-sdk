@@ -12,3 +12,8 @@ rocket = { version = "=0.5.0-rc.3", features = ["json"]}
 serde = "1.0.160"
 cosmwasm-std = { workspace = true }
 clap = { version = "4.2.4", features = ["derive"] }
+tendermint-rpc = { version = "0.31.1", features = ["http-client"] }
+cosmrs = { version = "0.13.0"}
+# remove, only needed for basecoin
+parse_int = "0.6.0"
+serde_json = "1.0.96"
