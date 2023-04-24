@@ -1,8 +1,8 @@
 # This is for the LCD server
 
 [default]
-# TODO: what is the standard here?
-port = 1718
+# standard for LCD port in Cosmos
+port = 1317
 
 [debug]
 address = "127.0.0.1"
