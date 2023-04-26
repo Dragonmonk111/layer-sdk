@@ -3,10 +3,16 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
+use tendermint_abci::ServerBuilder;
+use tracing::Level;
+use tracing_subscriber::fmt::time::LocalTime;
+use tracing_subscriber::FmtSubscriber;
 
+mod app;
 mod cli;
 mod config;
 
+use crate::app::Pulsarium;
 use crate::cli::Cli;
 use crate::config::Config;
 
@@ -20,8 +26,23 @@ fn main() {
         .merge(Serialized::defaults(args))
         .extract()
         .unwrap();
-
+    config.validate().unwrap();
     println!("{:?}", config);
 
-    // TODO: start server
+    // set up tracing
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::TRACE)
+        .with_timer(LocalTime::rfc_3339())
+        .with_ansi(true)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    // Create the app
+    let app = Pulsarium::default();
+
+    // Start ABCI server
+    let server = ServerBuilder::new(config.read_buf_size as usize)
+        .bind(format!("{}:{}", config.host, config.port), app)
+        .unwrap();
+    server.listen().unwrap();
 }
