@@ -32,7 +32,7 @@ unsafe impl Send for Pulsarium {}
 impl Application for Pulsarium {
     #[instrument(skip_all)]
     fn echo(&self, request: RequestEcho) -> ResponseEcho {
-        debug!("abci echo");
+        info!("abci echo");
         ResponseEcho {
             message: request.message,
         }
@@ -41,7 +41,7 @@ impl Application for Pulsarium {
     /// Provide information about the ABCI application.
     #[instrument(skip_all)]
     fn info(&self, _request: RequestInfo) -> ResponseInfo {
-        debug!("abci info");
+        info!("abci info");
         Default::default()
     }
 
@@ -55,35 +55,35 @@ impl Application for Pulsarium {
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, _request: RequestQuery) -> ResponseQuery {
-        debug!("abci query");
+        info!("abci query");
         Default::default()
     }
 
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, _request: RequestCheckTx) -> ResponseCheckTx {
-        debug!("abci check_tx");
+        info!("abci check_tx");
         Default::default()
     }
 
     /// Signals the beginning of a new block, prior to any `DeliverTx` calls.
     #[instrument(skip_all)]
     fn begin_block(&self, _request: RequestBeginBlock) -> ResponseBeginBlock {
-        debug!("abci begin_block");
+        info!("abci begin_block");
         Default::default()
     }
 
     /// Apply a transaction to the application's state.
     #[instrument(skip_all)]
     fn deliver_tx(&self, _request: RequestDeliverTx) -> ResponseDeliverTx {
-        debug!("abci deliver_tx");
+        info!("abci deliver_tx");
         Default::default()
     }
 
     /// Signals the end of a block.
     #[instrument(skip_all)]
     fn end_block(&self, _request: RequestEndBlock) -> ResponseEndBlock {
-        debug!("abci end_block");
+        info!("abci end_block");
         Default::default()
     }
 
@@ -97,28 +97,28 @@ impl Application for Pulsarium {
     /// Commit the current state at the current height.
     #[instrument]
     fn commit(&self) -> ResponseCommit {
-        debug!("abci commit");
+        info!("abci commit");
         Default::default()
     }
 
     /// Used during state sync to discover available snapshots on peers.
     #[instrument]
     fn list_snapshots(&self) -> ResponseListSnapshots {
-        debug!("abci list_snapshots");
+        info!("abci list_snapshots");
         Default::default()
     }
 
     /// Called when bootstrapping the node using state sync.
     #[instrument(skip_all)]
     fn offer_snapshot(&self, _request: RequestOfferSnapshot) -> ResponseOfferSnapshot {
-        debug!("abci offer_snapshot");
+        info!("abci offer_snapshot");
         Default::default()
     }
 
     /// Used during state sync to retrieve chunks of snapshots from peers.
     #[instrument(skip_all)]
     fn load_snapshot_chunk(&self, _request: RequestLoadSnapshotChunk) -> ResponseLoadSnapshotChunk {
-        debug!("abci load_snapshot_chunk");
+        info!("abci load_snapshot_chunk");
         Default::default()
     }
 
@@ -128,7 +128,7 @@ impl Application for Pulsarium {
         &self,
         _request: RequestApplySnapshotChunk,
     ) -> ResponseApplySnapshotChunk {
-        debug!("abci apply_snapshot_chunk");
+        info!("abci apply_snapshot_chunk");
         Default::default()
     }
 
@@ -145,7 +145,7 @@ impl Application for Pulsarium {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
-        debug!("abci prepare_proposal");
+        info!("abci prepare_proposal");
         // Per the ABCI++ spec: if the size of RequestPrepareProposal.txs is
         // greater than RequestPrepareProposal.max_tx_bytes, the Application
         // MUST remove transactions to ensure that the
@@ -178,7 +178,7 @@ impl Application for Pulsarium {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn process_proposal(&self, _request: RequestProcessProposal) -> ResponseProcessProposal {
-        debug!("abci process_proposal");
+        info!("abci process_proposal");
         ResponseProcessProposal {
             status: response_process_proposal::ProposalStatus::Accept as i32,
         }

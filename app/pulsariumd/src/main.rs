@@ -4,7 +4,6 @@ use figment::{
     Figment,
 };
 use tendermint_abci::ServerBuilder;
-use tracing::Level;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::FmtSubscriber;
 
@@ -14,24 +13,24 @@ mod config;
 
 use crate::app::Pulsarium;
 use crate::cli::Cli;
-use crate::config::Config;
+use crate::config::RawConfig;
 
 fn main() {
     // Parse all config info
     let args = Cli::parse();
     // Thanks to https://steezeburger.com/2023/03/rust-hierarchical-configuration/ for this tip
-    let config: Config = Figment::from(Serialized::defaults(Config::default()))
+    let config: RawConfig = Figment::from(Serialized::defaults(RawConfig::default()))
         .merge(Toml::file("config/pulsarium.toml"))
         .merge(Env::prefixed("PULSE_"))
         .merge(Serialized::defaults(args))
         .extract()
         .unwrap();
-    config.validate().unwrap();
     println!("{:?}", config);
+    let config = config.validate().unwrap();
 
     // set up tracing
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
+        .with_max_level(config.log)
         .with_timer(LocalTime::rfc_3339())
         .with_ansi(true)
         .finish();
