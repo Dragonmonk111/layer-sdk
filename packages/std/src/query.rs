@@ -3,6 +3,10 @@ use cosmwasm_std::Coin;
 use thiserror::Error;
 
 pub enum Query {
+    /// Return the raw binary value stored under that key
+    Raw {
+        key: Vec<u8>,
+    },
     Bank(BankQuery),
 }
 

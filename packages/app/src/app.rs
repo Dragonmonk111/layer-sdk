@@ -1,6 +1,9 @@
+use std::ops::Deref;
 // TODO: make our own custom pulsar-storage package to extend (esp with file system backing, transactions...)
+use crate::error::PulsarError;
 use cosmwasm_std::Storage;
 use parking_lot::RwLock;
+use pulsar_std::Query;
 
 use crate::sm::StateMachine;
 
@@ -21,5 +24,19 @@ impl App {
             storage: RwLock::new(Box::new(storage)),
             logic,
         }
+    }
+
+    // returns serialized response to the query that can be passed back verbatum
+    pub fn query(&self, request: Query) -> Result<Vec<u8>, PulsarError> {
+        let lock = self.storage.read();
+        self.logic.query(lock.deref().as_ref(), request)
+    }
+
+    pub fn check_tx(&self /* ??? */) -> Result<(), PulsarError> {
+        todo!();
+    }
+
+    pub fn execute_block(&self /* ??? */) -> Result<(), PulsarError> {
+        todo!();
     }
 }
