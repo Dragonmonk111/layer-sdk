@@ -11,6 +11,12 @@ pub enum Tx {
     Cosmos(CosmosTx),
 }
 
+#[derive(Error, Debug)]
+pub enum TxError {
+    #[error("{0}")]
+    Msg(#[from] MsgError),
+}
+
 /// Information to execute the contents of the transaction after it has passed auth
 pub struct ExecInfo {
     pub msgs: Vec<Msg>,
@@ -18,30 +24,19 @@ pub struct ExecInfo {
 }
 
 impl Tx {
-    pub fn messages(&self) -> Result<ExecInfo, TxError> {
+    pub fn messages(&self) -> Result<Vec<Msg>, TxError> {
         match self {
-            Tx::Cosmos(tx) => parse_cosmos_tx(tx),
+            Tx::Cosmos(tx) => cosmos::parse_tx(tx),
         }
     }
-
-    // TODO: add helpers to get signing info for auth
 }
 
-// TODO: make this a method on CosmosTx?
-fn parse_cosmos_tx(tx: &CosmosTx) -> Result<ExecInfo, TxError> {
-    let msgs = tx
-        .body
-        .messages
-        .iter()
-        .map(Msg::from_cosmos)
-        .collect::<Result<Vec<_>, MsgError>>()?;
-    // need to get required signers from those messages... arg!
-    let signers = msgs.iter().flat_map(|m| m.required_signers()).collect();
-    Ok(ExecInfo { msgs, signers })
-}
+mod cosmos {
+    use super::*;
 
-#[derive(Error, Debug)]
-pub enum TxError {
-    #[error("{0}")]
-    Msg(#[from] MsgError),
+    // TODO: make this a method on CosmosTx?
+    pub fn parse_tx(tx: &CosmosTx) -> Result<Vec<Msg>, TxError> {
+        let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(Msg::from_cosmos).collect();
+        Ok(msgs?)
+    }
 }

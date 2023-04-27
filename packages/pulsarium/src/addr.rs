@@ -14,7 +14,7 @@ fn bech32_prefix() -> &'static str {
     ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Addr(Vec<u8>);
 
 impl Deref for Addr {
