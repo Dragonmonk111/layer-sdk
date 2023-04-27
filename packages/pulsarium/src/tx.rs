@@ -33,7 +33,7 @@ fn parse_cosmos_tx(tx: &CosmosTx) -> Result<ExecInfo, TxError> {
         .body
         .messages
         .iter()
-        .map(|msg| Msg::from_cosmos(msg))
+        .map(Msg::from_cosmos)
         .collect::<Result<Vec<_>, MsgError>>()?;
     // need to get required signers from those messages... arg!
     let signers = msgs.iter().flat_map(|m| m.required_signers()).collect();
