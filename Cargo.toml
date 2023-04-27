@@ -1,6 +1,6 @@
 [workspace]
 members = ["app/*", "packages/*"]
-default-members   = ["app/pulsariumd"]
+#default-members   = ["app/pulsariumd"]
 
 [workspace.package]
 edition       = "2021"
@@ -23,6 +23,10 @@ bech32 = "0.9.1"
 cosmrs = "0.13.0"
 cosmos-sdk-proto = "0.18.0"
 itertools = "0.10.5"
+
+pulsar-app = { path = "./packages/app" }
+pulsar-std = { path = "./packages/std" }
+
 
 [profile.release]
 lto              = true
