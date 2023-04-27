@@ -1,5 +1,6 @@
 [workspace]
-members = ["app/*"]
+members = ["app/*", "packages/*"]
+default-members   = ["app/pulsariumd"]
 
 [workspace.package]
 edition       = "2021"
@@ -16,6 +17,8 @@ exclude = [
 [workspace.dependencies]
 thiserror    = "1.0.38"
 cosmwasm-std = "1.2.4"
+serde = { version = "1.0.160", features = ["derive"]}
+tracing = "0.1.37"
 
 [profile.release]
 lto              = true

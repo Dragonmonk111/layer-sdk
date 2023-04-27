@@ -1,5 +1,5 @@
 [package]
-name = "pulse-lcd"
+name = "pulsar-lcd"
 description = "Provide LCD-compatible proxy for pulsarium, for use with Keplr"
 version = { workspace = true }
 license = { workspace = true }
