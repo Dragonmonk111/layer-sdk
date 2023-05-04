@@ -1,12 +1,10 @@
 mod addr;
-mod block;
 mod gas;
 mod msg;
 mod query;
 mod tx;
 
 pub use addr::{Addr, AddrError};
-pub use block::{Block, TmPubKey, Validator, ValidatorUpdate};
 pub use gas::{GasError, GasMeter};
 pub use msg::{required_signers, BankMsg, Msg, MsgError};
 pub use query::{BankQuery, Query, QueryError};
