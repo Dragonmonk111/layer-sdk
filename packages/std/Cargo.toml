@@ -1,0 +1,16 @@
+[package]
+name = "pulsar-std"
+description = "Standard types for Pulsarium"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cosmwasm-std = { workspace = true }
+thiserror = { workspace = true }
+bech32 = { workspace = true }
+cosmrs = { workspace = true }
+cosmos-sdk-proto = { workspace = true }
+itertools = { workspace = true }
