@@ -1,10 +1,19 @@
 use cosmwasm_std::StdError;
 use thiserror::Error;
 
+use crate::auth::AuthError;
+use crate::bank::BankError;
+
 pub type PulsarResult<T> = Result<T, PulsarError>;
 
 #[derive(Error, Debug)]
 pub enum PulsarError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("{0}")]
+    Auth(#[from] AuthError),
+
+    #[error("{0}")]
+    Bank(#[from] BankError),
 }
