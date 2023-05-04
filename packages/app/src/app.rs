@@ -6,7 +6,7 @@ use parking_lot::RwLock;
 use pulsar_std::{Query, Tx};
 
 use crate::api::{Block, FinalizeBlockResponse, InitChainRequest, InitChainResponse, TxResult};
-use crate::error::PulsarError;
+use crate::error::PulsarResult;
 use crate::sm::StateMachine;
 
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
@@ -29,12 +29,12 @@ impl App {
     }
 
     /// Called once upon blockchain startup with genesis info, before anything else is called
-    pub fn init(&self, _request: InitChainRequest) -> Result<InitChainResponse, PulsarError> {
+    pub fn init(&self, _request: InitChainRequest) -> PulsarResult<InitChainResponse> {
         todo!();
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
-    pub fn query(&self, request: Query) -> Result<Vec<u8>, PulsarError> {
+    pub fn query(&self, request: Query) -> PulsarResult<Vec<u8>> {
         let lock = self.storage.read();
         self.logic.query(lock.deref().as_ref(), request)
     }
@@ -43,7 +43,7 @@ impl App {
         todo!();
     }
 
-    pub fn finalize_block(&self, _block: Block) -> Result<FinalizeBlockResponse, PulsarError> {
+    pub fn finalize_block(&self, _block: Block) -> PulsarResult<FinalizeBlockResponse> {
         todo!();
     }
 }
