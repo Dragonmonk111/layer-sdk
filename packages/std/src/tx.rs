@@ -13,7 +13,7 @@ pub enum Tx {
     Cosmos(CosmosTx),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum TxError {
     #[error("{0}")]
     Msg(#[from] MsgError),
@@ -22,11 +22,11 @@ pub enum TxError {
 /// Information to execute the contents of the transaction after it has passed auth
 pub struct ExecInfo {
     pub msgs: Vec<Msg>,
-    pub signers: Vec<Addr>,
+    pub signer: Addr,
 }
 
 impl Tx {
-    pub fn messages(&self) -> Result<Vec<Msg>, TxError> {
+    pub fn parse_tx(&self) -> Result<ExecInfo, TxError> {
         match self {
             Tx::Cosmos(tx) => cosmos::parse_tx(tx),
         }
@@ -35,10 +35,12 @@ impl Tx {
 
 mod cosmos {
     use super::*;
+    use crate::required_signer;
 
-    // TODO: make this a method on CosmosTx?
-    pub fn parse_tx(tx: &CosmosTx) -> Result<Vec<Msg>, TxError> {
+    pub fn parse_tx(tx: &CosmosTx) -> Result<ExecInfo, TxError> {
         let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(Msg::from_cosmos).collect();
-        Ok(msgs?)
+        let msgs = msgs?;
+        let signer = required_signer(&msgs)?;
+        Ok(ExecInfo { msgs, signer })
     }
 }

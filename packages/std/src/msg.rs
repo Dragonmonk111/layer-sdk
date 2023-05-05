@@ -41,10 +41,16 @@ impl Display for BankMsg {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum MsgError {
     #[error("Unsupported Any type: {0}")]
     UnsupportedAnyType(String),
+
+    #[error("Tx doesn't have any messages")]
+    NoMessages,
+
+    #[error("Tx requires signatures from multiple addresses - not supported")]
+    MultipleSigners,
 
     // TODO: remove this and replace with deterministic errors
     #[error("{0}")]
@@ -64,9 +70,14 @@ impl Msg {
     }
 }
 
-/// Combine the required signers of the messages in order, removing duplicates
-pub fn required_signers(msgs: &[Msg]) -> Vec<Addr> {
-    msgs.iter().map(Msg::required_signer).unique().collect()
+/// Returns the signer needed by all Messages.
+/// If there are no messages, or different signers required by messages, returns an error
+pub fn required_signer(msgs: &[Msg]) -> Result<Addr, MsgError> {
+    let mut signers: Vec<_> = msgs.iter().map(Msg::required_signer).dedup().collect();
+    if signers.len() > 1 {
+        return Err(MsgError::MultipleSigners);
+    }
+    signers.pop().ok_or(MsgError::NoMessages)
 }
 
 mod cosmos {

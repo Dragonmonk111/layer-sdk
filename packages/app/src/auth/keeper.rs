@@ -20,8 +20,22 @@ impl Auth {
         _storage: &mut dyn Storage,
         _block: &BlockInfo,
         _sm: &StateMachine,
-        _tx: Tx,
+        tx: Tx,
     ) -> PulsarResult<TxData> {
+        // make sure we can parse it
+        let _info = tx.parse_tx()?;
+
+        // load the signer account if any
+
+        // validate the signature with that account (Cosmos-specific), and get gas and fee info
+
+        // filter logic on gas pricing....
+
+        // try to charge fee info
+
+        // bump sequence number
+
+        // Return data
         todo!()
     }
 }
