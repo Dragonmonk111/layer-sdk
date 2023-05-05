@@ -2,6 +2,8 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
+use cosmwasm_std::StdResult;
+use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
 pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("PULSAR_BECH32");
@@ -25,11 +27,11 @@ impl Deref for Addr {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum AddrError {
     /// TODO: normalize this, so we don't have possibly non-deterministic errors from different crate versions
-    #[error("{0}")]
-    Bech32(#[from] Bech32Error),
+    #[error("Bech32: {0}")]
+    Bech32(String),
 
     #[error("Invalid variant: bech32m")]
     InvalidVariant,
@@ -41,9 +43,21 @@ pub enum AddrError {
     InvalidLength(usize),
 }
 
+impl From<Bech32Error> for AddrError {
+    fn from(value: Bech32Error) -> Self {
+        AddrError::Bech32(value.to_string())
+    }
+}
+
 impl Display for Addr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         bech32::encode_to_fmt(f, bech32_prefix(), self.0.to_base32(), Variant::Bech32).unwrap()
+    }
+}
+
+impl From<&Addr> for String {
+    fn from(value: &Addr) -> Self {
+        value.to_string()
     }
 }
 
@@ -65,6 +79,66 @@ impl Addr {
             return Err(AddrError::InvalidLength(addr.len()));
         }
         Ok(Addr(addr))
+    }
+
+    // only for use in test
+    pub fn unchecked(name: &str) -> Self {
+        // pad to valid length
+        let mut v = name.as_bytes().to_vec();
+        v.resize(VALID_ADDR_LENGTH[0], 0u8);
+        Addr(v)
+    }
+}
+
+impl<'a> PrimaryKey<'a> for Addr {
+    type Prefix = ();
+    type SubPrefix = ();
+    type Suffix = Self;
+    type SuperSuffix = Self;
+
+    fn key(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl<'a> Prefixer<'a> for Addr {
+    fn prefix(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl KeyDeserialize for Addr {
+    type Output = Addr;
+
+    #[inline(always)]
+    fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
+        Ok(Addr(value))
+    }
+}
+
+impl<'a> PrimaryKey<'a> for &'a Addr {
+    type Prefix = ();
+    type SubPrefix = ();
+    type Suffix = Self;
+    type SuperSuffix = Self;
+
+    fn key(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl<'a> Prefixer<'a> for &'a Addr {
+    fn prefix(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl KeyDeserialize for &Addr {
+    type Output = Addr;
+
+    #[inline(always)]
+    fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
+        Ok(Addr(value))
     }
 }
 

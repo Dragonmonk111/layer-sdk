@@ -8,6 +8,8 @@ use crate::msg::{Msg, MsgError};
 /// We start with Cosmos-SDK format for compatibility, but want to later allow native signing format.
 /// We can pass this around to auth to allow handling multiple types
 pub enum Tx {
+    /// Cosmos Format. Note that we support a subset of the functionality:
+    /// Only one signer, no authz or fee grants. But that means 90%+ of tx work, and are "Keplr compatible"
     Cosmos(CosmosTx),
 }
 

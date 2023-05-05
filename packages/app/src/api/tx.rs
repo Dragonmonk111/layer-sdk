@@ -4,11 +4,26 @@ use cosmwasm_std::Event;
 // We get the gas_used / gas_wanted from the gas meter (outside of scope)
 // Errors get codespace = "pulsar", code = 1, log = err.to_string()
 // Success get data and events
+#[derive(Debug)]
 pub struct TxResponse {
-    pub data: Vec<u8>,
+    pub data: Option<Vec<u8>>,
     pub events: Vec<Event>,
 }
 
+impl TxResponse {
+    pub fn new(events: Vec<Event>, data: Vec<u8>) -> Self {
+        TxResponse {
+            events,
+            data: Some(data),
+        }
+    }
+
+    pub fn events(events: Vec<Event>) -> Self {
+        TxResponse { events, data: None }
+    }
+}
+
+#[derive(Debug)]
 pub struct GasInfo {
     pub gas_used: u64,
     pub gas_wanted: u64,

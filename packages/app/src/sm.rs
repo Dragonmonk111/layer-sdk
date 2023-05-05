@@ -1,21 +1,64 @@
-use cosmwasm_std::{StdError, Storage};
-use pulsar_std::Query;
+use cosmwasm_std::{BlockInfo, StdError, Storage};
+use pulsar_std::response::QueryResponse;
+use pulsar_std::{Addr, GasMeter, Msg, Query};
 
-use crate::error::PulsarError;
+use crate::api::TxResponse;
+use crate::auth::Auth;
+use crate::bank::Bank;
+use crate::error::{PulsarError, PulsarResult};
 
 /// This is an immutable State Machine logic that processes incoming transactions.
 /// All mutable state held in Storage, which is passed as an argument to these methods.
 pub struct StateMachine {
-    // TODO: auth, bank, etc
+    pub auth: Auth,
+
+    pub bank: Bank,
 }
 
 impl StateMachine {
-    pub fn query(&self, storage: &dyn Storage, request: Query) -> Result<Vec<u8>, PulsarError> {
-        match request {
-            Query::Raw { key } => storage
-                .get(&key)
-                .ok_or_else(|| StdError::not_found("raw").into()),
-            _ => todo!(),
+    pub fn new() -> Self {
+        StateMachine {
+            auth: Auth::new(),
+            bank: Bank::new(),
         }
+    }
+
+    pub fn query(
+        &self,
+        storage: &dyn Storage,
+        gas: &mut GasMeter,
+        block: &BlockInfo,
+        request: Query,
+    ) -> Result<QueryResponse, PulsarError> {
+        match request {
+            Query::Raw { key } => {
+                let value = storage
+                    .get(&key)
+                    .ok_or_else(|| StdError::not_found("raw"))?;
+                Ok(QueryResponse::Raw { value })
+            }
+            Query::Bank(bank) => self.bank.query(storage, gas, block, self, bank),
+        }
+    }
+
+    pub fn process_msg(
+        &self,
+        storage: &mut dyn Storage,
+        gas: &mut GasMeter,
+        sender: &Addr,
+        block: &BlockInfo,
+        msg: Msg,
+    ) -> PulsarResult<TxResponse> {
+        match msg {
+            Msg::Bank(bank) => self
+                .bank
+                .process_msg(storage, gas, block, self, sender, bank),
+        }
+    }
+}
+
+impl Default for StateMachine {
+    fn default() -> Self {
+        Self::new()
     }
 }
