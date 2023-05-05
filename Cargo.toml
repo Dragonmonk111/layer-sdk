@@ -27,6 +27,7 @@ itertools = "0.10.5"
 
 pulsar-app = { path = "./packages/app" }
 pulsar-std = { path = "./packages/std" }
+pulsar-storage = { path = "./packages/storage" }
 
 
 [profile.release]
