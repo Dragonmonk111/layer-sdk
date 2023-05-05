@@ -8,7 +8,7 @@ use crate::addr::{Addr, AddrError};
 
 /// This is the internal message format used in Pulsarium.
 /// We convert various wire formats into this before processing.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Msg {
     Bank(BankMsg),
 }
@@ -19,7 +19,7 @@ impl From<BankMsg> for Msg {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BankMsg {
     Send {
         sender: Addr,

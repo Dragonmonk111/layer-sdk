@@ -171,15 +171,15 @@ mod test {
     use super::*;
 
     use crate::error::PulsarError;
-    use cosmwasm_std::testing::{mock_env, MockApi, MockQuerier, MockStorage};
-    use cosmwasm_std::{coins, from_slice, Empty};
+    // use cosmwasm_std::testing::mock_env;
+    use cosmwasm_std::{coins, from_slice, StdError};
+    use pulsar_storage::MemoryStorage;
 
     fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &Addr) -> Vec<Coin> {
         let req = BankQuery::AllBalances {
             address: rcpt.clone().into(),
         };
-        let block = mock_env().block;
-        let querier: MockQuerier<Empty> = MockQuerier::new(&[]);
+        // let block = mock_env().block;
 
         let raw = bank.query(store, req).unwrap();
         let res: AllBalanceResponse = from_slice(&raw).unwrap();
@@ -188,10 +188,8 @@ mod test {
 
     #[test]
     fn get_set_balance() {
-        let api = MockApi::default();
-        let mut store = MockStorage::new();
-        let block = mock_env().block;
-        let querier: MockQuerier<Empty> = MockQuerier::new(&[]);
+        let mut store = MemoryStorage::new();
+        // let block = mock_env().block;
 
         let owner = Addr::unchecked("owner");
         let rcpt = Addr::unchecked("receiver");
@@ -213,14 +211,14 @@ mod test {
         let req = BankQuery::AllBalances {
             address: owner.clone().into(),
         };
-        let raw = bank.query(&api, req).unwrap();
+        let raw = bank.query(&store, req).unwrap();
         let res: AllBalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, norm);
 
         let req = BankQuery::AllBalances {
             address: rcpt.clone().into(),
         };
-        let raw = bank.query(&api, req).unwrap();
+        let raw = bank.query(&store, req).unwrap();
         let res: AllBalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, vec![]);
 
@@ -228,7 +226,7 @@ mod test {
             address: owner.clone().into(),
             denom: "eth".into(),
         };
-        let raw = bank.query(&api, req).unwrap();
+        let raw = bank.query(&store, req).unwrap();
         let res: BalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, coin(100, "eth"));
 
@@ -236,7 +234,7 @@ mod test {
             address: owner.into(),
             denom: "foobar".into(),
         };
-        let raw = bank.query(&api, req).unwrap();
+        let raw = bank.query(&store, req).unwrap();
         let res: BalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, coin(0, "foobar"));
 
@@ -244,21 +242,19 @@ mod test {
             address: rcpt.into(),
             denom: "eth".into(),
         };
-        let raw = bank.query(&api, req).unwrap();
+        let raw = bank.query(&store, req).unwrap();
         let res: BalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, coin(0, "eth"));
     }
 
     #[test]
     fn send_coins() {
-        let api = MockApi::default();
-        let mut store = MockStorage::new();
-        let block = mock_env().block;
-        let router = MockRouter::default();
+        let mut store = MemoryStorage::new();
+        let mut meter = GasMeter::new(1_000_000);
+        // let block = mock_env().block;
 
         let owner = Addr::unchecked("owner");
         let rcpt = Addr::unchecked("receiver");
-        let mut meter = GasMeter::new(1_000_000);
         let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
         let rcpt_funds = vec![coin(5, "btc")];
 
@@ -300,13 +296,11 @@ mod test {
         assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
     }
 
-    /*
     #[test]
     fn burn_coins() {
-        let api = MockApi::default();
-        let mut store = MockStorage::new();
-        let block = mock_env().block;
-        let router = MockRouter::default();
+        let mut store = MemoryStorage::new();
+        // let block = mock_env().block;
+        let mut meter = GasMeter::new(1_000_000);
 
         let owner = Addr::unchecked("owner");
         let rcpt = Addr::unchecked("recipient");
@@ -318,40 +312,44 @@ mod test {
 
         // burn both tokens
         let to_burn = vec![coin(30, "eth"), coin(5, "btc")];
-        let msg = BankMsg::Burn { amount: to_burn };
-        bank.execute(&api, &mut store, &router, &block, owner.clone(), msg)
+        let msg = BankMsg::Burn {
+            sender: owner.clone(),
+            amount: to_burn,
+        };
+        bank.process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap();
-        let rich = query_balance(&bank, &api, &store, &owner);
+        let rich = query_balance(&bank, &store, &owner);
         assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
 
         // cannot burn too much
         let msg = BankMsg::Burn {
+            sender: owner.clone(),
             amount: coins(20, "btc"),
         };
         let err = bank
-            .execute(&api, &mut store, &router, &block, owner.clone(), msg)
+            .process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap_err();
-        assert!(matches!(err.downcast().unwrap(), StdError::Overflow { .. }));
+        assert!(matches!(err, PulsarError::Std(StdError::Overflow { .. })));
 
-        let rich = query_balance(&bank, &api, &store, &owner);
+        let rich = query_balance(&bank, &store, &owner);
         assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
 
         // cannot burn from empty account
         let msg = BankMsg::Burn {
+            sender: rcpt.clone(),
             amount: coins(1, "btc"),
         };
         let err = bank
-            .execute(&api, &mut store, &router, &block, rcpt, msg)
+            .process_msg(&mut store, &mut meter, &rcpt, msg)
             .unwrap_err();
-        assert!(matches!(err.downcast().unwrap(), StdError::Overflow { .. }));
+        assert!(matches!(err, PulsarError::Std(StdError::Overflow { .. })));
     }
 
     #[test]
     fn fail_on_zero_values() {
-        let api = MockApi::default();
-        let mut store = MockStorage::new();
-        let block = mock_env().block;
-        let router = MockRouter::default();
+        let mut store = MemoryStorage::new();
+        let mut meter = GasMeter::new(1_000_000);
+        // let block = mock_env().block;
 
         let owner = Addr::unchecked("owner");
         let rcpt = Addr::unchecked("recipient");
@@ -363,62 +361,70 @@ mod test {
 
         // can send normal amounts
         let msg = BankMsg::Send {
-            to_address: rcpt.to_string(),
+            sender: owner.clone(),
+            recipient: rcpt.clone(),
             amount: coins(100, "atom"),
         };
-        bank.execute(&api, &mut store, &router, &block, owner.clone(), msg)
+        bank.process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap();
 
         // fails send on no coins
         let msg = BankMsg::Send {
-            to_address: rcpt.to_string(),
+            sender: owner.clone(),
+            recipient: rcpt.clone(),
             amount: vec![],
         };
-        bank.execute(&api, &mut store, &router, &block, owner.clone(), msg)
+        let err = bank
+            .process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
 
         // fails send on 0 coins
         let msg = BankMsg::Send {
-            to_address: rcpt.to_string(),
+            sender: owner.clone(),
+            recipient: rcpt.clone(),
             amount: coins(0, "atom"),
         };
-        bank.execute(&api, &mut store, &router, &block, owner.clone(), msg)
+        let err = bank
+            .process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
 
         // fails burn on no coins
-        let msg = BankMsg::Burn { amount: vec![] };
-        bank.execute(&api, &mut store, &router, &block, owner.clone(), msg)
+        let msg = BankMsg::Burn {
+            sender: owner.clone(),
+            amount: vec![],
+        };
+        let err = bank
+            .process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
 
         // fails burn on 0 coins
         let msg = BankMsg::Burn {
+            sender: owner.clone(),
             amount: coins(0, "atom"),
         };
-        bank.execute(&api, &mut store, &router, &block, owner, msg)
+        let err = bank
+            .process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
 
-        // can mint via sudo
-        let msg = BankSudo::Mint {
-            to_address: rcpt.to_string(),
-            amount: coins(4321, "atom"),
-        };
-        bank.sudo(&api, &mut store, &router, &block, msg).unwrap();
+        // can mint
+        let mut bank_storage = prefixed(&mut store, NAMESPACE_BANK);
+        bank.mint(&mut bank_storage, rcpt.clone(), coins(4321, "atom"))
+            .unwrap();
 
         // mint fails with 0 tokens
-        let msg = BankSudo::Mint {
-            to_address: rcpt.to_string(),
-            amount: coins(0, "atom"),
-        };
-        bank.sudo(&api, &mut store, &router, &block, msg)
+        let err = bank
+            .mint(&mut bank_storage, rcpt.clone(), coins(0, "atom"))
             .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
 
         // mint fails with no tokens
-        let msg = BankSudo::Mint {
-            to_address: rcpt.to_string(),
-            amount: vec![],
-        };
-        bank.sudo(&api, &mut store, &router, &block, msg)
+        let err = bank
+            .mint(&mut bank_storage, rcpt.clone(), vec![])
             .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
     }
-    */
 }

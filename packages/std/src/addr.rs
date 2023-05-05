@@ -78,9 +78,8 @@ impl Addr {
     // only for use in test
     pub fn unchecked(name: &str) -> Self {
         // pad to valid length
-        let l = VALID_ADDR_LENGTH[0];
-        let mut v = vec![0u8; l];
-        v.copy_from_slice(name.as_bytes());
+        let mut v = name.as_bytes().to_vec();
+        v.resize(VALID_ADDR_LENGTH[0], 0u8);
         Addr(v)
     }
 }
