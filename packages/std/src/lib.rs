@@ -11,5 +11,7 @@ pub use query::{BankQuery, Query, QueryError};
 pub use tx::{ExecInfo, Tx, TxError};
 
 pub mod response {
-    pub use crate::query::{AllBalanceResponse, BalanceResponse, SupplyResponse};
+    pub use crate::query::{
+        AllBalanceResponse, BalanceResponse, BankQueryResponse, QueryResponse, SupplyResponse,
+    };
 }

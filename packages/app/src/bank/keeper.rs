@@ -1,19 +1,21 @@
 use itertools::Itertools;
 
-use cosmwasm_std::{
-    coin, ensure_eq, to_vec, AllBalanceResponse, BalanceResponse, BlockInfo, Coin, Event, Storage,
-};
+use cosmwasm_std::{coin, ensure_eq, BlockInfo, Coin, Event, Storage, Uint128};
 use cw_storage_plus::Map;
 use cw_utils::NativeBalance;
 
+use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
 use pulsar_std::{Addr, BankMsg, BankQuery, GasMeter};
 use pulsar_storage::{prefixed, prefixed_read};
 
 use crate::api::TxResponse;
 use crate::bank::BankError;
-use crate::error::PulsarResult;
+use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
 
+// store supply for each denom
+const SUPPLY: Map<&str, Uint128> = Map::new("supply");
+// FIXME: store each denom separate - (&Addr, &str), Uint128
 const BALANCES: Map<&Addr, NativeBalance> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
@@ -45,15 +47,29 @@ impl Bank {
     ) -> PulsarResult<()> {
         let mut balance = NativeBalance(amount);
         balance.normalize();
+
+        // update the supply for each coin
+        // TODO: this assume account had no balance before... let's see how to do this proper
+        for coin in balance.0.iter() {
+            SUPPLY.update::<_, PulsarError>(bank_storage, &coin.denom, |supply| {
+                Ok(supply.unwrap_or_default() + coin.amount)
+            })?;
+        }
+
+        // store user balance
         BALANCES
             .save(bank_storage, account, &balance)
             .map_err(Into::into)
     }
 
-    // this is an "admin" function to let us adjust bank accounts
     fn get_balance(&self, bank_storage: &dyn Storage, account: &Addr) -> PulsarResult<Vec<Coin>> {
         let val = BALANCES.may_load(bank_storage, account)?;
         Ok(val.unwrap_or_default().into_vec())
+    }
+
+    fn get_supply(&self, bank_storage: &dyn Storage, denom: &str) -> PulsarResult<Uint128> {
+        let val = SUPPLY.may_load(bank_storage, denom)?;
+        Ok(val.unwrap_or_default())
     }
 
     fn send(
@@ -74,6 +90,15 @@ impl Bank {
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let amount = self.normalize_amount(amount)?;
+
+        // update the supply for each coin
+        // TODO: this assume account had no balance before... let's see how to do this proper
+        for coin in &amount {
+            SUPPLY.update::<_, PulsarError>(bank_storage, &coin.denom, |supply| {
+                Ok(supply.unwrap_or_default() + coin.amount)
+            })?;
+        }
+
         let b = self.get_balance(bank_storage, &to_address)?;
         let b = NativeBalance(b) + NativeBalance(amount);
         self.set_balance(bank_storage, &to_address, b.into_vec())
@@ -147,13 +172,13 @@ impl Bank {
         _block: &BlockInfo,
         _sm: &StateMachine,
         request: BankQuery,
-    ) -> PulsarResult<Vec<u8>> {
+    ) -> PulsarResult<QueryResponse> {
         let bank_storage = prefixed_read(storage, NAMESPACE_BANK);
         match request {
             BankQuery::AllBalances { address } => {
                 let amount = self.get_balance(&bank_storage, &address)?;
                 let res = AllBalanceResponse { amount };
-                Ok(to_vec(&res)?)
+                Ok(res.into())
             }
             BankQuery::Balance { address, denom } => {
                 let all_amounts = self.get_balance(&bank_storage, &address)?;
@@ -162,9 +187,15 @@ impl Bank {
                     .find(|c| c.denom == denom)
                     .unwrap_or_else(|| coin(0, denom));
                 let res = BalanceResponse { amount };
-                Ok(to_vec(&res)?)
+                Ok(res.into())
             }
-            q => Err(BankError::UnsupportedQuery(q.to_string()).into()),
+            BankQuery::Supply { denom } => {
+                let amount = self.get_supply(&bank_storage, &denom)?;
+                let res = SupplyResponse {
+                    amount: Coin { denom, amount },
+                };
+                Ok(res.into())
+            }
         }
     }
 }
@@ -182,7 +213,8 @@ mod test {
 
     use crate::error::PulsarError;
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{coins, from_slice, StdError};
+    use cosmwasm_std::{coins, StdError};
+    use pulsar_std::response::BankQueryResponse;
     use pulsar_storage::MemoryStorage;
 
     fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &Addr) -> Vec<Coin> {
@@ -193,9 +225,13 @@ mod test {
         let mut meter = GasMeter::new(500_000);
         let sm = StateMachine::default();
 
-        let raw = bank.query(store, &mut meter, &block, &sm, req).unwrap();
-        let res: AllBalanceResponse = from_slice(&raw).unwrap();
-        res.amount
+        let resp = bank.query(store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::AllBalances(AllBalanceResponse { amount })) => {
+                amount
+            }
+            _ => panic!("unexpected return"),
+        }
     }
 
     #[test]
@@ -225,40 +261,82 @@ mod test {
         let req = BankQuery::AllBalances {
             address: owner.clone(),
         };
-        let raw = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
-        let res: AllBalanceResponse = from_slice(&raw).unwrap();
-        assert_eq!(res.amount, norm);
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::AllBalances(AllBalanceResponse { amount })) => {
+                assert_eq!(amount, norm)
+            }
+            _ => panic!("unexpected return"),
+        }
 
         let req = BankQuery::AllBalances {
             address: rcpt.clone(),
         };
-        let raw = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
-        let res: AllBalanceResponse = from_slice(&raw).unwrap();
-        assert_eq!(res.amount, vec![]);
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::AllBalances(AllBalanceResponse { amount })) => {
+                assert_eq!(amount, vec![])
+            }
+            _ => panic!("unexpected return"),
+        }
 
         let req = BankQuery::Balance {
             address: owner.clone(),
             denom: "eth".into(),
         };
-        let raw = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
-        let res: BalanceResponse = from_slice(&raw).unwrap();
-        assert_eq!(res.amount, coin(100, "eth"));
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Balance(BalanceResponse { amount })) => {
+                assert_eq!(amount, coin(100, "eth"))
+            }
+            _ => panic!("unexpected return"),
+        }
 
         let req = BankQuery::Balance {
             address: owner,
             denom: "foobar".into(),
         };
-        let raw = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
-        let res: BalanceResponse = from_slice(&raw).unwrap();
-        assert_eq!(res.amount, coin(0, "foobar"));
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Balance(BalanceResponse { amount })) => {
+                assert_eq!(amount, coin(0, "foobar"))
+            }
+            _ => panic!("unexpected return"),
+        }
 
         let req = BankQuery::Balance {
             address: rcpt,
             denom: "eth".into(),
         };
-        let raw = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
-        let res: BalanceResponse = from_slice(&raw).unwrap();
-        assert_eq!(res.amount, coin(0, "eth"));
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Balance(BalanceResponse { amount })) => {
+                assert_eq!(amount, coin(0, "eth"))
+            }
+            _ => panic!("unexpected return"),
+        }
+
+        let req = BankQuery::Supply {
+            denom: "eth".into(),
+        };
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Supply(SupplyResponse { amount })) => {
+                assert_eq!(amount, coin(100, "eth"))
+            }
+            _ => panic!("unexpected return"),
+        }
+
+        let req = BankQuery::Supply {
+            denom: "foobar".into(),
+        };
+        let resp = bank.query(&store, &mut meter, &block, &sm, req).unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Supply(SupplyResponse { amount })) => {
+                assert_eq!(amount, coin(0, "foobar"))
+            }
+            _ => panic!("unexpected return"),
+        }
     }
 
     #[test]

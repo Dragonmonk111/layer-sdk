@@ -49,8 +49,12 @@ impl App {
         let lock = self.storage.read();
         let block = self.block.read();
         let mut meter = GasMeter::new(DEFAULT_QUERY_GAS);
-        self.logic
-            .query(lock.deref().as_ref(), &mut meter, block.deref(), request)
+        let resp = self
+            .logic
+            .query(lock.deref().as_ref(), &mut meter, block.deref(), request)?;
+        // TODO: question on how to encode these... should convert to cosmos sdk protobuf?
+        // accept some arg on which format to encode
+        Ok(resp.to_cosmos()?)
     }
 
     pub fn check_tx(&self, _tx: Tx) -> TxResult {

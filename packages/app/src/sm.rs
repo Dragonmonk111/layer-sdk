@@ -1,4 +1,5 @@
 use cosmwasm_std::{BlockInfo, StdError, Storage};
+use pulsar_std::response::QueryResponse;
 use pulsar_std::{Addr, GasMeter, Msg, Query};
 
 use crate::api::TxResponse;
@@ -28,11 +29,14 @@ impl StateMachine {
         gas: &mut GasMeter,
         block: &BlockInfo,
         request: Query,
-    ) -> Result<Vec<u8>, PulsarError> {
+    ) -> Result<QueryResponse, PulsarError> {
         match request {
-            Query::Raw { key } => storage
-                .get(&key)
-                .ok_or_else(|| StdError::not_found("raw").into()),
+            Query::Raw { key } => {
+                let value = storage
+                    .get(&key)
+                    .ok_or_else(|| StdError::not_found("raw"))?;
+                Ok(QueryResponse::Raw { value })
+            }
             Query::Bank(bank) => self.bank.query(storage, gas, block, self, bank),
         }
     }

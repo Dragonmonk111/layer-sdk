@@ -27,11 +27,11 @@ impl Deref for Addr {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum AddrError {
     /// TODO: normalize this, so we don't have possibly non-deterministic errors from different crate versions
-    #[error("{0}")]
-    Bech32(#[from] Bech32Error),
+    #[error("Bech32: {0}")]
+    Bech32(String),
 
     #[error("Invalid variant: bech32m")]
     InvalidVariant,
@@ -41,6 +41,12 @@ pub enum AddrError {
 
     #[error("Invalid address size: {0} bytes")]
     InvalidLength(usize),
+}
+
+impl From<Bech32Error> for AddrError {
+    fn from(value: Bech32Error) -> Self {
+        AddrError::Bech32(value.to_string())
+    }
 }
 
 impl Display for Addr {
