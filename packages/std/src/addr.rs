@@ -49,6 +49,12 @@ impl Display for Addr {
     }
 }
 
+impl Into<String> for &Addr {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
 impl Addr {
     pub fn parse_string(encoded: &str) -> Result<Self, AddrError> {
         let (hrp, data, variant) = bech32::decode(encoded)?;
@@ -67,6 +73,15 @@ impl Addr {
             return Err(AddrError::InvalidLength(addr.len()));
         }
         Ok(Addr(addr))
+    }
+
+    // only for use in test
+    pub fn unchecked(name: &str) -> Self {
+        // pad to valid length
+        let l = VALID_ADDR_LENGTH[0];
+        let mut v = vec![0u8; l];
+        v.copy_from_slice(name.as_bytes());
+        Addr(v)
     }
 }
 

@@ -1,7 +1,7 @@
 mod error;
 
 use cosmwasm_std::Storage;
-use pulsar_std::{Msg, Tx};
+use pulsar_std::{Addr, Msg, Tx};
 
 pub use error::AuthError;
 
@@ -31,5 +31,7 @@ pub struct TxData {
     pub msgs: Vec<Msg>,
 
     pub gas_wanted: u64,
+
+    pub signer: Addr,
     // TODO: include fee info here? or do we charge directly inside?
 }

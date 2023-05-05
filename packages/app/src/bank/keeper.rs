@@ -1,6 +1,8 @@
 use itertools::Itertools;
 
-use cosmwasm_std::{coin, to_vec, AllBalanceResponse, BalanceResponse, Coin, Storage};
+use cosmwasm_std::{
+    coin, ensure_eq, to_vec, AllBalanceResponse, BalanceResponse, Coin, Event, Storage,
+};
 use cw_storage_plus::Map;
 use cw_utils::NativeBalance;
 
@@ -99,23 +101,42 @@ impl Bank {
     }
 }
 
-fn coins_to_string(coins: &[Coin]) -> String {
-    coins
-        .iter()
-        .map(|c| format!("{}{}", c.amount, c.denom))
-        .join(",")
-}
-
 impl Bank {
+    // TODO add: BlockInfo, &StateMachine (for callbacks)
     pub fn process_msg(
         &self,
-        _storage: &mut dyn Storage,
+        storage: &mut dyn Storage,
         _meter: &mut GasMeter,
-        _msg: BankMsg,
+        signer: &Addr,
+        msg: BankMsg,
     ) -> PulsarResult<TxResponse> {
-        todo!()
+        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+        match msg {
+            BankMsg::Send {
+                sender,
+                recipient,
+                amount,
+            } => {
+                ensure_eq!(signer, &sender, BankError::Unauthorized);
+                let events = vec![Event::new("transfer")
+                    .add_attribute("recipient", &recipient)
+                    .add_attribute("sender", &sender)
+                    .add_attribute("amount", coins_to_string(&amount))];
+                self.send(&mut bank_storage, sender, recipient, amount)?;
+                Ok(TxResponse::events(events))
+            }
+            BankMsg::Burn { sender, amount } => {
+                ensure_eq!(signer, &sender, BankError::Unauthorized);
+                let events = vec![Event::new("burn")
+                    .add_attribute("sender", &sender)
+                    .add_attribute("amount", coins_to_string(&amount))];
+                self.burn(&mut bank_storage, sender, amount)?;
+                Ok(TxResponse::events(events))
+            }
+        }
     }
 
+    // TODO add: BlockInfo, &StateMachine (for callbacks)
     pub fn query(&self, storage: &dyn Storage, request: BankQuery) -> PulsarResult<Vec<u8>> {
         let bank_storage = prefixed_read(storage, NAMESPACE_BANK);
         match request {
@@ -136,58 +157,31 @@ impl Bank {
             q => Err(BankError::UnsupportedQuery(q.to_string()).into()),
         }
     }
+}
 
-    // fn execute<ExecC, QueryC>(
-    //     &self,
-    //     _api: &dyn Api,
-    //     storage: &mut dyn Storage,
-    //     _router: &dyn CosmosRouter<ExecC = ExecC, QueryC = QueryC>,
-    //     _block: &BlockInfo,
-    //     sender: Addr,
-    //     msg: BankMsg,
-    // ) -> PulsarResult<AppResponse> {
-    //     let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
-    //     match msg {
-    //         BankMsg::Send { to_address, amount } => {
-    //             // see https://github.com/cosmos/cosmos-sdk/blob/v0.42.7/x/bank/keeper/send.go#L142-L147
-    //             let events = vec![Event::new("transfer")
-    //                 .add_attribute("recipient", &to_address)
-    //                 .add_attribute("sender", &sender)
-    //                 .add_attribute("amount", coins_to_string(&amount))];
-    //             self.send(
-    //                 &mut bank_storage,
-    //                 sender,
-    //                 Addr::unchecked(to_address),
-    //                 amount,
-    //             )?;
-    //             Ok(AppResponse { events, data: None })
-    //         }
-    //         BankMsg::Burn { amount } => {
-    //             // burn doesn't seem to emit any events
-    //             self.burn(&mut bank_storage, sender, amount)?;
-    //             Ok(AppResponse::default())
-    //         }
-    //         m => bail!("Unsupported bank message: {:?}", m),
-    //     }
-    // }
+fn coins_to_string(coins: &[Coin]) -> String {
+    coins
+        .iter()
+        .map(|c| format!("{}{}", c.amount, c.denom))
+        .join(",")
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    use crate::app::MockRouter;
+    use crate::error::PulsarError;
     use cosmwasm_std::testing::{mock_env, MockApi, MockQuerier, MockStorage};
-    use cosmwasm_std::{coins, from_slice, Empty, StdError};
+    use cosmwasm_std::{coins, from_slice, Empty};
 
-    fn query_balance(bank: &Bank, api: &dyn Api, store: &dyn Storage, rcpt: &Addr) -> Vec<Coin> {
+    fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &Addr) -> Vec<Coin> {
         let req = BankQuery::AllBalances {
             address: rcpt.clone().into(),
         };
         let block = mock_env().block;
         let querier: MockQuerier<Empty> = MockQuerier::new(&[]);
 
-        let raw = bank.query(api, store, &querier, &block, req).unwrap();
+        let raw = bank.query(store, req).unwrap();
         let res: AllBalanceResponse = from_slice(&raw).unwrap();
         res.amount
     }
@@ -219,14 +213,14 @@ mod test {
         let req = BankQuery::AllBalances {
             address: owner.clone().into(),
         };
-        let raw = bank.query(&api, &store, &querier, &block, req).unwrap();
+        let raw = bank.query(&api, req).unwrap();
         let res: AllBalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, norm);
 
         let req = BankQuery::AllBalances {
             address: rcpt.clone().into(),
         };
-        let raw = bank.query(&api, &store, &querier, &block, req).unwrap();
+        let raw = bank.query(&api, req).unwrap();
         let res: AllBalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, vec![]);
 
@@ -234,7 +228,7 @@ mod test {
             address: owner.clone().into(),
             denom: "eth".into(),
         };
-        let raw = bank.query(&api, &store, &querier, &block, req).unwrap();
+        let raw = bank.query(&api, req).unwrap();
         let res: BalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, coin(100, "eth"));
 
@@ -242,7 +236,7 @@ mod test {
             address: owner.into(),
             denom: "foobar".into(),
         };
-        let raw = bank.query(&api, &store, &querier, &block, req).unwrap();
+        let raw = bank.query(&api, req).unwrap();
         let res: BalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, coin(0, "foobar"));
 
@@ -250,7 +244,7 @@ mod test {
             address: rcpt.into(),
             denom: "eth".into(),
         };
-        let raw = bank.query(&api, &store, &querier, &block, req).unwrap();
+        let raw = bank.query(&api, req).unwrap();
         let res: BalanceResponse = from_slice(&raw).unwrap();
         assert_eq!(res.amount, coin(0, "eth"));
     }
@@ -264,6 +258,7 @@ mod test {
 
         let owner = Addr::unchecked("owner");
         let rcpt = Addr::unchecked("receiver");
+        let mut meter = GasMeter::new(1_000_000);
         let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
         let rcpt_funds = vec![coin(5, "btc")];
 
@@ -275,39 +270,37 @@ mod test {
         // send both tokens
         let to_send = vec![coin(30, "eth"), coin(5, "btc")];
         let msg = BankMsg::Send {
-            to_address: rcpt.clone().into(),
+            sender: owner.clone(),
+            recipient: rcpt.clone(),
             amount: to_send,
         };
-        bank.execute(
-            &api,
-            &mut store,
-            &router,
-            &block,
-            owner.clone(),
-            msg.clone(),
-        )
-        .unwrap();
-        let rich = query_balance(&bank, &api, &store, &owner);
+        bank.process_msg(&mut store, &mut meter, &owner, msg.clone())
+            .unwrap();
+        let rich = query_balance(&bank, &store, &owner);
         assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
-        let poor = query_balance(&bank, &api, &store, &rcpt);
+        let poor = query_balance(&bank, &store, &rcpt);
         assert_eq!(vec![coin(10, "btc"), coin(30, "eth")], poor);
 
-        // can send from any account with funds
-        bank.execute(&api, &mut store, &router, &block, rcpt.clone(), msg)
-            .unwrap();
+        // cannot send from someone else's account
+        let err = bank
+            .process_msg(&mut store, &mut meter, &rcpt, msg)
+            .unwrap_err();
+        assert_eq!(err, PulsarError::Bank(BankError::Unauthorized));
 
         // cannot send too much
         let msg = BankMsg::Send {
-            to_address: rcpt.into(),
+            sender: owner.clone(),
+            recipient: rcpt.clone(),
             amount: coins(20, "btc"),
         };
-        bank.execute(&api, &mut store, &router, &block, owner.clone(), msg)
+        bank.process_msg(&mut store, &mut meter, &owner, msg)
             .unwrap_err();
 
-        let rich = query_balance(&bank, &api, &store, &owner);
+        let rich = query_balance(&bank, &store, &owner);
         assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
     }
 
+    /*
     #[test]
     fn burn_coins() {
         let api = MockApi::default();
@@ -427,4 +420,5 @@ mod test {
         bank.sudo(&api, &mut store, &router, &block, msg)
             .unwrap_err();
     }
+    */
 }

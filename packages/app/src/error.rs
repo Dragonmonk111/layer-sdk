@@ -6,7 +6,7 @@ use crate::bank::BankError;
 
 pub type PulsarResult<T> = Result<T, PulsarError>;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum PulsarError {
     #[error("{0}")]
     Std(#[from] StdError),
