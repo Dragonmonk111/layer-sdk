@@ -49,9 +49,9 @@ impl Display for Addr {
     }
 }
 
-impl Into<String> for &Addr {
-    fn into(self) -> String {
-        self.to_string()
+impl From<&Addr> for String {
+    fn from(value: &Addr) -> Self {
+        value.to_string()
     }
 }
 

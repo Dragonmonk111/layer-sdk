@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdError, Storage};
+use cosmwasm_std::{BlockInfo, StdError, Storage};
 use pulsar_std::{Addr, GasMeter, Msg, Query};
 
 use crate::api::TxResponse;
@@ -22,12 +22,18 @@ impl StateMachine {
         }
     }
 
-    pub fn query(&self, storage: &dyn Storage, request: Query) -> Result<Vec<u8>, PulsarError> {
+    pub fn query(
+        &self,
+        storage: &dyn Storage,
+        gas: &mut GasMeter,
+        block: &BlockInfo,
+        request: Query,
+    ) -> Result<Vec<u8>, PulsarError> {
         match request {
             Query::Raw { key } => storage
                 .get(&key)
                 .ok_or_else(|| StdError::not_found("raw").into()),
-            Query::Bank(bank) => self.bank.query(storage, bank),
+            Query::Bank(bank) => self.bank.query(storage, gas, block, self, bank),
         }
     }
 
@@ -36,10 +42,13 @@ impl StateMachine {
         storage: &mut dyn Storage,
         gas: &mut GasMeter,
         sender: &Addr,
+        block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<TxResponse> {
         match msg {
-            Msg::Bank(bank) => self.bank.process_msg(storage, gas, sender, bank),
+            Msg::Bank(bank) => self
+                .bank
+                .process_msg(storage, gas, block, self, sender, bank),
         }
     }
 }
