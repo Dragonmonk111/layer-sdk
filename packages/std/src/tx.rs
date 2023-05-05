@@ -266,12 +266,12 @@ pub mod cosmos {
             let msg_send = MsgSend {
                 from_address: sender_account_id.clone(),
                 to_address: rcpt_account_id.clone(),
-                amount: vec![amount.clone()],
+                amount: vec![amount],
             };
 
             let tx_body = tx::Body::new(vec![msg_send.to_any().unwrap()], "", timeout_height);
             let signer_info = SignerInfo::single_direct(Some(sender_public_key), sequence_number);
-            let auth_info = signer_info.auth_info(Fee::from_amount_and_gas(fee.clone(), gas));
+            let auth_info = signer_info.auth_info(Fee::from_amount_and_gas(fee, gas));
 
             // The "sign doc" contains a message to be signed.
             let sign_doc =
@@ -285,9 +285,7 @@ pub mod cosmos {
             let tx = crate::Tx::parse_tx(&tx_bytes, chain_id.as_str()).unwrap();
 
             // validate we have the expected values
-            let tx = match tx {
-                crate::Tx::Cosmos(cms) => cms,
-            };
+            let crate::Tx::Cosmos(tx) = tx;
             assert_eq!(tx.timeout_height, Some(timeout_height as u64));
             assert_eq!(tx.fee.fee, Some(cosmwasm_std::coin(200_000u128, "uatom")));
             assert_eq!(tx.fee.gas_limit, gas);
