@@ -13,7 +13,6 @@ pub use cosmos::{CosmosTx, FeeInfo, SigningInfo};
 pub enum Tx {
     /// Cosmos Format. Note that we support a subset of the functionality:
     /// Only one signer, no authz or fee grants. But that means 90%+ of tx work, and are "Keplr compatible"
-    /// TODO: timeout height...
     Cosmos(CosmosTx),
 }
 
@@ -59,12 +58,6 @@ impl From<ErrorReport> for TxError {
     fn from(value: ErrorReport) -> Self {
         TxError::ErrorReport(value.to_string())
     }
-}
-
-/// Information to execute the contents of the transaction after it has passed auth
-pub struct ExecInfo {
-    pub msgs: Vec<Msg>,
-    pub signer: Addr,
 }
 
 impl Tx {
@@ -296,6 +289,7 @@ pub mod cosmos {
                 crate::Tx::Cosmos(cms) => cms,
             };
             assert_eq!(tx.timeout_height, Some(timeout_height as u64));
+            // TODO: more things here
         }
     }
 }
