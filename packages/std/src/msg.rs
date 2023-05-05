@@ -1,12 +1,14 @@
 use cosmos_sdk_proto::prost::DecodeError;
 use cosmwasm_std::Coin;
 use itertools::Itertools;
+use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::addr::{Addr, AddrError};
 
 /// This is the internal message format used in Pulsarium.
 /// We convert various wire formats into this before processing.
+#[derive(Debug, PartialEq)]
 pub enum Msg {
     Bank(BankMsg),
 }
@@ -17,12 +19,26 @@ impl From<BankMsg> for Msg {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum BankMsg {
     Send {
         sender: Addr,
         recipient: Addr,
         amount: Vec<Coin>,
     },
+    Burn {
+        sender: Addr,
+        amount: Vec<Coin>,
+    },
+}
+
+impl Display for BankMsg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BankMsg::Send { .. } => f.write_str("BankMsg::Send"),
+            BankMsg::Burn { .. } => f.write_str("BankMsg::Burn"),
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -40,19 +56,17 @@ pub enum MsgError {
 
 impl Msg {
     /// List which addresses must sign the message for it to be valid
-    pub fn required_signers(&self) -> Vec<Addr> {
+    pub fn required_signer(&self) -> Addr {
         match &self {
-            Msg::Bank(BankMsg::Send { sender, .. }) => vec![sender.clone()],
+            Msg::Bank(BankMsg::Send { sender, .. }) => sender.clone(),
+            Msg::Bank(BankMsg::Burn { sender, .. }) => sender.clone(),
         }
     }
 }
 
 /// Combine the required signers of the messages in order, removing duplicates
 pub fn required_signers(msgs: &[Msg]) -> Vec<Addr> {
-    msgs.iter()
-        .flat_map(Msg::required_signers)
-        .unique()
-        .collect()
+    msgs.iter().map(Msg::required_signer).unique().collect()
 }
 
 mod cosmos {

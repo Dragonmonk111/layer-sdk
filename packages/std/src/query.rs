@@ -1,5 +1,6 @@
 use crate::addr::{Addr, AddrError};
 use cosmwasm_std::Coin;
+use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 pub enum Query {
@@ -23,7 +24,17 @@ pub enum BankQuery {
     Balance { address: Addr, denom: String },
     /// Note that this may be much more expensive than Balance and should be avoided if possible.
     /// Return value is AllBalanceResponse.
-    AllBalances { address: String },
+    AllBalances { address: Addr },
+}
+
+impl Display for BankQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BankQuery::Supply { .. } => f.write_str("BankQuery::Supply"),
+            BankQuery::Balance { .. } => f.write_str("BankQuery::Balance"),
+            BankQuery::AllBalances { .. } => f.write_str("BankQuery::AllBalances"),
+        }
+    }
 }
 
 pub struct SupplyResponse {

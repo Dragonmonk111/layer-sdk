@@ -2,6 +2,8 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
+use cosmwasm_std::StdResult;
+use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
 pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("PULSAR_BECH32");
@@ -65,6 +67,58 @@ impl Addr {
             return Err(AddrError::InvalidLength(addr.len()));
         }
         Ok(Addr(addr))
+    }
+}
+
+impl<'a> PrimaryKey<'a> for Addr {
+    type Prefix = ();
+    type SubPrefix = ();
+    type Suffix = Self;
+    type SuperSuffix = Self;
+
+    fn key(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl<'a> Prefixer<'a> for Addr {
+    fn prefix(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl KeyDeserialize for Addr {
+    type Output = Addr;
+
+    #[inline(always)]
+    fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
+        Ok(Addr(value))
+    }
+}
+
+impl<'a> PrimaryKey<'a> for &'a Addr {
+    type Prefix = ();
+    type SubPrefix = ();
+    type Suffix = Self;
+    type SuperSuffix = Self;
+
+    fn key(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl<'a> Prefixer<'a> for &'a Addr {
+    fn prefix(&self) -> Vec<Key> {
+        vec![Key::Ref(self.deref())]
+    }
+}
+
+impl KeyDeserialize for &Addr {
+    type Output = Addr;
+
+    #[inline(always)]
+    fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
+        Ok(Addr(value))
     }
 }
 
