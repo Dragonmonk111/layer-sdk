@@ -3,6 +3,7 @@ use cosmwasm_std::Coin;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Query {
     /// Return the raw binary value stored under that key
     Raw {
@@ -17,6 +18,7 @@ impl From<BankQuery> for Query {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankQuery {
     /// Return value is of type SupplyResponse.
     Supply { denom: String },
