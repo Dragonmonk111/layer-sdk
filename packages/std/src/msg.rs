@@ -1,5 +1,5 @@
 use cosmos_sdk_proto::prost::DecodeError;
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, StdError};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
@@ -41,8 +41,11 @@ impl Display for BankMsg {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum MsgError {
+    #[error("{0}")]
+    Std(#[from] StdError),
+
     #[error("Unsupported Any type: {0}")]
     UnsupportedAnyType(String),
 
@@ -88,9 +91,13 @@ mod cosmos {
         traits::{MessageExt, TypeUrl},
     };
     use cosmrs::Any;
+    use cosmwasm_std::Uint128;
 
-    fn parse_sdk_coin(_coin: &SdkCoin) -> Result<Coin, MsgError> {
-        todo!();
+    fn parse_sdk_coin(coin: &SdkCoin) -> Result<Coin, MsgError> {
+        Ok(Coin {
+            denom: coin.denom.clone(),
+            amount: Uint128::try_from(coin.amount.as_str())?,
+        })
     }
 
     fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {

@@ -17,7 +17,7 @@ pub enum Tx {
     Cosmos(CosmosTx),
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum TxError {
     #[error("{0}")]
     Msg(#[from] MsgError),
@@ -231,5 +231,71 @@ pub mod cosmos {
         }
 
         Ok(FeeInfo { fee, gas_limit })
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        use crate::DEFAULT_BECH32_PREFIX;
+        use cosmrs::{
+            bank::MsgSend,
+            crypto::secp256k1,
+            tx::{self, Fee, Msg, SignDoc, SignerInfo},
+            Coin,
+        };
+
+        #[test]
+        fn happy_path_tx_parsing() {
+            let sender_private_key = secp256k1::SigningKey::random();
+            let sender_public_key = sender_private_key.public_key();
+            let sender_account_id = sender_public_key.account_id(DEFAULT_BECH32_PREFIX).unwrap();
+
+            let rcpt_account_id = secp256k1::SigningKey::random()
+                .public_key()
+                .account_id(DEFAULT_BECH32_PREFIX)
+                .unwrap();
+
+            let sequence_number = 5;
+            let chain_id = "tpulsar-1".parse().unwrap();
+            let gas = 350_000u64;
+            let timeout_height = 9001u16;
+
+            let amount = Coin {
+                amount: 1_000_000u128,
+                denom: "uatom".parse().unwrap(),
+            };
+            let fee = Coin {
+                amount: 200_000u128,
+                denom: "uatom".parse().unwrap(),
+            };
+
+            let msg_send = MsgSend {
+                from_address: sender_account_id.clone(),
+                to_address: rcpt_account_id,
+                amount: vec![amount.clone()],
+            };
+
+            let tx_body = tx::Body::new(vec![msg_send.to_any().unwrap()], "", timeout_height);
+            let signer_info = SignerInfo::single_direct(Some(sender_public_key), sequence_number);
+            let auth_info = signer_info.auth_info(Fee::from_amount_and_gas(fee.clone(), gas));
+
+            // The "sign doc" contains a message to be signed.
+            let sign_doc =
+                SignDoc::new(&tx_body, &auth_info, &chain_id, FIXED_ACCOUNT_NUMBER).unwrap();
+            // Sign the "sign doc" with the sender's private key, producing a signed raw transaction.
+            let tx_signed = sign_doc.sign(&sender_private_key).unwrap();
+            // Serialize the raw transaction as bytes (i.e. `Vec<u8>`).
+            let tx_bytes = tx_signed.to_bytes().unwrap();
+
+            // now let's parse and see if we have the proper values
+            let tx = crate::Tx::parse_tx(&tx_bytes, chain_id.as_str()).unwrap();
+
+            // validate we have the expected values
+            let tx = match tx {
+                crate::Tx::Cosmos(cms) => cms,
+            };
+            assert_eq!(tx.timeout_height, Some(timeout_height as u64));
+        }
     }
 }
