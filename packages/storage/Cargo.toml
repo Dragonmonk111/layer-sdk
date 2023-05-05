@@ -1,0 +1,12 @@
+[package]
+name = "pulsar-storage"
+description = "Storage helpers for Pulsarium"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cosmwasm-std = { workspace = true }
+thiserror = { workspace = true }
