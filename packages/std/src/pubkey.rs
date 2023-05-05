@@ -2,6 +2,7 @@ use cosmrs::tx::SignerPublicKey;
 
 use crate::TxError;
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum PubKey {
     Ed25519(Vec<u8>),
     Secp256k1(Vec<u8>),

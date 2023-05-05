@@ -132,7 +132,7 @@ pub mod cosmos {
                 v => Some(v),
             };
 
-            // TODO: validate other fields not used from body
+            // validate other fields not used from body
             if !tx.body.extension_options.is_empty() {
                 return Err(TxError::ExtensionsNotSupported);
             }
@@ -230,7 +230,7 @@ pub mod cosmos {
     mod test {
         use super::*;
 
-        use crate::DEFAULT_BECH32_PREFIX;
+        use crate::{BankMsg, DEFAULT_BECH32_PREFIX};
         use cosmrs::{
             bank::MsgSend,
             crypto::secp256k1,
@@ -265,7 +265,7 @@ pub mod cosmos {
 
             let msg_send = MsgSend {
                 from_address: sender_account_id.clone(),
-                to_address: rcpt_account_id,
+                to_address: rcpt_account_id.clone(),
                 amount: vec![amount.clone()],
             };
 
@@ -289,7 +289,29 @@ pub mod cosmos {
                 crate::Tx::Cosmos(cms) => cms,
             };
             assert_eq!(tx.timeout_height, Some(timeout_height as u64));
-            // TODO: more things here
+            assert_eq!(tx.fee.fee, Some(cosmwasm_std::coin(200_000u128, "uatom")));
+            assert_eq!(tx.fee.gas_limit, gas);
+            assert_eq!(tx.msgs.len(), 1);
+
+            let sender_addr = Addr::parse_string(sender_account_id.as_ref()).unwrap();
+            let rcpt_addr = Addr::parse_string(rcpt_account_id.as_ref()).unwrap();
+            match &tx.msgs[0] {
+                crate::Msg::Bank(BankMsg::Send {
+                    sender,
+                    amount,
+                    recipient,
+                }) => {
+                    assert_eq!(sender, &sender_addr);
+                    assert_eq!(recipient, &rcpt_addr);
+                    assert_eq!(amount, &[cosmwasm_std::coin(1_000_000u128, "uatom")]);
+                }
+                _ => panic!("incorrect message"),
+            };
+            assert_eq!(tx.signer, sender_addr);
+
+            assert_eq!(tx.signing_info.sequence, sequence_number);
+            // assert!(tx.signing_info.pubkey.is_some());
+            assert!(!tx.signing_info.signature.is_empty())
         }
     }
 }
