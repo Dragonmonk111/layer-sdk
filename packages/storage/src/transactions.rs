@@ -26,8 +26,6 @@ pub struct StorageTransaction<'a> {
     storage: &'a dyn Storage,
     /// these are local changes not flushed to backing storage
     local_state: BTreeMap<Vec<u8>, Delta>,
-    /// a log of local changes not yet flushed to backing storage
-    rep_log: RepLog,
 }
 
 impl<'a> StorageTransaction<'a> {
@@ -35,13 +33,14 @@ impl<'a> StorageTransaction<'a> {
         StorageTransaction {
             storage,
             local_state: BTreeMap::new(),
-            rep_log: RepLog::new(),
         }
     }
 
     /// prepares this transaction to be committed to storage
+    /// Consumes local cache and converts it to something than can be applied to another storage
     pub fn prepare(self) -> RepLog {
-        self.rep_log
+        let ops_log = self.local_state.into_iter().map(Op::from_delta).collect();
+        RepLog { ops_log }
     }
 }
 
@@ -62,13 +61,11 @@ impl<'a> Storage for StorageTransaction<'a> {
             value: value.to_vec(),
         };
         self.local_state.insert(key.to_vec(), op.to_delta());
-        self.rep_log.append(op);
     }
 
     fn remove(&mut self, key: &[u8]) {
         let op = Op::Delete { key: key.to_vec() };
         self.local_state.insert(key.to_vec(), op.to_delta());
-        self.rep_log.append(op);
     }
 
     /// range allows iteration over a set of keys, either forwards or backwards
@@ -109,15 +106,6 @@ pub struct RepLog {
 }
 
 impl RepLog {
-    fn new() -> Self {
-        RepLog { ops_log: vec![] }
-    }
-
-    /// appends an op to the list of changes to be applied upon commit
-    fn append(&mut self, op: Op) {
-        self.ops_log.push(op);
-    }
-
     /// applies the stored list of `Op`s to the provided `Storage`
     pub fn commit(self, storage: &mut dyn Storage) {
         for op in self.ops_log {
@@ -155,6 +143,13 @@ impl Op {
                 value: value.clone(),
             },
             Op::Delete { .. } => Delta::Delete {},
+        }
+    }
+
+    pub fn from_delta((key, delta): (Vec<u8>, Delta)) -> Self {
+        match delta {
+            Delta::Set { value } => Op::Set { key, value },
+            Delta::Delete {} => Op::Delete { key },
         }
     }
 }
