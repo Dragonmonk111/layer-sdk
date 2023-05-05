@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::addr::Addr;
 use crate::msg::{Msg, MsgError};
 
-pub use cosmos::{CosmosTx, SigningInfo, FeeInfo};
+pub use cosmos::{CosmosTx, FeeInfo, SigningInfo};
 
 /// A list of various tx formats we accept.
 /// We start with Cosmos-SDK format for compatibility, but want to later allow native signing format.
@@ -30,6 +30,21 @@ pub enum TxError {
 
     #[error("Trying to pay fees in multiple denoms, we allow only 1")]
     MultipleFeeDenoms,
+
+    #[error("No support for complex pubkey types: {0}")]
+    UnsupportedPubKey(&'static str),
+
+    #[error("No support for signing mode: {0}")]
+    UnsupportedSigningMode(&'static str),
+
+    #[error("Tx extensions present but not supported")]
+    ExtensionsNotSupported,
+
+    #[error("Fee grant field used but not supported")]
+    FeeGrantNotSupported,
+
+    #[error("Fee payer field used but not supported")]
+    FeePayerNotSupported,
 
     // TODO: remove this and replace with deterministic errors
     #[error("{0}")]
@@ -62,6 +77,7 @@ impl Tx {
 
 pub mod cosmos {
     use super::*;
+    use cosmos_sdk_proto::cosmos::tx::signing::v1beta1::SignMode;
     use cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw;
     use cosmos_sdk_proto::prost::Message;
 
@@ -113,18 +129,20 @@ pub mod cosmos {
             let tx = cosmrs::Tx::from_bytes(bytes)?;
             let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(Msg::from_cosmos).collect();
             let msgs = msgs?;
-
             let signer = required_signer(&msgs)?;
 
+            // other needed info
+            let fee = get_fee(&tx)?;
+            let signing_info = get_signing_info(&tx)?;
             let timeout_height = match tx.body.timeout_height.value() {
                 0 => None,
                 v => Some(v),
             };
 
-            // TODO: signing info with signature
-            let fee = get_fee(&tx)?;
-
-            let signing_info = get_signing_info(&tx)?;
+            // TODO: validate other fields not used from body
+            if !tx.body.extension_options.is_empty() {
+                return Err(TxError::ExtensionsNotSupported);
+            }
 
             Ok(CosmosTx {
                 sign_bytes,
@@ -157,13 +175,23 @@ pub mod cosmos {
             1 => Ok(&infos[0]),
             _ => Err(TxError::MultipleSigners),
         }?;
-        let sequence = info.sequence;
 
+        let sequence = info.sequence;
         let pubkey = info
             .public_key
             .as_ref()
             .map(PubKey::parse_cosmos)
             .transpose()?;
+
+        // assert we have sign-mode-direct (need to add legacy amino support later)
+        match info.mode_info {
+            cosmrs::tx::mode_info::ModeInfo::Single(s) => match s.mode {
+                SignMode::Direct => Ok(()),
+                SignMode::LegacyAminoJson => Err(TxError::UnsupportedSigningMode("legacy_amino")),
+                m => Err(TxError::UnsupportedSigningMode(m.as_str_name())),
+            },
+            _ => Err(TxError::UnsupportedSigningMode("multi")),
+        }?;
 
         Ok(SigningInfo {
             sequence,
@@ -193,6 +221,15 @@ pub mod cosmos {
             }
         };
         let gas_limit = info.gas_limit;
+
+        // assert some fields empty
+        if info.granter.is_some() {
+            return Err(TxError::FeeGrantNotSupported);
+        }
+        if info.payer.is_some() {
+            return Err(TxError::FeePayerNotSupported);
+        }
+
         Ok(FeeInfo { fee, gas_limit })
     }
 }
