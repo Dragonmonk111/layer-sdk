@@ -89,8 +89,12 @@ mod cosmos {
     };
     use cosmrs::Any;
 
-    fn parse_sdk_coins(_coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {
+    fn parse_sdk_coin(_coin: &SdkCoin) -> Result<Coin, MsgError> {
         todo!();
+    }
+
+    fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {
+        coins.iter().map(parse_sdk_coin).collect()
     }
 
     impl Msg {

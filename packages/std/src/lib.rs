@@ -1,6 +1,7 @@
 mod addr;
 mod gas;
 mod msg;
+mod pubkey;
 mod query;
 mod tx;
 

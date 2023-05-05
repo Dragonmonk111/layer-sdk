@@ -20,10 +20,9 @@ impl Auth {
         _storage: &mut dyn Storage,
         _block: &BlockInfo,
         _sm: &StateMachine,
-        tx: Tx,
+        _tx: Tx,
     ) -> PulsarResult<TxData> {
-        // make sure we can parse it
-        let _info = tx.parse_tx()?;
+        // ensure this is a cosmos tx
 
         // load the signer account if any
 
