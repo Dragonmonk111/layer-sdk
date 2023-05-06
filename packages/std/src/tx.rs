@@ -1,11 +1,13 @@
 use cosmos_sdk_proto::prost::DecodeError;
 use cosmrs::ErrorReport;
+use cosmwasm_std::Coin;
 use thiserror::Error;
 
 use crate::addr::Addr;
 use crate::msg::{Msg, MsgError};
 
-pub use cosmos::{CosmosTx, FeeInfo, SigningInfo};
+use crate::pubkey::PubKey;
+use crate::tx::cosmos::parse_cosmos_tx;
 
 /// A list of various tx formats we accept.
 /// We start with Cosmos-SDK format for compatibility, but want to later allow native signing format.
@@ -13,7 +15,46 @@ pub use cosmos::{CosmosTx, FeeInfo, SigningInfo};
 pub enum Tx {
     /// Cosmos Format. Note that we support a subset of the functionality:
     /// Only one signer, no authz or fee grants. But that means 90%+ of tx work, and are "Keplr compatible"
-    Cosmos(CosmosTx),
+    Signed(SignedTx),
+}
+
+/// This is a struct to represent a parsed transaction.
+/// The encoding schemes are defined separately and there are many ways to transform
+/// raw bytes into a proper SignedTx instance.
+/// Once of which is the Cosmos SDK format (direct or legacy amino signing modes)
+/// There will be others more native to Pulsar in the future, or for compatibility with other chains.
+pub struct SignedTx {
+    /// These are the raw bytes that should be properly signed by a pubkey to be valid.
+    /// It depends fully on the raw encoding of the transaction.
+    pub sign_bytes: Vec<u8>,
+
+    // The decoded messages inside this transaction
+    pub msgs: Vec<Msg>,
+
+    // The account that will execute them (must match the pubkey in signing_info if that is set)
+    pub signer: Addr,
+
+    /// this is info on the signer (pubkey, sequence)
+    pub signing_info: SigningInfo,
+
+    /// this is info on the fee (amount and gas wanted)
+    pub fee: FeeInfo,
+
+    /// if set and the chain height is greater than this, abort the tx in all cases
+    pub timeout_height: Option<u64>,
+}
+
+pub struct SigningInfo {
+    pub sequence: u64,
+    pub pubkey: Option<PubKey>,
+    pub signature: Vec<u8>,
+}
+
+pub struct FeeInfo {
+    // how much they pay
+    pub fee: Option<Coin>,
+    // how much work to do
+    pub gas_limit: u64,
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -60,11 +101,12 @@ impl From<ErrorReport> for TxError {
     }
 }
 
+// TODO: move this elsewhere - into the app level.
 impl Tx {
     pub fn parse_tx(bytes: &[u8], chain_id: &str) -> Result<Self, TxError> {
         // TODO: add other loop if non-cosmos
-        let tx = CosmosTx::parse_cosmos(bytes, chain_id)?;
-        Ok(Tx::Cosmos(tx))
+        let tx = parse_cosmos_tx(bytes, chain_id)?;
+        Ok(Tx::Signed(tx))
     }
 }
 
@@ -83,75 +125,47 @@ pub mod cosmos {
     pub const FIXED_ACCOUNT_NUMBER: u64 = 0;
 
     // This is parsed from cosmrs::Raw and cosmrs::Tx
-    pub struct CosmosTx {
-        // These are the raw bytes that should be properly signed by a pubkey to be valid
-        pub sign_bytes: Vec<u8>,
+    /// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
+    /// Extracts all useful info from the Tx in a simpler format for us
+    pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<SignedTx, TxError> {
+        // get raw format for accurate signing info (to validate sig)
+        let raw = TxRaw::decode(bytes)?;
+        // FIXME: add tx hash here as well from TxRaw?
+        let doc = SignDoc {
+            body_bytes: raw.body_bytes,
+            auth_info_bytes: raw.auth_info_bytes,
+            chain_id: chain_id.to_string(),
+            account_number: FIXED_ACCOUNT_NUMBER,
+        };
+        let sign_bytes = doc.into_bytes()?;
 
-        // The decoded messages inside this transaction
-        pub msgs: Vec<Msg>,
+        // parse into cosmrs::Tx so we can understand what we have
+        let tx = cosmrs::Tx::from_bytes(bytes)?;
+        let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(Msg::from_cosmos).collect();
+        let msgs = msgs?;
+        let signer = required_signer(&msgs)?;
 
-        // The account that will execute them (must match the pubkey in signing_info if that is set)
-        pub signer: Addr,
+        // other needed info
+        let fee = get_fee(&tx)?;
+        let signing_info = get_signing_info(&tx)?;
+        let timeout_height = match tx.body.timeout_height.value() {
+            0 => None,
+            v => Some(v),
+        };
 
-        /// this is info on the signer (pubkey, sequence)
-        pub signing_info: SigningInfo,
-
-        /// this is info on the fee (amount and gas wanted)
-        pub fee: FeeInfo,
-
-        /// if set and the chain height is greater than this, abort the tx in all cases
-        pub timeout_height: Option<u64>,
-    }
-
-    impl CosmosTx {
-        /// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
-        /// Extracts all useful info from the Tx in a simpler format for us
-        pub fn parse_cosmos(bytes: &[u8], chain_id: &str) -> Result<Self, TxError> {
-            // get raw format for accurate signing info (to validate sig)
-            let raw = TxRaw::decode(bytes)?;
-            // FIXME: add tx hash here as well from TxRaw?
-            let doc = SignDoc {
-                body_bytes: raw.body_bytes,
-                auth_info_bytes: raw.auth_info_bytes,
-                chain_id: chain_id.to_string(),
-                account_number: FIXED_ACCOUNT_NUMBER,
-            };
-            let sign_bytes = doc.into_bytes()?;
-
-            // parse into cosmrs::Tx so we can understand what we have
-            let tx = cosmrs::Tx::from_bytes(bytes)?;
-            let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(Msg::from_cosmos).collect();
-            let msgs = msgs?;
-            let signer = required_signer(&msgs)?;
-
-            // other needed info
-            let fee = get_fee(&tx)?;
-            let signing_info = get_signing_info(&tx)?;
-            let timeout_height = match tx.body.timeout_height.value() {
-                0 => None,
-                v => Some(v),
-            };
-
-            // validate other fields not used from body
-            if !tx.body.extension_options.is_empty() {
-                return Err(TxError::ExtensionsNotSupported);
-            }
-
-            Ok(CosmosTx {
-                sign_bytes,
-                signer,
-                msgs,
-                signing_info,
-                fee,
-                timeout_height,
-            })
+        // validate other fields not used from body
+        if !tx.body.extension_options.is_empty() {
+            return Err(TxError::ExtensionsNotSupported);
         }
-    }
 
-    pub struct SigningInfo {
-        pub sequence: u64,
-        pub pubkey: Option<PubKey>,
-        pub signature: Vec<u8>,
+        Ok(SignedTx {
+            sign_bytes,
+            signer,
+            msgs,
+            signing_info,
+            fee,
+            timeout_height,
+        })
     }
 
     pub fn get_signing_info(tx: &cosmrs::Tx) -> Result<SigningInfo, TxError> {
@@ -191,13 +205,6 @@ pub mod cosmos {
             pubkey,
             signature,
         })
-    }
-
-    pub struct FeeInfo {
-        // how much they pay
-        pub fee: Option<Coin>,
-        // how much work to do
-        pub gas_limit: u64,
     }
 
     fn parse_fee_coin(fee_coin: &cosmrs::Coin) -> Coin {
@@ -285,7 +292,7 @@ pub mod cosmos {
             let tx = crate::Tx::parse_tx(&tx_bytes, chain_id.as_str()).unwrap();
 
             // validate we have the expected values
-            let crate::Tx::Cosmos(tx) = tx;
+            let crate::Tx::Signed(tx) = tx;
             assert_eq!(tx.timeout_height, Some(timeout_height as u64));
             assert_eq!(tx.fee.fee, Some(cosmwasm_std::coin(200_000u128, "uatom")));
             assert_eq!(tx.fee.gas_limit, gas);
