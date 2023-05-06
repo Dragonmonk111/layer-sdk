@@ -10,9 +10,11 @@ edition = { workspace = true }
 [dependencies]
 cosmwasm-std = { workspace = true }
 cosmwasm-schema = { workspace = true }
+cosmwasm-crypto = { workspace = true }
 cw-storage-plus = { workspace = true }
 thiserror = { workspace = true }
 bech32 = { workspace = true }
 cosmrs = { workspace = true }
 cosmos-sdk-proto = { workspace = true }
 itertools = { workspace = true }
+sha2 = { workspace = true }

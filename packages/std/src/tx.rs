@@ -237,13 +237,16 @@ pub mod cosmos {
     mod test {
         use super::*;
 
-        use crate::{BankMsg, DEFAULT_BECH32_PREFIX};
         use cosmrs::{
             bank::MsgSend,
             crypto::secp256k1,
             tx::{self, Fee, Msg, SignDoc, SignerInfo},
             Coin,
         };
+        use cosmwasm_crypto::secp256k1_verify;
+        use sha2::{Digest, Sha256};
+
+        use crate::{BankMsg, DEFAULT_BECH32_PREFIX};
 
         #[test]
         fn happy_path_tx_parsing() {
@@ -315,8 +318,20 @@ pub mod cosmos {
             assert_eq!(tx.signer, sender_addr);
 
             assert_eq!(tx.signing_info.sequence, sequence_number);
-            // assert!(tx.signing_info.pubkey.is_some());
-            assert!(!tx.signing_info.signature.is_empty())
+            assert!(tx.signing_info.pubkey.is_some());
+            assert!(!tx.signing_info.signature.is_empty());
+
+            // now, let's try to validate the signature
+            let sign_bytes = tx.sign_bytes.as_slice();
+            let signature = tx.signing_info.signature.as_slice();
+            let Some(PubKey::Secp256k1(pk)) = &tx.signing_info.pubkey else { panic!("Wrong pubkey type") };
+
+            // cosmos secp256k1 standards
+            assert_eq!(signature.len(), 64);
+            assert_eq!(pk.len(), 33);
+
+            let hash = Sha256::digest(sign_bytes);
+            secp256k1_verify(hash.as_ref(), signature, pk.as_slice()).unwrap();
         }
     }
 }
