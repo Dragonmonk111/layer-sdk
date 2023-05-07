@@ -24,10 +24,6 @@ pub enum Tx {
 /// Once of which is the Cosmos SDK format (direct or legacy amino signing modes)
 /// There will be others more native to Pulsar in the future, or for compatibility with other chains.
 pub struct SignedTx {
-    /// These are the raw bytes that should be properly signed by a pubkey to be valid.
-    /// It depends fully on the raw encoding of the transaction.
-    pub sign_bytes: Vec<u8>,
-
     // The decoded messages inside this transaction
     pub msgs: Vec<Msg>,
 
@@ -45,9 +41,29 @@ pub struct SignedTx {
 }
 
 pub struct SigningInfo {
+    /// These are the raw bytes that should be properly signed by a pubkey to be valid.
+    /// It depends fully on the raw encoding of the transaction.
+    /// It is a hash of the sign bytes that can be fed into a public key verification function
+    pub message_hash: Vec<u8>,
+
+    /// This is the sequence number from the given pubkey -
     pub sequence: u64,
+
+    /// This is the pubkey used to sign. If None, the signer address has previously
+    /// signed transactions on this chain, and we can lookup the pubkey from the chain state.
     pub pubkey: Option<PubKey>,
+
+    /// These are raw signature bytes that make sense based on the pubkey type
     pub signature: Vec<u8>,
+}
+
+impl SigningInfo {
+    pub fn validate_signature(&self) -> Result<(), TxError> {
+        match &self.pubkey {
+            Some(pk) => pk.validate_signature(&self.message_hash, &self.signature),
+            None => Err(TxError::MissingPubKey),
+        }
+    }
 }
 
 pub struct FeeInfo {
@@ -86,6 +102,12 @@ pub enum TxError {
     #[error("Fee payer field used but not supported")]
     FeePayerNotSupported,
 
+    #[error("No public key provided to validate the signature")]
+    MissingPubKey,
+
+    #[error("The signature doesn't match the claimed pubkey and the message hash")]
+    InvalidSignature,
+
     // TODO: remove this and replace with deterministic errors
     #[error("{0}")]
     ProtoDecode(#[from] DecodeError),
@@ -110,6 +132,7 @@ impl Tx {
     }
 }
 
+// TODO: move to own package
 pub mod cosmos {
     use super::*;
     use cosmos_sdk_proto::cosmos::tx::signing::v1beta1::SignMode;
@@ -118,6 +141,7 @@ pub mod cosmos {
 
     use cosmrs::tx::SignDoc;
     use cosmwasm_std::{coin, Coin};
+    use sha2::{Digest, Sha256};
 
     use crate::pubkey::PubKey;
     use crate::required_signer;
@@ -131,6 +155,7 @@ pub mod cosmos {
         // get raw format for accurate signing info (to validate sig)
         let raw = TxRaw::decode(bytes)?;
         // FIXME: add tx hash here as well from TxRaw?
+        // TODO: we need to do this in some match statement - only works for direct mode
         let doc = SignDoc {
             body_bytes: raw.body_bytes,
             auth_info_bytes: raw.auth_info_bytes,
@@ -138,6 +163,7 @@ pub mod cosmos {
             account_number: FIXED_ACCOUNT_NUMBER,
         };
         let sign_bytes = doc.into_bytes()?;
+        let message_hash = Sha256::digest(sign_bytes).to_vec();
 
         // parse into cosmrs::Tx so we can understand what we have
         let tx = cosmrs::Tx::from_bytes(bytes)?;
@@ -147,7 +173,7 @@ pub mod cosmos {
 
         // other needed info
         let fee = get_fee(&tx)?;
-        let signing_info = get_signing_info(&tx)?;
+        let signing_info = get_signing_info(&tx, message_hash)?;
         let timeout_height = match tx.body.timeout_height.value() {
             0 => None,
             v => Some(v),
@@ -159,7 +185,6 @@ pub mod cosmos {
         }
 
         Ok(SignedTx {
-            sign_bytes,
             signer,
             msgs,
             signing_info,
@@ -168,7 +193,10 @@ pub mod cosmos {
         })
     }
 
-    pub fn get_signing_info(tx: &cosmrs::Tx) -> Result<SigningInfo, TxError> {
+    pub fn get_signing_info(
+        tx: &cosmrs::Tx,
+        message_hash: Vec<u8>,
+    ) -> Result<SigningInfo, TxError> {
         let sigs = &tx.signatures;
         let signature = match sigs.len() {
             0 => Err(TxError::NoSigner),
@@ -201,6 +229,7 @@ pub mod cosmos {
         }?;
 
         Ok(SigningInfo {
+            message_hash,
             sequence,
             pubkey,
             signature,
@@ -243,8 +272,6 @@ pub mod cosmos {
             tx::{self, Fee, Msg, SignDoc, SignerInfo},
             Coin,
         };
-        use cosmwasm_crypto::secp256k1_verify;
-        use sha2::{Digest, Sha256};
 
         use crate::{BankMsg, DEFAULT_BECH32_PREFIX};
 
@@ -319,19 +346,14 @@ pub mod cosmos {
 
             assert_eq!(tx.signing_info.sequence, sequence_number);
             assert!(tx.signing_info.pubkey.is_some());
-            assert!(!tx.signing_info.signature.is_empty());
 
-            // now, let's try to validate the signature
-            let sign_bytes = tx.sign_bytes.as_slice();
-            let signature = tx.signing_info.signature.as_slice();
+            // basic signature checks
+            assert_eq!(tx.signing_info.signature.len(), 64);
             let Some(PubKey::Secp256k1(pk)) = &tx.signing_info.pubkey else { panic!("Wrong pubkey type") };
-
-            // cosmos secp256k1 standards
-            assert_eq!(signature.len(), 64);
             assert_eq!(pk.len(), 33);
 
-            let hash = Sha256::digest(sign_bytes);
-            secp256k1_verify(hash.as_ref(), signature, pk.as_slice()).unwrap();
+            // validate
+            tx.signing_info.validate_signature().unwrap();
         }
     }
 }
