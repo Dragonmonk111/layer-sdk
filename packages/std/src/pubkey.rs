@@ -3,10 +3,12 @@ use sha2::{Digest, Sha256};
 
 use cosmrs::tx::SignerPublicKey;
 use cosmwasm_crypto::secp256k1_verify;
+use cosmwasm_schema::cw_serde;
 
 use crate::{AccountId, AccountIdError, TxError};
 
-#[derive(Debug, PartialEq, Clone)]
+// TODO: make this binary not Vec<u8>
+#[cw_serde]
 pub enum PubKey {
     Ed25519(Vec<u8>),
     Secp256k1(Vec<u8>),

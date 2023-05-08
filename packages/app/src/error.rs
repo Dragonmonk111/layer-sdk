@@ -1,5 +1,5 @@
 use cosmwasm_std::StdError;
-use pulsar_std::{QueryError, TxError};
+use pulsar_std::{AccountIdError, QueryError, TxError};
 use thiserror::Error;
 
 use crate::auth::AuthError;
@@ -14,6 +14,9 @@ pub enum PulsarError {
 
     #[error("{0}")]
     Auth(#[from] AuthError),
+
+    #[error("{0}")]
+    AccountId(#[from] AccountIdError),
 
     #[error("{0}")]
     Bank(#[from] BankError),

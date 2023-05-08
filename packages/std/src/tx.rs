@@ -108,6 +108,18 @@ pub enum TxError {
     #[error("The signature doesn't match the claimed pubkey and the message hash")]
     InvalidSignature,
 
+    #[error("The provided sequence {provided} doesn't match, expected {expected}")]
+    InvalidSequence { provided: u64, expected: u64 },
+
+    #[error("PubKey provided in the tx doesn't match the pubkey of the sender account")]
+    PubKeyMismatch,
+
+    #[error("The first transaction provided by an account must contain the pubkey")]
+    PubKeyMissing,
+
+    #[error("Cannot execute an external transaction from an internal account")]
+    InternalAcccount,
+
     // TODO: remove this and replace with deterministic errors
     #[error("{0}")]
     ProtoDecode(#[from] DecodeError),

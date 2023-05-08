@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::StdResult;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
@@ -16,7 +17,8 @@ fn bech32_prefix() -> &'static str {
     ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cw_serde]
+#[derive(Hash, Eq)]
 pub struct AccountId(Vec<u8>);
 
 impl Deref for AccountId {

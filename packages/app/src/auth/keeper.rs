@@ -1,8 +1,27 @@
 use crate::error::PulsarResult;
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{BlockInfo, Storage};
-use pulsar_std::{AccountId, Msg, Tx};
+use cw_storage_plus::Map;
+use pulsar_std::{AccountId, Msg, PubKey, Tx, TxError};
+use pulsar_storage::prefixed;
 
 use crate::sm::StateMachine;
+
+pub const NAMESPACE_AUTH: &[u8] = b"auth";
+const ACCOUNTS: Map<&AccountId, Account> = Map::new("accounts");
+
+#[cw_serde]
+pub enum Account {
+    /// This is External Account in Ethereum terms, controlled by a public key
+    External { pubkey: PubKey, sequence: u64 },
+    /// No pubkey can control this, either contract or "module account"
+    Internal {},
+    /// Used for account abstraction, where a contract can validate what a pubkey can do
+    Smart {
+        // FIXME: any more info to add here?
+        contract: AccountId,
+    },
+}
 
 pub struct Auth {
     // TODO
@@ -17,25 +36,93 @@ impl Auth {
     /// If successful, it returns the TxData with all info that needs to be executed.
     pub fn validate_tx(
         &self,
-        _storage: &mut dyn Storage,
+        storage: &mut dyn Storage,
         _block: &BlockInfo,
         _sm: &StateMachine,
-        _tx: Tx,
+        tx: Tx,
     ) -> PulsarResult<TxData> {
-        // ensure this is a cosmos tx
+        // later handle other types
+        let Tx::Signed(tx) = tx;
 
         // load the signer account if any
+        let mut auth_store = prefixed(storage, NAMESPACE_AUTH);
+        let pubkey = match ACCOUNTS.may_load(&auth_store, &tx.signer)? {
+            Some(Account::External {
+                pubkey,
+                mut sequence,
+            }) => {
+                // ensure sequence is next in line
+                sequence += 1;
+                if sequence != tx.signing_info.sequence {
+                    return Err(TxError::InvalidSequence {
+                        provided: tx.signing_info.sequence,
+                        expected: sequence,
+                    }
+                    .into());
+                }
+                // if pubkey is in signing info, it must match
+                if let Some(pk) = &tx.signing_info.pubkey {
+                    if pk != &pubkey {
+                        return Err(TxError::PubKeyMismatch {}.into());
+                    }
+                }
+                // store the bumped sequence
+                let account = Account::External {
+                    pubkey: pubkey.clone(),
+                    sequence,
+                };
+                ACCOUNTS.save(&mut auth_store, &tx.signer, &account)?;
+                // use the pubkey in the account to validate
+                pubkey
+            }
+            None => {
+                // if no account, ensure sequence is 1
+                if tx.signing_info.sequence != 1 {
+                    return Err(TxError::InvalidSequence {
+                        provided: tx.signing_info.sequence,
+                        expected: 1,
+                    }
+                    .into());
+                }
+                // ensure pubkey exists and matches account
+                match &tx.signing_info.pubkey {
+                    Some(pk) => {
+                        if pk.account_id()? != tx.signer {
+                            return Err(TxError::PubKeyMismatch.into());
+                        }
+                        let account = Account::External {
+                            pubkey: pk.clone(),
+                            sequence: 1,
+                        };
+                        ACCOUNTS.save(&mut auth_store, &tx.signer, &account)?;
+                        // use the pubkey in the account to validate
+                        pk.clone()
+                    }
+                    None => return Err(TxError::PubKeyMissing.into()),
+                }
+            }
+            Some(Account::Internal {}) => {
+                // this is always prohibited
+                return Err(TxError::InternalAcccount.into());
+            }
+            Some(Account::Smart { .. }) => {
+                todo!();
+            }
+        };
 
-        // validate the signature with that account (Cosmos-specific), and get gas and fee info
+        // validate the signature with that account (Cosmos-specific)
+        pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
 
-        // filter logic on gas pricing....
+        // TODO: filter logic on gas pricing....
 
-        // try to charge fee info
-
-        // bump sequence number
+        // TODO: try to charge fee info
 
         // Return data
-        todo!()
+        Ok(TxData {
+            signer: tx.signer,
+            msgs: tx.msgs,
+            gas_wanted: tx.fee.gas_limit,
+        })
     }
 }
 

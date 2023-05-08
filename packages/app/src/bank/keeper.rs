@@ -62,7 +62,11 @@ impl Bank {
             .map_err(Into::into)
     }
 
-    fn get_balance(&self, bank_storage: &dyn Storage, account: &AccountId) -> PulsarResult<Vec<Coin>> {
+    fn get_balance(
+        &self,
+        bank_storage: &dyn Storage,
+        account: &AccountId,
+    ) -> PulsarResult<Vec<Coin>> {
         let val = BALANCES.may_load(bank_storage, account)?;
         Ok(val.unwrap_or_default().into_vec())
     }
