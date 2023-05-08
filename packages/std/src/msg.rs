@@ -1,10 +1,10 @@
 use cosmos_sdk_proto::prost::DecodeError;
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, StdError};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
-use crate::addr::{Addr, AddrError};
+use crate::account_id::{AccountId, AccountIdError};
 
 /// This is the internal message format used in Pulsarium.
 /// We convert various wire formats into this before processing.
@@ -22,12 +22,12 @@ impl From<BankMsg> for Msg {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankMsg {
     Send {
-        sender: Addr,
-        recipient: Addr,
+        sender: AccountId,
+        recipient: AccountId,
         amount: Vec<Coin>,
     },
     Burn {
-        sender: Addr,
+        sender: AccountId,
         amount: Vec<Coin>,
     },
 }
@@ -41,22 +41,31 @@ impl Display for BankMsg {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum MsgError {
+    #[error("{0}")]
+    Std(#[from] StdError),
+
     #[error("Unsupported Any type: {0}")]
     UnsupportedAnyType(String),
+
+    #[error("Tx doesn't have any messages")]
+    NoMessages,
+
+    #[error("Tx requires signatures from multiple addresses - not supported")]
+    MultipleSigners,
 
     // TODO: remove this and replace with deterministic errors
     #[error("{0}")]
     ProtoDecode(#[from] DecodeError),
 
     #[error("{0}")]
-    Addr(#[from] AddrError),
+    Addr(#[from] AccountIdError),
 }
 
 impl Msg {
     /// List which addresses must sign the message for it to be valid
-    pub fn required_signer(&self) -> Addr {
+    pub fn required_signer(&self) -> AccountId {
         match &self {
             Msg::Bank(BankMsg::Send { sender, .. }) => sender.clone(),
             Msg::Bank(BankMsg::Burn { sender, .. }) => sender.clone(),
@@ -64,9 +73,14 @@ impl Msg {
     }
 }
 
-/// Combine the required signers of the messages in order, removing duplicates
-pub fn required_signers(msgs: &[Msg]) -> Vec<Addr> {
-    msgs.iter().map(Msg::required_signer).unique().collect()
+/// Returns the signer needed by all Messages.
+/// If there are no messages, or different signers required by messages, returns an error
+pub fn required_signer(msgs: &[Msg]) -> Result<AccountId, MsgError> {
+    let mut signers: Vec<_> = msgs.iter().map(Msg::required_signer).dedup().collect();
+    if signers.len() > 1 {
+        return Err(MsgError::MultipleSigners);
+    }
+    signers.pop().ok_or(MsgError::NoMessages)
 }
 
 mod cosmos {
@@ -77,9 +91,17 @@ mod cosmos {
         traits::{MessageExt, TypeUrl},
     };
     use cosmrs::Any;
+    use cosmwasm_std::Uint128;
 
-    fn parse_sdk_coins(_coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {
-        todo!();
+    fn parse_sdk_coin(coin: &SdkCoin) -> Result<Coin, MsgError> {
+        Ok(Coin {
+            denom: coin.denom.clone(),
+            amount: Uint128::try_from(coin.amount.as_str())?,
+        })
+    }
+
+    fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {
+        coins.iter().map(parse_sdk_coin).collect()
     }
 
     impl Msg {
@@ -88,8 +110,8 @@ mod cosmos {
                 MsgSend::TYPE_URL => {
                     let parsed = MsgSend::from_any(msg)?;
                     Ok(BankMsg::Send {
-                        sender: Addr::parse_string(&parsed.from_address)?,
-                        recipient: Addr::parse_string(&parsed.to_address)?,
+                        sender: AccountId::parse_string(&parsed.from_address)?,
+                        recipient: AccountId::parse_string(&parsed.to_address)?,
                         amount: parse_sdk_coins(&parsed.amount)?,
                     }
                     .into())

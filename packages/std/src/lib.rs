@@ -1,14 +1,16 @@
-mod addr;
+mod account_id;
 mod gas;
 mod msg;
+mod pubkey;
 mod query;
 mod tx;
 
-pub use addr::{Addr, AddrError};
+pub use account_id::{AccountId, AccountIdError, DEFAULT_BECH32_PREFIX};
 pub use gas::{GasError, GasMeter};
-pub use msg::{required_signers, BankMsg, Msg, MsgError};
+pub use msg::{required_signer, BankMsg, Msg, MsgError};
+pub use pubkey::PubKey;
 pub use query::{BankQuery, Query, QueryError};
-pub use tx::{ExecInfo, Tx, TxError};
+pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
 
 pub mod response {
     pub use crate::query::{

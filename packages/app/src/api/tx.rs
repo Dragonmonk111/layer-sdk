@@ -23,7 +23,7 @@ impl TxResponse {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GasInfo {
     pub gas_used: u64,
     pub gas_wanted: u64,

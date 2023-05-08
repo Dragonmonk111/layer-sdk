@@ -1,12 +1,16 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 // TODO: make our own custom pulsar-storage package to extend (esp with file system backing, transactions...)
 use cosmwasm_std::{BlockInfo, Storage};
 
 use parking_lot::RwLock;
 use pulsar_std::{GasMeter, Query, Tx};
+use pulsar_storage::StorageTransaction;
 
-use crate::api::{Block, FinalizeBlockResponse, InitChainRequest, InitChainResponse, TxResult};
+use crate::api::{
+    Block, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse, TxResponse,
+    TxResult,
+};
 use crate::error::PulsarResult;
 use crate::sm::StateMachine;
 
@@ -24,6 +28,9 @@ pub struct App {
 
     // State Machine Logic
     logic: StateMachine,
+
+    // cached chain_id
+    chain_id: String,
 }
 
 impl App {
@@ -36,6 +43,7 @@ impl App {
             storage: RwLock::new(Box::new(storage)),
             block: RwLock::new(current_block),
             logic,
+            chain_id: "todo-1".to_string(),
         }
     }
 
@@ -57,11 +65,107 @@ impl App {
         Ok(resp.to_cosmos()?)
     }
 
-    pub fn check_tx(&self, _tx: Tx) -> TxResult {
-        todo!();
+    pub fn check_tx(&self, tx: Tx) -> TxResult {
+        let lock = self.storage.read();
+        let block = self.block.read();
+        // temporary cache we will throw away
+        let mut store = StorageTransaction::new(lock.deref().as_ref());
+
+        // TODO: we could do things like commit write to underlying store on success...
+        self.execute_tx(&mut store, block.deref(), tx)
     }
 
-    pub fn finalize_block(&self, _block: Block) -> PulsarResult<FinalizeBlockResponse> {
-        todo!();
+    // TODO: this needs to be cleaned up
+    fn execute_tx(&self, storage: &mut dyn Storage, block: &BlockInfo, tx: Tx) -> TxResult {
+        // validate the transaction
+        let data = match self.logic.validate_tx(storage, block, tx) {
+            Ok(x) => x,
+            Err(e) => {
+                return TxResult {
+                    gas: Default::default(),
+                    result: Err(e),
+                }
+            }
+        };
+        // TODO: if this passes, we should ensure auth (sequence / fee) is written,
+        // even if messages fail and are reverted
+        let gas_wanted = data.gas_wanted;
+        let mut meter = GasMeter::new(gas_wanted);
+
+        // execute them all
+        let resps: Result<Vec<_>, _> = data
+            .msgs
+            .into_iter()
+            .map(|msg| {
+                self.logic
+                    .process_msg(storage, &mut meter, &data.signer, block, msg)
+            })
+            .collect();
+
+        // collect responses (todo: combine multiple data results, not just events...)
+        let gas_used = meter.used();
+        let result = resps.map(|all| {
+            let events = all.into_iter().flat_map(|r| r.events).collect();
+            TxResponse { data: None, events }
+        });
+
+        TxResult {
+            gas: GasInfo {
+                gas_used,
+                gas_wanted,
+            },
+            result,
+        }
+    }
+
+    pub fn finalize_block(&self, full_block: Block) -> PulsarResult<FinalizeBlockResponse> {
+        // FIXME: add begin blocker
+
+        let lock = self.storage.read();
+        let block = BlockInfo {
+            height: full_block.height,
+            time: full_block.time,
+            chain_id: self.chain_id.clone(),
+        };
+
+        // TODO: re-review where we commit and where we wrap (add some docs)
+        // grab all writes here and commit at the end
+        let mut block_store = StorageTransaction::new(lock.deref().as_ref());
+        let tx_results: Vec<_> = full_block
+            .txs
+            .into_iter()
+            .map(|tx| {
+                let mut tx_store = StorageTransaction::new(&block_store);
+                let r = self.execute_tx(&mut tx_store, &block, tx);
+                if r.result.is_ok() {
+                    tx_store.prepare().commit(&mut block_store);
+                }
+                r
+            })
+            .collect();
+
+        // FIXME: add end blocker
+
+        // commit to underlying store
+        {
+            let ops = block_store.prepare();
+            let mut lock = self.storage.write();
+            ops.commit(lock.as_mut());
+        }
+
+        // update block in cache
+        let mut new_lock = self.block.write();
+        *new_lock.deref_mut() = block;
+
+        // TODO: make app-hash
+        let app_hash = vec![full_block.height as u8; 32];
+
+        Ok(FinalizeBlockResponse {
+            events: vec![],
+            tx_results,
+            validator_updates: vec![],
+            consensus_param_updates: None,
+            app_hash,
+        })
     }
 }

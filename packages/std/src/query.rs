@@ -2,7 +2,7 @@ use cosmwasm_std::Coin;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
-use crate::addr::{Addr, AddrError};
+use crate::account_id::{AccountId, AccountIdError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Query {
@@ -24,10 +24,10 @@ pub enum BankQuery {
     /// Return value is of type SupplyResponse.
     Supply { denom: String },
     /// Return value is BalanceResponse
-    Balance { address: Addr, denom: String },
+    Balance { address: AccountId, denom: String },
     /// Note that this may be much more expensive than Balance and should be avoided if possible.
     /// Return value is AllBalanceResponse.
-    AllBalances { address: Addr },
+    AllBalances { address: AccountId },
 }
 
 impl Display for BankQuery {
@@ -103,7 +103,7 @@ pub enum QueryError {
     UnsupportedPath(String),
 
     #[error("{0}")]
-    Addr(#[from] AddrError),
+    Addr(#[from] AccountIdError),
 }
 
 mod cosmos {

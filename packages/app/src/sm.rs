@@ -1,9 +1,9 @@
 use cosmwasm_std::{BlockInfo, StdError, Storage};
 use pulsar_std::response::QueryResponse;
-use pulsar_std::{Addr, GasMeter, Msg, Query};
+use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
 
 use crate::api::TxResponse;
-use crate::auth::Auth;
+use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
 
@@ -45,7 +45,7 @@ impl StateMachine {
         &self,
         storage: &mut dyn Storage,
         gas: &mut GasMeter,
-        sender: &Addr,
+        sender: &AccountId,
         block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<TxResponse> {
@@ -54,6 +54,15 @@ impl StateMachine {
                 .bank
                 .process_msg(storage, gas, block, self, sender, bank),
         }
+    }
+
+    pub fn validate_tx(
+        &self,
+        storage: &mut dyn Storage,
+        block: &BlockInfo,
+        tx: Tx,
+    ) -> PulsarResult<TxData> {
+        self.auth.validate_tx(storage, block, self, tx)
     }
 }
 
