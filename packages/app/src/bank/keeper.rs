@@ -132,6 +132,18 @@ impl Bank {
 }
 
 impl Bank {
+    // helper to move funds when called from another module
+    pub fn transfer(
+        &self,
+        storage: &mut dyn Storage,
+        from_address: AccountId,
+        to_address: AccountId,
+        amount: Vec<Coin>,
+    ) -> PulsarResult<()> {
+        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+        self.send(&mut bank_storage, from_address, to_address, amount)
+    }
+
     // TODO add: BlockInfo, &StateMachine (for callbacks)
     pub fn process_msg(
         &self,

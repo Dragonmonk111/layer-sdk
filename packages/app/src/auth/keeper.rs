@@ -10,6 +10,13 @@ use crate::sm::StateMachine;
 pub const NAMESPACE_AUTH: &[u8] = b"auth";
 const ACCOUNTS: Map<&AccountId, Account> = Map::new("accounts");
 
+// Store magic accounts here
+// TODO: Initialize with InternalAccount on startup
+// TODO: make this some config?
+pub fn fee_collector_account() -> AccountId {
+    AccountId::new(&[7u8; 20]).unwrap()
+}
+
 #[cw_serde]
 pub enum Account {
     /// This is External Account in Ethereum terms, controlled by a public key
@@ -38,7 +45,7 @@ impl Auth {
         &self,
         storage: &mut dyn Storage,
         _block: &BlockInfo,
-        _sm: &StateMachine,
+        sm: &StateMachine,
         tx: Tx,
     ) -> PulsarResult<TxData> {
         // later handle other types
@@ -115,7 +122,15 @@ impl Auth {
 
         // TODO: filter logic on gas pricing....
 
-        // TODO: try to charge fee info
+        // charge fee info from tx sender (not pubkey if smart account)
+        if let Some(fee) = tx.fee.fee {
+            sm.bank.transfer(
+                storage,
+                tx.signer.clone(),
+                fee_collector_account(),
+                vec![fee],
+            )?;
+        }
 
         // Return data
         Ok(TxData {
