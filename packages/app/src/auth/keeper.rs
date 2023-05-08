@@ -120,7 +120,7 @@ impl Auth {
         // validate the signature with that account (Cosmos-specific)
         pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
 
-        // TODO: filter logic on gas pricing....
+        // TODO: filter logic on gas pricing.... charge min fee
 
         // charge fee info from tx sender (not pubkey if smart account)
         if let Some(fee) = tx.fee.fee {
@@ -136,6 +136,7 @@ impl Auth {
         Ok(TxData {
             signer: tx.signer,
             msgs: tx.msgs,
+            // TODO: make some max gas limit
             gas_wanted: tx.fee.gas_limit,
         })
     }

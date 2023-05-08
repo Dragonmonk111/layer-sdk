@@ -5,8 +5,12 @@ use cosmwasm_std::{BlockInfo, Storage};
 
 use parking_lot::RwLock;
 use pulsar_std::{GasMeter, Query, Tx};
+use pulsar_storage::StorageTransaction;
 
-use crate::api::{Block, FinalizeBlockResponse, InitChainRequest, InitChainResponse, TxResult};
+use crate::api::{
+    Block, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse, TxResponse,
+    TxResult,
+};
 use crate::error::PulsarResult;
 use crate::sm::StateMachine;
 
@@ -57,8 +61,49 @@ impl App {
         Ok(resp.to_cosmos()?)
     }
 
-    pub fn check_tx(&self, _tx: Tx) -> TxResult {
-        todo!();
+    pub fn check_tx(&self, tx: Tx) -> TxResult {
+        let lock = self.storage.read();
+        let block = self.block.read();
+        // temporary cache we will throw away
+        let mut store = StorageTransaction::new(lock.deref().as_ref());
+
+        // validate the transaction
+        let data = match self.logic.validate_tx(&mut store, block.deref(), tx) {
+            Ok(x) => x,
+            Err(e) => {
+                return TxResult {
+                    gas: Default::default(),
+                    result: Err(e),
+                }
+            }
+        };
+        let gas_wanted = data.gas_wanted;
+        let mut meter = GasMeter::new(gas_wanted);
+
+        // execute them all
+        let resps: Result<Vec<_>, _> = data
+            .msgs
+            .into_iter()
+            .map(|msg| {
+                self.logic
+                    .process_msg(&mut store, &mut meter, &data.signer, block.deref(), msg)
+            })
+            .collect();
+
+        // collect responses (todo: combine multiple data results, not just events...)
+        let gas_used = meter.used();
+        let result = resps.map(|all| {
+            let events = all.into_iter().flat_map(|r| r.events).collect();
+            TxResponse { data: None, events }
+        });
+
+        TxResult {
+            gas: GasInfo {
+                gas_used,
+                gas_wanted,
+            },
+            result,
+        }
     }
 
     pub fn finalize_block(&self, _block: Block) -> PulsarResult<FinalizeBlockResponse> {
