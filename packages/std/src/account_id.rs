@@ -17,9 +17,9 @@ fn bech32_prefix() -> &'static str {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Addr(Vec<u8>);
+pub struct AccountId(Vec<u8>);
 
-impl Deref for Addr {
+impl Deref for AccountId {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -28,7 +28,7 @@ impl Deref for Addr {
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub enum AddrError {
+pub enum AccountIdError {
     /// TODO: normalize this, so we don't have possibly non-deterministic errors from different crate versions
     #[error("Bech32: {0}")]
     Bech32(String),
@@ -43,42 +43,51 @@ pub enum AddrError {
     InvalidLength(usize),
 }
 
-impl From<Bech32Error> for AddrError {
+impl From<Bech32Error> for AccountIdError {
     fn from(value: Bech32Error) -> Self {
-        AddrError::Bech32(value.to_string())
+        AccountIdError::Bech32(value.to_string())
     }
 }
 
-impl Display for Addr {
+impl Display for AccountId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         bech32::encode_to_fmt(f, bech32_prefix(), self.0.to_base32(), Variant::Bech32).unwrap()
     }
 }
 
-impl From<&Addr> for String {
-    fn from(value: &Addr) -> Self {
+impl From<&AccountId> for String {
+    fn from(value: &AccountId) -> Self {
         value.to_string()
     }
 }
 
-impl Addr {
-    pub fn parse_string(encoded: &str) -> Result<Self, AddrError> {
+impl AccountId {
+    /// This takes
+    pub fn new(raw: &[u8]) -> Result<Self, AccountIdError> {
+        if !VALID_ADDR_LENGTH.contains(&raw.len()) {
+            Err(AccountIdError::InvalidLength(raw.len()))
+        } else {
+            Ok(AccountId(raw.to_vec()))
+        }
+    }
+
+    pub fn parse_string(encoded: &str) -> Result<Self, AccountIdError> {
         let (hrp, data, variant) = bech32::decode(encoded)?;
         // no bech32m
         if variant != Variant::Bech32 {
-            return Err(AddrError::InvalidVariant);
+            return Err(AccountIdError::InvalidVariant);
         }
         // make sure the proper chain prefix
         let prefix = bech32_prefix();
         if hrp != prefix {
-            return Err(AddrError::InvalidPrefix(hrp, prefix));
+            return Err(AccountIdError::InvalidPrefix(hrp, prefix));
         }
         let addr = Vec::<u8>::from_base32(&data).unwrap();
         // we only support 20 and 32 bytes for the binary version, enforce this for sanity check
         if !VALID_ADDR_LENGTH.contains(&addr.len()) {
-            return Err(AddrError::InvalidLength(addr.len()));
+            return Err(AccountIdError::InvalidLength(addr.len()));
         }
-        Ok(Addr(addr))
+        Ok(AccountId(addr))
     }
 
     // only for use in test
@@ -86,11 +95,11 @@ impl Addr {
         // pad to valid length
         let mut v = name.as_bytes().to_vec();
         v.resize(VALID_ADDR_LENGTH[0], 0u8);
-        Addr(v)
+        AccountId(v)
     }
 }
 
-impl<'a> PrimaryKey<'a> for Addr {
+impl<'a> PrimaryKey<'a> for AccountId {
     type Prefix = ();
     type SubPrefix = ();
     type Suffix = Self;
@@ -101,22 +110,22 @@ impl<'a> PrimaryKey<'a> for Addr {
     }
 }
 
-impl<'a> Prefixer<'a> for Addr {
+impl<'a> Prefixer<'a> for AccountId {
     fn prefix(&self) -> Vec<Key> {
         vec![Key::Ref(self.deref())]
     }
 }
 
-impl KeyDeserialize for Addr {
-    type Output = Addr;
+impl KeyDeserialize for AccountId {
+    type Output = AccountId;
 
     #[inline(always)]
     fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
-        Ok(Addr(value))
+        Ok(AccountId(value))
     }
 }
 
-impl<'a> PrimaryKey<'a> for &'a Addr {
+impl<'a> PrimaryKey<'a> for &'a AccountId {
     type Prefix = ();
     type SubPrefix = ();
     type Suffix = Self;
@@ -127,18 +136,18 @@ impl<'a> PrimaryKey<'a> for &'a Addr {
     }
 }
 
-impl<'a> Prefixer<'a> for &'a Addr {
+impl<'a> Prefixer<'a> for &'a AccountId {
     fn prefix(&self) -> Vec<Key> {
         vec![Key::Ref(self.deref())]
     }
 }
 
-impl KeyDeserialize for &Addr {
-    type Output = Addr;
+impl KeyDeserialize for &AccountId {
+    type Output = AccountId;
 
     #[inline(always)]
     fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
-        Ok(Addr(value))
+        Ok(AccountId(value))
     }
 }
 

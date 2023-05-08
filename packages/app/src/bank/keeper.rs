@@ -5,7 +5,7 @@ use cw_storage_plus::Map;
 use cw_utils::NativeBalance;
 
 use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
-use pulsar_std::{Addr, BankMsg, BankQuery, GasMeter};
+use pulsar_std::{AccountId, BankMsg, BankQuery, GasMeter};
 use pulsar_storage::{prefixed, prefixed_read};
 
 use crate::api::TxResponse;
@@ -16,7 +16,7 @@ use crate::sm::StateMachine;
 // store supply for each denom
 const SUPPLY: Map<&str, Uint128> = Map::new("supply");
 // FIXME: store each denom separate - (&Addr, &str), Uint128
-const BALANCES: Map<&Addr, NativeBalance> = Map::new("balances");
+const BALANCES: Map<&AccountId, NativeBalance> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
 
@@ -32,7 +32,7 @@ impl Bank {
     pub fn init_balance(
         &self,
         storage: &mut dyn Storage,
-        account: &Addr,
+        account: &AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
@@ -42,7 +42,7 @@ impl Bank {
     fn set_balance(
         &self,
         bank_storage: &mut dyn Storage,
-        account: &Addr,
+        account: &AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let mut balance = NativeBalance(amount);
@@ -62,7 +62,7 @@ impl Bank {
             .map_err(Into::into)
     }
 
-    fn get_balance(&self, bank_storage: &dyn Storage, account: &Addr) -> PulsarResult<Vec<Coin>> {
+    fn get_balance(&self, bank_storage: &dyn Storage, account: &AccountId) -> PulsarResult<Vec<Coin>> {
         let val = BALANCES.may_load(bank_storage, account)?;
         Ok(val.unwrap_or_default().into_vec())
     }
@@ -75,8 +75,8 @@ impl Bank {
     fn send(
         &self,
         bank_storage: &mut dyn Storage,
-        from_address: Addr,
-        to_address: Addr,
+        from_address: AccountId,
+        to_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         self.burn(bank_storage, from_address, amount.clone())?;
@@ -86,7 +86,7 @@ impl Bank {
     fn mint(
         &self,
         bank_storage: &mut dyn Storage,
-        to_address: Addr,
+        to_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let amount = self.normalize_amount(amount)?;
@@ -107,7 +107,7 @@ impl Bank {
     fn burn(
         &self,
         bank_storage: &mut dyn Storage,
-        from_address: Addr,
+        from_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let amount = self.normalize_amount(amount)?;
@@ -135,7 +135,7 @@ impl Bank {
         _meter: &mut GasMeter,
         _block: &BlockInfo,
         _sm: &StateMachine,
-        signer: &Addr,
+        signer: &AccountId,
         msg: BankMsg,
     ) -> PulsarResult<TxResponse> {
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
@@ -217,7 +217,7 @@ mod test {
     use pulsar_std::response::BankQueryResponse;
     use pulsar_storage::MemoryStorage;
 
-    fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &Addr) -> Vec<Coin> {
+    fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &AccountId) -> Vec<Coin> {
         let req = BankQuery::AllBalances {
             address: rcpt.clone(),
         };
@@ -241,8 +241,8 @@ mod test {
         let sm = StateMachine::new();
         let mut meter = GasMeter::new(500_000);
 
-        let owner = Addr::unchecked("owner");
-        let rcpt = Addr::unchecked("receiver");
+        let owner = AccountId::unchecked("owner");
+        let rcpt = AccountId::unchecked("receiver");
         let init_funds = vec![coin(100, "eth"), coin(20, "btc")];
         let norm = vec![coin(20, "btc"), coin(100, "eth")];
 
@@ -346,8 +346,8 @@ mod test {
         let block = mock_env().block;
         let sm = StateMachine::new();
 
-        let owner = Addr::unchecked("owner");
-        let rcpt = Addr::unchecked("receiver");
+        let owner = AccountId::unchecked("owner");
+        let rcpt = AccountId::unchecked("receiver");
         let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
         let rcpt_funds = vec![coin(5, "btc")];
 
@@ -396,8 +396,8 @@ mod test {
         let mut meter = GasMeter::new(1_000_000);
         let sm = StateMachine::new();
 
-        let owner = Addr::unchecked("owner");
-        let rcpt = Addr::unchecked("recipient");
+        let owner = AccountId::unchecked("owner");
+        let rcpt = AccountId::unchecked("recipient");
         let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
 
         // set money
@@ -446,8 +446,8 @@ mod test {
         let block = mock_env().block;
         let sm = StateMachine::new();
 
-        let owner = Addr::unchecked("owner");
-        let rcpt = Addr::unchecked("recipient");
+        let owner = AccountId::unchecked("owner");
+        let rcpt = AccountId::unchecked("recipient");
         let init_funds = vec![coin(5000, "atom"), coin(100, "eth")];
 
         // set money

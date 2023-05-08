@@ -1,6 +1,6 @@
 use cosmwasm_std::{BlockInfo, StdError, Storage};
 use pulsar_std::response::QueryResponse;
-use pulsar_std::{Addr, GasMeter, Msg, Query};
+use pulsar_std::{AccountId, GasMeter, Msg, Query};
 
 use crate::api::TxResponse;
 use crate::auth::Auth;
@@ -45,7 +45,7 @@ impl StateMachine {
         &self,
         storage: &mut dyn Storage,
         gas: &mut GasMeter,
-        sender: &Addr,
+        sender: &AccountId,
         block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<TxResponse> {

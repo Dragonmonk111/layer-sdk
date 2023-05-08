@@ -3,7 +3,7 @@ use cosmrs::ErrorReport;
 use cosmwasm_std::Coin;
 use thiserror::Error;
 
-use crate::addr::Addr;
+use crate::account_id::AccountId;
 use crate::msg::{Msg, MsgError};
 
 use crate::pubkey::PubKey;
@@ -28,7 +28,7 @@ pub struct SignedTx {
     pub msgs: Vec<Msg>,
 
     // The account that will execute them (must match the pubkey in signing_info if that is set)
-    pub signer: Addr,
+    pub signer: AccountId,
 
     /// this is info on the signer (pubkey, sequence)
     pub signing_info: SigningInfo,
@@ -328,8 +328,8 @@ pub mod cosmos {
             assert_eq!(tx.fee.gas_limit, gas);
             assert_eq!(tx.msgs.len(), 1);
 
-            let sender_addr = Addr::parse_string(sender_account_id.as_ref()).unwrap();
-            let rcpt_addr = Addr::parse_string(rcpt_account_id.as_ref()).unwrap();
+            let sender_addr = AccountId::parse_string(sender_account_id.as_ref()).unwrap();
+            let rcpt_addr = AccountId::parse_string(rcpt_account_id.as_ref()).unwrap();
             match &tx.msgs[0] {
                 crate::Msg::Bank(BankMsg::Send {
                     sender,

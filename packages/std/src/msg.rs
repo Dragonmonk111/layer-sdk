@@ -4,7 +4,7 @@ use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
-use crate::addr::{Addr, AddrError};
+use crate::account_id::{AccountId, AccountIdError};
 
 /// This is the internal message format used in Pulsarium.
 /// We convert various wire formats into this before processing.
@@ -22,12 +22,12 @@ impl From<BankMsg> for Msg {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankMsg {
     Send {
-        sender: Addr,
-        recipient: Addr,
+        sender: AccountId,
+        recipient: AccountId,
         amount: Vec<Coin>,
     },
     Burn {
-        sender: Addr,
+        sender: AccountId,
         amount: Vec<Coin>,
     },
 }
@@ -60,12 +60,12 @@ pub enum MsgError {
     ProtoDecode(#[from] DecodeError),
 
     #[error("{0}")]
-    Addr(#[from] AddrError),
+    Addr(#[from] AccountIdError),
 }
 
 impl Msg {
     /// List which addresses must sign the message for it to be valid
-    pub fn required_signer(&self) -> Addr {
+    pub fn required_signer(&self) -> AccountId {
         match &self {
             Msg::Bank(BankMsg::Send { sender, .. }) => sender.clone(),
             Msg::Bank(BankMsg::Burn { sender, .. }) => sender.clone(),
@@ -75,7 +75,7 @@ impl Msg {
 
 /// Returns the signer needed by all Messages.
 /// If there are no messages, or different signers required by messages, returns an error
-pub fn required_signer(msgs: &[Msg]) -> Result<Addr, MsgError> {
+pub fn required_signer(msgs: &[Msg]) -> Result<AccountId, MsgError> {
     let mut signers: Vec<_> = msgs.iter().map(Msg::required_signer).dedup().collect();
     if signers.len() > 1 {
         return Err(MsgError::MultipleSigners);
@@ -110,8 +110,8 @@ mod cosmos {
                 MsgSend::TYPE_URL => {
                     let parsed = MsgSend::from_any(msg)?;
                     Ok(BankMsg::Send {
-                        sender: Addr::parse_string(&parsed.from_address)?,
-                        recipient: Addr::parse_string(&parsed.to_address)?,
+                        sender: AccountId::parse_string(&parsed.from_address)?,
+                        recipient: AccountId::parse_string(&parsed.to_address)?,
                         amount: parse_sdk_coins(&parsed.amount)?,
                     }
                     .into())

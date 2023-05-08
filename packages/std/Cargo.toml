@@ -18,3 +18,4 @@ cosmrs = { workspace = true }
 cosmos-sdk-proto = { workspace = true }
 itertools = { workspace = true }
 sha2 = { workspace = true }
+ripemd = { workspace = true }

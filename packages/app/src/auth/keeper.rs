@@ -1,6 +1,6 @@
 use crate::error::PulsarResult;
 use cosmwasm_std::{BlockInfo, Storage};
-use pulsar_std::{Addr, Msg, Tx};
+use pulsar_std::{AccountId, Msg, Tx};
 
 use crate::sm::StateMachine;
 
@@ -48,7 +48,7 @@ impl Default for Auth {
 // info on a validated transaction
 pub struct TxData {
     /// We only support one sender per transaction
-    pub signer: Addr,
+    pub signer: AccountId,
 
     /// All messages in the payload, decoded to Pulsarium format
     pub msgs: Vec<Msg>,
