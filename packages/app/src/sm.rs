@@ -26,11 +26,12 @@ impl StateMachine {
 
     pub fn init(
         &self,
-        _storage: &mut dyn Storage,
-        _block: &BlockInfo,
-        _request: GenesisState,
+        storage: &mut dyn Storage,
+        block: &BlockInfo,
+        request: GenesisState,
     ) -> PulsarResult<()> {
-        todo!();
+        self.bank.init(storage, block, request.bank, self)?;
+        Ok(())
     }
 
     pub fn query(

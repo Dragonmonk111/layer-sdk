@@ -7,6 +7,7 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{BlockInfo, Storage};
 use cw_storage_plus::Item;
 
+use pulsar_std::response::QueryResponse;
 use pulsar_std::{GasMeter, Query, Tx};
 use pulsar_storage::{prefixed, prefixed_read, StorageTransaction};
 
@@ -131,16 +132,14 @@ impl App {
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
-    pub fn query(&self, request: Query) -> PulsarResult<Vec<u8>> {
+    pub fn query(&self, request: Query) -> PulsarResult<QueryResponse> {
         let lock = self.storage.read();
         let block = self.block.read();
         let mut meter = GasMeter::new(DEFAULT_QUERY_GAS);
         let resp = self
             .logic
             .query(lock.deref().as_ref(), &mut meter, block.deref(), request)?;
-        // TODO: question on how to encode these... should convert to cosmos sdk protobuf?
-        // accept some arg on which format to encode
-        Ok(resp.to_cosmos()?)
+        Ok(resp)
     }
 
     pub fn check_tx(&self, tx: Tx) -> TxResult {
@@ -245,5 +244,72 @@ impl App {
             consensus_param_updates: None,
             app_hash,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::{TmPubKey, ValidatorUpdate};
+    use crate::genesis::BankAccount;
+    use cosmwasm_std::testing::mock_env;
+    use cosmwasm_std::{coin, to_binary, MemoryStorage};
+    use pulsar_std::response::BankQueryResponse;
+    use pulsar_std::{AccountId, BankQuery};
+
+    fn mock_init(genesis: &GenesisState) -> InitChainRequest {
+        let app_state = to_binary(genesis).unwrap();
+        let env = mock_env();
+        InitChainRequest {
+            time: env.block.time,
+            chain_id: env.block.chain_id,
+            consensus_params: Default::default(),
+            validators: vec![ValidatorUpdate {
+                pub_key: TmPubKey::Ed25519(vec![123u8; 32]),
+                power: 1_000_000,
+            }],
+            app_state,
+            initial_height: 1,
+        }
+    }
+
+    #[test]
+    fn initialize_and_query_bank() {
+        let account = AccountId::unchecked("foobar");
+        let mut balance = vec![coin(1_000_000, "upulsar"), coin(2_000_000, "umagic")];
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: account.to_string(),
+                balance: balance.clone(),
+            }],
+        };
+
+        let storage = MemoryStorage::new();
+        let logic = StateMachine::new();
+        let request = mock_init(&genesis);
+
+        // create the app
+        let (app, result) = App::init(storage, logic, request.clone()).unwrap();
+        assert_eq!(result.validators, request.validators);
+        assert_eq!(result.consensus_params, request.consensus_params);
+
+        // query the original bank account
+        let result = app
+            .query(BankQuery::AllBalances { address: account }.into())
+            .unwrap();
+        // sort balance, output will be in denom order
+        balance.sort_by(|a, b| a.denom.cmp(&b.denom));
+        match result {
+            QueryResponse::Bank(BankQueryResponse::AllBalances(res)) => {
+                assert_eq!(res.amount, balance);
+            }
+            x => panic!("Exected AllBalancesResponse, got {:?}", x),
+        }
+
+        // TODO: pull out storage and re-create this - maybe with custom storage types...
+        // let storage = app.storage.into_inner();
+        // let app2 = App::load_from_storage(storage, app.logic).unwrap();
+
+        // query the recovered state
     }
 }
