@@ -11,6 +11,7 @@ use pulsar_storage::{prefixed, prefixed_read};
 use crate::api::TxResponse;
 use crate::bank::BankError;
 use crate::error::{PulsarError, PulsarResult};
+use crate::genesis::BankAccount;
 use crate::sm::StateMachine;
 
 // store supply for each denom
@@ -87,6 +88,7 @@ impl Bank {
         self.mint(bank_storage, to_address, amount)
     }
 
+    // TODO: supply tracking is completely wrong, as we mint as part of transfer...
     fn mint(
         &self,
         bank_storage: &mut dyn Storage,
@@ -144,7 +146,21 @@ impl Bank {
         self.send(&mut bank_storage, from_address, to_address, amount)
     }
 
-    // TODO add: BlockInfo, &StateMachine (for callbacks)
+    pub fn init(
+        &self,
+        storage: &mut dyn Storage,
+        _block: &BlockInfo,
+        accounts: Vec<BankAccount>,
+        _sm: &StateMachine,
+    ) -> PulsarResult<()> {
+        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+        for account in accounts {
+            let address = AccountId::parse_string(&account.address)?;
+            self.mint(&mut bank_storage, address, account.balance)?;
+        }
+        Ok(())
+    }
+
     pub fn process_msg(
         &self,
         storage: &mut dyn Storage,
@@ -180,7 +196,6 @@ impl Bank {
         }
     }
 
-    // TODO add: BlockInfo, &StateMachine (for callbacks)
     pub fn query(
         &self,
         storage: &dyn Storage,

@@ -21,6 +21,7 @@ use cosmwasm_std::{Binary, Timestamp};
 use super::consensus::ConsensusParams;
 use super::validator::ValidatorUpdate;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct InitChainRequest {
     pub time: Timestamp,
     // FIXME: add network_id as well, like for avalanche?
@@ -31,6 +32,7 @@ pub struct InitChainRequest {
     pub initial_height: u64,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct InitChainResponse {
     pub consensus_params: ConsensusParams,
     pub validators: Vec<ValidatorUpdate>,

@@ -6,6 +6,7 @@ use crate::api::TxResponse;
 use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
+use crate::genesis::GenesisState;
 
 /// This is an immutable State Machine logic that processes incoming transactions.
 /// All mutable state held in Storage, which is passed as an argument to these methods.
@@ -21,6 +22,16 @@ impl StateMachine {
             auth: Auth::new(),
             bank: Bank::new(),
         }
+    }
+
+    pub fn init(
+        &self,
+        storage: &mut dyn Storage,
+        block: &BlockInfo,
+        request: GenesisState,
+    ) -> PulsarResult<()> {
+        self.bank.init(storage, block, request.bank, self)?;
+        Ok(())
     }
 
     pub fn query(
