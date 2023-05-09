@@ -12,6 +12,8 @@ pub enum GasError {
     OutOfGas,
 }
 
+pub type GasResult<T> = Result<T, GasError>;
+
 impl GasMeter {
     pub fn new(limit: u64) -> Self {
         GasMeter { limit, used: 0 }

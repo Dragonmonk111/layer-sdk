@@ -8,6 +8,8 @@ use length_prefixed::{to_length_prefixed, to_length_prefixed_nested};
 use namespace_helpers::range_with_prefix;
 use namespace_helpers::{get_with_prefix, remove_with_prefix, set_with_prefix};
 
+// TODO: use the pulsar::Storage interfaces
+
 /// An alias of PrefixedStorage::new for less verbose usage
 pub fn prefixed<'a>(storage: &'a mut dyn Storage, namespace: &[u8]) -> PrefixedStorage<'a> {
     PrefixedStorage::new(storage, namespace)

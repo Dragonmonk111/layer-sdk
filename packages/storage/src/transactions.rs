@@ -4,6 +4,7 @@ use std::iter;
 use std::iter::Peekable;
 use std::ops::{Bound, RangeBounds};
 
+// TODO: use the pulsar::Storage interfaces
 use cosmwasm_std::Storage;
 use cosmwasm_std::{Order, Record};
 
@@ -102,7 +103,7 @@ impl<'a> Storage for StorageTransaction<'a> {
 
 pub struct RepLog {
     /// this is a list of changes to be written to backing storage upon commit
-    ops_log: Vec<Op>,
+    pub(crate) ops_log: Vec<Op>,
 }
 
 impl RepLog {
@@ -116,7 +117,7 @@ impl RepLog {
 
 /// Op is the user operation, which can be stored in the RepLog.
 /// Currently Set or Delete.
-enum Op {
+pub enum Op {
     /// represents the `Set` operation for setting a key-value pair in storage
     Set {
         key: Vec<u8>,
@@ -137,7 +138,7 @@ impl Op {
     }
 
     /// converts the Op to a delta, which can be stored in a local cache
-    pub fn to_delta(&self) -> Delta {
+    fn to_delta(&self) -> Delta {
         match self {
             Op::Set { value, .. } => Delta::Set {
                 value: value.clone(),
@@ -146,7 +147,7 @@ impl Op {
         }
     }
 
-    pub fn from_delta((key, delta): (Vec<u8>, Delta)) -> Self {
+    fn from_delta((key, delta): (Vec<u8>, Delta)) -> Self {
         match delta {
             Delta::Set { value } => Op::Set { key, value },
             Delta::Delete {} => Op::Delete { key },
