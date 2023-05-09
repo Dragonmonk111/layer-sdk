@@ -22,9 +22,16 @@ pub trait Storage {
     fn charge_gas(&mut self, gas: u64) -> Result<(), GasError>;
 }
 
+// TODO: readonly variant
 pub struct PulsarStorage<'a> {
     storage: &'a mut dyn MeteredStorage,
     meter: &'a mut GasMeter,
+}
+
+impl<'a> PulsarStorage<'a> {
+    pub fn new(storage: &'a mut dyn MeteredStorage, meter: &'a mut GasMeter) -> Self {
+        PulsarStorage { storage, meter }
+    }
 }
 
 impl Storage for PulsarStorage<'_> {
