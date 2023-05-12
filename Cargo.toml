@@ -29,6 +29,7 @@ cosmos-sdk-proto = "0.18.0"
 itertools = "0.10.5"
 sha2 = "0.10.6"
 ripemd = "0.1.3"
+parking_lot = "0.12.1"
 
 pulsar-app = { path = "./packages/app" }
 pulsar-std = { path = "./packages/std" }

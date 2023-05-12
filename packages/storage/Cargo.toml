@@ -11,3 +11,4 @@ edition = { workspace = true }
 pulsar-std = { workspace = true }
 cosmwasm-std = { workspace = true }
 thiserror = { workspace = true }
+parking_lot = {workspace = true}

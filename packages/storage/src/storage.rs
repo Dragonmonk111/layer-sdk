@@ -2,10 +2,10 @@ use cosmwasm_std::{Order, Record};
 
 use pulsar_std::{GasError, GasMeter, GasResult};
 
-use crate::metered::MeteredStorage;
+use crate::metered::Storage;
 
 /// Similar to cosmwasm_std::Storage, but with Results in return values
-pub trait Storage {
+pub trait GasStorage {
     fn get(&mut self, key: &[u8]) -> GasResult<Option<Vec<u8>>>;
 
     fn range<'a>(
@@ -24,17 +24,17 @@ pub trait Storage {
 
 // TODO: readonly variant
 pub struct PulsarStorage<'a> {
-    storage: &'a mut dyn MeteredStorage,
+    storage: &'a mut dyn Storage,
     meter: &'a mut GasMeter,
 }
 
 impl<'a> PulsarStorage<'a> {
-    pub fn new(storage: &'a mut dyn MeteredStorage, meter: &'a mut GasMeter) -> Self {
+    pub fn new(storage: &'a mut dyn Storage, meter: &'a mut GasMeter) -> Self {
         PulsarStorage { storage, meter }
     }
 }
 
-impl Storage for PulsarStorage<'_> {
+impl GasStorage for PulsarStorage<'_> {
     fn get(&mut self, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         self.storage.get(self.meter, key)
     }

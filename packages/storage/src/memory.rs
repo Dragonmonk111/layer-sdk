@@ -1,24 +1,113 @@
 use cosmwasm_std::{Order, Record};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use pulsar_std::{GasMeter, GasResult};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
 
-use crate::metered::MeteredStorage;
+use crate::{PersistentStorage, ReadonlyStorage, Storage};
 
-#[derive(Default)]
-pub struct MemoryStorage {
+pub struct HashedMemory(RwLock<MemoryStorage>);
+
+struct MemoryStorage {
+    hash: Vec<u8>,
     data: BTreeMap<Vec<u8>, Vec<u8>>,
+}
+
+impl PersistentStorage for HashedMemory {
+    fn read<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
+        let reader = self.0.read();
+        Box::new(MemoryStorageReader(reader))
+    }
+
+    fn write<'a>(&'a self) -> Box<dyn Storage + 'a> {
+        let writer = self.0.write();
+        Box::new(MemoryStorageWriter(writer))
+    }
+
+    fn app_hash(&self) -> Vec<u8> {
+        self.0.read().hash.clone()
+    }
+}
+
+struct MemoryStorageReader<'a>(RwLockReadGuard<'a, MemoryStorage>);
+
+impl ReadonlyStorage for MemoryStorageReader<'_> {
+    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        self.0.get(meter, key)
+    }
+
+    fn range<'a>(
+        &'a self,
+        meter: &'a mut GasMeter,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+        order: Order,
+    ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        self.0.range(meter, start, end, order)
+    }
+
+    fn abort(self) -> () {
+        // nothing to do
+    }
+}
+
+struct MemoryStorageWriter<'a>(RwLockWriteGuard<'a, MemoryStorage>);
+
+impl ReadonlyStorage for MemoryStorageWriter<'_> {
+    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        self.0.get(meter, key)
+    }
+
+    fn range<'a>(
+        &'a self,
+        meter: &'a mut GasMeter,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+        order: Order,
+    ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        self.0.range(meter, start, end, order)
+    }
+
+    fn abort(self) -> () {
+        // nothing to do
+    }
+}
+
+impl Storage for MemoryStorageWriter<'_> {
+    fn set(&mut self, _meter: &mut GasMeter, _key: &[u8], _value: &[u8]) -> GasResult<()> {
+        // use transaction info
+        todo!()
+    }
+
+    fn remove(&mut self, _meter: &mut GasMeter, _key: &[u8]) -> GasResult<()> {
+        // use transaction info
+        todo!()
+    }
+
+    fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
+        // use transaction info
+        todo!()
+    }
 }
 
 impl MemoryStorage {
     pub fn new() -> Self {
-        MemoryStorage::default()
+        MemoryStorage {
+            hash: vec![0; 32],
+            data: BTreeMap::new(),
+        }
     }
 }
 
-impl MeteredStorage for MemoryStorage {
+impl Default for MemoryStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MemoryStorage {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let value = self.data.get(key).cloned();
 
@@ -27,27 +116,6 @@ impl MeteredStorage for MemoryStorage {
         let cost = 1000u64 + (key.len() + val_len) as u64;
         meter.charge(cost)?;
         Ok(value)
-    }
-
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
-        if value.is_empty() {
-            panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
-        }
-        // TODO: abstract better
-        let cost = 2000u64 + 2 * (key.len() + value.len()) as u64;
-        meter.charge(cost)?;
-
-        self.data.insert(key.to_vec(), value.to_vec());
-        Ok(())
-    }
-
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
-        // TODO: abstract better
-        let cost = 2000u64;
-        meter.charge(cost)?;
-
-        self.data.remove(key);
-        Ok(())
     }
 
     /// range allows iteration over a set of keys, either forwards or backwards
@@ -87,6 +155,27 @@ impl MeteredStorage for MemoryStorage {
             Order::Ascending => Ok(Box::new(iter.map(clone_item))),
             Order::Descending => Ok(Box::new(iter.rev().map(clone_item))),
         }
+    }
+
+    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+        if value.is_empty() {
+            panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
+        }
+        // TODO: abstract better
+        let cost = 2000u64 + 2 * (key.len() + value.len()) as u64;
+        meter.charge(cost)?;
+
+        self.data.insert(key.to_vec(), value.to_vec());
+        Ok(())
+    }
+
+    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        // TODO: abstract better
+        let cost = 2000u64;
+        meter.charge(cost)?;
+
+        self.data.remove(key);
+        Ok(())
     }
 }
 

@@ -19,6 +19,10 @@ impl GasMeter {
         GasMeter { limit, used: 0 }
     }
 
+    pub fn infinite() -> Self {
+        GasMeter::new(u64::MAX)
+    }
+
     pub fn used(&self) -> u64 {
         self.used
     }
