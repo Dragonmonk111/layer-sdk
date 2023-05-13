@@ -1,14 +1,14 @@
-mod memory;
-mod metered;
-mod persistent;
+mod gas;
 mod prefixed_storage;
-mod pulsar_transaction;
-mod storage;
+mod traits;
 mod transactions;
 
-pub use memory::HashedMemory;
-pub use metered::{ReadonlyStorage, Storage};
-pub use persistent::PersistentStorage;
+#[cfg(feature = "memory")]
+mod memory;
+#[cfg(feature = "memory")]
+pub use memory::MemoryStore;
+
+pub use gas::{GasStorage, PulsarStorage};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
-pub use storage::{GasStorage, PulsarStorage};
+pub use traits::{PersistentStorage, ReadonlyStorage, Storage};
 pub use transactions::{transactional, RepLog, StorageTransaction};

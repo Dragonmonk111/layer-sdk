@@ -6,18 +6,18 @@ use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
 
-use crate::pulsar_transaction::Op;
-use crate::pulsar_transaction::PulsarTransaction;
+use super::transaction::Op;
+use super::transaction::PulsarTransaction;
 use crate::{PersistentStorage, ReadonlyStorage, Storage};
 
-pub struct HashedMemory(RwLock<MemoryStorage>);
+pub struct MemoryStore(RwLock<BTreeStorage>);
 
-struct MemoryStorage {
+struct BTreeStorage {
     hash: Vec<u8>,
     data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
-impl PersistentStorage for HashedMemory {
+impl PersistentStorage for MemoryStore {
     fn read<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
         let reader = self.0.read();
         Box::new(MemoryStorageReader(reader))
@@ -32,7 +32,7 @@ impl PersistentStorage for HashedMemory {
     }
 }
 
-pub struct MemoryStorageReader<'a>(RwLockReadGuard<'a, MemoryStorage>);
+pub struct MemoryStorageReader<'a>(RwLockReadGuard<'a, BTreeStorage>);
 
 impl ReadonlyStorage for MemoryStorageReader<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
@@ -56,13 +56,13 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
 
 pub struct MemoryStorageWriter<'a> {
     // This is needed for commit later on
-    persistent: &'a HashedMemory,
+    persistent: &'a MemoryStore,
     // This is a wrapper used for transactions
     transaction: PulsarTransaction<'a>,
 }
 
 impl<'a> MemoryStorageWriter<'a> {
-    fn new(persistent: &'a HashedMemory) -> Self {
+    fn new(persistent: &'a MemoryStore) -> Self {
         let reader = persistent.read();
         Self {
             persistent,
@@ -113,22 +113,22 @@ impl Storage for MemoryStorageWriter<'_> {
     }
 }
 
-impl MemoryStorage {
+impl BTreeStorage {
     pub fn new() -> Self {
-        MemoryStorage {
+        BTreeStorage {
             hash: vec![0; 32],
             data: BTreeMap::new(),
         }
     }
 }
 
-impl Default for MemoryStorage {
+impl Default for BTreeStorage {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl MemoryStorage {
+impl BTreeStorage {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let value = self.data.get(key).cloned();
 
@@ -202,7 +202,7 @@ impl MemoryStorage {
 
 /// This debug implementation is made for inspecting storages in unit testing.
 /// It is made for human readability only and the output can change at any time.
-impl fmt::Debug for MemoryStorage {
+impl fmt::Debug for BTreeStorage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "MemoryStorage ({} entries)", self.data.len())?;
         f.write_str(" {\n")?;
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn get_and_set() {
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         assert_eq!(store.get(b"foo"), None);
         store.set(b"foo", b"bar");
         assert_eq!(store.get(b"foo"), Some(b"bar".to_vec()));
@@ -255,13 +255,13 @@ mod tests {
         expected = "Getting empty values from storage is not well supported at the moment."
     )]
     fn set_panics_for_empty() {
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         store.set(b"foo", b"");
     }
 
     #[test]
     fn delete() {
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         store.set(b"foo", b"bar");
         store.set(b"food", b"bank");
         store.remove(b"foo");
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn iterator() {
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         store.set(b"foo", b"bar");
 
         // ensure we had previously set "foo" = "bar"
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn memory_storage_implements_debug() {
-        let store = MemoryStorage::new();
+        let store = BTreeStorage::new();
         assert_eq!(
             format!("{:?}", store),
             "MemoryStorage (0 entries) {\n\
@@ -420,7 +420,7 @@ mod tests {
         );
 
         // With one element
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         store.set(&[0x00, 0xAB, 0xDD], &[0xFF, 0xD5]);
         assert_eq!(
             format!("{:?}", store),
@@ -430,7 +430,7 @@ mod tests {
         );
 
         // Sorted by key
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         store.set(&[0x00, 0xAB, 0xDD], &[0xFF, 0xD5]);
         store.set(&[0x00, 0xAB, 0xEE], &[0xFF, 0xD5]);
         store.set(&[0x00, 0xAB, 0xCC], &[0xFF, 0xD5]);
@@ -444,7 +444,7 @@ mod tests {
         );
 
         // Different lengths
-        let mut store = MemoryStorage::new();
+        let mut store = BTreeStorage::new();
         store.set(&[0xAA], &[0x11]);
         store.set(&[0xAA, 0xBB], &[0x11, 0x22]);
         store.set(&[0xAA, 0xBB, 0xCC], &[0x11, 0x22, 0x33]);

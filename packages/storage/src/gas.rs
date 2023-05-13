@@ -2,7 +2,7 @@ use cosmwasm_std::{Order, Record};
 
 use pulsar_std::{GasError, GasMeter, GasResult};
 
-use crate::metered::Storage;
+use crate::Storage;
 
 /// Similar to cosmwasm_std::Storage, but with Results in return values
 pub trait GasStorage {
