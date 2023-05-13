@@ -19,4 +19,5 @@ pub use fast_hash::FastHasher;
 pub use gas::{GasStorage, PulsarStorage};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
 pub use traits::{PersistentStorage, ReadonlyStorage, Storage};
+pub use wrap::{ScratchTx, WriteTx};
 // pub use transactions::{transactional, RepLog, StorageTransaction};

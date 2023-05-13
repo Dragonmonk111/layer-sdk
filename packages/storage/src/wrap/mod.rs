@@ -1,6 +1,10 @@
-mod reader_tx;
+mod reader_wrap;
+mod scratch_tx;
+mod write_tx;
 
-pub(crate) use reader_tx::ReaderWrapper;
+pub(crate) use reader_wrap::ReaderWrapper;
+pub use scratch_tx::ScratchTx;
+pub use write_tx::WriteTx;
 
 /// The BTreeMap specific key-value pair reference type, as returned by BTreeMap<Vec<u8>, T>::range.
 /// This is internal as it can change any time if the map implementation is swapped out.
