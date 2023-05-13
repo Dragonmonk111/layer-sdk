@@ -6,8 +6,7 @@ use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
 
-use super::transaction::Op;
-use super::transaction::PulsarTransaction;
+use crate::wrap::{Op, ReaderWrapper};
 use crate::FastHasher;
 use crate::{PersistentStorage, ReadonlyStorage, Storage};
 
@@ -58,8 +57,10 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
 pub struct MemoryStorageWriter<'a> {
     // This is needed for commit later on
     persistent: &'a MemoryStore,
+    // This is the reader access
+    reader: Box<dyn ReadonlyStorage + 'a>,
     // This is a wrapper used for transactions
-    transaction: PulsarTransaction<'a>,
+    wrapper: ReaderWrapper,
 }
 
 impl<'a> MemoryStorageWriter<'a> {
@@ -67,14 +68,15 @@ impl<'a> MemoryStorageWriter<'a> {
         let reader = persistent.reader();
         Self {
             persistent,
-            transaction: PulsarTransaction::new(reader),
+            reader,
+            wrapper: ReaderWrapper::new(),
         }
     }
 }
 
 impl ReadonlyStorage for MemoryStorageWriter<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
-        self.transaction.get(meter, key)
+        self.wrapper.get(self.reader.as_ref(), meter, key)
     }
 
     fn range<'a>(
@@ -84,7 +86,8 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
-        self.transaction.range(meter, start, end, order)
+        self.wrapper
+            .range(self.reader.as_ref(), meter, start, end, order)
     }
 
     fn abort(self) -> () {
@@ -94,11 +97,11 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
 
 impl Storage for MemoryStorageWriter<'_> {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
-        self.transaction.set(meter, key, value)
+        self.wrapper.set(meter, key, value)
     }
 
     fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
-        self.transaction.remove(meter, key)
+        self.wrapper.remove(meter, key)
     }
 
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
@@ -106,9 +109,9 @@ impl Storage for MemoryStorageWriter<'_> {
         let mut hasher = FastHasher::new(&self.persistent.0.read().hash);
 
         // write all operations to the root storage
-        let ops = self.transaction.prepare();
+        let ops = self.wrapper.prepare();
         let mut writer = self.persistent.0.write();
-        for op in ops.ops_log {
+        for op in ops {
             match op {
                 Op::Set { key, value } => {
                     hasher.set(&key, &value);

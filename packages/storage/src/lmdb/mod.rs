@@ -1,3 +1,4 @@
+#![cfg(feature = "memory")]
 use libc::size_t;
 use lmdb::{Cursor, Database, Environment, Transaction};
 use std::path::Path;
