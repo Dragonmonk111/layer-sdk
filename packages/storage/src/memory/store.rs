@@ -8,6 +8,7 @@ use std::ops::{Bound, RangeBounds};
 
 use super::transaction::Op;
 use super::transaction::PulsarTransaction;
+use crate::FastHasher;
 use crate::{PersistentStorage, ReadonlyStorage, Storage};
 
 pub struct MemoryStore(RwLock<BTreeStorage>);
@@ -18,12 +19,12 @@ struct BTreeStorage {
 }
 
 impl PersistentStorage for MemoryStore {
-    fn read<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
+    fn reader<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
         let reader = self.0.read();
         Box::new(MemoryStorageReader(reader))
     }
 
-    fn write<'a>(&'a self) -> Box<dyn Storage + 'a> {
+    fn writer<'a>(&'a self) -> Box<dyn Storage + 'a> {
         Box::new(MemoryStorageWriter::new(self))
     }
 
@@ -63,7 +64,7 @@ pub struct MemoryStorageWriter<'a> {
 
 impl<'a> MemoryStorageWriter<'a> {
     fn new(persistent: &'a MemoryStore) -> Self {
-        let reader = persistent.read();
+        let reader = persistent.reader();
         Self {
             persistent,
             transaction: PulsarTransaction::new(reader),
@@ -101,14 +102,27 @@ impl Storage for MemoryStorageWriter<'_> {
     }
 
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
+        // start with old app-hash
+        let mut hasher = FastHasher::new(&self.persistent.0.read().hash);
+
+        // write all operations to the root storage
         let ops = self.transaction.prepare();
         let mut writer = self.persistent.0.write();
         for op in ops.ops_log {
             match op {
-                Op::Set { key, value } => writer.set(meter, key, value)?,
-                Op::Delete { key } => writer.remove(meter, &key)?,
+                Op::Set { key, value } => {
+                    hasher.set(&key, &value);
+                    writer.set(meter, key, value)?;
+                }
+                Op::Delete { key } => {
+                    hasher.remove(&key);
+                    writer.remove(meter, &key)?;
+                }
             }
         }
+
+        // calculate new app hash
+        writer.hash = hasher.hash();
         Ok(())
     }
 }
@@ -186,6 +200,8 @@ impl BTreeStorage {
         let cost = 2000u64 + 2 * (key.len() + value.len()) as u64;
         meter.charge(cost)?;
 
+        // TODO: add to hasher...
+
         self.data.insert(key, value);
         Ok(())
     }
@@ -194,6 +210,8 @@ impl BTreeStorage {
         // TODO: abstract better
         let cost = 2000u64;
         meter.charge(cost)?;
+
+        // TODO: add to hasher...
 
         self.data.remove(key);
         Ok(())

@@ -2,12 +2,15 @@ use libc::size_t;
 use lmdb::{Cursor, Database, Environment, Transaction};
 use std::path::Path;
 
-use crate::{PersistentStorage, ReadonlyStorage, Storage};
+use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 // 1 GB max... review this later
 pub const DEFAULT_DB_SIZE_MB: u64 = 1024;
+
+// TODO: ensure this never shows up in range queries
+pub const APP_HASH_KEY: &[u8] = &[255u8];
 
 pub struct LmdbStore {
     env: Environment,
@@ -27,23 +30,38 @@ impl LmdbStore {
     }
 }
 
+fn read_app_hash<T: Transaction>(tx: &T, db: Database) -> Vec<u8> {
+    match tx.get(db, &APP_HASH_KEY) {
+        Ok(v) => v.to_vec(),
+        // initialize it here
+        Err(lmdb::Error::NotFound) => vec![0u8; 32],
+        Err(e) => panic!("Error reading from LMDB: {:?}", e),
+    }
+}
+
+fn write_app_hash(tx: &mut lmdb::RwTransaction, db: Database, hash: &[u8]) {
+    tx.put(db, &APP_HASH_KEY, &hash, lmdb::WriteFlags::empty())
+        .unwrap();
+}
+
 impl PersistentStorage for LmdbStore {
     // open a read-only view of the storage. should abort it to free space for write
-    fn read<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
+    fn reader<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
         let tx = self.env.begin_ro_txn().unwrap();
         Box::new(LmdbReader { tx, db: self.db })
     }
 
     // open a read-write view of the storage. takes exclusive access to the storage until completed
     // assumes internal rwlock
-    fn write<'a>(&'a self) -> Box<dyn Storage + 'a> {
+    fn writer<'a>(&'a self) -> Box<dyn Storage + 'a> {
         let tx = self.env.begin_rw_txn().unwrap();
-        Box::new(LmdbWriter { tx, db: self.db })
+        Box::new(LmdbWriter::new(tx, self.db))
     }
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8> {
-        todo!()
+        let tx = self.env.begin_ro_txn().unwrap();
+        read_app_hash(&tx, self.db)
     }
 }
 
@@ -119,8 +137,17 @@ impl Iterator for LmdbIterator<'_> {
 }
 
 pub struct LmdbWriter<'a> {
+    hasher: FastHasher,
     tx: lmdb::RwTransaction<'a>,
     db: Database,
+}
+
+impl<'a> LmdbWriter<'a> {
+    pub fn new(tx: lmdb::RwTransaction<'a>, db: Database) -> Self {
+        let app_hash = read_app_hash(&tx, db);
+        let hasher = FastHasher::new(&app_hash);
+        LmdbWriter { tx, db, hasher }
+    }
 }
 
 impl ReadonlyStorage for LmdbWriter<'_> {
@@ -169,10 +196,12 @@ impl Storage for LmdbWriter<'_> {
         self.tx
             .put(self.db, &key, &value, lmdb::WriteFlags::empty())
             .unwrap();
+        self.hasher.set(key, value);
         Ok(())
     }
 
     fn remove(&mut self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        self.hasher.remove(key);
         match self.tx.del(self.db, &key, None) {
             Ok(_) => Ok(()),
             Err(lmdb::Error::NotFound) => Ok(()),
@@ -181,7 +210,9 @@ impl Storage for LmdbWriter<'_> {
     }
 
     // This writes all changes to the underlying storage and consumes this wrapper
-    fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
+    fn commit(mut self, _meter: &mut GasMeter) -> GasResult<()> {
+        let app_hash = self.hasher.hash();
+        write_app_hash(&mut self.tx, self.db, &app_hash);
         self.tx.commit().unwrap();
         Ok(())
     }

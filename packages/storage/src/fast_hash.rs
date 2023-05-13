@@ -84,8 +84,6 @@ mod tests {
         b.set(b"foo", b"bar");
         let hashed_b = b.hash();
         assert_ne!(hashed_a, hashed_b);
-
-
     }
 
     #[test]
@@ -120,5 +118,4 @@ mod tests {
     //     let hashed_group = group.hash();
     //     assert_eq!(hashed, hashed_group);
     // }
-
 }
