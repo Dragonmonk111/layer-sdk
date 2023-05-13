@@ -1,3 +1,4 @@
+mod fast_hash;
 mod gas;
 mod prefixed_storage;
 mod traits;
@@ -13,6 +14,7 @@ mod lmdb;
 #[cfg(feature = "lmdb")]
 pub use crate::lmdb::LmdbStore;
 
+pub use fast_hash::FastHasher;
 pub use gas::{GasStorage, PulsarStorage};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
 pub use traits::{PersistentStorage, ReadonlyStorage, Storage};

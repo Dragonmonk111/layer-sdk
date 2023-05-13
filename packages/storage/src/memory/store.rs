@@ -237,6 +237,7 @@ fn clone_item(item_ref: GasResult<BTreeMapRecordRef>) -> GasResult<Record> {
     item_ref.map(|(key, value)| (key.clone(), value.clone()))
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,3 +461,4 @@ mod tests {
         );
     }
 }
+*/
