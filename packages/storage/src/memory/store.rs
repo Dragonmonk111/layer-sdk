@@ -49,7 +49,7 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
         self.0.range(meter, start, end, order)
     }
 
-    fn abort(self) -> () {
+    fn abort(self) {
         // nothing to do
     }
 }
@@ -90,7 +90,7 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
             .range(self.reader.as_ref(), meter, start, end, order)
     }
 
-    fn abort(self) -> () {
+    fn abort(self) {
         // nothing to do
     }
 }

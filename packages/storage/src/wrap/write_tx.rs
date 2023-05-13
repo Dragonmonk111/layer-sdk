@@ -37,7 +37,7 @@ impl ReadonlyStorage for WriteTx<'_> {
         self.wrap.range_mut(self.storage, meter, start, end, order)
     }
 
-    fn abort(self) -> () {}
+    fn abort(self) {}
 }
 
 impl Storage for WriteTx<'_> {
@@ -85,7 +85,7 @@ impl<'a> ReadonlyStorage for CastReadonly<'a> {
         self.0.range(meter, start, end, order)
     }
 
-    fn abort(self) -> () {
+    fn abort(self) {
         // intentionally not implemented
         unimplemented!()
     }

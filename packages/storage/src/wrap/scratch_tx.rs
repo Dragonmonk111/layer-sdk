@@ -38,7 +38,7 @@ impl ReadonlyStorage for ScratchTx<'_> {
         self.wrap.range(self.storage, meter, start, end, order)
     }
 
-    fn abort(self) -> () {}
+    fn abort(self) {}
 }
 
 impl Storage for ScratchTx<'_> {

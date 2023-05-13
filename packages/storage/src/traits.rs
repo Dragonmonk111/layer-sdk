@@ -29,7 +29,7 @@ pub trait ReadonlyStorage {
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>>;
 
     // Drops this storage without committing changes
-    fn abort(self) -> ();
+    fn abort(self);
 }
 pub trait Storage: ReadonlyStorage {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()>;

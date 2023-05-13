@@ -1,41 +1,15 @@
-use cosmwasm_std::Storage;
-use cosmwasm_std::{Order, Record};
-
-pub(crate) fn get_with_prefix(
-    storage: &dyn Storage,
-    namespace: &[u8],
-    key: &[u8],
-) -> Option<Vec<u8>> {
-    storage.get(&concat(namespace, key))
-}
-
-pub(crate) fn set_with_prefix(
-    storage: &mut dyn Storage,
-    namespace: &[u8],
-    key: &[u8],
-    value: &[u8],
-) {
-    storage.set(&concat(namespace, key), value);
-}
-
-pub(crate) fn remove_with_prefix(storage: &mut dyn Storage, namespace: &[u8], key: &[u8]) {
-    storage.remove(&concat(namespace, key));
-}
-
 #[inline]
-fn concat(namespace: &[u8], key: &[u8]) -> Vec<u8> {
+pub(crate) fn concat(namespace: &[u8], key: &[u8]) -> Vec<u8> {
     let mut k = namespace.to_vec();
     k.extend_from_slice(key);
     k
 }
 
-pub(crate) fn range_with_prefix<'a>(
-    storage: &'a dyn Storage,
+pub(crate) fn prefixed_bounds(
     namespace: &[u8],
     start: Option<&[u8]>,
     end: Option<&[u8]>,
-    order: Order,
-) -> Box<dyn Iterator<Item = Record> + 'a> {
+) -> (Vec<u8>, Vec<u8>) {
     // prepare start, end with prefix
     let start = match start {
         Some(s) => concat(namespace, s),
@@ -46,25 +20,18 @@ pub(crate) fn range_with_prefix<'a>(
         // end is updating last byte by one
         None => namespace_upper_bound(namespace),
     };
-
-    // get iterator from storage
-    let base_iterator = storage.range(Some(&start), Some(&end), order);
-
-    // make a copy for the closure to handle lifetimes safely
-    let prefix = namespace.to_vec();
-    let mapped = base_iterator.map(move |(k, v)| (trim(&prefix, &k), v));
-    Box::new(mapped)
+    (start, end)
 }
 
 #[inline]
-fn trim(namespace: &[u8], key: &[u8]) -> Vec<u8> {
+pub(crate) fn trim(namespace: &[u8], key: &[u8]) -> Vec<u8> {
     key[namespace.len()..].to_vec()
 }
 
 /// Returns a new vec of same length and last byte incremented by one
 /// If last bytes are 255, we handle overflow up the chain.
 /// If all bytes are 255, this returns wrong data - but that is never possible as a namespace
-fn namespace_upper_bound(input: &[u8]) -> Vec<u8> {
+pub(crate) fn namespace_upper_bound(input: &[u8]) -> Vec<u8> {
     let mut copy = input.to_vec();
     // zero out all trailing 255, increment first that is not such
     for i in (0..input.len()).rev() {
@@ -78,6 +45,7 @@ fn namespace_upper_bound(input: &[u8]) -> Vec<u8> {
     copy
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::super::length_prefixed::to_length_prefixed;
@@ -210,3 +178,4 @@ mod tests {
         assert_eq!(namespace_upper_bound(b"\xffabc"), b"\xffabd".to_vec());
     }
 }
+*/

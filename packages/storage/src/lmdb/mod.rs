@@ -99,15 +99,15 @@ impl ReadonlyStorage for LmdbReader<'_> {
         };
 
         let res = LmdbIterator {
-            cursor: cursor,
-            iter: iter,
+            cursor,
+            iter,
             end: end.map(|s| s.to_vec()),
         };
         Ok(Box::new(res))
     }
 
     // Drops this storage without committing changes
-    fn abort(self) -> () {
+    fn abort(self) {
         self.tx.abort()
     }
 }
@@ -179,15 +179,15 @@ impl ReadonlyStorage for LmdbWriter<'_> {
         };
 
         let res = LmdbIterator {
-            cursor: cursor,
-            iter: iter,
+            cursor,
+            iter,
             end: end.map(|s| s.to_vec()),
         };
         Ok(Box::new(res))
     }
 
     // Drops this storage without committing changes
-    fn abort(self) -> () {
+    fn abort(self) {
         self.tx.abort()
     }
 }
