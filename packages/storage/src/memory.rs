@@ -1,11 +1,13 @@
 use cosmwasm_std::{Order, Record};
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{RwLock, RwLockReadGuard};
 use pulsar_std::{GasMeter, GasResult};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
 
+use crate::pulsar_transaction::Op;
+use crate::pulsar_transaction::PulsarTransaction;
 use crate::{PersistentStorage, ReadonlyStorage, Storage};
 
 pub struct HashedMemory(RwLock<MemoryStorage>);
@@ -22,8 +24,7 @@ impl PersistentStorage for HashedMemory {
     }
 
     fn write<'a>(&'a self) -> Box<dyn Storage + 'a> {
-        let writer = self.0.write();
-        Box::new(MemoryStorageWriter(writer))
+        Box::new(MemoryStorageWriter::new(self))
     }
 
     fn app_hash(&self) -> Vec<u8> {
@@ -31,7 +32,7 @@ impl PersistentStorage for HashedMemory {
     }
 }
 
-struct MemoryStorageReader<'a>(RwLockReadGuard<'a, MemoryStorage>);
+pub struct MemoryStorageReader<'a>(RwLockReadGuard<'a, MemoryStorage>);
 
 impl ReadonlyStorage for MemoryStorageReader<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
@@ -53,11 +54,26 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
     }
 }
 
-struct MemoryStorageWriter<'a>(RwLockWriteGuard<'a, MemoryStorage>);
+pub struct MemoryStorageWriter<'a> {
+    // This is needed for commit later on
+    persistent: &'a HashedMemory,
+    // This is a wrapper used for transactions
+    transaction: PulsarTransaction<'a>,
+}
+
+impl<'a> MemoryStorageWriter<'a> {
+    fn new(persistent: &'a HashedMemory) -> Self {
+        let reader = persistent.read();
+        Self {
+            persistent,
+            transaction: PulsarTransaction::new(reader),
+        }
+    }
+}
 
 impl ReadonlyStorage for MemoryStorageWriter<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
-        self.0.get(meter, key)
+        self.transaction.get(meter, key)
     }
 
     fn range<'a>(
@@ -67,7 +83,7 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
-        self.0.range(meter, start, end, order)
+        self.transaction.range(meter, start, end, order)
     }
 
     fn abort(self) -> () {
@@ -76,19 +92,24 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
 }
 
 impl Storage for MemoryStorageWriter<'_> {
-    fn set(&mut self, _meter: &mut GasMeter, _key: &[u8], _value: &[u8]) -> GasResult<()> {
-        // use transaction info
-        todo!()
+    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+        self.transaction.set(meter, key, value)
     }
 
-    fn remove(&mut self, _meter: &mut GasMeter, _key: &[u8]) -> GasResult<()> {
-        // use transaction info
-        todo!()
+    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        self.transaction.remove(meter, key)
     }
 
-    fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
-        // use transaction info
-        todo!()
+    fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
+        let ops = self.transaction.prepare();
+        let mut writer = self.persistent.0.write();
+        for op in ops.ops_log {
+            match op {
+                Op::Set { key, value } => writer.set(meter, key, value)?,
+                Op::Delete { key } => writer.remove(meter, &key)?,
+            }
+        }
+        Ok(())
     }
 }
 
@@ -157,7 +178,7 @@ impl MemoryStorage {
         }
     }
 
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &mut GasMeter, key: Vec<u8>, value: Vec<u8>) -> GasResult<()> {
         if value.is_empty() {
             panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
         }
@@ -165,7 +186,7 @@ impl MemoryStorage {
         let cost = 2000u64 + 2 * (key.len() + value.len()) as u64;
         meter.charge(cost)?;
 
-        self.data.insert(key.to_vec(), value.to_vec());
+        self.data.insert(key, value);
         Ok(())
     }
 

@@ -6,7 +6,7 @@ pub struct GasMeter {
     used: u64,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum GasError {
     #[error("Out of gas")]
     OutOfGas,

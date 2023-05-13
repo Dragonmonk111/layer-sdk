@@ -2,6 +2,7 @@ mod memory;
 mod metered;
 mod persistent;
 mod prefixed_storage;
+mod pulsar_transaction;
 mod storage;
 mod transactions;
 
