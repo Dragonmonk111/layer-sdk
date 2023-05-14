@@ -30,7 +30,10 @@ pub trait ReadonlyStorage {
 
     // Drops this storage without committing changes
     fn abort(self);
+
+    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b>;
 }
+
 pub trait Storage: ReadonlyStorage {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()>;
 
@@ -39,5 +42,7 @@ pub trait Storage: ReadonlyStorage {
     // This writes all changes to the underlying storage and consumes this wrapper
     fn commit(self, meter: &mut GasMeter) -> GasResult<()>;
 
-    // Question: transaction as a method here? or just use generic Transaction type?
+    fn as_ref(&self) -> &dyn ReadonlyStorage;
+
+    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b>;
 }

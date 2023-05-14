@@ -8,7 +8,7 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 use super::{BTreeMapPairRef, Delta, Op};
-use crate::{ReadonlyStorage, Storage};
+use crate::ReadonlyStorage;
 
 pub(crate) struct ReaderWrapper {
     /// read-only access to backing storage
@@ -45,58 +45,10 @@ impl ReaderWrapper {
         }
     }
 
-    pub(crate) fn get_mut(
-        &self,
-        storage: &dyn Storage,
-        meter: &mut GasMeter,
-        key: &[u8],
-    ) -> GasResult<Option<Vec<u8>>> {
-        match self.local_state.get(key) {
-            Some(val) => match val {
-                Delta::Set { value } => Ok(Some(value.clone())),
-                Delta::Delete {} => Ok(None),
-            },
-            None => storage.get(meter, key),
-        }
-    }
-
     /// range allows iteration over a set of keys, either forwards or backwards
     pub(crate) fn range<'b>(
         &'b self,
         storage: &'b dyn ReadonlyStorage,
-        meter: &'b mut GasMeter,
-        start: Option<&[u8]>,
-        end: Option<&[u8]>,
-        order: Order,
-    ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'b>> {
-        let bounds = range_bounds(start, end);
-
-        // BTreeMap.range panics if range is start > end.
-        // However, this cases represent just empty range and we treat it as such.
-        let local: Box<dyn Iterator<Item = BTreeMapPairRef<Delta>>> =
-            match (bounds.start_bound(), bounds.end_bound()) {
-                (Bound::Included(start), Bound::Excluded(end)) if start > end => {
-                    Box::new(iter::empty())
-                }
-                _ => {
-                    let local_raw = self.local_state.range(bounds);
-                    match order {
-                        Order::Ascending => Box::new(local_raw),
-                        Order::Descending => Box::new(local_raw.rev()),
-                    }
-                }
-            };
-
-        // TODO: make this proper
-        let base = storage.range(meter, start, end, order)?;
-        let merged = MergeOverlay::new(local, base, order);
-        Ok(Box::new(merged))
-    }
-
-    /// range_mut allows iteration over a set of keys, either forwards or backwards
-    pub(crate) fn range_mut<'b>(
-        &'b self,
-        storage: &'b dyn Storage,
         meter: &'b mut GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,

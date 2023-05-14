@@ -1,9 +1,8 @@
-#![cfg(feature = "memory")]
 use libc::size_t;
 use lmdb::{Cursor, Database, Environment, Transaction};
 use std::path::Path;
 
-use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
+use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage, WriteTx};
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
@@ -110,6 +109,10 @@ impl ReadonlyStorage for LmdbReader<'_> {
     fn abort(self) {
         self.tx.abort()
     }
+
+    fn scratch_tx<'c>(&'c self) -> Box<dyn ReadonlyStorage + 'c> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 pub struct LmdbIterator<'a> {
@@ -190,6 +193,10 @@ impl ReadonlyStorage for LmdbWriter<'_> {
     fn abort(self) {
         self.tx.abort()
     }
+
+    fn scratch_tx<'c>(&'c self) -> Box<dyn ReadonlyStorage + 'c> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 impl Storage for LmdbWriter<'_> {
@@ -216,5 +223,13 @@ impl Storage for LmdbWriter<'_> {
         write_app_hash(&mut self.tx, self.db, &app_hash);
         self.tx.commit().unwrap();
         Ok(())
+    }
+
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+
+    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
+        Box::new(WriteTx::new(self))
     }
 }

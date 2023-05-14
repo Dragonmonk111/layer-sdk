@@ -2,7 +2,7 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 use super::{Delta, ReaderWrapper};
-use crate::{ReadonlyStorage, Storage};
+use crate::{ReadonlyStorage, ScratchTx, Storage};
 
 /// This can wrap any Storage with another one as temporary transaction level on top.
 /// If aborted, all writes will be discarded.
@@ -20,11 +20,15 @@ impl<'a> WriteTx<'a> {
             wrap: ReaderWrapper::new(),
         }
     }
+
+    pub fn scratch<'b>(&'b self) -> Box<dyn Storage + 'b> {
+        Box::new(ScratchTx::new(self))
+    }
 }
 
 impl ReadonlyStorage for WriteTx<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
-        self.wrap.get_mut(self.storage, meter, key)
+        self.wrap.get(self.storage.as_ref(), meter, key)
     }
 
     fn range<'a>(
@@ -34,10 +38,15 @@ impl ReadonlyStorage for WriteTx<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
-        self.wrap.range_mut(self.storage, meter, start, end, order)
+        self.wrap
+            .range(self.storage.as_ref(), meter, start, end, order)
     }
 
     fn abort(self) {}
+
+    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 impl Storage for WriteTx<'_> {
@@ -65,28 +74,12 @@ impl Storage for WriteTx<'_> {
         }
         Ok(())
     }
-}
 
-/// Ugly helper
-struct CastReadonly<'a>(&'a dyn Storage);
-
-impl<'a> ReadonlyStorage for CastReadonly<'a> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
-        self.0.get(meter, key)
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
     }
 
-    fn range<'b>(
-        &'b self,
-        meter: &'b mut GasMeter,
-        start: Option<&[u8]>,
-        end: Option<&[u8]>,
-        order: Order,
-    ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'b>> {
-        self.0.range(meter, start, end, order)
-    }
-
-    fn abort(self) {
-        // intentionally not implemented
-        unimplemented!()
+    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
+        Box::new(WriteTx::new(self))
     }
 }

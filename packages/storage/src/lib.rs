@@ -1,13 +1,11 @@
 mod fast_hash;
 mod gas;
+mod memory;
 mod prefixed_storage;
 mod traits;
 // mod transactions;
 mod wrap;
 
-#[cfg(feature = "memory")]
-mod memory;
-#[cfg(feature = "memory")]
 pub use memory::MemoryStore;
 
 #[cfg(feature = "lmdb")]

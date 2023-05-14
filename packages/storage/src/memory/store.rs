@@ -7,8 +7,7 @@ use std::iter;
 use std::ops::{Bound, RangeBounds};
 
 use crate::wrap::{Op, ReaderWrapper};
-use crate::FastHasher;
-use crate::{PersistentStorage, ReadonlyStorage, Storage};
+use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage, WriteTx};
 
 pub struct MemoryStore(RwLock<BTreeStorage>);
 
@@ -52,6 +51,10 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
     fn abort(self) {
         // nothing to do
     }
+
+    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 pub struct MemoryStorageWriter<'a> {
@@ -93,6 +96,10 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
     fn abort(self) {
         // nothing to do
     }
+
+    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 impl Storage for MemoryStorageWriter<'_> {
@@ -127,6 +134,13 @@ impl Storage for MemoryStorageWriter<'_> {
         // calculate new app hash
         writer.hash = hasher.hash();
         Ok(())
+    }
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+
+    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
+        Box::new(WriteTx::new(self))
     }
 }
 

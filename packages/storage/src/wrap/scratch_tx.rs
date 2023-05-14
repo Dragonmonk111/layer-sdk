@@ -2,7 +2,7 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 use super::ReaderWrapper;
-use crate::{ReadonlyStorage, Storage};
+use crate::{ReadonlyStorage, Storage, WriteTx};
 
 /// This wraps ReadonlyStorage, providing a scratch-pad that acts like normal Storage
 /// but can never be persisted to the underlying state.
@@ -39,6 +39,10 @@ impl ReadonlyStorage for ScratchTx<'_> {
     }
 
     fn abort(self) {}
+
+    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 impl Storage for ScratchTx<'_> {
@@ -54,5 +58,13 @@ impl Storage for ScratchTx<'_> {
     // Shall we make it no op rather than panic??
     fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
         unimplemented!()
+    }
+
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+
+    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
+        Box::new(WriteTx::new(self))
     }
 }

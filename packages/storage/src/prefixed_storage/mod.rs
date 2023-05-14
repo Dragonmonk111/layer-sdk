@@ -4,7 +4,7 @@ mod namespace_helpers;
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
-use crate::{ReadonlyStorage, Storage};
+use crate::{ReadonlyStorage, Storage, WriteTx};
 use length_prefixed::{to_length_prefixed, to_length_prefixed_nested};
 use namespace_helpers::{concat, prefixed_bounds, trim};
 
@@ -72,6 +72,10 @@ impl<'b> ReadonlyStorage for PrefixedStorage<'b> {
     fn abort(self) {
         todo!();
     }
+
+    fn scratch_tx<'c>(&'c self) -> Box<dyn ReadonlyStorage + 'c> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 impl<'a> Storage for PrefixedStorage<'a> {
@@ -86,6 +90,14 @@ impl<'a> Storage for PrefixedStorage<'a> {
     fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
         todo!();
         // self.storage.commit(meter)
+    }
+
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+
+    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
+        Box::new(WriteTx::new(self))
     }
 }
 
@@ -138,6 +150,9 @@ impl<'b> ReadonlyStorage for ReadonlyPrefixedStorage<'b> {
     }
 
     fn abort(self) {}
+    fn scratch_tx<'c>(&'c self) -> Box<dyn ReadonlyStorage + 'c> {
+        Box::new(crate::ScratchTx::new(self))
+    }
 }
 
 /*
