@@ -2,7 +2,7 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 use super::ReaderWrapper;
-use crate::{ReadonlyStorage, Storage, WriteTx};
+use crate::{traits::Transaction, ReadonlyStorage, Storage};
 
 /// This wraps ReadonlyStorage, providing a scratch-pad that acts like normal Storage
 /// but can never be persisted to the underlying state.
@@ -39,10 +39,6 @@ impl ReadonlyStorage for ScratchTx<'_> {
     }
 
     fn abort(self) {}
-
-    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
-        Box::new(crate::ScratchTx::new(self))
-    }
 }
 
 impl Storage for ScratchTx<'_> {
@@ -54,6 +50,12 @@ impl Storage for ScratchTx<'_> {
         self.wrap.remove(meter, key)
     }
 
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+}
+
+impl Transaction for ScratchTx<'_> {
     // FIXME: better error message - this should never be called, but we expose the API for the trait.
     // Shall we make it no op rather than panic??
     fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
@@ -64,7 +66,7 @@ impl Storage for ScratchTx<'_> {
         self
     }
 
-    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
-        Box::new(WriteTx::new(self))
+    fn as_mut(&mut self) -> &mut dyn Storage {
+        self
     }
 }

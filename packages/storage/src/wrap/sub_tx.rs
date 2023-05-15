@@ -2,20 +2,20 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 use super::{Delta, ReaderWrapper};
-use crate::{ReadonlyStorage, ScratchTx, Storage};
+use crate::{traits::Transaction, ReadonlyStorage, ScratchTx, Storage};
 
 /// This can wrap any Storage with another one as temporary transaction level on top.
 /// If aborted, all writes will be discarded.
 /// If committed, all writes will be written to the underlying storage.
 /// Holds an exclusive lock (&mut) on the Storage until committed or aborted
-pub struct WriteTx<'a> {
+pub struct SubTx<'a> {
     storage: &'a mut dyn Storage,
     wrap: ReaderWrapper,
 }
 
-impl<'a> WriteTx<'a> {
+impl<'a> SubTx<'a> {
     pub fn new(storage: &'a mut dyn Storage) -> Self {
-        WriteTx {
+        SubTx {
             storage,
             wrap: ReaderWrapper::new(),
         }
@@ -26,7 +26,7 @@ impl<'a> WriteTx<'a> {
     }
 }
 
-impl ReadonlyStorage for WriteTx<'_> {
+impl ReadonlyStorage for SubTx<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         self.wrap.get(self.storage.as_ref(), meter, key)
     }
@@ -41,15 +41,10 @@ impl ReadonlyStorage for WriteTx<'_> {
         self.wrap
             .range(self.storage.as_ref(), meter, start, end, order)
     }
-
     fn abort(self) {}
-
-    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
-        Box::new(crate::ScratchTx::new(self))
-    }
 }
 
-impl Storage for WriteTx<'_> {
+impl Storage for SubTx<'_> {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         self.wrap.set(meter, key, value)
     }
@@ -58,6 +53,12 @@ impl Storage for WriteTx<'_> {
         self.wrap.remove(meter, key)
     }
 
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+}
+
+impl Transaction for SubTx<'_> {
     // FIXME: better error message - this should never be called, but we expose the API for the trait.
     // Shall we make it no op rather than panic??
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
@@ -79,7 +80,7 @@ impl Storage for WriteTx<'_> {
         self
     }
 
-    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
-        Box::new(WriteTx::new(self))
+    fn as_mut(&mut self) -> &mut dyn Storage {
+        self
     }
 }

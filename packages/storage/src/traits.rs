@@ -5,12 +5,20 @@ use pulsar_std::{GasMeter, GasResult};
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,
 /// but one method for bulk write, that will commit a new version and return the app hash (stored internally)
 pub trait PersistentStorage {
+    type Reader<'x>: ReadonlyStorage
+    where
+        Self: 'x;
+
+    type Writer<'x>: Storage
+    where
+        Self: 'x;
+
     // open a read-only view of the storage. should abort it to free space for write
-    fn reader<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a>;
+    fn reader<'a>(&'a self) -> Self::Reader<'a>;
 
     // open a read-write view of the storage. takes exclusive access to the storage until completed
     // assumes internal rwlock
-    fn writer<'a>(&'a self) -> Box<dyn Storage + 'a>;
+    fn writer<'a>(&'a self) -> Self::Writer<'a>;
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8>;
@@ -18,6 +26,10 @@ pub trait PersistentStorage {
 
 /// This is like cosmwasm_std::Storage, but takes GasMeter as extra arg everywhere
 pub trait ReadonlyStorage {
+    /// Drops this reader or transaction without committing changes
+    /// May be needed to free up resources
+    fn abort(self);
+
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>>;
 
     fn range<'a>(
@@ -27,11 +39,6 @@ pub trait ReadonlyStorage {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>>;
-
-    // Drops this storage without committing changes
-    fn abort(self);
-
-    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b>;
 }
 
 pub trait Storage: ReadonlyStorage {
@@ -39,10 +46,14 @@ pub trait Storage: ReadonlyStorage {
 
     fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()>;
 
+    fn as_ref(&self) -> &dyn ReadonlyStorage;
+}
+
+pub trait Transaction: Storage {
     // This writes all changes to the underlying storage and consumes this wrapper
     fn commit(self, meter: &mut GasMeter) -> GasResult<()>;
 
     fn as_ref(&self) -> &dyn ReadonlyStorage;
 
-    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b>;
+    fn as_mut(&mut self) -> &mut dyn Storage;
 }

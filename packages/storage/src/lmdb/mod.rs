@@ -2,7 +2,7 @@ use libc::size_t;
 use lmdb::{Cursor, Database, Environment, Transaction};
 use std::path::Path;
 
-use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage, WriteTx};
+use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
@@ -45,17 +45,21 @@ fn write_app_hash(tx: &mut lmdb::RwTransaction, db: Database, hash: &[u8]) {
 }
 
 impl PersistentStorage for LmdbStore {
+    type Reader<'a> = LmdbReader<'a>;
+
+    type Writer<'a> = LmdbWriter<'a>;
+
     // open a read-only view of the storage. should abort it to free space for write
-    fn reader<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
+    fn reader<'a>(&'a self) -> LmdbReader<'a> {
         let tx = self.env.begin_ro_txn().unwrap();
-        Box::new(LmdbReader { tx, db: self.db })
+        LmdbReader { tx, db: self.db }
     }
 
     // open a read-write view of the storage. takes exclusive access to the storage until completed
     // assumes internal rwlock
-    fn writer<'a>(&'a self) -> Box<dyn Storage + 'a> {
+    fn writer<'a>(&'a self) -> LmdbWriter<'a> {
         let tx = self.env.begin_rw_txn().unwrap();
-        Box::new(LmdbWriter::new(tx, self.db))
+        LmdbWriter::new(tx, self.db)
     }
 
     /// Returns app hash of last commit
@@ -108,10 +112,6 @@ impl ReadonlyStorage for LmdbReader<'_> {
     // Drops this storage without committing changes
     fn abort(self) {
         self.tx.abort()
-    }
-
-    fn scratch_tx<'c>(&'c self) -> Box<dyn ReadonlyStorage + 'c> {
-        Box::new(crate::ScratchTx::new(self))
     }
 }
 
@@ -193,10 +193,6 @@ impl ReadonlyStorage for LmdbWriter<'_> {
     fn abort(self) {
         self.tx.abort()
     }
-
-    fn scratch_tx<'c>(&'c self) -> Box<dyn ReadonlyStorage + 'c> {
-        Box::new(crate::ScratchTx::new(self))
-    }
 }
 
 impl Storage for LmdbWriter<'_> {
@@ -217,6 +213,12 @@ impl Storage for LmdbWriter<'_> {
         }
     }
 
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+}
+
+impl crate::Transaction for LmdbWriter<'_> {
     // This writes all changes to the underlying storage and consumes this wrapper
     fn commit(mut self, _meter: &mut GasMeter) -> GasResult<()> {
         let app_hash = self.hasher.hash();
@@ -229,7 +231,7 @@ impl Storage for LmdbWriter<'_> {
         self
     }
 
-    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
-        Box::new(WriteTx::new(self))
+    fn as_mut(&mut self) -> &mut dyn Storage {
+        self
     }
 }

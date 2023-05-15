@@ -6,8 +6,9 @@ use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
 
+use crate::traits::Transaction;
 use crate::wrap::{Op, ReaderWrapper};
-use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage, WriteTx};
+use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
 
 pub struct MemoryStore(RwLock<BTreeStorage>);
 
@@ -17,13 +18,17 @@ struct BTreeStorage {
 }
 
 impl PersistentStorage for MemoryStore {
-    fn reader<'a>(&'a self) -> Box<dyn ReadonlyStorage + 'a> {
+    type Reader<'a> = MemoryStorageReader<'a>;
+
+    type Writer<'a> = MemoryStorageWriter<'a>;
+
+    fn reader<'a>(&'a self) -> MemoryStorageReader<'a> {
         let reader = self.0.read();
-        Box::new(MemoryStorageReader(reader))
+        MemoryStorageReader(reader)
     }
 
-    fn writer<'a>(&'a self) -> Box<dyn Storage + 'a> {
-        Box::new(MemoryStorageWriter::new(self))
+    fn writer<'a>(&'a self) -> MemoryStorageWriter<'a> {
+        MemoryStorageWriter::new(self)
     }
 
     fn app_hash(&self) -> Vec<u8> {
@@ -48,20 +53,14 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
         self.0.range(meter, start, end, order)
     }
 
-    fn abort(self) {
-        // nothing to do
-    }
-
-    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
-        Box::new(crate::ScratchTx::new(self))
-    }
+    fn abort(self) {}
 }
 
 pub struct MemoryStorageWriter<'a> {
     // This is needed for commit later on
     persistent: &'a MemoryStore,
     // This is the reader access
-    reader: Box<dyn ReadonlyStorage + 'a>,
+    reader: MemoryStorageReader<'a>,
     // This is a wrapper used for transactions
     wrapper: ReaderWrapper,
 }
@@ -79,7 +78,7 @@ impl<'a> MemoryStorageWriter<'a> {
 
 impl ReadonlyStorage for MemoryStorageWriter<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
-        self.wrapper.get(self.reader.as_ref(), meter, key)
+        self.wrapper.get(&self.reader, meter, key)
     }
 
     fn range<'a>(
@@ -89,17 +88,10 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
-        self.wrapper
-            .range(self.reader.as_ref(), meter, start, end, order)
+        self.wrapper.range(&self.reader, meter, start, end, order)
     }
 
-    fn abort(self) {
-        // nothing to do
-    }
-
-    fn scratch_tx<'b>(&'b self) -> Box<dyn ReadonlyStorage + 'b> {
-        Box::new(crate::ScratchTx::new(self))
-    }
+    fn abort(self) {}
 }
 
 impl Storage for MemoryStorageWriter<'_> {
@@ -111,6 +103,12 @@ impl Storage for MemoryStorageWriter<'_> {
         self.wrapper.remove(meter, key)
     }
 
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+}
+
+impl Transaction for MemoryStorageWriter<'_> {
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
         // start with old app-hash
         let mut hasher = FastHasher::new(&self.persistent.0.read().hash);
@@ -135,12 +133,13 @@ impl Storage for MemoryStorageWriter<'_> {
         writer.hash = hasher.hash();
         Ok(())
     }
+
     fn as_ref(&self) -> &dyn ReadonlyStorage {
         self
     }
 
-    fn sub_tx<'b>(&'b mut self) -> Box<dyn Storage + 'b> {
-        Box::new(WriteTx::new(self))
+    fn as_mut(&mut self) -> &mut dyn Storage {
+        self
     }
 }
 
