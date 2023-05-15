@@ -9,7 +9,7 @@ pub trait PersistentStorage {
     where
         Self: 'x;
 
-    type Writer<'x>: Storage
+    type Writer<'x>: Transaction
     where
         Self: 'x;
 

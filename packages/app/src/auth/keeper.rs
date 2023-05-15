@@ -1,9 +1,9 @@
 use crate::error::PulsarResult;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
-use cw_storage_plus::Map;
-use pulsar_std::{AccountId, Msg, PubKey, Tx, TxError};
-use pulsar_storage::{prefixed, Storage};
+
+use pulsar_std::{AccountId, GasMeter, Msg, PubKey, Tx, TxError};
+use pulsar_storage::{prefixed, Map, Storage};
 
 use crate::sm::StateMachine;
 
@@ -51,9 +51,12 @@ impl Auth {
         // later handle other types
         let Tx::Signed(tx) = tx;
 
+        // TODO: what to use until tx is parsed??
+        let mut meter = GasMeter::infinite();
+
         // load the signer account if any
         let mut auth_store = prefixed(storage, NAMESPACE_AUTH);
-        let pubkey = match ACCOUNTS.may_load(&auth_store, &tx.signer)? {
+        let pubkey = match ACCOUNTS.may_load(&auth_store, &mut meter, &tx.signer)? {
             Some(Account::External {
                 pubkey,
                 mut sequence,
@@ -78,7 +81,7 @@ impl Auth {
                     pubkey: pubkey.clone(),
                     sequence,
                 };
-                ACCOUNTS.save(&mut auth_store, &tx.signer, &account)?;
+                ACCOUNTS.save(&mut auth_store, &mut meter, &tx.signer, &account)?;
                 // use the pubkey in the account to validate
                 pubkey
             }
@@ -101,7 +104,7 @@ impl Auth {
                             pubkey: pk.clone(),
                             sequence: 1,
                         };
-                        ACCOUNTS.save(&mut auth_store, &tx.signer, &account)?;
+                        ACCOUNTS.save(&mut auth_store, &mut meter, &tx.signer, &account)?;
                         // use the pubkey in the account to validate
                         pk.clone()
                     }
@@ -126,6 +129,7 @@ impl Auth {
         if let Some(fee) = tx.fee.fee {
             sm.bank.transfer(
                 storage,
+                &mut meter,
                 tx.signer.clone(),
                 fee_collector_account(),
                 vec![fee],

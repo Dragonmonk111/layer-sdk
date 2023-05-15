@@ -8,10 +8,10 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
 use pulsar_std::response::QueryResponse;
-use pulsar_std::{GasMeter, Query, Tx};
+use pulsar_std::{GasMeter, GasResult, Query, Tx};
 use pulsar_storage::{
-    prefixed, prefixed_read, PersistentStorage, ReadonlyStorage, ScratchTx, Storage, SubTx,
-    Transaction, Item,
+    prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage, SubTx,
+    Transaction,
 };
 
 use crate::api::{
@@ -87,7 +87,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
     /// Called once upon blockchain startup with genesis info, before anything else is called
     pub fn init(
-        mut storage: T,
+        storage: T,
         logic: StateMachine,
         request: InitChainRequest,
     ) -> PulsarResult<(Self, InitChainResponse)> {
@@ -105,7 +105,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Set up the state machine here
         let genesis = GenesisState::parse(&request.app_state)?;
-        logic.init(&mut writer, &last_block, genesis)?;
+        logic.init(&mut writer, &mut meter, &last_block, genesis)?;
 
         // Store the application data
         let state = AppState {
@@ -209,7 +209,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         // FIXME: add begin blocker
 
         // FIXME: use reader here, later writer with ops (just optimization)
-        let writer = self.storage.writer();
+        let mut writer = self.storage.writer();
         let block = BlockInfo {
             height: full_block.height,
             time: full_block.time,
@@ -219,7 +219,8 @@ impl<T: PersistentStorage + 'static> App<T> {
         // TODO: re-review where we commit and where we wrap (add some docs)
         // grab all writes here and commit at the end
         let mut block_store = SubTx::new(&mut writer);
-        let tx_results: Vec<_> = full_block
+        // TODO: is this really what we want to do?
+        let tx_results: GasResult<Vec<_>> = full_block
             .txs
             .into_iter()
             .map(|tx| {
@@ -228,11 +229,12 @@ impl<T: PersistentStorage + 'static> App<T> {
                 if r.result.is_ok() {
                     // TODO: where does meter come from?
                     let mut meter = GasMeter::infinite();
-                    tx_store.commit(&mut meter);
+                    tx_store.commit(&mut meter)?;
                 }
-                r
+                Ok(r)
             })
             .collect();
+        let tx_results = tx_results?;
 
         // FIXME: add end blocker
 
