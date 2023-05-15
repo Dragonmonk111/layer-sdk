@@ -6,13 +6,12 @@ use thiserror::Error;
 // TODO: make our own custom pulsar-storage package to extend (esp with file system backing, transactions...)
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
-use cw_storage_plus::Item;
 
 use pulsar_std::response::QueryResponse;
 use pulsar_std::{GasMeter, Query, Tx};
 use pulsar_storage::{
     prefixed, prefixed_read, PersistentStorage, ReadonlyStorage, ScratchTx, Storage, SubTx,
-    Transaction,
+    Transaction, Item,
 };
 
 use crate::api::{
@@ -67,11 +66,12 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// If this fails with AppLoadError::NoStoredState, then we wait for init to be called.
     /// Otherwise we fail on loading.
     pub fn load_from_storage(storage: T, logic: StateMachine) -> Result<App<T>, AppLoadError> {
+        let mut meter = GasMeter::infinite();
         let state = {
             let reader = storage.reader();
             let app_store = prefixed_read(&reader, NAMESPACE_APP);
             APP_STATE
-                .may_load(&app_store)
+                .may_load(&app_store, &mut meter)
                 .map_err(|e| AppLoadError::InvalidState(e.to_string()))?
         };
         match state {
@@ -114,7 +114,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             last_block,
         };
         let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
-        APP_STATE.save(&mut app_store, &state)?;
+        APP_STATE.save(&mut app_store, &mut meter, &state)?;
 
         // commit to disk
         writer.commit(&mut meter)?;

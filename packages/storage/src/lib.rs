@@ -1,6 +1,7 @@
 mod fast_hash;
 mod gas;
 mod memory;
+mod plus;
 mod prefixed_storage;
 mod traits;
 // mod transactions;
@@ -15,6 +16,7 @@ pub use crate::lmdb::LmdbStore;
 
 pub use fast_hash::FastHasher;
 pub use gas::{GasStorage, PulsarStorage};
+pub use plus::{Item, Map, PlusError, PlusResult};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
 pub use traits::{PersistentStorage, ReadonlyStorage, Storage, Transaction};
 pub use wrap::{ScratchTx, SubTx};
