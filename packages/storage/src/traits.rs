@@ -14,11 +14,11 @@ pub trait PersistentStorage {
         Self: 'x;
 
     // open a read-only view of the storage. should abort it to free space for write
-    fn reader<'a>(&'a self) -> Self::Reader<'a>;
+    fn reader(&self) -> Self::Reader<'_>;
 
     // open a read-write view of the storage. takes exclusive access to the storage until completed
     // assumes internal rwlock
-    fn writer<'a>(&'a self) -> Self::Writer<'a>;
+    fn writer(&self) -> Self::Writer<'_>;
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8>;
@@ -52,8 +52,6 @@ pub trait Storage: ReadonlyStorage {
 pub trait Transaction: Storage {
     // This writes all changes to the underlying storage and consumes this wrapper
     fn commit(self, meter: &mut GasMeter) -> GasResult<()>;
-
-    fn as_ref(&self) -> &dyn ReadonlyStorage;
 
     fn as_mut(&mut self) -> &mut dyn Storage;
 }

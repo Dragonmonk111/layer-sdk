@@ -1,9 +1,9 @@
 use crate::error::PulsarResult;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{BlockInfo, Storage};
+use cosmwasm_std::BlockInfo;
 use cw_storage_plus::Map;
 use pulsar_std::{AccountId, Msg, PubKey, Tx, TxError};
-use pulsar_storage::prefixed;
+use pulsar_storage::{prefixed, Storage};
 
 use crate::sm::StateMachine;
 

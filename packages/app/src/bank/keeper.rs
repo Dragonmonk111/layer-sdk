@@ -1,12 +1,12 @@
 use itertools::Itertools;
 
-use cosmwasm_std::{coin, ensure_eq, BlockInfo, Coin, Event, Storage, Uint128};
+use cosmwasm_std::{coin, ensure_eq, BlockInfo, Coin, Event, Uint128};
 use cw_storage_plus::Map;
 use cw_utils::NativeBalance;
 
 use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
 use pulsar_std::{AccountId, BankMsg, BankQuery, GasMeter};
-use pulsar_storage::{prefixed, prefixed_read};
+use pulsar_storage::{prefixed, prefixed_read, ReadonlyStorage, Storage};
 
 use crate::api::TxResponse;
 use crate::bank::BankError;
@@ -65,14 +65,14 @@ impl Bank {
 
     fn get_balance(
         &self,
-        bank_storage: &dyn Storage,
+        bank_storage: &dyn ReadonlyStorage,
         account: &AccountId,
     ) -> PulsarResult<Vec<Coin>> {
         let val = BALANCES.may_load(bank_storage, account)?;
         Ok(val.unwrap_or_default().into_vec())
     }
 
-    fn get_supply(&self, bank_storage: &dyn Storage, denom: &str) -> PulsarResult<Uint128> {
+    fn get_supply(&self, bank_storage: &dyn ReadonlyStorage, denom: &str) -> PulsarResult<Uint128> {
         let val = SUPPLY.may_load(bank_storage, denom)?;
         Ok(val.unwrap_or_default())
     }
@@ -105,7 +105,7 @@ impl Bank {
             })?;
         }
 
-        let b = self.get_balance(bank_storage, &to_address)?;
+        let b = self.get_balance(bank_storage.as_ref(), &to_address)?;
         let b = NativeBalance(b) + NativeBalance(amount);
         self.set_balance(bank_storage, &to_address, b.into_vec())
     }
@@ -117,7 +117,7 @@ impl Bank {
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let amount = self.normalize_amount(amount)?;
-        let a = self.get_balance(bank_storage, &from_address)?;
+        let a = self.get_balance(bank_storage.as_ref(), &from_address)?;
         let a = (NativeBalance(a) - amount)?;
         self.set_balance(bank_storage, &from_address, a.into_vec())
     }
@@ -198,7 +198,7 @@ impl Bank {
 
     pub fn query(
         &self,
-        storage: &dyn Storage,
+        storage: &dyn ReadonlyStorage,
         _meter: &mut GasMeter,
         _block: &BlockInfo,
         _sm: &StateMachine,

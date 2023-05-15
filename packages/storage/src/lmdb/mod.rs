@@ -50,14 +50,14 @@ impl PersistentStorage for LmdbStore {
     type Writer<'a> = LmdbWriter<'a>;
 
     // open a read-only view of the storage. should abort it to free space for write
-    fn reader<'a>(&'a self) -> LmdbReader<'a> {
+    fn reader(&self) -> LmdbReader<'_> {
         let tx = self.env.begin_ro_txn().unwrap();
         LmdbReader { tx, db: self.db }
     }
 
     // open a read-write view of the storage. takes exclusive access to the storage until completed
     // assumes internal rwlock
-    fn writer<'a>(&'a self) -> LmdbWriter<'a> {
+    fn writer(&self) -> LmdbWriter<'_> {
         let tx = self.env.begin_rw_txn().unwrap();
         LmdbWriter::new(tx, self.db)
     }
@@ -225,10 +225,6 @@ impl crate::Transaction for LmdbWriter<'_> {
         write_app_hash(&mut self.tx, self.db, &app_hash);
         self.tx.commit().unwrap();
         Ok(())
-    }
-
-    fn as_ref(&self) -> &dyn ReadonlyStorage {
-        self
     }
 
     fn as_mut(&mut self) -> &mut dyn Storage {

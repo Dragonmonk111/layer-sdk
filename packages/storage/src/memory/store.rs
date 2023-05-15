@@ -12,6 +12,18 @@ use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
 
 pub struct MemoryStore(RwLock<BTreeStorage>);
 
+impl MemoryStore {
+    pub fn new() -> Self {
+        MemoryStore(RwLock::new(BTreeStorage::new()))
+    }
+}
+
+impl Default for MemoryStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct BTreeStorage {
     hash: Vec<u8>,
     data: BTreeMap<Vec<u8>, Vec<u8>>,
@@ -22,12 +34,12 @@ impl PersistentStorage for MemoryStore {
 
     type Writer<'a> = MemoryStorageWriter<'a>;
 
-    fn reader<'a>(&'a self) -> MemoryStorageReader<'a> {
+    fn reader(&self) -> MemoryStorageReader<'_> {
         let reader = self.0.read();
         MemoryStorageReader(reader)
     }
 
-    fn writer<'a>(&'a self) -> MemoryStorageWriter<'a> {
+    fn writer(&self) -> MemoryStorageWriter<'_> {
         MemoryStorageWriter::new(self)
     }
 
@@ -132,10 +144,6 @@ impl Transaction for MemoryStorageWriter<'_> {
         // calculate new app hash
         writer.hash = hasher.hash();
         Ok(())
-    }
-
-    fn as_ref(&self) -> &dyn ReadonlyStorage {
-        self
     }
 
     fn as_mut(&mut self) -> &mut dyn Storage {

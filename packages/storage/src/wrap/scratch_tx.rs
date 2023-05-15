@@ -62,10 +62,6 @@ impl Transaction for ScratchTx<'_> {
         unimplemented!()
     }
 
-    fn as_ref(&self) -> &dyn ReadonlyStorage {
-        self
-    }
-
     fn as_mut(&mut self) -> &mut dyn Storage {
         self
     }

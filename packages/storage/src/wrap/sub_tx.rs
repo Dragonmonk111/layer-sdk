@@ -76,10 +76,6 @@ impl Transaction for SubTx<'_> {
         Ok(())
     }
 
-    fn as_ref(&self) -> &dyn ReadonlyStorage {
-        self
-    }
-
     fn as_mut(&mut self) -> &mut dyn Storage {
         self
     }
