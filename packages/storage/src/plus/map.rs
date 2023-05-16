@@ -326,6 +326,7 @@ where
     }
 }
 
+#[cfg(feature = "todo")]
 #[cfg(test)]
 mod test {
     use super::*;

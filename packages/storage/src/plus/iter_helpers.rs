@@ -98,17 +98,17 @@ mod test {
     }
 }
 
-// currently disabled tests as they require a bunch of legacy non-sense
-// TODO: enable
+#[cfg(feature = "todo")]
 #[cfg(test)]
-#[cfg(not(feature = "iterator"))]
 mod namespace_test {
     use super::*;
-    use cosmwasm_std::testing::MockStorage;
+    use crate::{MemoryStore, PersistentStorage, ReadonlyStorage, Storage};
+    use cosmwasm_std::Order;
 
     #[test]
     fn test_range() {
-        let mut storage = MockStorage::new();
+        let store = MemoryStore::new();
+        let mut storage = store.writer();
         let prefix = to_length_prefixed(b"foo");
         let other_prefix = to_length_prefixed(b"food");
 

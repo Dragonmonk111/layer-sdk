@@ -45,7 +45,7 @@ pub(crate) fn namespace_upper_bound(input: &[u8]) -> Vec<u8> {
     copy
 }
 
-/*
+#[cfg(feature = "todo")]
 #[cfg(test)]
 mod tests {
     use super::super::length_prefixed::to_length_prefixed;
@@ -178,4 +178,3 @@ mod tests {
         assert_eq!(namespace_upper_bound(b"\xffabc"), b"\xffabd".to_vec());
     }
 }
-*/

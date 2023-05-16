@@ -43,7 +43,7 @@ where
         Ok(())
     }
 
-    pub fn remove(&self, meter: &mut GasMeter, store: &mut dyn Storage) -> GasResult<()> {
+    pub fn remove(&self, store: &mut dyn Storage, meter: &mut GasMeter) -> GasResult<()> {
         store.remove(meter, self.storage_key)
     }
 
@@ -105,11 +105,11 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use cosmwasm_std::testing::MockStorage;
     use serde::{Deserialize, Serialize};
 
     use cosmwasm_std::{OverflowError, OverflowOperation, StdError};
 
+    use crate::{MemoryStore, PersistentStorage};
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Config {
         pub owner: String,
@@ -121,69 +121,81 @@ mod test {
 
     #[test]
     fn save_and_load() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
-        assert!(CONFIG.load(&store).is_err());
-        assert_eq!(CONFIG.may_load(&store).unwrap(), None);
+        assert!(CONFIG.load(&store, meter).is_err());
+        assert_eq!(CONFIG.may_load(&store, meter).unwrap(), None);
 
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
 
-        assert_eq!(cfg, CONFIG.load(&store).unwrap());
+        assert_eq!(cfg, CONFIG.load(&store, meter).unwrap());
     }
 
     #[test]
     fn remove_works() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // store data
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
-        assert_eq!(cfg, CONFIG.load(&store).unwrap());
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
+        assert_eq!(cfg, CONFIG.load(&store, meter).unwrap());
 
         // remove it and loads None
-        CONFIG.remove(&mut store);
-        assert_eq!(None, CONFIG.may_load(&store).unwrap());
+        CONFIG.remove(&mut store, meter).unwrap();
+        assert_eq!(None, CONFIG.may_load(&store, meter).unwrap());
 
         // safe to remove 2 times
-        CONFIG.remove(&mut store);
-        assert_eq!(None, CONFIG.may_load(&store).unwrap());
+        CONFIG.remove(&mut store, meter).unwrap();
+        assert_eq!(None, CONFIG.may_load(&store, meter).unwrap());
     }
 
     #[test]
     fn isolated_reads() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
 
         let reader = Item::<Config>::new("config");
-        assert_eq!(cfg, reader.load(&store).unwrap());
+        assert_eq!(cfg, reader.load(&store, meter).unwrap());
 
         let other_reader = Item::<Config>::new("config2");
-        assert_eq!(other_reader.may_load(&store).unwrap(), None);
+        assert_eq!(other_reader.may_load(&store, meter).unwrap(), None);
     }
 
     #[test]
     fn update_success() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
 
-        let output = CONFIG.update(&mut store, |mut c| -> PlusResult<_> {
+        let output = CONFIG.update(&mut store, meter, |mut c| -> PlusResult<_> {
             c.max_tokens *= 2;
             Ok(c)
         });
@@ -192,21 +204,25 @@ mod test {
             max_tokens: 2468,
         };
         assert_eq!(output.unwrap(), expected);
-        assert_eq!(CONFIG.load(&store).unwrap(), expected);
+        assert_eq!(CONFIG.load(&store, meter).unwrap(), expected);
     }
 
     #[test]
     fn update_can_change_variable_from_outer_scope() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
+
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
 
         let mut old_max_tokens = 0i32;
         CONFIG
-            .update(&mut store, |mut c| -> PlusResult<_> {
+            .update(&mut store, meter, |mut c| -> PlusResult<_> {
                 old_max_tokens = c.max_tokens;
                 c.max_tokens *= 2;
                 Ok(c)
@@ -217,51 +233,63 @@ mod test {
 
     #[test]
     fn update_does_not_change_data_on_error() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
 
-        let output = CONFIG.update(&mut store, |_c| {
-            Err(StdError::overflow(OverflowError::new(
+        let output = CONFIG.update(&mut store, meter, |_c| {
+            Err(PlusError::Std(StdError::overflow(OverflowError::new(
                 OverflowOperation::Sub,
                 4,
                 7,
-            )))
+            ))))
         });
         match output.unwrap_err() {
-            StdError::Overflow { .. } => {}
+            PlusError::Std(StdError::Overflow { .. }) => {}
             err => panic!("Unexpected error: {:?}", err),
         }
-        assert_eq!(CONFIG.load(&store).unwrap(), cfg);
+        assert_eq!(CONFIG.load(&store, meter).unwrap(), cfg);
     }
 
     #[test]
     fn update_supports_custom_errors() {
         #[derive(Debug)]
         enum MyError {
-            Std(StdError),
+            Plus(PlusError),
             Foo,
         }
 
         impl From<StdError> for MyError {
             fn from(original: StdError) -> MyError {
-                MyError::Std(original)
+                MyError::Plus(original.into())
             }
         }
 
-        let mut store = MockStorage::new();
+        impl From<PlusError> for MyError {
+            fn from(original: PlusError) -> MyError {
+                MyError::Plus(original)
+            }
+        }
+
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg).unwrap();
+        CONFIG.save(&mut store, meter, &cfg).unwrap();
 
-        let res = CONFIG.update(&mut store, |mut c| {
+        let res = CONFIG.update(&mut store, meter, |mut c| {
             if c.max_tokens > 5000 {
                 return Err(MyError::Foo);
             }
@@ -275,44 +303,47 @@ mod test {
             Ok(c)
         });
         match res.unwrap_err() {
-            MyError::Std(StdError::GenericErr { .. }) => {}
+            MyError::Plus(PlusError::Std(StdError::GenericErr { .. })) => {}
             err => panic!("Unexpected error: {:?}", err),
         }
-        assert_eq!(CONFIG.load(&store).unwrap(), cfg);
+        assert_eq!(CONFIG.load(&store, meter).unwrap(), cfg);
     }
 
     #[test]
     fn readme_works() -> PlusResult<()> {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // may_load returns Option<T>, so None if data is missing
         // load returns T and Err(StdError::NotFound{}) if data is missing
-        let empty = CONFIG.may_load(&store)?;
+        let empty = CONFIG.may_load(&store, meter)?;
         assert_eq!(None, empty);
         let cfg = Config {
             owner: "admin".to_string(),
             max_tokens: 1234,
         };
-        CONFIG.save(&mut store, &cfg)?;
-        let loaded = CONFIG.load(&store)?;
+        CONFIG.save(&mut store, meter, &cfg)?;
+        let loaded = CONFIG.load(&store, meter)?;
         assert_eq!(cfg, loaded);
 
         // update an item with a closure (includes read and write)
         // returns the newly saved value
-        let output = CONFIG.update(&mut store, |mut c| -> PlusResult<_> {
+        let output = CONFIG.update(&mut store, meter, |mut c| -> PlusResult<_> {
             c.max_tokens *= 2;
             Ok(c)
         })?;
         assert_eq!(2468, output.max_tokens);
 
         // you can error in an update and nothing is saved
-        let failed = CONFIG.update(&mut store, |_| -> PlusResult<_> {
-            Err(StdError::generic_err("failure mode"))
+        let failed = CONFIG.update(&mut store, meter, |_| -> PlusResult<_> {
+            Err(PlusError::Std(StdError::generic_err("failure mode")))
         });
         assert!(failed.is_err());
 
         // loading data will show the first update was saved
-        let loaded = CONFIG.load(&store)?;
+        let loaded = CONFIG.load(&store, meter)?;
         let expected = Config {
             owner: "admin".to_string(),
             max_tokens: 2468,
@@ -320,8 +351,8 @@ mod test {
         assert_eq!(expected, loaded);
 
         // we can remove data as well
-        CONFIG.remove(&mut store);
-        let empty = CONFIG.may_load(&store)?;
+        CONFIG.remove(&mut store, meter).unwrap();
+        let empty = CONFIG.may_load(&store, meter)?;
         assert_eq!(None, empty);
 
         Ok(())

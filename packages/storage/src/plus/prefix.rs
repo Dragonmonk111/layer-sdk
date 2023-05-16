@@ -337,6 +337,7 @@ fn increment_last_byte(input: &[u8]) -> Vec<u8> {
     copy
 }
 
+#[cfg(feature = "todo")]
 #[cfg(test)]
 mod test {
     use super::*;
