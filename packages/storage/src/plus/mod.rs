@@ -7,7 +7,7 @@ mod path;
 mod prefix;
 
 pub use cw_storage_plus::{
-    Bound, IntKey, Key, KeyDeserialize, PrefixBound, Prefixer, PrimaryKey, RawBound,
+    Bound, Bounder, IntKey, Key, KeyDeserialize, PrefixBound, Prefixer, PrimaryKey, RawBound,
 };
 
 pub use error::{PlusError, PlusResult};

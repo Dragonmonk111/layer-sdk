@@ -326,21 +326,16 @@ where
     }
 }
 
-#[cfg(feature = "todo")]
 #[cfg(test)]
 mod test {
     use super::*;
     use serde::{Deserialize, Serialize};
     use std::ops::Deref;
 
-    use cosmwasm_std::testing::MockStorage;
-    use cosmwasm_std::to_binary;
-    use cosmwasm_std::StdError::InvalidUtf8;
-    use cosmwasm_std::{Order, StdResult};
+    use cosmwasm_std::{to_binary, Order, StdError};
 
-    use crate::bound::Bounder;
-
-    use crate::int_key::IntKey;
+    use crate::plus::{Bounder, IntKey};
+    use crate::{MemoryStore, PersistentStorage, Storage};
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
     struct Data {
@@ -393,7 +388,10 @@ mod test {
 
     #[test]
     fn save_and_load() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on one key
         let john = PEOPLE.key(b"john");
@@ -401,108 +399,129 @@ mod test {
             name: "John".to_string(),
             age: 32,
         };
-        assert_eq!(None, john.may_load(&store).unwrap());
-        john.save(&mut store, &data).unwrap();
-        assert_eq!(data, john.load(&store).unwrap());
+        assert_eq!(None, john.may_load(&store, meter).unwrap());
+        john.save(&mut store, meter, &data).unwrap();
+        assert_eq!(data, john.load(&store, meter).unwrap());
 
         // nothing on another key
-        assert_eq!(None, PEOPLE.may_load(&store, b"jack").unwrap());
+        assert_eq!(None, PEOPLE.may_load(&store, meter, b"jack").unwrap());
 
         // same named path gets the data
-        assert_eq!(data, PEOPLE.load(&store, b"john").unwrap());
+        assert_eq!(data, PEOPLE.load(&store, meter, b"john").unwrap());
 
         // removing leaves us empty
-        john.remove(&mut store);
-        assert_eq!(None, john.may_load(&store).unwrap());
+        john.remove(&mut store, meter).unwrap();
+        assert_eq!(None, john.may_load(&store, meter).unwrap());
     }
 
     #[test]
     fn existence() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // set data in proper format
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE.save(&mut store, b"john", &data).unwrap();
+        PEOPLE.save(&mut store, meter, b"john", &data).unwrap();
 
         // set and remove it
-        PEOPLE.save(&mut store, b"removed", &data).unwrap();
-        PEOPLE.remove(&mut store, b"removed");
+        PEOPLE.save(&mut store, meter, b"removed", &data).unwrap();
+        PEOPLE.remove(&mut store, meter, b"removed").unwrap();
 
         // invalid, but non-empty data
-        store.set(&PEOPLE.key(b"random"), b"random-data");
+        store
+            .set(meter, &PEOPLE.key(b"random"), b"random-data")
+            .unwrap();
 
         // any data, including invalid or empty is returned as "has"
-        assert!(PEOPLE.has(&store, b"john"));
-        assert!(PEOPLE.has(&store, b"random"));
+        assert!(PEOPLE.has(&store, meter, b"john").unwrap());
+        assert!(PEOPLE.has(&store, meter, b"random").unwrap());
 
         // if nothing was written, it is false
-        assert!(!PEOPLE.has(&store, b"never-writen"));
-        assert!(!PEOPLE.has(&store, b"removed"));
+        assert!(!PEOPLE.has(&store, meter, b"never-writen").unwrap());
+        assert!(!PEOPLE.has(&store, meter, b"removed").unwrap());
     }
 
     #[test]
     fn composite_keys() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on a composite key
         let allow = ALLOWANCE.key((b"owner", b"spender"));
-        assert_eq!(None, allow.may_load(&store).unwrap());
-        allow.save(&mut store, &1234).unwrap();
-        assert_eq!(1234, allow.load(&store).unwrap());
+        assert_eq!(None, allow.may_load(&store, meter).unwrap());
+        allow.save(&mut store, meter, &1234).unwrap();
+        assert_eq!(1234, allow.load(&store, meter).unwrap());
 
         // not under other key
-        let different = ALLOWANCE.may_load(&store, (b"owners", b"pender")).unwrap();
+        let different = ALLOWANCE
+            .may_load(&store, meter, (b"owners", b"pender"))
+            .unwrap();
         assert_eq!(None, different);
 
         // matches under a proper copy
-        let same = ALLOWANCE.load(&store, (b"owner", b"spender")).unwrap();
+        let same = ALLOWANCE
+            .load(&store, meter, (b"owner", b"spender"))
+            .unwrap();
         assert_eq!(1234, same);
     }
 
     #[test]
     fn triple_keys() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on a triple composite key
         let triple = TRIPLE.key((b"owner", 10u8, "recipient"));
-        assert_eq!(None, triple.may_load(&store).unwrap());
-        triple.save(&mut store, &1234).unwrap();
-        assert_eq!(1234, triple.load(&store).unwrap());
+        assert_eq!(None, triple.may_load(&store, meter).unwrap());
+        triple.save(&mut store, meter, &1234).unwrap();
+        assert_eq!(1234, triple.load(&store, meter).unwrap());
 
         // not under other key
         let different = TRIPLE
-            .may_load(&store, (b"owners", 10u8, "ecipient"))
+            .may_load(&store, meter, (b"owners", 10u8, "ecipient"))
             .unwrap();
         assert_eq!(None, different);
 
         // matches under a proper copy
-        let same = TRIPLE.load(&store, (b"owner", 10u8, "recipient")).unwrap();
+        let same = TRIPLE
+            .load(&store, meter, (b"owner", 10u8, "recipient"))
+            .unwrap();
         assert_eq!(1234, same);
     }
 
     #[test]
     fn range_raw_simple_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on two keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE.save(&mut store, b"john", &data).unwrap();
+        PEOPLE.save(&mut store, meter, b"john", &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        PEOPLE.save(&mut store, b"jim", &data2).unwrap();
+        PEOPLE.save(&mut store, meter, b"jim", &data2).unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = PEOPLE
-            .range_raw(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -515,13 +534,15 @@ mod test {
         );
 
         // let's try to iterate over a range
-        let all: StdResult<Vec<_>> = PEOPLE
+        let all: PlusResult<Vec<_>> = PEOPLE
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::inclusive(b"j" as &[u8])),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -531,13 +552,15 @@ mod test {
         );
 
         // let's try to iterate over a more restrictive range
-        let all: StdResult<Vec<_>> = PEOPLE
+        let all: PlusResult<Vec<_>> = PEOPLE
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::inclusive(b"jo" as &[u8])),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -546,29 +569,35 @@ mod test {
 
     #[test]
     fn range_simple_string_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE.save(&mut store, b"john", &data).unwrap();
+        PEOPLE.save(&mut store, meter, b"john", &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        PEOPLE.save(&mut store, b"jim", &data2).unwrap();
+        PEOPLE.save(&mut store, meter, b"jim", &data2).unwrap();
 
         let data3 = Data {
             name: "Ada".to_string(),
             age: 23,
         };
-        PEOPLE.save(&mut store, b"ada", &data3).unwrap();
+        PEOPLE.save(&mut store, meter, b"ada", &data3).unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = PEOPLE.range(&store, None, None, Order::Ascending).collect();
+        let all: PlusResult<Vec<_>> = PEOPLE
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
+            .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
         assert_eq!(
@@ -581,8 +610,15 @@ mod test {
         );
 
         // let's try to iterate over a range
-        let all: StdResult<Vec<_>> = PEOPLE
-            .range(&store, b"j".inclusive_bound(), None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE
+            .range(
+                &store,
+                meter,
+                b"j".inclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -592,8 +628,15 @@ mod test {
         );
 
         // let's try to iterate over a more restrictive range
-        let all: StdResult<Vec<_>> = PEOPLE
-            .range(&store, b"jo".inclusive_bound(), None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE
+            .range(
+                &store,
+                meter,
+                b"jo".inclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -602,30 +645,34 @@ mod test {
 
     #[test]
     fn range_key_broken_deserialization_errors() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE_STR.save(&mut store, "john", &data).unwrap();
+        PEOPLE_STR.save(&mut store, meter, "john", &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        PEOPLE_STR.save(&mut store, "jim", &data2).unwrap();
+        PEOPLE_STR.save(&mut store, meter, "jim", &data2).unwrap();
 
         let data3 = Data {
             name: "Ada".to_string(),
             age: 23,
         };
-        PEOPLE_STR.save(&mut store, "ada", &data3).unwrap();
+        PEOPLE_STR.save(&mut store, meter, "ada", &data3).unwrap();
 
         // let's iterate!
-        let all: StdResult<Vec<_>> = PEOPLE_STR
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_STR
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -639,33 +686,45 @@ mod test {
         );
 
         // Manually add a broken key (invalid utf-8)
-        store.set(
-            &[
-                [0u8, PEOPLE_STR_KEY.len() as u8].as_slice(),
-                PEOPLE_STR_KEY.as_bytes(),
-                b"\xddim",
-            ]
-            .concat(),
-            &to_binary(&data2).unwrap(),
-        );
+        store
+            .set(
+                meter,
+                &[
+                    [0u8, PEOPLE_STR_KEY.len() as u8].as_slice(),
+                    PEOPLE_STR_KEY.as_bytes(),
+                    b"\xddim",
+                ]
+                .concat(),
+                &to_binary(&data2).unwrap(),
+            )
+            .unwrap();
 
         // Let's try to iterate again!
-        let all: StdResult<Vec<_>> = PEOPLE_STR
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_STR
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         assert!(all.is_err());
-        assert!(matches!(all.unwrap_err(), InvalidUtf8 { .. }));
+        assert!(matches!(
+            all.unwrap_err(),
+            PlusError::Std(StdError::InvalidUtf8 { .. })
+        ));
 
         // And the same with keys()
-        let all: StdResult<Vec<_>> = PEOPLE_STR
-            .keys(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_STR
+            .keys(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         assert!(all.is_err());
-        assert!(matches!(all.unwrap_err(), InvalidUtf8 { .. }));
+        assert!(matches!(
+            all.unwrap_err(),
+            PlusError::Std(StdError::InvalidUtf8 { .. })
+        ));
 
         // But range_raw still works
-        let all: StdResult<Vec<_>> = PEOPLE_STR
-            .range_raw(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_STR
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
 
         let all = all.unwrap();
@@ -681,9 +740,11 @@ mod test {
         );
 
         // And the same with keys_raw
-        let all: Vec<_> = PEOPLE_STR
-            .keys_raw(&store, None, None, Order::Ascending)
+        let all: GasResult<Vec<_>> = PEOPLE_STR
+            .keys_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
+        let all = all.unwrap();
 
         assert_eq!(4, all.len());
         assert_eq!(
@@ -699,50 +760,58 @@ mod test {
 
     #[test]
     fn range_simple_integer_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on two keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE_ID.save(&mut store, 1234, &data).unwrap();
+        PEOPLE_ID.save(&mut store, meter, 1234, &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        PEOPLE_ID.save(&mut store, 56, &data2).unwrap();
+        PEOPLE_ID.save(&mut store, meter, 56, &data2).unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = PEOPLE_ID
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_ID
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
         assert_eq!(all, vec![(56, data2.clone()), (1234, data.clone())]);
 
         // let's try to iterate over a range
-        let all: StdResult<Vec<_>> = PEOPLE_ID
+        let all: PlusResult<Vec<_>> = PEOPLE_ID
             .range(
                 &store,
+                meter,
                 Some(Bound::inclusive(56u32)),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
         assert_eq!(all, vec![(56, data2), (1234, data.clone())]);
 
         // let's try to iterate over a more restrictive range
-        let all: StdResult<Vec<_>> = PEOPLE_ID
+        let all: PlusResult<Vec<_>> = PEOPLE_ID
             .range(
                 &store,
+                meter,
                 Some(Bound::inclusive(57u32)),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -751,40 +820,58 @@ mod test {
 
     #[test]
     fn range_simple_integer_key_with_bounder_trait() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on two keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE_ID.save(&mut store, 1234, &data).unwrap();
+        PEOPLE_ID.save(&mut store, meter, 1234, &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        PEOPLE_ID.save(&mut store, 56, &data2).unwrap();
+        PEOPLE_ID.save(&mut store, meter, 56, &data2).unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = PEOPLE_ID
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_ID
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
         assert_eq!(all, vec![(56, data2.clone()), (1234, data.clone())]);
 
         // let's try to iterate over a range
-        let all: StdResult<Vec<_>> = PEOPLE_ID
-            .range(&store, 56u32.inclusive_bound(), None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_ID
+            .range(
+                &store,
+                meter,
+                56u32.inclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
         assert_eq!(all, vec![(56, data2), (1234, data.clone())]);
 
         // let's try to iterate over a more restrictive range
-        let all: StdResult<Vec<_>> = PEOPLE_ID
-            .range(&store, 57u32.inclusive_bound(), None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE_ID
+            .range(
+                &store,
+                meter,
+                57u32.inclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -793,30 +880,34 @@ mod test {
 
     #[test]
     fn range_simple_signed_integer_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        SIGNED_ID.save(&mut store, -1234, &data).unwrap();
+        SIGNED_ID.save(&mut store, meter, -1234, &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        SIGNED_ID.save(&mut store, -56, &data2).unwrap();
+        SIGNED_ID.save(&mut store, meter, -56, &data2).unwrap();
 
         let data3 = Data {
             name: "Jules".to_string(),
             age: 55,
         };
-        SIGNED_ID.save(&mut store, 50, &data3).unwrap();
+        SIGNED_ID.save(&mut store, meter, 50, &data3).unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = SIGNED_ID
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = SIGNED_ID
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -827,26 +918,30 @@ mod test {
         );
 
         // let's try to iterate over a range
-        let all: StdResult<Vec<_>> = SIGNED_ID
+        let all: PlusResult<Vec<_>> = SIGNED_ID
             .range(
                 &store,
+                meter,
                 Some(Bound::inclusive(-56i32)),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
         assert_eq!(all, vec![(-56, data2), (50, data3.clone())]);
 
         // let's try to iterate over a more restrictive range
-        let all: StdResult<Vec<_>> = SIGNED_ID
+        let all: PlusResult<Vec<_>> = SIGNED_ID
             .range(
                 &store,
+                meter,
                 Some(Bound::inclusive(-55i32)),
                 Some(Bound::inclusive(50i32)),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -855,30 +950,34 @@ mod test {
 
     #[test]
     fn range_simple_signed_integer_key_with_bounder_trait() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        SIGNED_ID.save(&mut store, -1234, &data).unwrap();
+        SIGNED_ID.save(&mut store, meter, -1234, &data).unwrap();
 
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        SIGNED_ID.save(&mut store, -56, &data2).unwrap();
+        SIGNED_ID.save(&mut store, meter, -56, &data2).unwrap();
 
         let data3 = Data {
             name: "Jules".to_string(),
             age: 55,
         };
-        SIGNED_ID.save(&mut store, 50, &data3).unwrap();
+        SIGNED_ID.save(&mut store, meter, 50, &data3).unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = SIGNED_ID
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = SIGNED_ID
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -889,21 +988,30 @@ mod test {
         );
 
         // let's try to iterate over a range
-        let all: StdResult<Vec<_>> = SIGNED_ID
-            .range(&store, (-56i32).inclusive_bound(), None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = SIGNED_ID
+            .range(
+                &store,
+                meter,
+                (-56i32).inclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
         assert_eq!(all, vec![(-56, data2), (50, data3.clone())]);
 
         // let's try to iterate over a more restrictive range
-        let all: StdResult<Vec<_>> = SIGNED_ID
+        let all: PlusResult<Vec<_>> = SIGNED_ID
             .range(
                 &store,
+                meter,
                 (-55i32).inclusive_bound(),
                 50i32.inclusive_bound(),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -912,22 +1020,26 @@ mod test {
 
     #[test]
     fn range_raw_composite_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys, one under different owner
         ALLOWANCE
-            .save(&mut store, (b"owner", b"spender"), &1000)
+            .save(&mut store, meter, (b"owner", b"spender"), &1000)
             .unwrap();
         ALLOWANCE
-            .save(&mut store, (b"owner", b"spender2"), &3000)
+            .save(&mut store, meter, (b"owner", b"spender2"), &3000)
             .unwrap();
         ALLOWANCE
-            .save(&mut store, (b"owner2", b"spender"), &5000)
+            .save(&mut store, meter, (b"owner2", b"spender"), &5000)
             .unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = ALLOWANCE
-            .range_raw(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = ALLOWANCE
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -941,9 +1053,10 @@ mod test {
         );
 
         // let's try to iterate over a prefix
-        let all: StdResult<Vec<_>> = ALLOWANCE
+        let all: PlusResult<Vec<_>> = ALLOWANCE
             .prefix(b"owner")
-            .range_raw(&store, None, None, Order::Ascending)
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -955,22 +1068,26 @@ mod test {
 
     #[test]
     fn range_composite_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys, one under different owner
         ALLOWANCE
-            .save(&mut store, (b"owner", b"spender"), &1000)
+            .save(&mut store, meter, (b"owner", b"spender"), &1000)
             .unwrap();
         ALLOWANCE
-            .save(&mut store, (b"owner", b"spender2"), &3000)
+            .save(&mut store, meter, (b"owner", b"spender2"), &3000)
             .unwrap();
         ALLOWANCE
-            .save(&mut store, (b"owner2", b"spender"), &5000)
+            .save(&mut store, meter, (b"owner2", b"spender"), &5000)
             .unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = ALLOWANCE
-            .range(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = ALLOWANCE
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -984,9 +1101,10 @@ mod test {
         );
 
         // let's try to iterate over a prefix
-        let all: StdResult<Vec<_>> = ALLOWANCE
+        let all: PlusResult<Vec<_>> = ALLOWANCE
             .prefix(b"owner")
-            .range(&store, None, None, Order::Ascending)
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -996,9 +1114,16 @@ mod test {
         );
 
         // let's try to iterate over a prefixed restricted inclusive range
-        let all: StdResult<Vec<_>> = ALLOWANCE
+        let all: PlusResult<Vec<_>> = ALLOWANCE
             .prefix(b"owner")
-            .range(&store, b"spender".inclusive_bound(), None, Order::Ascending)
+            .range(
+                &store,
+                meter,
+                b"spender".inclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -1008,9 +1133,16 @@ mod test {
         );
 
         // let's try to iterate over a prefixed restricted exclusive range
-        let all: StdResult<Vec<_>> = ALLOWANCE
+        let all: PlusResult<Vec<_>> = ALLOWANCE
             .prefix(b"owner")
-            .range(&store, b"spender".exclusive_bound(), None, Order::Ascending)
+            .range(
+                &store,
+                meter,
+                b"spender".exclusive_bound(),
+                None,
+                Order::Ascending,
+            )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -1019,25 +1151,29 @@ mod test {
 
     #[test]
     fn range_raw_triple_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys, one under different owner
         TRIPLE
-            .save(&mut store, (b"owner", 9, "recipient"), &1000)
+            .save(&mut store, meter, (b"owner", 9, "recipient"), &1000)
             .unwrap();
         TRIPLE
-            .save(&mut store, (b"owner", 9, "recipient2"), &3000)
+            .save(&mut store, meter, (b"owner", 9, "recipient2"), &3000)
             .unwrap();
         TRIPLE
-            .save(&mut store, (b"owner", 10, "recipient3"), &3000)
+            .save(&mut store, meter, (b"owner", 10, "recipient3"), &3000)
             .unwrap();
         TRIPLE
-            .save(&mut store, (b"owner2", 9, "recipient"), &5000)
+            .save(&mut store, meter, (b"owner2", 9, "recipient"), &5000)
             .unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = TRIPLE
-            .range_raw(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = TRIPLE
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(4, all.len());
@@ -1064,9 +1200,10 @@ mod test {
         );
 
         // let's iterate over a prefix
-        let all: StdResult<Vec<_>> = TRIPLE
+        let all: PlusResult<Vec<_>> = TRIPLE
             .prefix((b"owner", 9))
-            .range_raw(&store, None, None, Order::Ascending)
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -1079,9 +1216,10 @@ mod test {
         );
 
         // let's iterate over a sub prefix
-        let all: StdResult<Vec<_>> = TRIPLE
+        let all: PlusResult<Vec<_>> = TRIPLE
             .sub_prefix(b"owner")
-            .range_raw(&store, None, None, Order::Ascending)
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -1098,24 +1236,30 @@ mod test {
 
     #[test]
     fn range_triple_key() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on three keys, one under different owner
         TRIPLE
-            .save(&mut store, (b"owner", 9u8, "recipient"), &1000)
+            .save(&mut store, meter, (b"owner", 9u8, "recipient"), &1000)
             .unwrap();
         TRIPLE
-            .save(&mut store, (b"owner", 9u8, "recipient2"), &3000)
+            .save(&mut store, meter, (b"owner", 9u8, "recipient2"), &3000)
             .unwrap();
         TRIPLE
-            .save(&mut store, (b"owner", 10u8, "recipient3"), &3000)
+            .save(&mut store, meter, (b"owner", 10u8, "recipient3"), &3000)
             .unwrap();
         TRIPLE
-            .save(&mut store, (b"owner2", 9u8, "recipient"), &5000)
+            .save(&mut store, meter, (b"owner2", 9u8, "recipient"), &5000)
             .unwrap();
 
         // let's try to iterate!
-        let all: StdResult<Vec<_>> = TRIPLE.range(&store, None, None, Order::Ascending).collect();
+        let all: PlusResult<Vec<_>> = TRIPLE
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
+            .collect();
         let all = all.unwrap();
         assert_eq!(4, all.len());
         assert_eq!(
@@ -1129,9 +1273,10 @@ mod test {
         );
 
         // let's iterate over a sub_prefix
-        let all: StdResult<Vec<_>> = TRIPLE
+        let all: PlusResult<Vec<_>> = TRIPLE
             .sub_prefix(b"owner")
-            .range(&store, None, None, Order::Ascending)
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(3, all.len());
@@ -1145,9 +1290,10 @@ mod test {
         );
 
         // let's iterate over a prefix
-        let all: StdResult<Vec<_>> = TRIPLE
+        let all: PlusResult<Vec<_>> = TRIPLE
             .prefix((b"owner", 9))
-            .range(&store, None, None, Order::Ascending)
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -1160,14 +1306,16 @@ mod test {
         );
 
         // let's try to iterate over a prefixed restricted inclusive range
-        let all: StdResult<Vec<_>> = TRIPLE
+        let all: PlusResult<Vec<_>> = TRIPLE
             .prefix((b"owner", 9))
             .range(
                 &store,
+                meter,
                 "recipient".inclusive_bound(),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(2, all.len());
@@ -1180,14 +1328,16 @@ mod test {
         );
 
         // let's try to iterate over a prefixed restricted exclusive range
-        let all: StdResult<Vec<_>> = TRIPLE
+        let all: PlusResult<Vec<_>> = TRIPLE
             .prefix((b"owner", 9))
             .range(
                 &store,
+                meter,
                 "recipient".exclusive_bound(),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         let all = all.unwrap();
         assert_eq!(1, all.len());
@@ -1196,40 +1346,47 @@ mod test {
 
     #[test]
     fn basic_update() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
-        let add_ten = |a: Option<u64>| -> StdResult<_> { Ok(a.unwrap_or_default() + 10) };
+        let add_ten = |a: Option<u64>| -> PlusResult<_> { Ok(a.unwrap_or_default() + 10) };
 
         // save and load on three keys, one under different owner
         let key: (&[u8], &[u8]) = (b"owner", b"spender");
-        ALLOWANCE.update(&mut store, key, add_ten).unwrap();
-        let twenty = ALLOWANCE.update(&mut store, key, add_ten).unwrap();
+        ALLOWANCE.update(&mut store, meter, key, add_ten).unwrap();
+        let twenty = ALLOWANCE.update(&mut store, meter, key, add_ten).unwrap();
         assert_eq!(20, twenty);
-        let loaded = ALLOWANCE.load(&store, key).unwrap();
+        let loaded = ALLOWANCE.load(&store, meter, key).unwrap();
         assert_eq!(20, loaded);
     }
 
     #[test]
-    fn readme_works() -> StdResult<()> {
-        let mut store = MockStorage::new();
+    fn readme_works() -> PlusResult<()> {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
+
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
 
         // load and save with extra key argument
-        let empty = PEOPLE.may_load(&store, b"john")?;
+        let empty = PEOPLE.may_load(&store, meter, b"john")?;
         assert_eq!(None, empty);
-        PEOPLE.save(&mut store, b"john", &data)?;
-        let loaded = PEOPLE.load(&store, b"john")?;
+        PEOPLE.save(&mut store, meter, b"john", &data)?;
+        let loaded = PEOPLE.load(&store, meter, b"john")?;
         assert_eq!(data, loaded);
 
         // nothing on another key
-        let missing = PEOPLE.may_load(&store, b"jack")?;
+        let missing = PEOPLE.may_load(&store, meter, b"jack")?;
         assert_eq!(None, missing);
 
         // update function for new or existing keys
-        let birthday = |d: Option<Data>| -> StdResult<Data> {
+        let birthday = |d: Option<Data>| -> PlusResult<Data> {
             match d {
                 Some(one) => Ok(Data {
                     name: one.name,
@@ -1242,54 +1399,66 @@ mod test {
             }
         };
 
-        let old_john = PEOPLE.update(&mut store, b"john", birthday)?;
+        let old_john = PEOPLE.update(&mut store, meter, b"john", birthday)?;
         assert_eq!(33, old_john.age);
         assert_eq!("John", old_john.name.as_str());
 
-        let new_jack = PEOPLE.update(&mut store, b"jack", birthday)?;
+        let new_jack = PEOPLE.update(&mut store, meter, b"jack", birthday)?;
         assert_eq!(0, new_jack.age);
         assert_eq!("Newborn", new_jack.name.as_str());
 
         // update also changes the store
-        assert_eq!(old_john, PEOPLE.load(&store, b"john")?);
-        assert_eq!(new_jack, PEOPLE.load(&store, b"jack")?);
+        assert_eq!(old_john, PEOPLE.load(&store, meter, b"john")?);
+        assert_eq!(new_jack, PEOPLE.load(&store, meter, b"jack")?);
 
         // removing leaves us empty
-        PEOPLE.remove(&mut store, b"john");
-        let empty = PEOPLE.may_load(&store, b"john")?;
+        PEOPLE.remove(&mut store, meter, b"john")?;
+        let empty = PEOPLE.may_load(&store, meter, b"john")?;
         assert_eq!(None, empty);
 
         Ok(())
     }
 
     #[test]
-    fn readme_works_composite_keys() -> StdResult<()> {
-        let mut store = MockStorage::new();
+    fn readme_works_composite_keys() -> PlusResult<()> {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on a composite key
-        let empty = ALLOWANCE.may_load(&store, (b"owner", b"spender"))?;
+        let empty = ALLOWANCE.may_load(&store, meter, (b"owner", b"spender"))?;
         assert_eq!(None, empty);
-        ALLOWANCE.save(&mut store, (b"owner", b"spender"), &777)?;
-        let loaded = ALLOWANCE.load(&store, (b"owner", b"spender"))?;
+        ALLOWANCE.save(&mut store, meter, (b"owner", b"spender"), &777)?;
+        let loaded = ALLOWANCE.load(&store, meter, (b"owner", b"spender"))?;
         assert_eq!(777, loaded);
 
         // doesn't appear under other key (even if a concat would be the same)
-        let different = ALLOWANCE.may_load(&store, (b"owners", b"pender")).unwrap();
+        let different = ALLOWANCE
+            .may_load(&store, meter, (b"owners", b"pender"))
+            .unwrap();
         assert_eq!(None, different);
 
         // simple update
-        ALLOWANCE.update(&mut store, (b"owner", b"spender"), |v| -> StdResult<u64> {
-            Ok(v.unwrap_or_default() + 222)
-        })?;
-        let loaded = ALLOWANCE.load(&store, (b"owner", b"spender"))?;
+        ALLOWANCE.update(
+            &mut store,
+            meter,
+            (b"owner", b"spender"),
+            |v| -> PlusResult<u64> { Ok(v.unwrap_or_default() + 222) },
+        )?;
+        let loaded = ALLOWANCE.load(&store, meter, (b"owner", b"spender"))?;
         assert_eq!(999, loaded);
 
         Ok(())
     }
 
     #[test]
-    fn readme_works_with_path() -> StdResult<()> {
-        let mut store = MockStorage::new();
+    fn readme_works_with_path() -> PlusResult<()> {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
+
         let data = Data {
             name: "John".to_string(),
             age: 32,
@@ -1299,48 +1468,52 @@ mod test {
         let john = PEOPLE.key(b"john");
 
         // Use this just like an Item above
-        let empty = john.may_load(&store)?;
+        let empty = john.may_load(&store, meter)?;
         assert_eq!(None, empty);
-        john.save(&mut store, &data)?;
-        let loaded = john.load(&store)?;
+        john.save(&mut store, meter, &data)?;
+        let loaded = john.load(&store, meter)?;
         assert_eq!(data, loaded);
-        john.remove(&mut store);
-        let empty = john.may_load(&store)?;
+        john.remove(&mut store, meter).unwrap();
+        let empty = john.may_load(&store, meter)?;
         assert_eq!(None, empty);
 
         // same for composite keys, just use both parts in key()
         let allow = ALLOWANCE.key((b"owner", b"spender"));
-        allow.save(&mut store, &1234)?;
-        let loaded = allow.load(&store)?;
+        allow.save(&mut store, meter, &1234)?;
+        let loaded = allow.load(&store, meter)?;
         assert_eq!(1234, loaded);
-        allow.update(&mut store, |x| -> StdResult<u64> {
+        allow.update(&mut store, meter, |x| -> PlusResult<u64> {
             Ok(x.unwrap_or_default() * 2)
         })?;
-        let loaded = allow.load(&store)?;
+        let loaded = allow.load(&store, meter)?;
         assert_eq!(2468, loaded);
 
         Ok(())
     }
 
     #[test]
-    fn readme_with_range_raw() -> StdResult<()> {
-        let mut store = MockStorage::new();
+    fn readme_with_range_raw() -> PlusResult<()> {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
         // save and load on two keys
         let data = Data {
             name: "John".to_string(),
             age: 32,
         };
-        PEOPLE.save(&mut store, b"john", &data)?;
+        PEOPLE.save(&mut store, meter, b"john", &data)?;
         let data2 = Data {
             name: "Jim".to_string(),
             age: 44,
         };
-        PEOPLE.save(&mut store, b"jim", &data2)?;
+        PEOPLE.save(&mut store, meter, b"jim", &data2)?;
 
         // iterate over them all
-        let all: StdResult<Vec<_>> = PEOPLE
-            .range_raw(&store, None, None, Order::Ascending)
+        let all: PlusResult<Vec<_>> = PEOPLE
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         assert_eq!(
             all?,
@@ -1348,25 +1521,28 @@ mod test {
         );
 
         // or just show what is after jim
-        let all: StdResult<Vec<_>> = PEOPLE
+        let all: PlusResult<Vec<_>> = PEOPLE
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::exclusive(b"jim" as &[u8])),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         assert_eq!(all?, vec![(b"john".to_vec(), data)]);
 
         // save and load on three keys, one under different owner
-        ALLOWANCE.save(&mut store, (b"owner", b"spender"), &1000)?;
-        ALLOWANCE.save(&mut store, (b"owner", b"spender2"), &3000)?;
-        ALLOWANCE.save(&mut store, (b"owner2", b"spender"), &5000)?;
+        ALLOWANCE.save(&mut store, meter, (b"owner", b"spender"), &1000)?;
+        ALLOWANCE.save(&mut store, meter, (b"owner", b"spender2"), &3000)?;
+        ALLOWANCE.save(&mut store, meter, (b"owner2", b"spender"), &5000)?;
 
         // get all under one key
-        let all: StdResult<Vec<_>> = ALLOWANCE
+        let all: PlusResult<Vec<_>> = ALLOWANCE
             .prefix(b"owner")
-            .range_raw(&store, None, None, Order::Ascending)
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         assert_eq!(
             all?,
@@ -1374,14 +1550,16 @@ mod test {
         );
 
         // Or ranges between two items (even reverse)
-        let all: StdResult<Vec<_>> = ALLOWANCE
+        let all: PlusResult<Vec<_>> = ALLOWANCE
             .prefix(b"owner")
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::exclusive(b"spender1" as &[u8])),
                 Some(Bound::inclusive(b"spender2" as &[u8])),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         assert_eq!(all?, vec![(b"spender2".to_vec(), 3000)]);
 
@@ -1394,38 +1572,53 @@ mod test {
         // we want to query over a range of u32 for the first key and all subkeys
         const AGES: Map<(u32, Vec<u8>), u64> = Map::new("ages");
 
-        let mut store = MockStorage::new();
-        AGES.save(&mut store, (2, vec![1, 2, 3]), &123).unwrap();
-        AGES.save(&mut store, (3, vec![4, 5, 6]), &456).unwrap();
-        AGES.save(&mut store, (5, vec![7, 8, 9]), &789).unwrap();
-        AGES.save(&mut store, (5, vec![9, 8, 7]), &987).unwrap();
-        AGES.save(&mut store, (7, vec![20, 21, 22]), &2002).unwrap();
-        AGES.save(&mut store, (8, vec![23, 24, 25]), &2332).unwrap();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
+
+        AGES.save(&mut store, meter, (2, vec![1, 2, 3]), &123)
+            .unwrap();
+        AGES.save(&mut store, meter, (3, vec![4, 5, 6]), &456)
+            .unwrap();
+        AGES.save(&mut store, meter, (5, vec![7, 8, 9]), &789)
+            .unwrap();
+        AGES.save(&mut store, meter, (5, vec![9, 8, 7]), &987)
+            .unwrap();
+        AGES.save(&mut store, meter, (7, vec![20, 21, 22]), &2002)
+            .unwrap();
+        AGES.save(&mut store, meter, (8, vec![23, 24, 25]), &2332)
+            .unwrap();
 
         // typical range under one prefix as a control
         let fives = AGES
             .prefix(5)
-            .range_raw(&store, None, None, Order::Ascending)
-            .collect::<StdResult<Vec<_>>>()
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(fives.len(), 2);
         assert_eq!(fives, vec![(vec![7, 8, 9], 789), (vec![9, 8, 7], 987)]);
 
-        let keys: Vec<_> = AGES
-            .keys_raw(&store, None, None, Order::Ascending)
+        let keys: GasResult<Vec<_>> = AGES
+            .keys_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
+        let keys = keys.unwrap();
         println!("keys: {:?}", keys);
 
         // using inclusive bounds both sides
         let include = AGES
             .prefix_range_raw(
                 &store,
+                meter,
                 Some(PrefixBound::inclusive(3u32)),
                 Some(PrefixBound::inclusive(7u32)),
                 Order::Ascending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(include.len(), 4);
         assert_eq!(include, vec![456, 789, 987, 2002]);
@@ -1434,12 +1627,14 @@ mod test {
         let exclude = AGES
             .prefix_range_raw(
                 &store,
+                meter,
                 Some(PrefixBound::exclusive(3u32)),
                 Some(PrefixBound::exclusive(7u32)),
                 Order::Ascending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(exclude.len(), 2);
         assert_eq!(exclude, vec![789, 987]);
@@ -1448,12 +1643,14 @@ mod test {
         let include = AGES
             .prefix_range_raw(
                 &store,
+                meter,
                 Some(PrefixBound::inclusive(3u32)),
                 Some(PrefixBound::inclusive(5u32)),
                 Order::Descending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(include.len(), 3);
         assert_eq!(include, vec![987, 789, 456]);
@@ -1462,12 +1659,14 @@ mod test {
         let include = AGES
             .prefix_range_raw(
                 &store,
+                meter,
                 Some(PrefixBound::exclusive(2u32)),
                 Some(PrefixBound::exclusive(5u32)),
                 Order::Descending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(include.len(), 1);
         assert_eq!(include, vec![456]);
@@ -1479,19 +1678,24 @@ mod test {
         // we want to query over a range of u32 for the first key and all subkeys
         const AGES: Map<(u32, &str), u64> = Map::new("ages");
 
-        let mut store = MockStorage::new();
-        AGES.save(&mut store, (2, "123"), &123).unwrap();
-        AGES.save(&mut store, (3, "456"), &456).unwrap();
-        AGES.save(&mut store, (5, "789"), &789).unwrap();
-        AGES.save(&mut store, (5, "987"), &987).unwrap();
-        AGES.save(&mut store, (7, "202122"), &2002).unwrap();
-        AGES.save(&mut store, (8, "232425"), &2332).unwrap();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
+
+        AGES.save(&mut store, meter, (2, "123"), &123).unwrap();
+        AGES.save(&mut store, meter, (3, "456"), &456).unwrap();
+        AGES.save(&mut store, meter, (5, "789"), &789).unwrap();
+        AGES.save(&mut store, meter, (5, "987"), &987).unwrap();
+        AGES.save(&mut store, meter, (7, "202122"), &2002).unwrap();
+        AGES.save(&mut store, meter, (8, "232425"), &2332).unwrap();
 
         // typical range under one prefix as a control
         let fives = AGES
             .prefix(5)
-            .range(&store, None, None, Order::Ascending)
-            .collect::<StdResult<Vec<_>>>()
+            .range(&store, meter, None, None, Order::Ascending)
+            .unwrap()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(fives.len(), 2);
         assert_eq!(
@@ -1499,19 +1703,25 @@ mod test {
             vec![("789".to_string(), 789), ("987".to_string(), 987)]
         );
 
-        let keys: Vec<_> = AGES.keys(&store, None, None, Order::Ascending).collect();
+        let keys: PlusResult<Vec<_>> = AGES
+            .keys(&store, meter, None, None, Order::Ascending)
+            .unwrap()
+            .collect();
+        let keys = keys.unwrap();
         println!("keys: {:?}", keys);
 
         // using inclusive bounds both sides
         let include = AGES
             .prefix_range(
                 &store,
+                meter,
                 Some(PrefixBound::inclusive(3u32)),
                 Some(PrefixBound::inclusive(7u32)),
                 Order::Ascending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(include.len(), 4);
         assert_eq!(include, vec![456, 789, 987, 2002]);
@@ -1520,12 +1730,14 @@ mod test {
         let exclude = AGES
             .prefix_range(
                 &store,
+                meter,
                 Some(PrefixBound::exclusive(3u32)),
                 Some(PrefixBound::exclusive(7u32)),
                 Order::Ascending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(exclude.len(), 2);
         assert_eq!(exclude, vec![789, 987]);
@@ -1534,12 +1746,14 @@ mod test {
         let include = AGES
             .prefix_range(
                 &store,
+                meter,
                 Some(PrefixBound::inclusive(3u32)),
                 Some(PrefixBound::inclusive(5u32)),
                 Order::Descending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(include.len(), 3);
         assert_eq!(include, vec![987, 789, 456]);
@@ -1548,12 +1762,14 @@ mod test {
         let include = AGES
             .prefix_range(
                 &store,
+                meter,
                 Some(PrefixBound::exclusive(2u32)),
                 Some(PrefixBound::exclusive(5u32)),
                 Order::Descending,
             )
+            .unwrap()
             .map(|r| r.map(|(_, v)| v))
-            .collect::<StdResult<Vec<_>>>()
+            .collect::<PlusResult<Vec<_>>>()
             .unwrap();
         assert_eq!(include.len(), 1);
         assert_eq!(include, vec![456]);
@@ -1563,33 +1779,40 @@ mod test {
     fn clear_works() {
         const TEST_MAP: Map<&str, u32> = Map::new("test_map");
 
-        let mut storage = MockStorage::new();
-        TEST_MAP.save(&mut storage, "key0", &0u32).unwrap();
-        TEST_MAP.save(&mut storage, "key1", &1u32).unwrap();
-        TEST_MAP.save(&mut storage, "key2", &2u32).unwrap();
-        TEST_MAP.save(&mut storage, "key3", &3u32).unwrap();
-        TEST_MAP.save(&mut storage, "key4", &4u32).unwrap();
+        let store = MemoryStore::new();
+        let mut storage = store.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
-        TEST_MAP.clear(&mut storage);
+        TEST_MAP.save(&mut storage, meter, "key0", &0u32).unwrap();
+        TEST_MAP.save(&mut storage, meter, "key1", &1u32).unwrap();
+        TEST_MAP.save(&mut storage, meter, "key2", &2u32).unwrap();
+        TEST_MAP.save(&mut storage, meter, "key3", &3u32).unwrap();
+        TEST_MAP.save(&mut storage, meter, "key4", &4u32).unwrap();
 
-        assert!(!TEST_MAP.has(&storage, "key0"));
-        assert!(!TEST_MAP.has(&storage, "key1"));
-        assert!(!TEST_MAP.has(&storage, "key2"));
-        assert!(!TEST_MAP.has(&storage, "key3"));
-        assert!(!TEST_MAP.has(&storage, "key4"));
+        TEST_MAP.clear(&mut storage, meter).unwrap();
+
+        assert!(!TEST_MAP.has(&storage, meter, "key0").unwrap());
+        assert!(!TEST_MAP.has(&storage, meter, "key1").unwrap());
+        assert!(!TEST_MAP.has(&storage, meter, "key2").unwrap());
+        assert!(!TEST_MAP.has(&storage, meter, "key3").unwrap());
+        assert!(!TEST_MAP.has(&storage, meter, "key4").unwrap());
     }
 
     #[test]
     fn is_empty_works() {
         const TEST_MAP: Map<&str, u32> = Map::new("test_map");
 
-        let mut storage = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
 
-        assert!(TEST_MAP.is_empty(&storage));
+        assert!(TEST_MAP.is_empty(&store, meter).unwrap());
 
-        TEST_MAP.save(&mut storage, "key1", &1u32).unwrap();
-        TEST_MAP.save(&mut storage, "key2", &2u32).unwrap();
+        TEST_MAP.save(&mut store, meter, "key1", &1u32).unwrap();
+        TEST_MAP.save(&mut store, meter, "key2", &2u32).unwrap();
 
-        assert!(!TEST_MAP.is_empty(&storage));
+        assert!(!TEST_MAP.is_empty(&store, meter).unwrap());
     }
 }

@@ -1,7 +1,7 @@
 mod fast_hash;
 mod gas;
 mod memory;
-mod plus;
+pub mod plus;
 mod prefixed_storage;
 mod traits;
 // mod transactions;
