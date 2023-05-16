@@ -112,8 +112,11 @@ impl<T: PersistentStorage + 'static> App<T> {
             chain_id,
             last_block,
         };
-        let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
-        APP_STATE.save(&mut app_store, &mut meter, &state)?;
+        {
+            // ensure we drop app_store before the commit
+            let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
+            APP_STATE.save(&mut app_store, &mut meter, &state)?;
+        }
 
         // commit to disk
         writer.commit(&mut meter)?;

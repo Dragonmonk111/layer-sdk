@@ -122,7 +122,18 @@ impl Storage for MemoryStorageWriter<'_> {
 
 impl Transaction for MemoryStorageWriter<'_> {
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
-        // start with old app-hash
+        // destructure and force dropping reader to remove read lock (otherwise, deadlock on getting writer below)
+        // println!(
+        //     "lock status: {}, exclusive: {}",
+        //     self.persistent.0.is_locked(),
+        //     self.persistent.0.is_locked_exclusive()
+        // );
+        self.reader.abort();
+        // println!(
+        //     "lock status: {}, exclusive: {}",
+        //     self.persistent.0.is_locked(),
+        //     self.persistent.0.is_locked_exclusive()
+        // );
         let mut hasher = FastHasher::new(&self.persistent.0.read().hash);
 
         // write all operations to the root storage

@@ -258,7 +258,7 @@ mod test {
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coins, StdError};
     use pulsar_std::response::BankQueryResponse;
-    use pulsar_storage::MemoryStore;
+    use pulsar_storage::{MemoryStore, PersistentStorage, Storage};
 
     fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &AccountId) -> Vec<Coin> {
         let req = BankQuery::AllBalances {
@@ -268,7 +268,9 @@ mod test {
         let mut meter = GasMeter::new(500_000);
         let sm = StateMachine::default();
 
-        let resp = bank.query(store, &mut meter, &block, &sm, req).unwrap();
+        let resp = bank
+            .query(store.as_ref(), &mut meter, &block, &sm, req)
+            .unwrap();
         match resp {
             QueryResponse::Bank(BankQueryResponse::AllBalances(AllBalanceResponse { amount })) => {
                 amount
@@ -279,7 +281,8 @@ mod test {
 
     #[test]
     fn get_set_balance() {
-        let mut store = MemoryStore::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
         let block = mock_env().block;
         let sm = StateMachine::new();
         let mut meter = GasMeter::new(500_000);
@@ -291,13 +294,14 @@ mod test {
 
         // set money
         let bank = Bank::new();
-        bank.init_balance(&mut store, &owner, init_funds).unwrap();
+        bank.init_balance(&mut store, &mut meter, &owner, init_funds)
+            .unwrap();
         let bank_storage = prefixed_read(&store, NAMESPACE_BANK);
 
         // get balance work
-        let rich = bank.get_balance(&bank_storage, &owner).unwrap();
+        let rich = bank.get_balance(&bank_storage, &mut meter, &owner).unwrap();
         assert_eq!(rich, norm);
-        let poor = bank.get_balance(&bank_storage, &rcpt).unwrap();
+        let poor = bank.get_balance(&bank_storage, &mut meter, &rcpt).unwrap();
         assert_eq!(poor, vec![]);
 
         // proper queries work
@@ -384,7 +388,8 @@ mod test {
 
     #[test]
     fn send_coins() {
-        let mut store = MemoryStore::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
         let mut meter = GasMeter::new(1_000_000);
         let block = mock_env().block;
         let sm = StateMachine::new();
@@ -396,8 +401,10 @@ mod test {
 
         // set money
         let bank = Bank::new();
-        bank.init_balance(&mut store, &owner, init_funds).unwrap();
-        bank.init_balance(&mut store, &rcpt, rcpt_funds).unwrap();
+        bank.init_balance(&mut store, &mut meter, &owner, init_funds)
+            .unwrap();
+        bank.init_balance(&mut store, &mut meter, &rcpt, rcpt_funds)
+            .unwrap();
 
         // send both tokens
         let to_send = vec![coin(30, "eth"), coin(5, "btc")];
@@ -434,7 +441,8 @@ mod test {
 
     #[test]
     fn burn_coins() {
-        let mut store = MemoryStore::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
         let block = mock_env().block;
         let mut meter = GasMeter::new(1_000_000);
         let sm = StateMachine::new();
@@ -445,7 +453,8 @@ mod test {
 
         // set money
         let bank = Bank::new();
-        bank.init_balance(&mut store, &owner, init_funds).unwrap();
+        bank.init_balance(&mut store, &mut meter, &owner, init_funds)
+            .unwrap();
 
         // burn both tokens
         let to_burn = vec![coin(30, "eth"), coin(5, "btc")];
@@ -484,7 +493,8 @@ mod test {
 
     #[test]
     fn fail_on_zero_values() {
-        let mut store = MemoryStore::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
         let mut meter = GasMeter::new(1_000_000);
         let block = mock_env().block;
         let sm = StateMachine::new();
@@ -495,7 +505,8 @@ mod test {
 
         // set money
         let bank = Bank::new();
-        bank.init_balance(&mut store, &owner, init_funds).unwrap();
+        bank.init_balance(&mut store, &mut meter, &owner, init_funds)
+            .unwrap();
 
         // can send normal amounts
         let msg = BankMsg::Send {
@@ -550,17 +561,29 @@ mod test {
 
         // can mint
         let mut bank_storage = prefixed(&mut store, NAMESPACE_BANK);
-        bank.mint(&mut bank_storage, rcpt.clone(), coins(4321, "atom"))
-            .unwrap();
+        bank.mint(
+            &mut bank_storage,
+            &mut meter,
+            rcpt.clone(),
+            coins(4321, "atom"),
+        )
+        .unwrap();
 
         // mint fails with 0 tokens
         let err = bank
-            .mint(&mut bank_storage, rcpt.clone(), coins(0, "atom"))
+            .mint(
+                &mut bank_storage,
+                &mut meter,
+                rcpt.clone(),
+                coins(0, "atom"),
+            )
             .unwrap_err();
         assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
 
         // mint fails with no tokens
-        let err = bank.mint(&mut bank_storage, rcpt, vec![]).unwrap_err();
+        let err = bank
+            .mint(&mut bank_storage, &mut meter, rcpt, vec![])
+            .unwrap_err();
         assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
     }
 }
