@@ -11,6 +11,16 @@ This means the pulsar app modules can use a `cw-storage-plus`-like interface to 
 the internal state, which should be familiar to cosmwasm devs (and maybe allow easier porting
 between pulsar modules and cosmwasm contracts)
 
+## TODO
+
+Re-write PrefixedStorage to use the tested code from plus.
+Add some high-level tests
+(This is a subset of plus::Prefix with a different API, no use for two versions of prefix code)
+
+Add some tests on memory store for basic flows (eg no deadlock in commit)
+
+Add some tests on lmdb for some basic flows
+
 ## Status
 
 Ported:
