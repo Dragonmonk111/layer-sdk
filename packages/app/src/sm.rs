@@ -1,6 +1,7 @@
-use cosmwasm_std::{BlockInfo, StdError, Storage};
+use cosmwasm_std::{BlockInfo, StdError};
 use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
+use pulsar_storage::{ReadonlyStorage, Storage};
 
 use crate::api::TxResponse;
 use crate::auth::{Auth, TxData};
@@ -27,28 +28,29 @@ impl StateMachine {
     pub fn init(
         &self,
         storage: &mut dyn Storage,
+        meter: &mut GasMeter,
         block: &BlockInfo,
         request: GenesisState,
     ) -> PulsarResult<()> {
-        self.bank.init(storage, block, request.bank, self)?;
+        self.bank.init(storage, meter, block, request.bank, self)?;
         Ok(())
     }
 
     pub fn query(
         &self,
-        storage: &dyn Storage,
-        gas: &mut GasMeter,
+        storage: &dyn ReadonlyStorage,
+        meter: &mut GasMeter,
         block: &BlockInfo,
         request: Query,
     ) -> Result<QueryResponse, PulsarError> {
         match request {
             Query::Raw { key } => {
                 let value = storage
-                    .get(&key)
+                    .get(meter, &key)?
                     .ok_or_else(|| StdError::not_found("raw"))?;
                 Ok(QueryResponse::Raw { value })
             }
-            Query::Bank(bank) => self.bank.query(storage, gas, block, self, bank),
+            Query::Bank(bank) => self.bank.query(storage, meter, block, self, bank),
         }
     }
 
