@@ -110,6 +110,7 @@ mod test {
     use cosmwasm_std::{OverflowError, OverflowOperation, StdError};
 
     use crate::{MemoryStore, PersistentStorage};
+
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Config {
         pub owner: String,

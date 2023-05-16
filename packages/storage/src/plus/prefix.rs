@@ -337,15 +337,18 @@ fn increment_last_byte(input: &[u8]) -> Vec<u8> {
     copy
 }
 
-#[cfg(feature = "todo")]
 #[cfg(test)]
 mod test {
     use super::*;
-    use cosmwasm_std::testing::MockStorage;
+    use crate::{MemoryStore, PersistentStorage, Storage};
 
     #[test]
     fn ensure_proper_range_bounds() {
-        let mut store = MockStorage::new();
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut gas_meter = GasMeter::infinite();
+        let meter = &mut gas_meter;
+
         // manually create this - not testing nested prefixes here
         let prefix: Prefix<Vec<u8>, u64> = Prefix {
             storage_prefix: b"foo".to_vec(),
@@ -356,12 +359,12 @@ mod test {
         };
 
         // set some data, we care about "foo" prefix
-        store.set(b"foobar", b"1");
-        store.set(b"foora", b"2");
-        store.set(b"foozi", b"3");
+        store.set(meter, b"foobar", b"1").unwrap();
+        store.set(meter, b"foora", b"2").unwrap();
+        store.set(meter, b"foozi", b"3").unwrap();
         // these shouldn't match
-        store.set(b"foply", b"100");
-        store.set(b"font", b"200");
+        store.set(meter, b"foply", b"100").unwrap();
+        store.set(meter, b"font", b"200").unwrap();
 
         let expected = vec![
             (b"bar".to_vec(), 1u64),
@@ -371,115 +374,137 @@ mod test {
         let expected_reversed: Vec<(Vec<u8>, u64)> = expected.iter().rev().cloned().collect();
 
         // let's do the basic sanity check
-        let res: StdResult<Vec<_>> = prefix
-            .range_raw(&store, None, None, Order::Ascending)
+        let res: PlusResult<Vec<_>> = prefix
+            .range_raw(&store, meter, None, None, Order::Ascending)
+            .unwrap()
             .collect();
         assert_eq!(&expected, &res.unwrap());
-        let res: StdResult<Vec<_>> = prefix
-            .range_raw(&store, None, None, Order::Descending)
+        let res: PlusResult<Vec<_>> = prefix
+            .range_raw(&store, meter, None, None, Order::Descending)
+            .unwrap()
             .collect();
         assert_eq!(&expected_reversed, &res.unwrap());
 
         // now let's check some ascending ranges
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::inclusive(b"ra".to_vec())),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected[1..], res.unwrap().as_slice());
         // skip excluded
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::exclusive(b"ra".to_vec())),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected[2..], res.unwrap().as_slice());
         // if we exclude something a little lower, we get matched
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::exclusive(b"r".to_vec())),
                 None,
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected[1..], res.unwrap().as_slice());
 
         // now let's check some descending ranges
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 None,
                 Some(Bound::inclusive(b"ra".to_vec())),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected_reversed[1..], res.unwrap().as_slice());
         // skip excluded
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 None,
                 Some(Bound::exclusive(b"ra".to_vec())),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected_reversed[2..], res.unwrap().as_slice());
         // if we exclude something a little higher, we get matched
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 None,
                 Some(Bound::exclusive(b"rb".to_vec())),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected_reversed[1..], res.unwrap().as_slice());
 
         // now test when both sides are set
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::inclusive(b"ra".to_vec())),
                 Some(Bound::exclusive(b"zi".to_vec())),
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected[1..2], res.unwrap().as_slice());
         // and descending
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::inclusive(b"ra".to_vec())),
                 Some(Bound::exclusive(b"zi".to_vec())),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected[1..2], res.unwrap().as_slice());
         // Include both sides
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::inclusive(b"ra".to_vec())),
                 Some(Bound::inclusive(b"zi".to_vec())),
                 Order::Descending,
             )
+            .unwrap()
             .collect();
         assert_eq!(&expected_reversed[..2], res.unwrap().as_slice());
         // Exclude both sides
-        let res: StdResult<Vec<_>> = prefix
+        let res: PlusResult<Vec<_>> = prefix
             .range_raw(
                 &store,
+                meter,
                 Some(Bound::exclusive(b"ra".to_vec())),
                 Some(Bound::exclusive(b"zi".to_vec())),
                 Order::Ascending,
             )
+            .unwrap()
             .collect();
         assert_eq!(res.unwrap().as_slice(), &[]);
     }
