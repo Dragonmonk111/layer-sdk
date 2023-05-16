@@ -1,28 +1,30 @@
-// TODO: port this all over
-#![cfg(feature = "iterator")]
 use core::fmt;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use cosmwasm_std::{Order, Record, StdResult, Storage};
+use cosmwasm_std::{Order, Record, StdResult};
 use std::ops::Deref;
 
-use crate::bound::{PrefixBound, RawBound};
-use crate::de::KeyDeserialize;
-use crate::helpers::{namespaces_with_key, nested_namespaces_with_key};
-use crate::iter_helpers::{concat, deserialize_kv, deserialize_v, trim};
-use crate::keys::Key;
-use crate::{Bound, Prefixer, PrimaryKey};
+use pulsar_std::{GasMeter, GasResult};
 
-type DeserializeVFn<T> = fn(&dyn Storage, &[u8], Record) -> StdResult<Record<T>>;
+use super::error::PlusResult;
+use super::helpers::{namespaces_with_key, nested_namespaces_with_key};
+use super::iter_helpers::{concat, deserialize_kv, deserialize_v, trim};
+use super::{Bound, Key, KeyDeserialize, PrefixBound, Prefixer, PrimaryKey, RawBound};
+use crate::ReadonlyStorage;
+
+pub type PlusIterator<'c, T> = GasResult<Box<dyn Iterator<Item = PlusResult<T>> + 'c>>;
+pub type GasIterator<'c, T> = GasResult<Box<dyn Iterator<Item = GasResult<T>> + 'c>>;
+
+type DeserializeVFn<T> = fn(&dyn ReadonlyStorage, &[u8], Record) -> StdResult<Record<T>>;
 
 type DeserializeKvFn<K, T> =
-    fn(&dyn Storage, &[u8], Record) -> StdResult<(<K as KeyDeserialize>::Output, T)>;
+    fn(&dyn ReadonlyStorage, &[u8], Record) -> StdResult<(<K as KeyDeserialize>::Output, T)>;
 
 pub fn default_deserializer_v<T: DeserializeOwned>(
-    _: &dyn Storage,
+    _: &dyn ReadonlyStorage,
     _: &[u8],
     raw: Record,
 ) -> StdResult<Record<T>> {
@@ -30,7 +32,7 @@ pub fn default_deserializer_v<T: DeserializeOwned>(
 }
 
 pub fn default_deserializer_kv<K: KeyDeserialize, T: DeserializeOwned>(
-    _: &dyn Storage,
+    _: &dyn ReadonlyStorage,
     _: &[u8],
     raw: Record,
 ) -> StdResult<(K::Output, T)> {
@@ -118,11 +120,12 @@ where
 {
     pub fn range_raw<'a>(
         &self,
-        store: &'a dyn Storage,
+        store: &'a dyn ReadonlyStorage,
+        meter: &'a mut GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
-    ) -> Box<dyn Iterator<Item = StdResult<Record<T>>> + 'a>
+    ) -> PlusIterator<'a, Record<T>>
     where
         T: 'a,
     {
@@ -130,40 +133,47 @@ where
         let pk_name = self.pk_name.clone();
         let mapped = range_with_prefix(
             store,
+            meter,
             &self.storage_prefix,
             min.map(|b| b.to_raw_bound()),
             max.map(|b| b.to_raw_bound()),
             order,
-        )
-        .map(move |kv| (de_fn)(store, &pk_name, kv));
-        Box::new(mapped)
+        )?
+        .map(move |r| {
+            let kv = r?;
+            Ok((de_fn)(store, &pk_name, kv)?)
+        });
+        Ok(Box::new(mapped))
     }
 
     pub fn keys_raw<'a>(
         &self,
-        store: &'a dyn Storage,
+        store: &'a dyn ReadonlyStorage,
+        meter: &'a mut GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
-    ) -> Box<dyn Iterator<Item = Vec<u8>> + 'a> {
+    ) -> GasIterator<'a, Vec<u8>> {
         let mapped = range_with_prefix(
             store,
+            meter,
             &self.storage_prefix,
             min.map(|b| b.to_raw_bound()),
             max.map(|b| b.to_raw_bound()),
             order,
-        )
-        .map(|(k, _)| k);
-        Box::new(mapped)
+        )?
+        .map(|r| Ok(r?.0));
+        Ok(Box::new(mapped))
     }
 
     pub fn range<'a>(
         &self,
-        store: &'a dyn Storage,
+        store: &'a dyn ReadonlyStorage,
+        meter: &'a mut GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
-    ) -> Box<dyn Iterator<Item = StdResult<(K::Output, T)>> + 'a>
+    ) -> PlusIterator<'a, (K::Output, T)>
     where
         T: 'a,
         K::Output: 'static,
@@ -172,22 +182,27 @@ where
         let pk_name = self.pk_name.clone();
         let mapped = range_with_prefix(
             store,
+            meter,
             &self.storage_prefix,
             min.map(|b| b.to_raw_bound()),
             max.map(|b| b.to_raw_bound()),
             order,
-        )
-        .map(move |kv| (de_fn)(store, &pk_name, kv));
-        Box::new(mapped)
+        )?
+        .map(move |r| {
+            let kv = r?;
+            Ok((de_fn)(store, &pk_name, kv)?)
+        });
+        Ok(Box::new(mapped))
     }
 
     pub fn keys<'a>(
         &self,
-        store: &'a dyn Storage,
+        store: &'a dyn ReadonlyStorage,
+        meter: &'a mut GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
-    ) -> Box<dyn Iterator<Item = StdResult<K::Output>> + 'a>
+    ) -> PlusIterator<'a, K::Output>
     where
         T: 'a,
         K::Output: 'static,
@@ -196,24 +211,29 @@ where
         let pk_name = self.pk_name.clone();
         let mapped = range_with_prefix(
             store,
+            meter,
             &self.storage_prefix,
             min.map(|b| b.to_raw_bound()),
             max.map(|b| b.to_raw_bound()),
             order,
-        )
-        .map(move |kv| (de_fn)(store, &pk_name, kv).map(|(k, _)| k));
-        Box::new(mapped)
+        )?
+        .map(move |r| {
+            let kv = r?;
+            let (k, _) = (de_fn)(store, &pk_name, kv)?;
+            Ok(k)
+        });
+        Ok(Box::new(mapped))
     }
 }
 
 pub fn range_with_prefix<'a>(
-    storage: &'a dyn Storage,
+    storage: &'a dyn ReadonlyStorage,
     meter: &'a mut GasMeter,
     namespace: &[u8],
     start: Option<RawBound>,
     end: Option<RawBound>,
     order: Order,
-) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+) -> GasIterator<'a, Record> {
     let start = calc_start_bound(namespace, start);
     let end = calc_end_bound(namespace, end);
 
@@ -226,7 +246,7 @@ pub fn range_with_prefix<'a>(
         let (k, v) = r?;
         Ok((trim(&prefix, &k), v))
     });
-    Box::new(mapped)
+    Ok(Box::new(mapped))
 }
 
 fn calc_start_bound(namespace: &[u8], bound: Option<RawBound>) -> Vec<u8> {
@@ -248,13 +268,13 @@ fn calc_end_bound(namespace: &[u8], bound: Option<RawBound>) -> Vec<u8> {
 }
 
 pub fn namespaced_prefix_range<'a, 'c, K: Prefixer<'a>>(
-    storage: &'c dyn Storage,
-    meter: &mut GasMeter,
+    storage: &'c dyn ReadonlyStorage,
+    meter: &'c mut GasMeter,
     namespace: &[u8],
     start: Option<PrefixBound<'a, K>>,
     end: Option<PrefixBound<'a, K>>,
     order: Order,
-) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'c>> {
+) -> GasIterator<'c, Record> {
     let prefix = namespaces_with_key(&[namespace], &[]);
     let start = calc_prefix_start_bound(&prefix, start);
     let end = calc_prefix_end_bound(&prefix, end);

@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
 
-// TODO: make our own custom pulsar-storage package to extend (esp with file system backing, transactions...)
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
@@ -252,7 +251,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             tx_results,
             validator_updates: vec![],
             consensus_param_updates: None,
-            app_hash: self.storage.app_hash().into(),
+            app_hash: self.storage.app_hash(),
         })
     }
 }

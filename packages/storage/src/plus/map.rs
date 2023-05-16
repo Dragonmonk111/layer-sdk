@@ -2,16 +2,16 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 
-use cosmwasm_std::{from_slice, Addr, CustomQuery, QuerierWrapper, StdResult};
-
-use cw_storage_plus::{Bound, Key, KeyDeserialize, Prefix, PrefixBound, Prefixer, PrimaryKey};
+use cosmwasm_std::{from_slice, Addr, CustomQuery, QuerierWrapper, Record, StdResult};
 
 use pulsar_std::{GasMeter, GasResult};
 
 use super::error::{PlusError, PlusResult};
 use super::helpers::query_raw;
-use super::iter_helpers::{deserialize_kv, deserialize_v, namespaced_prefix_range};
+use super::iter_helpers::{deserialize_kv, deserialize_v};
 use super::path::Path;
+use super::prefix::{namespaced_prefix_range, GasIterator, PlusIterator, Prefix};
+use super::{Bound, Key, KeyDeserialize, PrefixBound, Prefixer, PrimaryKey};
 use crate::{ReadonlyStorage, Storage};
 
 #[derive(Debug, Clone)]
@@ -123,8 +123,6 @@ where
         }
     }
 
-    // TODO
-    /*
     /// Clears the map, removing all elements.
     pub fn clear(&self, store: &mut dyn Storage, meter: &mut GasMeter) -> GasResult<()> {
         const TAKE: usize = 10;
@@ -133,31 +131,42 @@ where
         while !cleared {
             let paths = self
                 .no_prefix_raw()
-                .keys_raw(store, None, None, cosmwasm_std::Order::Ascending)
-                .map(|raw_key| Path::<T>::new(self.namespace, &[raw_key.as_slice()]))
+                .keys_raw(
+                    store.as_ref(),
+                    meter,
+                    None,
+                    None,
+                    cosmwasm_std::Order::Ascending,
+                )?
+                .map(|r| {
+                    let raw_key = r?;
+                    Ok(Path::<T>::new(self.namespace, &[raw_key.as_slice()]))
+                })
                 // Take just TAKE elements to prevent possible heap overflow if the Map is big.
                 .take(TAKE)
                 .collect::<Vec<_>>();
+            let len = paths.len();
 
+            // call remove on them all and error if any error
             paths
-                .iter()
-                .map(|path| store.remove(meter, path))
-                .collect::<GasResult<_>>()?;
+                .into_iter()
+                .map(|path| store.remove(meter, &path?))
+                .collect::<GasResult<Vec<_>>>()?;
 
-            cleared = paths.len() < TAKE;
+            cleared = len < TAKE;
         }
         Ok(())
     }
-    */
 
-    // TODO
-    // /// Returns `true` if the map is empty.
-    // pub fn is_empty(&self, store: &dyn Storage) -> bool {
-    //     self.no_prefix_raw()
-    //         .keys_raw(store, None, None, cosmwasm_std::Order::Ascending)
-    //         .next()
-    //         .is_none()
-    // }
+    /// Returns `true` if the map is empty.
+    pub fn is_empty(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter) -> GasResult<bool> {
+        let empty = self
+            .no_prefix_raw()
+            .keys_raw(store, meter, None, None, cosmwasm_std::Order::Ascending)?
+            .next()
+            .is_none();
+        Ok(empty)
+    }
 }
 
 impl<'a, K, T> Map<'a, K, T>
@@ -189,12 +198,12 @@ where
     /// solve them.
     pub fn prefix_range_raw<'c>(
         &self,
-        store: &'c dyn Storage,
+        store: &'c dyn ReadonlyStorage,
         meter: &'c mut GasMeter,
         min: Option<PrefixBound<'a, K::Prefix>>,
         max: Option<PrefixBound<'a, K::Prefix>>,
         order: cosmwasm_std::Order,
-    ) -> GasResult<Box<dyn Iterator<Item = PlusResult<cosmwasm_std::Record<T>>> + 'c>>
+    ) -> PlusIterator<'c, Record<T>>
     where
         T: 'c,
         'a: 'c,
@@ -221,12 +230,12 @@ where
     /// solve them.
     pub fn prefix_range<'c>(
         &self,
-        store: &'c dyn Storage,
+        store: &'c dyn ReadonlyStorage,
         meter: &'c mut GasMeter,
         min: Option<PrefixBound<'a, K::Prefix>>,
         max: Option<PrefixBound<'a, K::Prefix>>,
         order: cosmwasm_std::Order,
-    ) -> GasResult<Box<dyn Iterator<Item = PlusResult<(K::Output, T)>> + 'c>>
+    ) -> PlusIterator<'c, (K::Output, T)>
     where
         T: 'c,
         'a: 'c,
@@ -246,8 +255,6 @@ where
     }
 }
 
-// TODO
-/*
 impl<'a, K, T> Map<'a, K, T>
 where
     T: Serialize + DeserializeOwned,
@@ -255,34 +262,34 @@ where
 {
     pub fn range_raw<'c>(
         &self,
-        store: &'c dyn Storage,
+        store: &'c dyn ReadonlyStorage,
+        meter: &'c mut GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
-    ) -> Box<dyn Iterator<Item = StdResult<cosmwasm_std::Record<T>>> + 'c>
+    ) -> PlusIterator<'c, Record<T>>
     where
         T: 'c,
     {
-        self.no_prefix_raw().range_raw(store, min, max, order)
+        self.no_prefix_raw()
+            .range_raw(store, meter, min, max, order)
     }
 
     pub fn keys_raw<'c>(
         &self,
-        store: &'c dyn Storage,
+        store: &'c dyn ReadonlyStorage,
+        meter: &'c mut GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
-    ) -> Box<dyn Iterator<Item = Vec<u8>> + 'c>
+    ) -> GasIterator<'c, Vec<u8>>
     where
         T: 'c,
     {
-        self.no_prefix_raw().keys_raw(store, min, max, order)
+        self.no_prefix_raw().keys_raw(store, meter, min, max, order)
     }
 }
-*/
 
-// TODO
-/*
 impl<'a, K, T> Map<'a, K, T>
 where
     T: Serialize + DeserializeOwned,
@@ -290,33 +297,34 @@ where
 {
     pub fn range<'c>(
         &self,
-        store: &'c dyn Storage,
+        store: &'c dyn ReadonlyStorage,
+        meter: &'c mut GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
-    ) -> Box<dyn Iterator<Item = StdResult<(K::Output, T)>> + 'c>
+    ) -> PlusIterator<'c, (K::Output, T)>
     where
         T: 'c,
         K::Output: 'static,
     {
-        self.no_prefix().range(store, min, max, order)
+        self.no_prefix().range(store, meter, min, max, order)
     }
 
     pub fn keys<'c>(
         &self,
-        store: &'c dyn Storage,
+        store: &'c dyn ReadonlyStorage,
+        meter: &'c mut GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
-    ) -> Box<dyn Iterator<Item = StdResult<K::Output>> + 'c>
+    ) -> PlusIterator<'c, K::Output>
     where
         T: 'c,
         K::Output: 'static,
     {
-        self.no_prefix().keys(store, min, max, order)
+        self.no_prefix().keys(store, meter, min, max, order)
     }
 }
-*/
 
 #[cfg(test)]
 mod test {

@@ -3,12 +3,12 @@ use serde::Serialize;
 use std::marker::PhantomData;
 
 use cosmwasm_std::to_vec;
-use cw_storage_plus::Key;
 use std::ops::Deref;
 
 use pulsar_std::{GasMeter, GasResult};
 
 use super::helpers::{may_deserialize, must_deserialize, nested_namespaces_with_key};
+use super::Key;
 use crate::{PlusError, PlusResult, ReadonlyStorage, Storage};
 
 #[derive(Debug, Clone)]

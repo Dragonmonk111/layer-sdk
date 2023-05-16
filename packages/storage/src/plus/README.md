@@ -1,0 +1,29 @@
+# Pulsar Storage Plus
+
+This is a port of the great work done in cw-storage-plus. Unfortunately, that work
+was tied to `cosmwasm_std::Storage`, while we need `plusar_storage::Storage` support,
+along with passing in a `GasMeter` and returning `GasError`.
+
+All logic and functions are the same, args and results have been modified to support
+these changes for the different storage interface.
+
+This means the pulsar app modules can use a `cw-storage-plus`-like interface to manage
+the internal state, which should be familiar to cosmwasm devs (and maybe allow easier porting
+between pulsar modules and cosmwasm contracts)
+
+## Status
+
+Ported:
+* Item
+* Map
+* Prefix
+
+Not yet ported (to do if/when needed):
+* Deque
+* IndexedMap
+* SnapshotMap
+
+
+## Open Questions
+
+Do we stick with JSON encoding or use protobuf instead?

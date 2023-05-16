@@ -1,75 +1,9 @@
 use serde::de::DeserializeOwned;
 
-use cosmwasm_std::{from_slice, Order, Record, StdResult};
-use cw_storage_plus::{KeyDeserialize, PrefixBound, Prefixer, RawBound};
+use cosmwasm_std::{from_slice, Record, StdResult};
 
-use super::helpers::{encode_length, namespaces_with_key};
-use crate::Storage;
-use pulsar_std::{GasMeter, GasResult};
-
-pub fn namespaced_prefix_range<'a, 'c, K: Prefixer<'a>>(
-    storage: &'c dyn Storage,
-    meter: &'c mut GasMeter,
-    namespace: &[u8],
-    start: Option<PrefixBound<'a, K>>,
-    end: Option<PrefixBound<'a, K>>,
-    order: Order,
-) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'c>> {
-    let prefix = namespaces_with_key(&[namespace], &[]);
-    let start = calc_prefix_start_bound(&prefix, start);
-    let end = calc_prefix_end_bound(&prefix, end);
-
-    // get iterator from storage
-    let base_iterator = storage.range(meter, Some(&start), Some(&end), order)?;
-
-    // make a copy for the closure to handle lifetimes safely
-    let mapped = base_iterator.map(move |r| {
-        let (k, v) = r?;
-        Ok((trim(&prefix, &k), v))
-    });
-    Ok(Box::new(mapped))
-}
-
-fn calc_prefix_start_bound<'a, K: Prefixer<'a>>(
-    namespace: &[u8],
-    bound: Option<PrefixBound<'a, K>>,
-) -> Vec<u8> {
-    match bound.map(|b| b.to_raw_bound()) {
-        None => namespace.to_vec(),
-        // this is the natural limits of the underlying Storage
-        Some(RawBound::Inclusive(limit)) => concat(namespace, &limit),
-        Some(RawBound::Exclusive(limit)) => concat(namespace, &increment_last_byte(&limit)),
-    }
-}
-
-fn calc_prefix_end_bound<'a, K: Prefixer<'a>>(
-    namespace: &[u8],
-    bound: Option<PrefixBound<'a, K>>,
-) -> Vec<u8> {
-    match bound.map(|b| b.to_raw_bound()) {
-        None => increment_last_byte(namespace),
-        // this is the natural limits of the underlying Storage
-        Some(RawBound::Exclusive(limit)) => concat(namespace, &limit),
-        Some(RawBound::Inclusive(limit)) => concat(namespace, &increment_last_byte(&limit)),
-    }
-}
-
-/// Returns a new vec of same length and last byte incremented by one
-/// If last bytes are 255, we handle overflow up the chain.
-/// If all bytes are 255, this returns wrong data - but that is never possible as a namespace
-fn increment_last_byte(input: &[u8]) -> Vec<u8> {
-    let mut copy = input.to_vec();
-    // zero out all trailing 255, increment first that is not such
-    for i in (0..input.len()).rev() {
-        if copy[i] == 255 {
-            copy[i] = 0;
-        } else {
-            copy[i] += 1;
-            break;
-        }
-    }
-    copy
-}
+use super::helpers::encode_length;
+use super::KeyDeserialize;
 
 #[allow(dead_code)]
 pub(crate) fn deserialize_v<T: DeserializeOwned>(kv: Record) -> StdResult<Record<T>> {
