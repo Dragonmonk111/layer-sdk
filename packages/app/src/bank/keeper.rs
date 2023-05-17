@@ -23,52 +23,6 @@ const BALANCES: Map<(&AccountId, &str), Uint128> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
 
-struct ValidCoins<'a> {
-    coins: std::slice::Iter<'a, Coin>,
-    seen: HashMap<&'a str, bool>,
-}
-
-impl<'a> ValidCoins<'a> {
-    fn new(coins: &'a [Coin]) -> Self {
-        ValidCoins {
-            coins: coins.iter(),
-            seen: HashMap::new(),
-        }
-    }
-}
-
-impl<'a> Iterator for ValidCoins<'a> {
-    type Item = Result<&'a Coin, BankError>;
-
-    /// Rules:
-    /// If zero amount, filter out.
-    /// If denom seen before, return error
-    /// Otherwise, return coin
-    /// At end of iterator, if no non-zero amount seen, return error
-    fn next(&mut self) -> Option<Self::Item> {
-        let val = self.coins.next();
-        match val {
-            None => {
-                if self.seen.is_empty() {
-                    Some(Err(BankError::NoEmptyTransfer))
-                } else {
-                    None
-                }
-            }
-            // filter out zero amounts via recursion
-            Some(c) if c.amount.is_zero() => self.next(),
-            Some(c) => {
-                if self.seen.contains_key(&c.denom.as_str()) {
-                    Some(Err(BankError::DuplicateDenom(c.denom.clone())))
-                } else {
-                    self.seen.insert(&c.denom, true);
-                    Some(Ok(c))
-                }
-            }
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct Bank {}
 
@@ -335,6 +289,52 @@ impl Bank {
                     amount: Coin { denom, amount },
                 };
                 Ok(res.into())
+            }
+        }
+    }
+}
+
+struct ValidCoins<'a> {
+    coins: std::slice::Iter<'a, Coin>,
+    seen: HashMap<&'a str, bool>,
+}
+
+impl<'a> ValidCoins<'a> {
+    fn new(coins: &'a [Coin]) -> Self {
+        ValidCoins {
+            coins: coins.iter(),
+            seen: HashMap::new(),
+        }
+    }
+}
+
+impl<'a> Iterator for ValidCoins<'a> {
+    type Item = Result<&'a Coin, BankError>;
+
+    /// Rules:
+    /// If zero amount, filter out.
+    /// If denom seen before, return error
+    /// Otherwise, return coin
+    /// At end of iterator, if no non-zero amount seen, return error
+    fn next(&mut self) -> Option<Self::Item> {
+        let val = self.coins.next();
+        match val {
+            None => {
+                if self.seen.is_empty() {
+                    Some(Err(BankError::NoEmptyTransfer))
+                } else {
+                    None
+                }
+            }
+            // filter out zero amounts via recursion
+            Some(c) if c.amount.is_zero() => self.next(),
+            Some(c) => {
+                if self.seen.contains_key(&c.denom.as_str()) {
+                    Some(Err(BankError::DuplicateDenom(c.denom.clone())))
+                } else {
+                    self.seen.insert(&c.denom, true);
+                    Some(Ok(c))
+                }
             }
         }
     }
@@ -760,5 +760,37 @@ mod test {
             .mint(&mut bank_storage, &mut meter, rcpt, vec![])
             .unwrap_err();
         assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
+    }
+
+    #[test]
+    fn valid_coins() {
+        // empty transfer
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(&[]).collect();
+        assert_eq!(a.unwrap_err(), BankError::NoEmptyTransfer);
+
+        // only 0 is also empty
+        let only_zeros = &[coin(0, "ucosm"), coin(0, "uwasm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(only_zeros).collect();
+        assert_eq!(a.unwrap_err(), BankError::NoEmptyTransfer);
+
+        // all valid coins are passed through (unsorted)
+        let all_valid: &[Coin] = &[coin(234, "uwasm"), coin(17, "ucosm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(all_valid).collect();
+        // trying to compare Vec<&Coin> with &[Coin] makes use manually transform
+        assert_eq!(a.unwrap(), vec![&all_valid[0], &all_valid[1]]);
+
+        // 0 values are filtered out and don't count towards duplicate
+        let all_valid: &[Coin] = &[coin(0, "uwasm"), coin(876, "uwasm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(all_valid).collect();
+        // trying to compare Vec<&Coin> with &[Coin] makes use manually transform
+        assert_eq!(a.unwrap(), vec![&all_valid[1]]);
+
+        // two non-zero entries with same denom is duplicate error
+        let all_valid: &[Coin] = &[coin(876, "uwasm"), coin(876, "uwasm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(all_valid).collect();
+        assert_eq!(
+            a.unwrap_err(),
+            BankError::DuplicateDenom("uwasm".to_string())
+        );
     }
 }
