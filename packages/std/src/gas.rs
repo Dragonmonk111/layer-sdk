@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 /// Tracks gas usage and returns error when it hits the limit
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasMeter {
     limit: u64,
     used: u64,

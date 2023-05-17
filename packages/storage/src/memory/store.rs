@@ -16,6 +16,13 @@ impl MemoryStore {
     pub fn new() -> Self {
         MemoryStore(RwLock::new(BTreeStorage::new()))
     }
+
+    pub fn import(src: &dyn ReadonlyStorage, meter: Option<&mut GasMeter>) -> GasResult<Self> {
+        let mut inf = GasMeter::infinite();
+        let meter = meter.unwrap_or_else(|| &mut inf);
+        let btree = BTreeStorage::import(src, meter)?;
+        Ok(MemoryStore(RwLock::new(btree)))
+    }
 }
 
 impl Default for MemoryStore {
@@ -178,6 +185,18 @@ impl Default for BTreeStorage {
 }
 
 impl BTreeStorage {
+    // Make a copy of another storage
+    fn import(source: &dyn ReadonlyStorage, meter: &mut GasMeter) -> GasResult<Self> {
+        let mut storage = BTreeStorage::new();
+        let mut gas_copy = meter.clone();
+        let keys = source.range(&mut gas_copy, None, None, Order::Ascending)?;
+        for r in keys {
+            let (key, value) = r?;
+            storage.set(meter, key, value).unwrap();
+        }
+        Ok(storage)
+    }
+
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let value = self.data.get(key).cloned();
 

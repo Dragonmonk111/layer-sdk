@@ -308,7 +308,12 @@ mod tests {
 
         // query the original bank account
         let result = app
-            .query(BankQuery::AllBalances { address: account }.into())
+            .query(
+                BankQuery::AllBalances {
+                    address: account.clone(),
+                }
+                .into(),
+            )
             .unwrap();
         // sort balance, output will be in denom order
         balance.sort_by(|a, b| a.denom.cmp(&b.denom));
@@ -320,9 +325,18 @@ mod tests {
         }
 
         // TODO: pull out storage and re-create this - maybe with custom storage types...
-        // let storage = app.storage.into_inner();
-        // let app2 = App::load_from_storage(storage, app.logic).unwrap();
+        let storage = MemoryStore::import(&app.storage.reader(), None).unwrap();
+        let app2 = App::load_from_storage(storage, app.logic).unwrap();
 
         // query the recovered state
+        let result = app2
+            .query(BankQuery::AllBalances { address: account }.into())
+            .unwrap();
+        match result {
+            QueryResponse::Bank(BankQueryResponse::AllBalances(res)) => {
+                assert_eq!(res.amount, balance);
+            }
+            x => panic!("Exected AllBalancesResponse, got {:?}", x),
+        }
     }
 }
