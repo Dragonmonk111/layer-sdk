@@ -19,7 +19,7 @@ impl MemoryStore {
 
     pub fn import(src: &dyn ReadonlyStorage, meter: Option<&mut GasMeter>) -> GasResult<Self> {
         let mut inf = GasMeter::infinite();
-        let meter = meter.unwrap_or_else(|| &mut inf);
+        let meter = meter.unwrap_or(&mut inf);
         let btree = BTreeStorage::import(src, meter)?;
         Ok(MemoryStore(RwLock::new(btree)))
     }
