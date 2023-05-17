@@ -1,4 +1,4 @@
-use cosmwasm_std::StdError;
+use cosmwasm_std::{OverflowError, StdError};
 use pulsar_std::GasError;
 use thiserror::Error;
 
@@ -11,4 +11,10 @@ pub enum PlusError {
 
     #[error("{0}")]
     Gas(#[from] GasError),
+}
+
+impl From<OverflowError> for PlusError {
+    fn from(err: OverflowError) -> Self {
+        PlusError::Std(err.into())
+    }
 }

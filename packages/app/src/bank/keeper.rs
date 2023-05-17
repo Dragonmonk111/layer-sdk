@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use itertools::Itertools;
 
-use cosmwasm_std::{coin, ensure_eq, BlockInfo, Coin, Event, Uint128};
-use cw_utils::NativeBalance;
+use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
 
 use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
 use pulsar_std::{AccountId, BankMsg, BankQuery, GasMeter};
-use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
+use pulsar_storage::{
+    prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
+};
 
 use crate::api::TxResponse;
 use crate::bank::BankError;
@@ -15,8 +18,8 @@ use crate::sm::StateMachine;
 
 // store supply for each denom
 const SUPPLY: Map<&str, Uint128> = Map::new("supply");
-// FIXME: store each denom separate - (&Addr, &str), Uint128
-const BALANCES: Map<&AccountId, NativeBalance> = Map::new("balances");
+// each (user, denom) pair is stored separately for efficient query of one denom
+const BALANCES: Map<(&AccountId, &str), Uint128> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
 
@@ -28,7 +31,8 @@ impl Bank {
         Bank {}
     }
 
-    // this is an "admin" function to let us adjust bank accounts in genesis
+    /// this is an "admin" function to let us adjust bank accounts in genesis
+    /// Should never be called on an initialized account
     pub fn init_balance(
         &self,
         storage: &mut dyn Storage,
@@ -37,31 +41,47 @@ impl Bank {
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
-        self.set_balance(&mut bank_storage, meter, account, amount)
-    }
-
-    fn set_balance(
-        &self,
-        bank_storage: &mut dyn Storage,
-        meter: &mut GasMeter,
-        account: &AccountId,
-        amount: Vec<Coin>,
-    ) -> PulsarResult<()> {
-        let mut balance = NativeBalance(amount);
-        balance.normalize();
-
-        // update the supply for each coin
-        // TODO: this assume account had no balance before... let's see how to do this proper
-        for coin in balance.0.iter() {
-            SUPPLY.update::<_, PulsarError>(bank_storage, meter, &coin.denom, |supply| {
+        for coin in ValidCoins::new(&amount) {
+            let coin = coin?;
+            SUPPLY.update::<_, PulsarError>(&mut bank_storage, meter, &coin.denom, |supply| {
                 Ok(supply.unwrap_or_default() + coin.amount)
             })?;
+            BALANCES.update::<_, PulsarError>(
+                &mut bank_storage,
+                meter,
+                (account, &coin.denom),
+                |balance| match balance {
+                    None => Ok(coin.amount),
+                    Some(_) => {
+                        Err(BankError::ReinitializeExistingAccount(account.to_string()).into())
+                    }
+                },
+            )?;
         }
+        Ok(())
+    }
 
-        // store user balance
-        BALANCES
-            .save(bank_storage, meter, account, &balance)
-            .map_err(Into::into)
+    fn get_all_balances(
+        &self,
+        bank_storage: &dyn ReadonlyStorage,
+        meter: &mut GasMeter,
+        account: &AccountId,
+    ) -> PulsarResult<Vec<Coin>> {
+        let vals: PlusResult<Vec<_>> = BALANCES
+            .prefix(account)
+            .range(
+                bank_storage,
+                meter,
+                None,
+                None,
+                cosmwasm_std::Order::Ascending,
+            )?
+            .map(|r| {
+                let (denom, amount) = r?;
+                Ok(Coin { amount, denom })
+            })
+            .collect();
+        Ok(vals?)
     }
 
     fn get_balance(
@@ -69,9 +89,13 @@ impl Bank {
         bank_storage: &dyn ReadonlyStorage,
         meter: &mut GasMeter,
         account: &AccountId,
-    ) -> PulsarResult<Vec<Coin>> {
-        let val = BALANCES.may_load(bank_storage, meter, account)?;
-        Ok(val.unwrap_or_default().into_vec())
+        denom: &str,
+    ) -> PulsarResult<Coin> {
+        let val = BALANCES.may_load(bank_storage, meter, (account, denom))?;
+        Ok(Coin {
+            amount: val.unwrap_or_default(),
+            denom: denom.to_string(),
+        })
     }
 
     fn get_supply(
@@ -92,8 +116,24 @@ impl Bank {
         to_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
-        self.burn(bank_storage, meter, from_address, amount.clone())?;
-        self.mint(bank_storage, meter, to_address, amount)
+        for coin in ValidCoins::new(&amount) {
+            let coin = coin?;
+            // remove from old account account balance
+            BALANCES.update::<_, PlusError>(
+                bank_storage,
+                meter,
+                (&from_address, &coin.denom),
+                |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
+            )?;
+            // add to new account balance
+            BALANCES.update::<_, PulsarError>(
+                bank_storage,
+                meter,
+                (&to_address, &coin.denom),
+                |balance| Ok(balance.unwrap_or_default() + coin.amount),
+            )?;
+        }
+        Ok(())
     }
 
     // TODO: supply tracking is completely wrong, as we mint as part of transfer...
@@ -104,42 +144,45 @@ impl Bank {
         to_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
-        let amount = self.normalize_amount(amount)?;
-
-        // update the supply for each coin
-        // TODO: this assume account had no balance before... let's see how to do this proper
-        for coin in &amount {
+        for coin in ValidCoins::new(&amount) {
+            let coin = coin?;
+            // add to the supply
             SUPPLY.update::<_, PulsarError>(bank_storage, meter, &coin.denom, |supply| {
                 Ok(supply.unwrap_or_default() + coin.amount)
             })?;
+            // and to the account balance
+            BALANCES.update::<_, PulsarError>(
+                bank_storage,
+                meter,
+                (&to_address, &coin.denom),
+                |balance| Ok(balance.unwrap_or_default() + coin.amount),
+            )?;
         }
-
-        let b = self.get_balance(bank_storage.as_ref(), meter, &to_address)?;
-        let b = NativeBalance(b) + NativeBalance(amount);
-        self.set_balance(bank_storage, meter, &to_address, b.into_vec())
+        Ok(())
     }
 
-    fn burn(
+    fn burn_tokens(
         &self,
         bank_storage: &mut dyn Storage,
         meter: &mut GasMeter,
         from_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
-        let amount = self.normalize_amount(amount)?;
-        let a = self.get_balance(bank_storage.as_ref(), meter, &from_address)?;
-        let a = (NativeBalance(a) - amount)?;
-        self.set_balance(bank_storage, meter, &from_address, a.into_vec())
-    }
-
-    /// Filters out all 0 value coins and returns an error if the resulting Vec is empty
-    fn normalize_amount(&self, amount: Vec<Coin>) -> PulsarResult<Vec<Coin>> {
-        let res: Vec<_> = amount.into_iter().filter(|x| !x.amount.is_zero()).collect();
-        if res.is_empty() {
-            Err(BankError::NoEmptyTransfer.into())
-        } else {
-            Ok(res)
+        for coin in ValidCoins::new(&amount) {
+            let coin = coin?;
+            // remove from the supply
+            SUPPLY.update::<_, PlusError>(bank_storage, meter, &coin.denom, |supply| {
+                Ok(supply.unwrap_or_default().checked_sub(coin.amount)?)
+            })?;
+            // and to the account balance
+            BALANCES.update::<_, PlusError>(
+                bank_storage,
+                meter,
+                (&from_address, &coin.denom),
+                |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
+            )?;
         }
+        Ok(())
     }
 }
 
@@ -155,6 +198,18 @@ impl Bank {
     ) -> PulsarResult<()> {
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
         self.send(&mut bank_storage, meter, from_address, to_address, amount)
+    }
+
+    // helper to move funds when called from another module
+    pub fn burn(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &mut GasMeter,
+        from_address: AccountId,
+        amount: Vec<Coin>,
+    ) -> PulsarResult<()> {
+        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+        self.burn_tokens(&mut bank_storage, meter, from_address, amount)
     }
 
     pub fn init(
@@ -202,7 +257,7 @@ impl Bank {
                 let events = vec![Event::new("burn")
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
-                self.burn(&mut bank_storage, meter, sender, amount)?;
+                self.burn_tokens(&mut bank_storage, meter, sender, amount)?;
                 Ok(TxResponse::events(events))
             }
         }
@@ -219,16 +274,12 @@ impl Bank {
         let bank_storage = prefixed_read(storage, NAMESPACE_BANK);
         match request {
             BankQuery::AllBalances { address } => {
-                let amount = self.get_balance(&bank_storage, meter, &address)?;
+                let amount = self.get_all_balances(&bank_storage, meter, &address)?;
                 let res = AllBalanceResponse { amount };
                 Ok(res.into())
             }
             BankQuery::Balance { address, denom } => {
-                let all_amounts = self.get_balance(&bank_storage, meter, &address)?;
-                let amount = all_amounts
-                    .into_iter()
-                    .find(|c| c.denom == denom)
-                    .unwrap_or_else(|| coin(0, denom));
+                let amount = self.get_balance(&bank_storage, meter, &address, &denom)?;
                 let res = BalanceResponse { amount };
                 Ok(res.into())
             }
@@ -238,6 +289,52 @@ impl Bank {
                     amount: Coin { denom, amount },
                 };
                 Ok(res.into())
+            }
+        }
+    }
+}
+
+struct ValidCoins<'a> {
+    coins: std::slice::Iter<'a, Coin>,
+    seen: HashMap<&'a str, bool>,
+}
+
+impl<'a> ValidCoins<'a> {
+    fn new(coins: &'a [Coin]) -> Self {
+        ValidCoins {
+            coins: coins.iter(),
+            seen: HashMap::new(),
+        }
+    }
+}
+
+impl<'a> Iterator for ValidCoins<'a> {
+    type Item = Result<&'a Coin, BankError>;
+
+    /// Rules:
+    /// If zero amount, filter out.
+    /// If denom seen before, return error
+    /// Otherwise, return coin
+    /// At end of iterator, if no non-zero amount seen, return error
+    fn next(&mut self) -> Option<Self::Item> {
+        let val = self.coins.next();
+        match val {
+            None => {
+                if self.seen.is_empty() {
+                    Some(Err(BankError::NoEmptyTransfer))
+                } else {
+                    None
+                }
+            }
+            // filter out zero amounts via recursion
+            Some(c) if c.amount.is_zero() => self.next(),
+            Some(c) => {
+                if self.seen.contains_key(&c.denom.as_str()) {
+                    Some(Err(BankError::DuplicateDenom(c.denom.clone())))
+                } else {
+                    self.seen.insert(&c.denom, true);
+                    Some(Ok(c))
+                }
             }
         }
     }
@@ -256,7 +353,7 @@ mod test {
 
     use crate::error::PulsarError;
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{coins, StdError};
+    use cosmwasm_std::{coin, coins, StdError};
     use pulsar_std::response::BankQueryResponse;
     use pulsar_storage::{MemoryStore, PersistentStorage, Storage};
 
@@ -274,6 +371,25 @@ mod test {
         match resp {
             QueryResponse::Bank(BankQueryResponse::AllBalances(AllBalanceResponse { amount })) => {
                 amount
+            }
+            _ => panic!("unexpected return"),
+        }
+    }
+
+    fn query_supply(bank: &Bank, store: &dyn Storage, denom: &str) -> Uint128 {
+        let req = BankQuery::Supply {
+            denom: denom.into(),
+        };
+        let block = mock_env().block;
+        let mut meter = GasMeter::new(500_000);
+        let sm = StateMachine::default();
+
+        let resp = bank
+            .query(store.as_ref(), &mut meter, &block, &sm, req)
+            .unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Supply(SupplyResponse { amount })) => {
+                amount.amount
             }
             _ => panic!("unexpected return"),
         }
@@ -299,9 +415,13 @@ mod test {
         let bank_storage = prefixed_read(&store, NAMESPACE_BANK);
 
         // get balance work
-        let rich = bank.get_balance(&bank_storage, &mut meter, &owner).unwrap();
+        let rich = bank
+            .get_all_balances(&bank_storage, &mut meter, &owner)
+            .unwrap();
         assert_eq!(rich, norm);
-        let poor = bank.get_balance(&bank_storage, &mut meter, &rcpt).unwrap();
+        let poor = bank
+            .get_all_balances(&bank_storage, &mut meter, &rcpt)
+            .unwrap();
         assert_eq!(poor, vec![]);
 
         // proper queries work
@@ -492,6 +612,61 @@ mod test {
     }
 
     #[test]
+    fn supply_tracked_properly() {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut meter = GasMeter::new(1_000_000);
+
+        let owner = AccountId::unchecked("owner");
+        let rcpt = AccountId::unchecked("receiver");
+        let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
+        let rcpt_funds = vec![coin(5, "btc")];
+
+        // set money
+        let bank = Bank::new();
+        bank.init_balance(&mut store, &mut meter, &owner, init_funds)
+            .unwrap();
+        bank.init_balance(&mut store, &mut meter, &rcpt, rcpt_funds)
+            .unwrap();
+
+        // check original supply
+        let btc = query_supply(&bank, &store, "btc");
+        assert_eq!(btc.u128(), 25);
+        let eth = query_supply(&bank, &store, "eth");
+        assert_eq!(eth.u128(), 100);
+
+        // send some tokens will not modify supply
+        let to_send = vec![coin(30, "eth"), coin(5, "btc")];
+        bank.transfer(&mut store, &mut meter, owner.clone(), rcpt.clone(), to_send)
+            .unwrap();
+        // check balance properly updated (already covered above)
+        let rich = query_balance(&bank, &store, &owner);
+        assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
+        // check supply didn't change
+        let btc = query_supply(&bank, &store, "btc");
+        assert_eq!(btc.u128(), 25);
+        let eth = query_supply(&bank, &store, "eth");
+        assert_eq!(eth.u128(), 100);
+
+        // burn tokens will reduce supply
+        bank.burn(&mut store, &mut meter, owner.clone(), coins(7, "btc"))
+            .unwrap();
+        let rich = query_balance(&bank, &store, &owner);
+        assert_eq!(vec![coin(8, "btc"), coin(70, "eth")], rich);
+        let btc = query_supply(&bank, &store, "btc");
+        assert_eq!(btc.u128(), 18);
+
+        // mint tokens will increase supply
+        let mut bstore = prefixed(&mut store, NAMESPACE_BANK);
+        bank.mint(&mut bstore, &mut meter, rcpt.clone(), coins(77, "eth"))
+            .unwrap();
+        let poor = query_balance(&bank, &store, &rcpt);
+        assert_eq!(vec![coin(10, "btc"), coin(107, "eth")], poor);
+        let eth = query_supply(&bank, &store, "eth");
+        assert_eq!(eth.u128(), 177);
+    }
+
+    #[test]
     fn fail_on_zero_values() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
@@ -585,5 +760,37 @@ mod test {
             .mint(&mut bank_storage, &mut meter, rcpt, vec![])
             .unwrap_err();
         assert_eq!(err, PulsarError::Bank(BankError::NoEmptyTransfer));
+    }
+
+    #[test]
+    fn valid_coins() {
+        // empty transfer
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(&[]).collect();
+        assert_eq!(a.unwrap_err(), BankError::NoEmptyTransfer);
+
+        // only 0 is also empty
+        let only_zeros = &[coin(0, "ucosm"), coin(0, "uwasm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(only_zeros).collect();
+        assert_eq!(a.unwrap_err(), BankError::NoEmptyTransfer);
+
+        // all valid coins are passed through (unsorted)
+        let all_valid: &[Coin] = &[coin(234, "uwasm"), coin(17, "ucosm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(all_valid).collect();
+        // trying to compare Vec<&Coin> with &[Coin] makes use manually transform
+        assert_eq!(a.unwrap(), vec![&all_valid[0], &all_valid[1]]);
+
+        // 0 values are filtered out and don't count towards duplicate
+        let all_valid: &[Coin] = &[coin(0, "uwasm"), coin(876, "uwasm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(all_valid).collect();
+        // trying to compare Vec<&Coin> with &[Coin] makes use manually transform
+        assert_eq!(a.unwrap(), vec![&all_valid[1]]);
+
+        // two non-zero entries with same denom is duplicate error
+        let all_valid: &[Coin] = &[coin(876, "uwasm"), coin(876, "uwasm")];
+        let a: Result<Vec<_>, BankError> = ValidCoins::new(all_valid).collect();
+        assert_eq!(
+            a.unwrap_err(),
+            BankError::DuplicateDenom("uwasm".to_string())
+        );
     }
 }
