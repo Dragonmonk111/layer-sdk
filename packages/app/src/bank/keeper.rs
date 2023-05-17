@@ -92,7 +92,7 @@ impl Bank {
         to_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
-        self.burn(bank_storage, meter, from_address, amount.clone())?;
+        self.burn_tokens(bank_storage, meter, from_address, amount.clone())?;
         self.mint(bank_storage, meter, to_address, amount)
     }
 
@@ -119,7 +119,7 @@ impl Bank {
         self.set_balance(bank_storage, meter, &to_address, b.into_vec())
     }
 
-    fn burn(
+    fn burn_tokens(
         &self,
         bank_storage: &mut dyn Storage,
         meter: &mut GasMeter,
@@ -155,6 +155,18 @@ impl Bank {
     ) -> PulsarResult<()> {
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
         self.send(&mut bank_storage, meter, from_address, to_address, amount)
+    }
+
+    // helper to move funds when called from another module
+    pub fn burn(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &mut GasMeter,
+        from_address: AccountId,
+        amount: Vec<Coin>,
+    ) -> PulsarResult<()> {
+        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+        self.burn_tokens(&mut bank_storage, meter, from_address, amount)
     }
 
     pub fn init(
@@ -202,7 +214,7 @@ impl Bank {
                 let events = vec![Event::new("burn")
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
-                self.burn(&mut bank_storage, meter, sender, amount)?;
+                self.burn_tokens(&mut bank_storage, meter, sender, amount)?;
                 Ok(TxResponse::events(events))
             }
         }
@@ -274,6 +286,25 @@ mod test {
         match resp {
             QueryResponse::Bank(BankQueryResponse::AllBalances(AllBalanceResponse { amount })) => {
                 amount
+            }
+            _ => panic!("unexpected return"),
+        }
+    }
+
+    fn query_supply(bank: &Bank, store: &dyn Storage, denom: &str) -> Uint128 {
+        let req = BankQuery::Supply {
+            denom: denom.into(),
+        };
+        let block = mock_env().block;
+        let mut meter = GasMeter::new(500_000);
+        let sm = StateMachine::default();
+
+        let resp = bank
+            .query(store.as_ref(), &mut meter, &block, &sm, req)
+            .unwrap();
+        match resp {
+            QueryResponse::Bank(BankQueryResponse::Supply(SupplyResponse { amount })) => {
+                amount.amount
             }
             _ => panic!("unexpected return"),
         }
@@ -489,6 +520,61 @@ mod test {
             .process_msg(&mut store, &mut meter, &block, &sm, &rcpt, msg)
             .unwrap_err();
         assert!(matches!(err, PulsarError::Std(StdError::Overflow { .. })));
+    }
+
+    #[test]
+    fn supply_tracked_properly() {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let mut meter = GasMeter::new(1_000_000);
+
+        let owner = AccountId::unchecked("owner");
+        let rcpt = AccountId::unchecked("receiver");
+        let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
+        let rcpt_funds = vec![coin(5, "btc")];
+
+        // set money
+        let bank = Bank::new();
+        bank.init_balance(&mut store, &mut meter, &owner, init_funds)
+            .unwrap();
+        bank.init_balance(&mut store, &mut meter, &rcpt, rcpt_funds)
+            .unwrap();
+
+        // check original supply
+        let btc = query_supply(&bank, &store, "btc");
+        assert_eq!(btc.u128(), 25);
+        let eth = query_supply(&bank, &store, "eth");
+        assert_eq!(eth.u128(), 100);
+
+        // send some tokens will not modify supply
+        let to_send = vec![coin(30, "eth"), coin(5, "btc")];
+        bank.transfer(&mut store, &mut meter, owner.clone(), rcpt.clone(), to_send)
+            .unwrap();
+        // check balance properly updated (already covered above)
+        let rich = query_balance(&bank, &store, &owner);
+        assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);
+        // check supply didn't change
+        let btc = query_supply(&bank, &store, "btc");
+        assert_eq!(btc.u128(), 25);
+        let eth = query_supply(&bank, &store, "eth");
+        assert_eq!(eth.u128(), 100);
+
+        // burn tokens will reduce supply
+        bank.burn_tokens(&mut store, &mut meter, owner.clone(), coins(7, "btc"))
+            .unwrap();
+        let rich = query_balance(&bank, &store, &owner);
+        assert_eq!(vec![coin(8, "btc"), coin(70, "eth")], rich);
+        let btc = query_supply(&bank, &store, "btc");
+        assert_eq!(btc.u128(), 18);
+
+        // mint tokens will increase supply
+        let mut bstore = prefixed(&mut store, NAMESPACE_BANK);
+        bank.mint(&mut bstore, &mut meter, rcpt.clone(), coins(77, "eth"))
+            .unwrap();
+        let poor = query_balance(&bank, &store, &rcpt);
+        assert_eq!(vec![coin(10, "btc"), coin(107, "eth")], poor);
+        let eth = query_supply(&bank, &store, "eth");
+        assert_eq!(eth.u128(), 177);
     }
 
     #[test]
