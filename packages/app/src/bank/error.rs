@@ -13,4 +13,10 @@ pub enum BankError {
 
     #[error("Cannot transfer funds from another account")]
     Unauthorized,
+
+    #[error("Bank amount contains the same denomination twice: {0}")]
+    DuplicateDenom(String),
+
+    #[error("Initializing bank account on existing account: {0}")]
+    ReinitializeExistingAccount(String),
 }
