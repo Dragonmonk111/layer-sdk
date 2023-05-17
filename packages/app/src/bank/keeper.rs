@@ -18,7 +18,7 @@ use crate::sm::StateMachine;
 
 // store supply for each denom
 const SUPPLY: Map<&str, Uint128> = Map::new("supply");
-// each (user, denom) pair stored separately for efficient query of one denom
+// each (user, denom) pair is stored separately for efficient query of one denom
 const BALANCES: Map<(&AccountId, &str), Uint128> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
