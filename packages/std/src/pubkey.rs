@@ -8,6 +8,7 @@ use crate::{AccountId, AccountIdError, TxError};
 
 // TODO: make this binary not Vec<u8>
 #[cw_serde]
+#[derive(Eq)]
 pub enum PubKey {
     Ed25519(Vec<u8>),
     Secp256k1(Vec<u8>),

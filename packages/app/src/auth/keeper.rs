@@ -2,8 +2,11 @@ use crate::error::PulsarResult;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
-use pulsar_std::{AccountId, GasMeter, Msg, PubKey, Tx, TxError};
-use pulsar_storage::{prefixed, Map, Storage};
+use pulsar_std::{
+    response::{AccountResponse, QueryResponse},
+    AccountId, AuthQuery, GasMeter, Msg, PubKey, Tx, TxError,
+};
+use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 
 use crate::sm::StateMachine;
 
@@ -141,6 +144,32 @@ impl Auth {
             // TODO: make some max gas limit
             gas_wanted: tx.fee.gas_limit,
         })
+    }
+
+    pub fn query(
+        &self,
+        storage: &dyn ReadonlyStorage,
+        meter: &mut GasMeter,
+        _block: &BlockInfo,
+        _sm: &StateMachine,
+        request: AuthQuery,
+    ) -> PulsarResult<QueryResponse> {
+        let auth_storage = prefixed_read(storage, NAMESPACE_AUTH);
+        match request {
+            AuthQuery::Account { address } => {
+                let account = ACCOUNTS.load(&auth_storage, meter, &address)?;
+                let res = match account {
+                    Account::External { pubkey, sequence } => AccountResponse::External {
+                        address,
+                        pubkey,
+                        sequence,
+                    },
+                    Account::Internal {} => AccountResponse::Internal { address },
+                    Account::Smart { contract } => AccountResponse::Smart { contract, address },
+                };
+                Ok(res.into())
+            }
+        }
     }
 }
 

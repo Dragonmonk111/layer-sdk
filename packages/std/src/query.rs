@@ -10,7 +10,14 @@ pub enum Query {
     Raw {
         key: Vec<u8>,
     },
+    Auth(AuthQuery),
     Bank(BankQuery),
+}
+
+impl From<AuthQuery> for Query {
+    fn from(value: AuthQuery) -> Self {
+        Query::Auth(value)
+    }
 }
 
 impl From<BankQuery> for Query {
@@ -41,14 +48,64 @@ impl Display for BankQuery {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthQuery {
+    /// Return value is of type AccountResponse.
+    Account { address: AccountId },
+}
+
+impl Display for AuthQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AuthQuery::Account { .. } => f.write_str("AuthQuery::Account"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryResponse {
     Raw { value: Vec<u8> },
+    Auth(AuthQueryResponse),
     Bank(BankQueryResponse),
+}
+
+impl From<AuthQueryResponse> for QueryResponse {
+    fn from(value: AuthQueryResponse) -> Self {
+        QueryResponse::Auth(value)
+    }
 }
 
 impl From<BankQueryResponse> for QueryResponse {
     fn from(value: BankQueryResponse) -> Self {
         QueryResponse::Bank(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthQueryResponse {
+    Account(AccountResponse),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AccountResponse {
+    /// This is External Account in Ethereum terms, controlled by a public key
+    External {
+        address: AccountId,
+        pubkey: crate::PubKey,
+        sequence: u64,
+    },
+    /// No pubkey can control this, either contract or "module account"
+    Internal { address: AccountId },
+    /// Used for account abstraction, where a contract can validate what a pubkey can do
+    Smart {
+        address: AccountId,
+        // FIXME: any more info to add here?
+        contract: AccountId,
+    },
+}
+
+impl From<AccountResponse> for QueryResponse {
+    fn from(value: AccountResponse) -> Self {
+        AuthQueryResponse::Account(value).into()
     }
 }
 

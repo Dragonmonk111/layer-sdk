@@ -8,8 +8,5 @@ mod utils;
 pub use error::CosmosError;
 pub use msg::parse_cosmos_msg;
 pub use pubkey::parse_cosmos_pubkey;
-pub use query::{
-    encode_cosmos_response, parse_cosmos_query, QUERY_PATH_APP, QUERY_PATH_CUSTOM, QUERY_PATH_P2P,
-    QUERY_PATH_STORE,
-};
+pub use query::{encode_cosmos_response, parse_cosmos_query, QUERY_PATH_APP, QUERY_PATH_STORE};
 pub use tx::parse_cosmos_tx;

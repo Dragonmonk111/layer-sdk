@@ -51,6 +51,7 @@ impl StateMachine {
                 Ok(QueryResponse::Raw { value })
             }
             Query::Bank(bank) => self.bank.query(storage, meter, block, self, bank),
+            Query::Auth(auth) => self.auth.query(storage, meter, block, self, auth),
         }
     }
 
