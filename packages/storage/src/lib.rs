@@ -19,4 +19,4 @@ pub use gas::{GasStorage, PulsarStorage};
 pub use plus::{Item, Map, PlusError, PlusResult};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
 pub use traits::{PersistentStorage, ReadonlyStorage, Storage, Transaction};
-pub use wrap::{ScratchTx, SubTx};
+pub use wrap::{atomic, ScratchTx, SubTx};

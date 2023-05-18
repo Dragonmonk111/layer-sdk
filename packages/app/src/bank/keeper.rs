@@ -10,7 +10,7 @@ use pulsar_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
 };
 
-use crate::api::TxResponse;
+use crate::api::MsgResponse;
 use crate::bank::BankError;
 use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::BankAccount;
@@ -236,7 +236,7 @@ impl Bank {
         _sm: &StateMachine,
         signer: &AccountId,
         msg: BankMsg,
-    ) -> PulsarResult<TxResponse> {
+    ) -> PulsarResult<MsgResponse> {
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
         match msg {
             BankMsg::Send {
@@ -250,7 +250,7 @@ impl Bank {
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
                 self.send(&mut bank_storage, meter, sender, recipient, amount)?;
-                Ok(TxResponse::events(events))
+                Ok(MsgResponse::events(events))
             }
             BankMsg::Burn { sender, amount } => {
                 ensure_eq!(signer, &sender, BankError::Unauthorized);
@@ -258,7 +258,7 @@ impl Bank {
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
                 self.burn_tokens(&mut bank_storage, meter, sender, amount)?;
-                Ok(TxResponse::events(events))
+                Ok(MsgResponse::events(events))
             }
         }
     }

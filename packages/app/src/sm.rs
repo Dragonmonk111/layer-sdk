@@ -1,9 +1,9 @@
-use cosmwasm_std::{BlockInfo, StdError};
+use cosmwasm_std::{BlockInfo, Event, StdError};
 use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
 use pulsar_storage::{ReadonlyStorage, Storage};
 
-use crate::api::TxResponse;
+use crate::api::{Block, MsgResponse};
 use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
@@ -61,7 +61,7 @@ impl StateMachine {
         sender: &AccountId,
         block: &BlockInfo,
         msg: Msg,
-    ) -> PulsarResult<TxResponse> {
+    ) -> PulsarResult<MsgResponse> {
         match msg {
             Msg::Bank(bank) => self
                 .bank
@@ -72,10 +72,37 @@ impl StateMachine {
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
+        meter: &mut GasMeter,
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxData> {
-        self.auth.validate_tx(storage, block, self, tx)
+        self.auth.validate_tx(storage, meter, block, self, tx)
+    }
+
+    /// Note: erroring here (including exceeding gas limits) will abort block execution. Be careful.
+    pub fn begin_block(
+        &self,
+        _storage: &mut dyn Storage,
+        // this is set to the gas limit for begin blockers
+        _meter: &mut GasMeter,
+        // here we have full block info including proposer and voters (for rewards if needed)
+        _block: &Block,
+    ) -> PulsarResult<Vec<Event>> {
+        // FIXME: implement this later
+        Ok(vec![])
+    }
+
+    /// Note: erroring here (including exceeding gas limits) will abort block execution. Be careful.
+    pub fn end_block(
+        &self,
+        _storage: &mut dyn Storage,
+        // this is set to the gas limit for end blockers
+        _meter: &mut GasMeter,
+        // this is just block metadata
+        _block: &BlockInfo,
+    ) -> PulsarResult<Vec<Event>> {
+        // FIXME: implement this later
+        Ok(vec![])
     }
 }
 

@@ -28,6 +28,14 @@ impl GasMeter {
         self.used
     }
 
+    pub fn limit(&self) -> u64 {
+        self.limit
+    }
+
+    pub fn remaining(&self) -> u64 {
+        self.limit.saturating_sub(self.used)
+    }
+
     pub fn charge(&mut self, cost: u64) -> Result<(), GasError> {
         self.used += cost;
         if self.used >= self.limit {

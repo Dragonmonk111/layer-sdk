@@ -4,7 +4,7 @@ mod sub_tx;
 
 pub(crate) use reader_wrap::ReaderWrapper;
 pub use scratch_tx::ScratchTx;
-pub use sub_tx::SubTx;
+pub use sub_tx::{atomic, SubTx};
 
 /// The BTreeMap specific key-value pair reference type, as returned by BTreeMap<Vec<u8>, T>::range.
 /// This is internal as it can change any time if the map implementation is swapped out.
