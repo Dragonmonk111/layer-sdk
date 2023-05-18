@@ -1,8 +1,23 @@
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult};
+use pulsar_std::{GasError, GasMeter, GasResult};
 
 use super::{Delta, ReaderWrapper};
 use crate::{traits::Transaction, ReadonlyStorage, ScratchTx, Storage};
+
+pub fn atomic<T, E: From<GasError>>(
+    storage: &mut dyn Storage,
+    meter: &mut GasMeter,
+    f: impl FnOnce(&mut SubTx) -> Result<T, E>,
+) -> Result<T, E> {
+    let mut tx = SubTx::new(storage);
+    let res = f(&mut tx);
+    if res.is_ok() {
+        tx.commit(meter)?;
+    } else {
+        tx.abort();
+    }
+    res
+}
 
 /// This can wrap any Storage with another one as temporary transaction level on top.
 /// If aborted, all writes will be discarded.
