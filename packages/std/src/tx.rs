@@ -1,5 +1,3 @@
-use cosmos_sdk_proto::prost::DecodeError;
-use cosmrs::ErrorReport;
 use cosmwasm_std::Coin;
 use thiserror::Error;
 
@@ -119,17 +117,8 @@ pub enum TxError {
     #[error("Cannot execute an external transaction from an internal account")]
     InternalAcccount,
 
-    // TODO: remove this and replace with deterministic errors
-    #[error("{0}")]
-    ProtoDecode(#[from] DecodeError),
-
-    // TODO: remove this and replace with deterministic errors
-    #[error("Error Report: {0}")]
-    ErrorReport(String),
-}
-
-impl From<ErrorReport> for TxError {
-    fn from(value: ErrorReport) -> Self {
-        TxError::ErrorReport(value.to_string())
-    }
+    /// TODO: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Parse: {0}")]
+    ParseError(String),
 }

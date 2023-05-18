@@ -9,14 +9,11 @@ use sha2::{Digest, Sha256};
 use pulsar_std::required_signer;
 use pulsar_std::{FeeInfo, SignedTx, SigningInfo, TxError};
 
-use crate::{parse_cosmos_msg, parse_cosmos_pubkey};
+use crate::{parse_cosmos_msg, parse_cosmos_pubkey, CosmosError};
 
 pub const FIXED_ACCOUNT_NUMBER: u64 = 0;
 
-// This is parsed from cosmrs::Raw and cosmrs::Tx
-/// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
-/// Extracts all useful info from the Tx in a simpler format for us
-pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, TxError> {
+fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), CosmosError> {
     // get raw format for accurate signing info (to validate sig)
     let raw = TxRaw::decode(bytes)?;
     // FIXME: add tx hash here as well from TxRaw?
@@ -32,6 +29,16 @@ pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, T
 
     // parse into cosmrs::Tx so we can understand what we have
     let tx = cosmrs::Tx::from_bytes(bytes)?;
+
+    Ok((tx, message_hash))
+}
+
+// This is parsed from cosmrs::Raw and cosmrs::Tx
+/// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
+/// Extracts all useful info from the Tx in a simpler format for us
+pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, TxError> {
+    let (tx, message_hash) = parse_raw_tx(bytes, chain_id)?;
+
     let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(parse_cosmos_msg).collect();
     let msgs = msgs?;
     let signer = required_signer(&msgs)?;

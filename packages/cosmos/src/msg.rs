@@ -8,21 +8,23 @@ use cosmwasm_std::{Coin, Uint128};
 
 use pulsar_std::{AccountId, BankMsg, Msg, MsgError};
 
-fn parse_sdk_coin(coin: &SdkCoin) -> Result<Coin, MsgError> {
+use crate::error::CosmosError;
+
+fn parse_sdk_coin(coin: &SdkCoin) -> Result<Coin, CosmosError> {
     Ok(Coin {
         denom: coin.denom.clone(),
         amount: Uint128::try_from(coin.amount.as_str())?,
     })
 }
 
-fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {
+fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, CosmosError> {
     coins.iter().map(parse_sdk_coin).collect()
 }
 
 pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
     match msg.type_url.as_str() {
         MsgSend::TYPE_URL => {
-            let parsed = MsgSend::from_any(msg)?;
+            let parsed = MsgSend::from_any(msg).map_err(CosmosError::from)?;
             Ok(BankMsg::Send {
                 sender: AccountId::parse_string(&parsed.from_address)?,
                 recipient: AccountId::parse_string(&parsed.to_address)?,

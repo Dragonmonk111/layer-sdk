@@ -12,3 +12,4 @@ pulsar-app = { workspace = true }
 cosmrs = { workspace = true }
 cosmos-sdk-proto = { workspace = true, features = ["cosmwasm"] }
 sha2 = { workspace = true }
+thiserror = { workspace = true }

@@ -1,4 +1,3 @@
-use cosmos_sdk_proto::prost::DecodeError;
 use cosmwasm_std::{Coin, StdError};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
@@ -55,12 +54,13 @@ pub enum MsgError {
     #[error("Tx requires signatures from multiple addresses - not supported")]
     MultipleSigners,
 
-    // TODO: remove this and replace with deterministic errors
-    #[error("{0}")]
-    ProtoDecode(#[from] DecodeError),
-
     #[error("{0}")]
     Addr(#[from] AccountIdError),
+
+    /// TODO: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Parse: {0}")]
+    ParseError(String),
 }
 
 impl Msg {
