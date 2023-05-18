@@ -7,7 +7,9 @@ use cosmwasm_std::{coin, Coin};
 use sha2::{Digest, Sha256};
 
 use pulsar_std::required_signer;
-use pulsar_std::{FeeInfo, Msg, PubKey, SignedTx, SigningInfo, TxError};
+use pulsar_std::{FeeInfo, SignedTx, SigningInfo, TxError};
+
+use crate::{parse_cosmos_msg, parse_cosmos_pubkey};
 
 pub const FIXED_ACCOUNT_NUMBER: u64 = 0;
 
@@ -30,7 +32,7 @@ pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, T
 
     // parse into cosmrs::Tx so we can understand what we have
     let tx = cosmrs::Tx::from_bytes(bytes)?;
-    let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(Msg::from_cosmos).collect();
+    let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(parse_cosmos_msg).collect();
     let msgs = msgs?;
     let signer = required_signer(&msgs)?;
 
@@ -76,7 +78,7 @@ pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Vec<u8>) -> Result<Signin
     let pubkey = info
         .public_key
         .as_ref()
-        .map(PubKey::parse_cosmos)
+        .map(parse_cosmos_pubkey)
         .transpose()?;
 
     // assert we have sign-mode-direct (need to add legacy amino support later)
@@ -134,7 +136,7 @@ mod test {
         Coin,
     };
 
-    use pulsar_std::{AccountId, BankMsg, DEFAULT_BECH32_PREFIX};
+    use pulsar_std::{AccountId, BankMsg, PubKey, DEFAULT_BECH32_PREFIX};
 
     #[test]
     fn happy_path_tx_parsing() {
