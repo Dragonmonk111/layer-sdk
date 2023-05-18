@@ -17,6 +17,7 @@ impl MemoryStore {
         MemoryStore(RwLock::new(BTreeStorage::new()))
     }
 
+    /// This is only meant for testing as a way to "Clone" a DB from one app to another
     pub fn import(src: &dyn ReadonlyStorage, meter: Option<&mut GasMeter>) -> GasResult<Self> {
         let mut inf = GasMeter::infinite();
         let meter = meter.unwrap_or(&mut inf);

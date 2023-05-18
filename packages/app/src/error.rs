@@ -30,6 +30,12 @@ pub enum PulsarError {
 
     #[error("{0}")]
     Gas(#[from] GasError),
+
+    #[error("Unexpected block height. Got {got}, previous {previous}")]
+    BadBlockHeight { got: u64, previous: u64 },
+
+    #[error("Descending block time. Got {got}, previous {previous}")]
+    DescendingBlockTime { got: u64, previous: u64 },
 }
 
 impl From<PlusError> for PulsarError {

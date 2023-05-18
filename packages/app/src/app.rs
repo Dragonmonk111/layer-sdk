@@ -7,22 +7,25 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
 use pulsar_std::response::QueryResponse;
-use pulsar_std::{GasMeter, GasResult, Query, Tx};
+use pulsar_std::{GasMeter, Query, Tx};
 use pulsar_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
-    SubTx, Transaction,
+    Transaction,
 };
 
 use crate::api::{
     Block, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse, TxResponse,
     TxResult,
 };
-use crate::error::PulsarResult;
+use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
 
+// FIXME: make these configurable
 const DEFAULT_QUERY_GAS: u64 = 500_000;
 const MAX_VALIDATE_GAS: u64 = 200_000;
+const MAX_BEGIN_BLOCK_GAS: u64 = 10_000_000;
+const MAX_END_BLOCK_GAS: u64 = 10_000_000;
 
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
 /// application. It *should* be able to run inside an ABCI app as well as an Avalanche Subnet.
@@ -222,49 +225,62 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     pub fn finalize_block(&self, full_block: Block) -> PulsarResult<FinalizeBlockResponse> {
-        // FIXME: add begin blocker
-
-        // FIXME: use reader here, later writer with ops (just optimization)
         let mut writer = self.storage.writer();
+
+        // assert we are exactly one block ahead of last known state
         let block = BlockInfo {
             height: full_block.height,
             time: full_block.time,
             chain_id: self.chain_id.clone(),
         };
+        let old_block = self.block.read().clone();
+        if block.height != old_block.height + 1 {
+            return Err(PulsarError::BadBlockHeight {
+                got: block.height,
+                previous: old_block.height,
+            });
+        }
+        if block.time <= old_block.time {
+            return Err(PulsarError::DescendingBlockTime {
+                got: old_block.time.seconds(),
+                previous: block.time.seconds(),
+            });
+        }
 
-        // TODO: re-review where we commit and where we wrap (add some docs)
-        // grab all writes here and commit at the end
-        let mut block_store = SubTx::new(&mut writer);
-        // TODO: is this really what we want to do?
-        let tx_results: GasResult<Vec<_>> = full_block
+        // Run begin block logic
+        let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
+        let begin_events = self
+            .logic
+            .begin_block(&mut writer, &mut begin_meter, &full_block)?;
+
+        // TODO: track block gas as well and stop tx when limit hit
+        let tx_results: Vec<_> = full_block
             .txs
             .into_iter()
             .map(|tx| {
-                let mut tx_store = SubTx::new(&mut block_store);
-                let r = self.execute_tx(&mut tx_store, &block, tx);
-                if r.result.is_ok() {
-                    // TODO: where does meter come from?
-                    let mut meter = GasMeter::infinite();
-                    tx_store.commit(&mut meter)?;
-                }
-                Ok(r)
+                // execute tx takes care of atomically committing or aborting auth and msg state writes
+                self.execute_tx(&mut writer, &block, tx)
             })
             .collect();
-        let tx_results = tx_results?;
 
-        // FIXME: add end blocker
+        // Run end block logic
+        let mut end_meter = GasMeter::new(MAX_END_BLOCK_GAS);
+        let end_events = self.logic.end_block(&mut writer, &mut end_meter, &block)?;
+        // FIXME: is there a more efficient way to do this?
+        let events = begin_events.into_iter().chain(end_events).collect();
 
-        // commit to underlying store
-        // TODO: where does meter come from?
+        // Use lock around commit to block any concurrent queries
+        let mut new_lock = self.block.write();
+
+        // Commit to underlying store. Use infinite gas meter to ensure we don't fail here
         let mut meter = GasMeter::infinite();
-        block_store.commit(&mut meter)?;
+        writer.commit(&mut meter)?;
 
         // update block in cache
-        let mut new_lock = self.block.write();
         *new_lock.deref_mut() = block;
 
         Ok(FinalizeBlockResponse {
-            events: vec![],
+            events,
             tx_results,
             validator_updates: vec![],
             consensus_param_updates: None,
@@ -338,7 +354,7 @@ mod tests {
             x => panic!("Exected AllBalancesResponse, got {:?}", x),
         }
 
-        // TODO: pull out storage and re-create this - maybe with custom storage types...
+        // copy data into new storage (MemoryStore::import only meant for testing)
         let storage = MemoryStore::import(&app.storage.reader(), None).unwrap();
         let app2 = App::load_from_storage(storage, app.logic).unwrap();
 
