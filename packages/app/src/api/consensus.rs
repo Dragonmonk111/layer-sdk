@@ -1,6 +1,7 @@
 // based on https://github.com/informalsystems/tendermint-rs/blob/mikhail/cometbft-0.38/proto/src/prost/v0_38/tendermint.types.rs
 // but let's make this more generic
 
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Timestamp;
 
 const DEFAULT_APP_VERSION: u64 = 1;
@@ -28,7 +29,7 @@ impl Default for ConsensusParams {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[cw_serde]
 pub struct BlockParams {
     pub max_bytes: u64,
     /// None means no limit

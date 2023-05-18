@@ -20,16 +20,20 @@ impl GasMeter {
         GasMeter { limit, used: 0 }
     }
 
-    pub fn limit(&self) -> u64 {
-        self.limit
-    }
-
     pub fn infinite() -> Self {
         GasMeter::new(u64::MAX)
     }
 
     pub fn used(&self) -> u64 {
         self.used
+    }
+
+    pub fn limit(&self) -> u64 {
+        self.limit
+    }
+
+    pub fn remaining(&self) -> u64 {
+        self.limit.saturating_sub(self.used)
     }
 
     pub fn charge(&mut self, cost: u64) -> Result<(), GasError> {
