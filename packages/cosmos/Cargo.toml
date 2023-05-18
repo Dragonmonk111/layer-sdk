@@ -1,0 +1,14 @@
+[package]
+name = "pulsar-cosmos"
+description = "Conversions to/from Cosmos SDK types for Tx and Queries"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+cosmwasm-std = { workspace = true }
+pulsar-std = { workspace = true }
+pulsar-app = { workspace = true }
+cosmrs = { workspace = true }
+cosmos-sdk-proto = { workspace = true, features = ["cosmwasm"] }
+sha2 = { workspace = true }
