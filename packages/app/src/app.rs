@@ -9,8 +9,8 @@ use cosmwasm_std::BlockInfo;
 use pulsar_std::response::QueryResponse;
 use pulsar_std::{GasMeter, GasResult, Query, Tx};
 use pulsar_storage::{
-    prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage, SubTx,
-    Transaction,
+    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
+    SubTx, Transaction,
 };
 
 use crate::api::{
@@ -22,6 +22,7 @@ use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
 
 const DEFAULT_QUERY_GAS: u64 = 500_000;
+const MAX_VALIDATE_GAS: u64 = 200_000;
 
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
 /// application. It *should* be able to run inside an ABCI app as well as an Avalanche Subnet.
@@ -38,6 +39,8 @@ pub struct App<T: PersistentStorage> {
 
     // cached chain_id
     chain_id: String,
+    // TODO: store block and tx max gas limits (and byte limits?)
+    // or just all consensus params
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -142,69 +145,80 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// Returns serialized response to the query that can be passed back verbatum
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse> {
         let reader = self.storage.reader();
-        let block = self.block.read();
         let mut meter = GasMeter::new(DEFAULT_QUERY_GAS);
+
+        // TODO: handle simulate queries
+        let block = self.block.read();
         let resp = self
             .logic
             .query(&reader, &mut meter, block.deref(), request);
+        drop(block);
+
         reader.abort();
         resp
     }
 
     pub fn check_tx(&self, tx: Tx) -> TxResult {
-        let reader = self.storage.reader();
-        let block = self.block.read();
         // temporary cache we will throw away
+        let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
 
+        // FIXME: only run auth check? or do full tx simulation?
+        let block = self.block.read();
         let res = self.execute_tx(&mut store, block.deref(), tx);
+        drop(block);
+
         reader.abort();
         res
     }
 
-    // TODO: this needs to be cleaned up
     fn execute_tx(&self, storage: &mut dyn Storage, block: &BlockInfo, tx: Tx) -> TxResult {
-        // validate the transaction
-        let data = match self.logic.validate_tx(storage, block, tx) {
+        // validate the transaction. if this passes, we commit the auth info (sequence / fee)
+        // even if messages fail and are reverted
+        let mut val_meter = GasMeter::new(MAX_VALIDATE_GAS);
+        let val_res = atomic(storage, &mut val_meter, |store, m| {
+            self.logic.validate_tx(store, m, block, tx)
+        });
+        let data = match val_res {
             Ok(x) => x,
             Err(e) => {
                 return TxResult {
-                    gas: Default::default(),
+                    gas: GasInfo::from_meter(&val_meter),
                     result: Err(e),
                 }
             }
         };
 
-        // TODO: if this passes, we should ensure auth (sequence / fee) is written,
-        // even if messages fail and are reverted
-        let gas_wanted = data.gas_wanted;
         // TODO: cap at some block limit
+        let gas_wanted = data.gas_wanted;
         let mut meter = GasMeter::new(gas_wanted);
+        if let Err(e) = meter.charge(val_meter.used()) {
+            return TxResult {
+                gas: GasInfo::from_meter(&meter),
+                result: Err(e.into()),
+            };
+        }
 
-        // execute them all
-        let resps: Result<Vec<_>, _> = data
-            .msgs
-            .into_iter()
-            .map(|msg| {
-                self.logic
-                    .process_msg(storage, &mut meter, &data.signer, block, msg)
-            })
-            .collect();
+        // execute all messages atomically. if any fail, we don't write any state changes
+        // from any of the messages
+        let resps: PulsarResult<Vec<_>> = atomic(storage, &mut meter, |store, m| {
+            data.msgs
+                .into_iter()
+                .map(|msg| self.logic.process_msg(store, m, &data.signer, block, msg))
+                .collect()
+        });
 
-        // collect responses (todo: combine multiple data results, not just events...)
-        let gas_used = meter.used();
+        // collect responses
         let result = resps.map(|all| {
+            // TODO: combine multiple data results, not just events...
+            // maybe we need to change TxResponse type to data: Vec<Vec<u8>>? And use separate MsgResponse type
             let events = all.into_iter().flat_map(|r| r.events).collect();
             TxResponse { data: None, events }
         });
 
-        TxResult {
-            gas: GasInfo {
-                gas_used,
-                gas_wanted,
-            },
-            result,
-        }
+        // return result
+        let gas = GasInfo::from_meter(&meter);
+        TxResult { gas, result }
     }
 
     pub fn finalize_block(&self, full_block: Block) -> PulsarResult<FinalizeBlockResponse> {

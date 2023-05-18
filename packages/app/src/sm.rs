@@ -72,10 +72,11 @@ impl StateMachine {
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
+        meter: &mut GasMeter,
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxData> {
-        self.auth.validate_tx(storage, block, self, tx)
+        self.auth.validate_tx(storage, meter, block, self, tx)
     }
 }
 

@@ -44,6 +44,7 @@ impl Auth {
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
+        meter: &mut GasMeter,
         _block: &BlockInfo,
         sm: &StateMachine,
         tx: Tx,
@@ -51,12 +52,9 @@ impl Auth {
         // later handle other types
         let Tx::Signed(tx) = tx;
 
-        // TODO: what to use until tx is parsed??
-        let mut meter = GasMeter::infinite();
-
         // load the signer account if any
         let mut auth_store = prefixed(storage, NAMESPACE_AUTH);
-        let pubkey = match ACCOUNTS.may_load(&auth_store, &mut meter, &tx.signer)? {
+        let pubkey = match ACCOUNTS.may_load(&auth_store, meter, &tx.signer)? {
             Some(Account::External {
                 pubkey,
                 mut sequence,
@@ -81,7 +79,7 @@ impl Auth {
                     pubkey: pubkey.clone(),
                     sequence,
                 };
-                ACCOUNTS.save(&mut auth_store, &mut meter, &tx.signer, &account)?;
+                ACCOUNTS.save(&mut auth_store, meter, &tx.signer, &account)?;
                 // use the pubkey in the account to validate
                 pubkey
             }
@@ -104,7 +102,7 @@ impl Auth {
                             pubkey: pk.clone(),
                             sequence: 1,
                         };
-                        ACCOUNTS.save(&mut auth_store, &mut meter, &tx.signer, &account)?;
+                        ACCOUNTS.save(&mut auth_store, meter, &tx.signer, &account)?;
                         // use the pubkey in the account to validate
                         pk.clone()
                     }
@@ -129,7 +127,7 @@ impl Auth {
         if let Some(fee) = tx.fee.fee {
             sm.bank.transfer(
                 storage,
-                &mut meter,
+                meter,
                 tx.signer.clone(),
                 fee_collector_account(),
                 vec![fee],

@@ -7,10 +7,10 @@ use crate::{traits::Transaction, ReadonlyStorage, ScratchTx, Storage};
 pub fn atomic<T, E: From<GasError>>(
     storage: &mut dyn Storage,
     meter: &mut GasMeter,
-    f: impl FnOnce(&mut SubTx) -> Result<T, E>,
+    f: impl FnOnce(&mut SubTx, &mut GasMeter) -> Result<T, E>,
 ) -> Result<T, E> {
     let mut tx = SubTx::new(storage);
-    let res = f(&mut tx);
+    let res = f(&mut tx, meter);
     if res.is_ok() {
         tx.commit(meter)?;
     } else {

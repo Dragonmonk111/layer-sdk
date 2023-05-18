@@ -1,5 +1,7 @@
-use crate::error::PulsarError;
 use cosmwasm_std::Event;
+
+use crate::error::PulsarError;
+use pulsar_std::GasMeter;
 
 // We get the gas_used / gas_wanted from the gas meter (outside of scope)
 // Errors get codespace = "pulsar", code = 1, log = err.to_string()
@@ -27,6 +29,15 @@ impl TxResponse {
 pub struct GasInfo {
     pub gas_used: u64,
     pub gas_wanted: u64,
+}
+
+impl GasInfo {
+    pub fn from_meter(meter: &GasMeter) -> Self {
+        GasInfo {
+            gas_used: meter.used(),
+            gas_wanted: meter.limit(),
+        }
+    }
 }
 
 pub struct TxResult {
