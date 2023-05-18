@@ -121,7 +121,6 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Store the application data
         let state = AppState {
-            // TODO: make real hash in Storage API... later
             chain_id,
             last_block,
             params: request.consensus_params.block.clone(),
@@ -139,7 +138,6 @@ impl<T: PersistentStorage + 'static> App<T> {
         let response = InitChainResponse {
             consensus_params: request.consensus_params,
             validators: request.validators,
-            // TODO: make real hash in Storage API... later
             app_hash: storage.app_hash().into(),
         };
         // And initialize the application
@@ -255,10 +253,14 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // collect responses
         let result = resps.map(|all| {
-            // TODO: combine multiple data results, not just events...
-            // maybe we need to change TxResponse type to data: Vec<Vec<u8>>? And use separate MsgResponse type
-            let events = all.into_iter().flat_map(|r| r.events).collect();
-            TxResponse { data: None, events }
+            // Two separate steps to combine data, then events.
+            // Data is much cheaper to clone, so we do that first.
+            let data = all
+                .iter()
+                .map(|r| r.data.clone().unwrap_or_default())
+                .collect();
+            let events = all.into_iter().map(|r| r.events).collect();
+            TxResponse { data, events }
         });
 
         // return result
@@ -291,7 +293,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Run begin block logic (not included in block gas)
         let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
-        let begin_events = self
+        let mut events = self
             .logic
             .begin_block(&mut writer, &mut begin_meter, &full_block)?;
 
@@ -310,7 +312,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         // Run end block logic (not included in block gas)
         let mut end_meter = GasMeter::new(MAX_END_BLOCK_GAS);
         let end_events = self.logic.end_block(&mut writer, &mut end_meter, &block)?;
-        let events = begin_events.into_iter().chain(end_events).collect();
+        events.extend(end_events);
 
         // Use lock around commit to block any concurrent queries
         let mut new_lock = self.block.write();

@@ -3,7 +3,7 @@ use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
 use pulsar_storage::{ReadonlyStorage, Storage};
 
-use crate::api::{Block, TxResponse};
+use crate::api::{Block, MsgResponse};
 use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
@@ -61,7 +61,7 @@ impl StateMachine {
         sender: &AccountId,
         block: &BlockInfo,
         msg: Msg,
-    ) -> PulsarResult<TxResponse> {
+    ) -> PulsarResult<MsgResponse> {
         match msg {
             Msg::Bank(bank) => self
                 .bank
