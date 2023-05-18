@@ -117,7 +117,7 @@ pub enum TxError {
     #[error("Cannot execute an external transaction from an internal account")]
     InternalAcccount,
 
-    /// TODO: either ensure all callers of this function produce determinstic strings,
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
     /// Or remove all info
     #[error("Parse: {0}")]
     ParseError(String),

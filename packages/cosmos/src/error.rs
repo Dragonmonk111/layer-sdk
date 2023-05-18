@@ -1,5 +1,5 @@
 use cosmwasm_std::StdError;
-use pulsar_std::{MsgError, TxError};
+use pulsar_std::{MsgError, QueryError, TxError};
 use thiserror::Error;
 
 use cosmos_sdk_proto::prost::DecodeError;
@@ -51,6 +51,18 @@ impl From<CosmosError> for TxError {
             CosmosError::Std(e) => TxError::Msg(MsgError::Std(e)),
             CosmosError::ProtoDecode(e) => TxError::ParseError(e.to_string()),
             CosmosError::ErrorReport(e) => TxError::ParseError(e),
+        }
+    }
+}
+
+// FIXME: for production, produce a few fixed type-strings (but harder debugging)
+impl From<CosmosError> for QueryError {
+    fn from(err: CosmosError) -> Self {
+        match err {
+            // TODO: add another variant to TxError?
+            CosmosError::Std(e) => QueryError::Std(e),
+            CosmosError::ProtoDecode(e) => QueryError::ParseError(e.to_string()),
+            CosmosError::ErrorReport(e) => QueryError::ParseError(e),
         }
     }
 }

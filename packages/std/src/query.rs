@@ -1,8 +1,8 @@
-use cosmwasm_std::Coin;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
+use cosmwasm_std::{Coin, StdError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Query {
@@ -97,33 +97,19 @@ impl From<AllBalanceResponse> for QueryResponse {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum QueryError {
+    #[error("{0}")]
+    Std(#[from] StdError),
+
     #[error("Unsupported path: {0}")]
     UnsupportedPath(String),
 
     #[error("{0}")]
     Addr(#[from] AccountIdError),
+
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Parse: {0}")]
+    ParseError(String),
 }
-
-mod cosmos {
-    use super::*;
-
-    impl QueryResponse {
-        /// Make a binary protobuf encoding of this type
-        pub fn to_cosmos(&self) -> Result<Vec<u8>, QueryError> {
-            todo!();
-        }
-    }
-}
-
-// mod cosmos {
-//     use cosmos_sdk_proto::{
-//         cosmos::bank::v1beta1::MsgSend,
-//         cosmos::base::v1beta1::Coin as SdkCoin,
-//         prost::DecodeError,
-//         traits::{MessageExt, TypeUrl},
-//     };
-//
-//     use cosmrs::Any;
-// }

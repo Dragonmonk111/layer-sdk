@@ -1,25 +1,13 @@
 use cosmos_sdk_proto::{
     cosmos::bank::v1beta1::MsgSend,
-    cosmos::base::v1beta1::Coin as SdkCoin,
     traits::{MessageExt, TypeUrl},
 };
 use cosmrs::Any;
-use cosmwasm_std::{Coin, Uint128};
 
 use pulsar_std::{AccountId, BankMsg, Msg, MsgError};
 
 use crate::error::CosmosError;
-
-fn parse_sdk_coin(coin: &SdkCoin) -> Result<Coin, CosmosError> {
-    Ok(Coin {
-        denom: coin.denom.clone(),
-        amount: Uint128::try_from(coin.amount.as_str())?,
-    })
-}
-
-fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, CosmosError> {
-    coins.iter().map(parse_sdk_coin).collect()
-}
+use crate::utils::parse_sdk_coins;
 
 pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
     match msg.type_url.as_str() {
