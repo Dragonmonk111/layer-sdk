@@ -9,7 +9,8 @@ edition = { workspace = true }
 cosmwasm-std = { workspace = true }
 pulsar-std = { workspace = true }
 pulsar-app = { workspace = true }
-cosmrs = { workspace = true }
-cosmos-sdk-proto = { workspace = true, features = ["cosmwasm"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+
+cosmrs = {version = "0.13.0", default_features = false, features = ["cosmwasm"] }
+cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
