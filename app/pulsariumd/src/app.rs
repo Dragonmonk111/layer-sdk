@@ -17,7 +17,15 @@ use tendermint_proto::abci::{
 use pulsar_app::{App, AppLoadError, StateMachine};
 use pulsar_storage::{MemoryStore, PersistentStorage};
 
-use crate::{decode::decode_init_response, encode::encode_init_request};
+use crate::{
+    decode::{
+        decode_check_response, decode_finalize_response, decode_init_response,
+        decode_query_response,
+    },
+    encode::{
+        encode_check_request, encode_finalize_request, encode_init_request, encode_query_request,
+    },
+};
 
 #[derive(Debug)]
 pub struct Pulsarium<T: PersistentStorage + 'static> {
@@ -84,7 +92,16 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn info(&self, _request: RequestInfo) -> ResponseInfo {
         info!("abci info");
-        Default::default()
+        let app = self.app.read();
+        let block = app.info();
+        let app_hash = app.app_hash();
+        ResponseInfo {
+            data: format!("{} {}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION")),
+            version: "".to_string(),
+            app_version: 1,                         // FIXME: what to put here?
+            last_block_height: block.height as i64, // ugly api :(
+            last_block_app_hash: app_hash.into(),
+        }
     }
 
     /// Called once upon genesis.
@@ -99,22 +116,29 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
-    fn query(&self, _request: RequestQuery) -> ResponseQuery {
+    fn query(&self, request: RequestQuery) -> ResponseQuery {
         info!("abci query");
-        Default::default()
+        let request = encode_query_request(request);
+        let res = self.app.read().query(request);
+        decode_query_response(res)
     }
 
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
-    fn check_tx(&self, _request: RequestCheckTx) -> ResponseCheckTx {
+    fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
         info!("abci check_tx");
-        Default::default()
+        let request = encode_check_request(request);
+        let res = self.app.read().check_tx(request);
+        decode_check_response(res)
     }
 
     #[instrument(skip_all)]
-    fn finalize_block(&self, _request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
+    fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
         info!("abci finalize_block");
-        Default::default()
+        let request = encode_finalize_request(request);
+        // FIXME: crash node on finalize block error?
+        let res = self.app.write().finalize_block(request).unwrap();
+        decode_finalize_response(res)
     }
 
     /// Signals that messages queued on the client should be flushed to the server.
@@ -130,6 +154,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         // Note: pulsar commits data in finalize_block. unsure why there is a different command,
         // and separating them causes issues with lifetimes and static analysis.
         info!("abci commit");
+        // TODO: get app data
         Default::default()
     }
 
