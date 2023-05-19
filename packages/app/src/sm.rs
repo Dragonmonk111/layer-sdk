@@ -11,6 +11,7 @@ use crate::genesis::GenesisState;
 
 /// This is an immutable State Machine logic that processes incoming transactions.
 /// All mutable state held in Storage, which is passed as an argument to these methods.
+#[derive(Debug, Clone)]
 pub struct StateMachine {
     pub auth: Auth,
 

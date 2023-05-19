@@ -1462,6 +1462,8 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "figment",
+ "pulsar-app",
+ "pulsar-storage",
  "serde",
  "tendermint-abci",
  "tendermint-proto 0.32.0",

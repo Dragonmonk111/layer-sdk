@@ -33,6 +33,7 @@ pub enum Account {
     },
 }
 
+#[derive(Debug, Clone)]
 pub struct Auth {}
 
 impl Auth {

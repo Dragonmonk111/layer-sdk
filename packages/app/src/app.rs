@@ -33,7 +33,7 @@ const MAX_END_BLOCK_GAS: u64 = 10_000_000;
 
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
 /// application. It *should* be able to run inside an ABCI app as well as an Avalanche Subnet.
-#[allow(dead_code)]
+#[derive(Debug)]
 pub struct App<T: PersistentStorage> {
     // State
     storage: Arc<T>,

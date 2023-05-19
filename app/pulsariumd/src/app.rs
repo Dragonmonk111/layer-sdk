@@ -1,7 +1,8 @@
+use core::panic;
+use std::sync::Arc;
 use tracing::{debug, info, instrument};
 
 use tendermint_abci::Application;
-
 use tendermint_proto::abci::{
     response_process_proposal, RequestApplySnapshotChunk, RequestCheckTx, RequestEcho,
     RequestFinalizeBlock, RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
@@ -12,24 +13,51 @@ use tendermint_proto::abci::{
     ResponseProcessProposal, ResponseQuery,
 };
 
-#[derive(Default, Debug)]
-pub struct Pulsarium {
+use pulsar_app::{App, AppLoadError, StateMachine};
+use pulsar_storage::{MemoryStore, PersistentStorage};
+
+#[derive(Debug)]
+pub struct Pulsarium<T: PersistentStorage + 'static> {
     // Applications are `Send` + `Clone` + `'static` because they are cloned for
     // each incoming connection to the ABCI [`Server`]. It is up to the
     // application developer to manage shared state between these clones of their
     // application.
+    app: Arc<App<T>>,
 }
 
-impl Clone for Pulsarium {
-    fn clone(&self) -> Self {
-        debug!("clone Pulsarium");
-        Pulsarium::default()
+impl Default for Pulsarium<MemoryStore> {
+    fn default() -> Self {
+        let store = MemoryStore::new();
+        Self::new(store)
     }
 }
 
-unsafe impl Send for Pulsarium {}
+impl<T: PersistentStorage + 'static> Clone for Pulsarium<T> {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+        }
+    }
+}
 
-impl Application for Pulsarium {
+unsafe impl<T: PersistentStorage> Send for Pulsarium<T> {}
+
+impl<T: PersistentStorage + 'static> Pulsarium<T> {
+    pub fn new(store: T) -> Self {
+        let logic = StateMachine::new();
+        let app = match App::load_from_storage(store, logic) {
+            Ok(app) => app,
+            Err(AppLoadError::NoStoredState) => {
+                // TODO: we need to wait for init genesis
+                todo!();
+            }
+            Err(e) => panic!("Failed to load app from storage: {}", e),
+        };
+        Self { app: Arc::new(app) }
+    }
+}
+
+impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn echo(&self, request: RequestEcho) -> ResponseEcho {
         info!("abci echo");

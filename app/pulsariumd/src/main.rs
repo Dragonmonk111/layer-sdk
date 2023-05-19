@@ -10,6 +10,7 @@ use tracing_subscriber::FmtSubscriber;
 mod app;
 mod cli;
 mod config;
+mod encode;
 
 use crate::app::Pulsarium;
 use crate::cli::Cli;
