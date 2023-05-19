@@ -1,4 +1,5 @@
 mod account_id;
+pub mod api;
 mod gas;
 mod msg;
 mod pubkey;

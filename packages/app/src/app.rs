@@ -13,13 +13,13 @@ use pulsar_storage::{
     Transaction,
 };
 
-use crate::api::{
-    Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
-    TxResponse, TxResult,
-};
 use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
+use pulsar_std::api::{
+    Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
+    TxResponse, TxResult,
+};
 
 // FIXME: make this configurable on per-node basis
 const DEFAULT_QUERY_GAS: u64 = 500_000;
@@ -192,7 +192,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         GasMeter::new(DEFAULT_QUERY_GAS)
     }
 
-    pub fn check_tx(&self, tx: Tx) -> TxResult {
+    pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
         // temporary cache we will throw away
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
@@ -213,7 +213,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         block_meter: &mut GasMeter,
         block: &BlockInfo,
         tx: Tx,
-    ) -> TxResult {
+    ) -> TxResult<PulsarError> {
         // validate the transaction. if this passes, we commit the auth info (sequence / fee)
         // even if messages fail and are reverted
         let mut val_meter = GasMeter::new(MAX_VALIDATE_GAS);
@@ -284,7 +284,10 @@ impl<T: PersistentStorage + 'static> App<T> {
         TxResult { gas, result }
     }
 
-    pub fn finalize_block(&self, full_block: Block) -> PulsarResult<FinalizeBlockResponse> {
+    pub fn finalize_block(
+        &self,
+        full_block: Block,
+    ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
         let mut writer = self.storage.writer();
 
         // assert we are exactly one block ahead of last known state
@@ -353,10 +356,11 @@ impl<T: PersistentStorage + 'static> App<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::{TmPubKey, ValidatorUpdate};
     use crate::genesis::BankAccount;
+
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, to_binary};
+    use pulsar_std::api::{TmPubKey, ValidatorUpdate};
     use pulsar_std::response::BankQueryResponse;
     use pulsar_std::{AccountId, BankQuery};
     use pulsar_storage::MemoryStore;
