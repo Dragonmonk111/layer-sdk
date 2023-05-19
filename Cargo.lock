@@ -1462,6 +1462,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "figment",
+ "parking_lot",
  "pulsar-app",
  "pulsar-storage",
  "serde",

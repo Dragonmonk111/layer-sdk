@@ -30,6 +30,13 @@ impl LmdbStore {
     }
 }
 
+impl fmt::Debug for LmdbStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // FIXME: add some path info?
+        write!(f, "LmdbStore")
+    }
+}
+
 fn read_app_hash<T: Transaction>(tx: &T, db: Database) -> Vec<u8> {
     match tx.get(db, &APP_HASH_KEY) {
         Ok(v) => v.to_vec(),

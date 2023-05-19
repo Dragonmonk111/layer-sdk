@@ -52,9 +52,9 @@ pub struct App<T: PersistentStorage> {
 }
 
 #[derive(Error, Debug, PartialEq)]
-pub enum AppLoadError {
+pub enum AppLoadError<T: PersistentStorage> {
     #[error("No State Stored")]
-    NoStoredState,
+    NoStoredState(T),
 
     #[error("Invalid State: {0}")]
     InvalidState(String),
@@ -77,7 +77,7 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// Re-create a blockchain from existing stored state.
     /// If this fails with AppLoadError::NoStoredState, then we wait for init to be called.
     /// Otherwise we fail on loading.
-    pub fn load_from_storage(storage: T, logic: StateMachine) -> Result<App<T>, AppLoadError> {
+    pub fn load_from_storage(storage: T, logic: StateMachine) -> Result<App<T>, AppLoadError<T>> {
         let mut meter = GasMeter::infinite();
         let state = {
             let reader = storage.reader();
@@ -94,13 +94,13 @@ impl<T: PersistentStorage + 'static> App<T> {
                 chain_id: state.chain_id,
                 params: state.params,
             }),
-            None => Err(AppLoadError::NoStoredState),
+            None => Err(AppLoadError::NoStoredState(storage)),
         }
     }
 
     /// Called once upon blockchain startup with genesis info, before anything else is called
     pub fn init(
-        storage: T,
+        storage: Arc<T>,
         logic: StateMachine,
         request: InitChainRequest,
     ) -> PulsarResult<(Self, InitChainResponse)> {
@@ -143,7 +143,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         };
         // And initialize the application
         let app = App {
-            storage: Arc::new(storage),
+            storage,
             logic,
             block: RwLock::new(state.last_block),
             chain_id: state.chain_id,
@@ -396,7 +396,7 @@ mod tests {
         let request = mock_init(&genesis);
 
         // create the app
-        let (app, result) = App::init(storage, logic, request.clone()).unwrap();
+        let (app, result) = App::init(Arc::new(storage), logic, request.clone()).unwrap();
         assert_eq!(result.validators, request.validators);
         assert_eq!(result.consensus_params, request.consensus_params);
 

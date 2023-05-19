@@ -1,4 +1,5 @@
 use core::panic;
+use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, info, instrument};
 
@@ -22,8 +23,17 @@ pub struct Pulsarium<T: PersistentStorage + 'static> {
     // each incoming connection to the ABCI [`Server`]. It is up to the
     // application developer to manage shared state between these clones of their
     // application.
-    app: Arc<App<T>>,
+    app: Arc<RwLock<MaybeApp<T>>>,
 }
+
+// TODO: make enum for initiated or waiting app
+#[derive(Debug)]
+enum MaybeApp<T: PersistentStorage + 'static> {
+    Ready(App<T>),
+    WaitingInit(T),
+}
+
+impl<T: PersistentStorage + 'static> MaybeApp<T> {}
 
 impl Default for Pulsarium<MemoryStore> {
     fn default() -> Self {
@@ -46,14 +56,13 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
     pub fn new(store: T) -> Self {
         let logic = StateMachine::new();
         let app = match App::load_from_storage(store, logic) {
-            Ok(app) => app,
-            Err(AppLoadError::NoStoredState) => {
-                // TODO: we need to wait for init genesis
-                todo!();
-            }
+            Ok(app) => MaybeApp::Ready(app),
+            Err(AppLoadError::NoStoredState(store)) => MaybeApp::WaitingInit(store),
             Err(e) => panic!("Failed to load app from storage: {}", e),
         };
-        Self { app: Arc::new(app) }
+        Self {
+            app: Arc::new(RwLock::new(app)),
+        }
     }
 }
 
@@ -76,6 +85,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Called once upon genesis.
     #[instrument(skip_all)]
     fn init_chain(&self, _request: RequestInitChain) -> ResponseInitChain {
+        // TODO: this is critical call. Alternative to New to construct it
         info!("abci init_chain");
         Default::default()
     }
