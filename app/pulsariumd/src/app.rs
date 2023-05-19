@@ -2,14 +2,14 @@ use tracing::{debug, info, instrument};
 
 use tendermint_abci::Application;
 
-use tendermint_proto::v0_37::abci::{
-    response_process_proposal, RequestApplySnapshotChunk, RequestBeginBlock, RequestCheckTx,
-    RequestDeliverTx, RequestEcho, RequestEndBlock, RequestInfo, RequestInitChain,
-    RequestLoadSnapshotChunk, RequestOfferSnapshot, RequestPrepareProposal, RequestProcessProposal,
-    RequestQuery, ResponseApplySnapshotChunk, ResponseBeginBlock, ResponseCheckTx, ResponseCommit,
-    ResponseDeliverTx, ResponseEcho, ResponseEndBlock, ResponseFlush, ResponseInfo,
-    ResponseInitChain, ResponseListSnapshots, ResponseLoadSnapshotChunk, ResponseOfferSnapshot,
-    ResponsePrepareProposal, ResponseProcessProposal, ResponseQuery,
+use tendermint_proto::abci::{
+    response_process_proposal, RequestApplySnapshotChunk, RequestCheckTx, RequestEcho,
+    RequestFinalizeBlock, RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
+    RequestOfferSnapshot, RequestPrepareProposal, RequestProcessProposal, RequestQuery,
+    ResponseApplySnapshotChunk, ResponseCheckTx, ResponseCommit, ResponseEcho,
+    ResponseFinalizeBlock, ResponseFlush, ResponseInfo, ResponseInitChain, ResponseListSnapshots,
+    ResponseLoadSnapshotChunk, ResponseOfferSnapshot, ResponsePrepareProposal,
+    ResponseProcessProposal, ResponseQuery,
 };
 
 #[derive(Default, Debug)]
@@ -66,43 +66,30 @@ impl Application for Pulsarium {
         Default::default()
     }
 
-    /// Signals the beginning of a new block, prior to any `DeliverTx` calls.
     #[instrument(skip_all)]
-    fn begin_block(&self, _request: RequestBeginBlock) -> ResponseBeginBlock {
-        info!("abci begin_block");
-        Default::default()
-    }
-
-    /// Apply a transaction to the application's state.
-    #[instrument(skip_all)]
-    fn deliver_tx(&self, _request: RequestDeliverTx) -> ResponseDeliverTx {
-        info!("abci deliver_tx");
-        Default::default()
-    }
-
-    /// Signals the end of a block.
-    #[instrument(skip_all)]
-    fn end_block(&self, _request: RequestEndBlock) -> ResponseEndBlock {
-        info!("abci end_block");
+    fn finalize_block(&self, _request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
+        info!("abci finalize_block");
         Default::default()
     }
 
     /// Signals that messages queued on the client should be flushed to the server.
-    #[instrument]
+    #[instrument(skip_all)]
     fn flush(&self) -> ResponseFlush {
         debug!("abci flush");
         ResponseFlush {}
     }
 
     /// Commit the current state at the current height.
-    #[instrument]
+    #[instrument(skip_all)]
     fn commit(&self) -> ResponseCommit {
+        // Note: pulsar commits data in finalize_block. unsure why there is a different command,
+        // and separating them causes issues with lifetimes and static analysis.
         info!("abci commit");
         Default::default()
     }
 
     /// Used during state sync to discover available snapshots on peers.
-    #[instrument]
+    #[instrument(skip_all)]
     fn list_snapshots(&self) -> ResponseListSnapshots {
         info!("abci list_snapshots");
         Default::default()

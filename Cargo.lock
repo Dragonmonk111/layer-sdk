@@ -291,7 +291,7 @@ checksum = "cb581177a703987352eeabf6ae6989b1c6681e92ef8b9f284b6016ab90d3dc67"
 dependencies = [
  "prost",
  "prost-types",
- "tendermint-proto",
+ "tendermint-proto 0.31.1",
  "tonic",
 ]
 
@@ -1464,7 +1464,7 @@ dependencies = [
  "figment",
  "serde",
  "tendermint-abci",
- "tendermint-proto",
+ "tendermint-proto 0.32.0",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -1900,21 +1900,20 @@ dependencies = [
  "signature 2.1.0",
  "subtle",
  "subtle-encoding",
- "tendermint-proto",
+ "tendermint-proto 0.31.1",
  "time",
  "zeroize",
 ]
 
 [[package]]
 name = "tendermint-abci"
-version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc70258c1a7aa8eb905aae4e3b734a2100ecffce7c9756dd1c446aaf188ba03"
+version = "0.32.0"
+source = "git+https://github.com/informalsystems/tendermint-rs.git?rev=483a1da#483a1da0a4f6337fa27c129682a3e47c7123a495"
 dependencies = [
  "bytes",
  "flex-error",
  "prost",
- "tendermint-proto",
+ "tendermint-proto 0.32.0",
  "tracing",
 ]
 
@@ -1923,6 +1922,23 @@ name = "tendermint-proto"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1f15666993e193fa4d2b2479aa1e4f1bbe41283c820812df8dd618f41ca3f7a"
+dependencies = [
+ "bytes",
+ "flex-error",
+ "num-derive",
+ "num-traits",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_bytes",
+ "subtle-encoding",
+ "time",
+]
+
+[[package]]
+name = "tendermint-proto"
+version = "0.32.0"
+source = "git+https://github.com/informalsystems/tendermint-rs.git?rev=483a1da#483a1da0a4f6337fa27c129682a3e47c7123a495"
 dependencies = [
  "bytes",
  "flex-error",
