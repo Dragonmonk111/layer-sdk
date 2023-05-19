@@ -15,11 +15,11 @@ pub enum CosmosError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    // TODO: remove this and replace with deterministic errors
+    // FIXME: remove this and replace with deterministic errors
     #[error("Prost: {0}")]
     ProtoDecode(#[from] DecodeError),
 
-    // TODO: remove this and replace with deterministic errors
+    // FIXME: remove this and replace with deterministic errors
     #[error("Cosmrs: {0}")]
     ErrorReport(String),
 }
@@ -47,7 +47,7 @@ impl From<CosmosError> for MsgError {
 impl From<CosmosError> for TxError {
     fn from(err: CosmosError) -> Self {
         match err {
-            // TODO: add another variant to TxError?
+            // FIXME: add another variant to TxError?
             CosmosError::Std(e) => TxError::Msg(MsgError::Std(e)),
             CosmosError::ProtoDecode(e) => TxError::ParseError(e.to_string()),
             CosmosError::ErrorReport(e) => TxError::ParseError(e),
@@ -59,7 +59,6 @@ impl From<CosmosError> for TxError {
 impl From<CosmosError> for QueryError {
     fn from(err: CosmosError) -> Self {
         match err {
-            // TODO: add another variant to TxError?
             CosmosError::Std(e) => QueryError::Std(e),
             CosmosError::ProtoDecode(e) => QueryError::ParseError(e.to_string()),
             CosmosError::ErrorReport(e) => QueryError::ParseError(e),

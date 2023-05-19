@@ -1,6 +1,6 @@
 use cosmwasm_std::{BlockInfo, Event, StdError};
 use pulsar_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
-use pulsar_std::response::{QueryResponse, SimulateQueryResponse};
+use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
 use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage};
 
@@ -42,7 +42,7 @@ impl StateMachine {
         meter: &mut GasMeter,
         block: &BlockInfo,
         request: Query,
-    ) -> Result<QueryResponse, PulsarError> {
+    ) -> Result<QueryResponse<PulsarError>, PulsarError> {
         match request {
             Query::Raw { key } => {
                 let value = storage
@@ -58,9 +58,8 @@ impl StateMachine {
                 let result = self.query_simulate(&mut store, meter, block, tx);
                 let gas = GasInfo::from_meter(meter);
                 // TODO
-                let _res = TxResult { gas, result };
-                // Ok(QueryResponse::Simulate(res))
-                Ok(QueryResponse::Simulate(SimulateQueryResponse {}))
+                let res = TxResult { gas, result };
+                Ok(QueryResponse::Simulate(res))
             }
         }
     }

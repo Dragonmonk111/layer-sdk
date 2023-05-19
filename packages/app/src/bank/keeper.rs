@@ -270,7 +270,7 @@ impl Bank {
         _block: &BlockInfo,
         _sm: &StateMachine,
         request: BankQuery,
-    ) -> PulsarResult<QueryResponse> {
+    ) -> PulsarResult<QueryResponse<PulsarError>> {
         let bank_storage = prefixed_read(storage, NAMESPACE_BANK);
         match request {
             BankQuery::AllBalances { address } => {

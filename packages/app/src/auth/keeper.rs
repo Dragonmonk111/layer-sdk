@@ -1,4 +1,4 @@
-use crate::error::PulsarResult;
+use crate::error::{PulsarError, PulsarResult};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
@@ -153,7 +153,7 @@ impl Auth {
         _block: &BlockInfo,
         _sm: &StateMachine,
         request: AuthQuery,
-    ) -> PulsarResult<QueryResponse> {
+    ) -> PulsarResult<QueryResponse<PulsarError>> {
         let auth_storage = prefixed_read(storage, NAMESPACE_AUTH);
         match request {
             AuthQuery::Account { address } => {

@@ -22,7 +22,7 @@ pub fn encode_cosmos_pubkey(pubkey: &PubKey) -> Result<Any, QueryError> {
     }
     .ok_or_else(|| QueryError::EncodingError("invalid pubkey".to_string()))?;
 
-    // TODO: map error to some generic line not the undeterministic report line
+    // FIXME: map error to some generic line not the undeterministic report line
     cosmrs::crypto::PublicKey::from(pk)
         .to_any()
         .map_err(|e| QueryError::EncodingError(e.to_string()))

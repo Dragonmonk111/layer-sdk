@@ -1,6 +1,7 @@
-use pulsar_std::response::{
-    AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, SimulateQueryResponse,
-};
+use cosmos_sdk_proto::cosmos::tx::v1beta1::SimulateResponse;
+use cosmwasm_std::Event;
+use pulsar_std::api::{GasInfo, TxResponse, TxResult};
+use pulsar_std::response::{AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse};
 use pulsar_std::{AccountId, AuthQuery, BankQuery, Query, QueryError};
 
 use cosmos_sdk_proto::cosmos::auth::v1beta1::{
@@ -16,10 +17,9 @@ use cosmos_sdk_proto::traits::MessageExt;
 use crate::pubkey::encode_cosmos_pubkey;
 use crate::tx::FIXED_ACCOUNT_NUMBER;
 use crate::utils::{encode_sdk_coin, encode_sdk_coins};
-use crate::CosmosError;
+use crate::{parse_cosmos_tx, CosmosError};
 
 /// "/app" prefix for special application queries
-/// TODO: /app/simulate returns JSON of {GasInfo, Result}
 /// /app/version returns app version string cast to bytes
 pub const QUERY_PATH_APP: &str = "app";
 
@@ -33,7 +33,7 @@ pub const QUERY_PATH_STORE: &str = "store";
 // const QUERY_PATH_P2P: &str = "p2p";
 
 // See relevant code we emulate at https://github.com/cosmos/cosmos-sdk/blob/v0.47.2/baseapp/abci.go#L538-L561
-pub fn parse_cosmos_query(path: &str, data: &[u8]) -> Result<Query, QueryError> {
+pub fn parse_cosmos_query(path: &str, data: &[u8], chain_id: &str) -> Result<Query, QueryError> {
     if let Some(grpc_res) = parse_cosmos_grpc_query(path, data)? {
         return Ok(grpc_res);
     }
@@ -41,7 +41,12 @@ pub fn parse_cosmos_query(path: &str, data: &[u8]) -> Result<Query, QueryError> 
     // try some special cases
     let fragments: Vec<&str> = path.split('/').collect();
     match fragments[0] {
-        QUERY_PATH_APP => parse_app_query(&fragments[1..], data),
+        QUERY_PATH_APP => {
+            if fragments.len() != 2 {
+                return Err(QueryError::UnsupportedPath(path.to_string()));
+            }
+            parse_app_query(fragments[1], data, chain_id)
+        }
         QUERY_PATH_STORE => parse_store_query(&fragments[1..], data),
         p => Err(QueryError::UnsupportedPath(p.to_string())),
     }
@@ -49,30 +54,30 @@ pub fn parse_cosmos_query(path: &str, data: &[u8]) -> Result<Query, QueryError> 
 
 /// for raw queries
 fn parse_store_query(_fragments: &[&str], data: &[u8]) -> Result<Query, QueryError> {
-    // TODO: review if this is correct when we have a sample caller for compatibility
+    // FIXME: review if this is correct when we have a sample caller for compatibility
     Ok(Query::Raw { key: data.to_vec() })
 }
 
 /// simulate and version support
-fn parse_app_query(fragments: &[&str], _data: &[u8]) -> Result<Query, QueryError> {
-    if fragments.is_empty() {
-        return Err(QueryError::UnsupportedPath(QUERY_PATH_APP.to_string()));
-    }
-    match fragments[0] {
-        // TODO: add Simulate query (full stack)
-        "simulate" => todo!(),
+fn parse_app_query(command: &str, data: &[u8], chain_id: &str) -> Result<Query, QueryError> {
+    match command {
+        "simulate" => {
+            // TODO: error handling is ugly, revise proper types
+            let tx = parse_cosmos_tx(data, chain_id)
+                .map_err(|e| QueryError::ParseError(e.to_string()))?;
+            Ok(Query::Simulate(tx))
+        }
         "version" => todo!(),
         _ => Err(QueryError::UnsupportedPath(format!(
             "{}/{}",
-            QUERY_PATH_APP,
-            fragments.join("/")
+            QUERY_PATH_APP, command
         ))),
     }
 }
 
 /// This will use grpc path lookups, returns Ok(None) if not a match, so we try special queries
 fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>, QueryError> {
-    // TODO: add auth queries
+    // FIXME: add auth queries
     // FIXME: make more extensible when we add cosmwasm, etc support
     match path {
         // see https://github.com/cosmos/cosmos-rust/blob/main/cosmos-sdk-proto/src/prost/cosmos-sdk/cosmos.bank.v1beta1.tonic.rs#L85
@@ -103,22 +108,24 @@ fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>, Que
         }
         // "/cosmos.auth.v1beta1.Query/Accounts" => {
         //     let _ = QueryAccountsRequest::decode(data).map_err(CosmosError::from)?;
-        //     todo!();
+        //     unimplemented!();
         // }
         // "/cosmos.auth.v1beta1.Query/Params" => {
         //     let _ = QueryParamsRequest::decode(data).map_err(CosmosError::from)?;
-        //     todo!();
+        //     unimplemented!();
         // }
         _ => Ok(None),
     }
 }
 
-pub fn encode_cosmos_response(res: &QueryResponse) -> Result<Vec<u8>, QueryError> {
+pub fn encode_cosmos_response<E: std::error::Error>(
+    res: &QueryResponse<E>,
+) -> Result<Vec<u8>, QueryError> {
     match res {
         QueryResponse::Raw { value } => Ok(value.clone()),
         QueryResponse::Auth(auth) => encode_auth_response(auth),
         QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
-        QueryResponse::Simulate(simulate) => Ok(encode_simulate_response(simulate)),
+        QueryResponse::Simulate(simulate) => encode_simulate_response(simulate),
     }
 }
 
@@ -170,7 +177,72 @@ pub fn encode_bank_response(res: &BankQueryResponse) -> Vec<u8> {
     }
 }
 
-pub fn encode_simulate_response(_: &SimulateQueryResponse) -> Vec<u8> {
-    // TODO
-    todo!();
+pub fn encode_simulate_response<E: std::error::Error>(
+    result: &TxResult<E>,
+) -> Result<Vec<u8>, QueryError> {
+    let gas_info = encode_gas_info(&result.gas);
+    // if the result was an error, we just return error to the query service, it gets encoded at rpc level
+    let r = result
+        .result
+        .as_ref()
+        .map_err(|e| QueryError::EncodingError(e.to_string()))?;
+    let result = encode_tx_result(r);
+
+    let sim = SimulateResponse {
+        gas_info: Some(gas_info),
+        result: Some(result),
+    };
+    Ok(sim.encode_to_vec())
+}
+
+fn encode_gas_info(gas: &GasInfo) -> cosmos_sdk_proto::cosmos::base::abci::v1beta1::GasInfo {
+    cosmos_sdk_proto::cosmos::base::abci::v1beta1::GasInfo {
+        gas_wanted: gas.gas_wanted,
+        gas_used: gas.gas_used,
+    }
+}
+
+fn encode_tx_result(
+    response: &TxResponse,
+) -> cosmos_sdk_proto::cosmos::base::abci::v1beta1::Result {
+    let data = response
+        .data
+        .iter()
+        .cloned()
+        .map(|d| cosmos_sdk_proto::cosmos::base::abci::v1beta1::MsgData {
+            // TODO: what type??
+            msg_type: "unknown".to_string(),
+            data: d,
+        })
+        .collect();
+
+    let combined_data =
+        cosmos_sdk_proto::cosmos::base::abci::v1beta1::TxMsgData { data }.encode_to_vec();
+
+    cosmos_sdk_proto::cosmos::base::abci::v1beta1::Result {
+        data: combined_data,
+        events: response
+            .events
+            .iter()
+            .cloned()
+            .flat_map(|e| e.into_iter().map(encode_cosmos_event))
+            .collect(),
+        log: "".to_string(),
+    }
+}
+
+fn encode_cosmos_event(event: Event) -> cosmos_sdk_proto::tendermint::abci::Event {
+    let attributes = event
+        .attributes
+        .into_iter()
+        .map(|a| cosmos_sdk_proto::tendermint::abci::EventAttribute {
+            key: a.key,
+            value: a.value,
+            index: true,
+        })
+        .collect();
+    cosmos_sdk_proto::tendermint::abci::Event {
+        r#type: event.ty,
+        attributes,
+    }
 }

@@ -1,8 +1,10 @@
 use cosmwasm_std::{Coin, StdError};
+use std::error::Error as Err;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
+use crate::api::TxResult;
 use crate::tx::Tx;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,28 +66,27 @@ impl Display for AuthQuery {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QueryResponse {
+pub enum QueryResponse<E: Err> {
     Raw { value: Vec<u8> },
     Auth(AuthQueryResponse),
     Bank(BankQueryResponse),
-    Simulate(SimulateQueryResponse),
-    // Simulate(TxResult),
+    Simulate(TxResult<E>),
 }
 
-impl From<AuthQueryResponse> for QueryResponse {
+impl<E: Err> From<AuthQueryResponse> for QueryResponse<E> {
     fn from(value: AuthQueryResponse) -> Self {
         QueryResponse::Auth(value)
     }
 }
 
-impl From<BankQueryResponse> for QueryResponse {
+impl<E: Err> From<BankQueryResponse> for QueryResponse<E> {
     fn from(value: BankQueryResponse) -> Self {
         QueryResponse::Bank(value)
     }
 }
 
-impl From<SimulateQueryResponse> for QueryResponse {
-    fn from(value: SimulateQueryResponse) -> Self {
+impl<E: Err> From<TxResult<E>> for QueryResponse<E> {
+    fn from(value: TxResult<E>) -> Self {
         QueryResponse::Simulate(value)
     }
 }
@@ -113,7 +114,7 @@ pub enum AccountResponse {
     },
 }
 
-impl From<AccountResponse> for QueryResponse {
+impl<E: Err> From<AccountResponse> for QueryResponse<E> {
     fn from(value: AccountResponse) -> Self {
         AuthQueryResponse::Account(value).into()
     }
@@ -133,7 +134,7 @@ pub struct SupplyResponse {
     pub amount: Coin,
 }
 
-impl From<SupplyResponse> for QueryResponse {
+impl<E: Err> From<SupplyResponse> for QueryResponse<E> {
     fn from(value: SupplyResponse) -> Self {
         BankQueryResponse::Supply(value).into()
     }
@@ -146,7 +147,7 @@ pub struct BalanceResponse {
     pub amount: Coin,
 }
 
-impl From<BalanceResponse> for QueryResponse {
+impl<E: Err> From<BalanceResponse> for QueryResponse<E> {
     fn from(value: BalanceResponse) -> Self {
         BankQueryResponse::Balance(value).into()
     }
@@ -158,15 +159,10 @@ pub struct AllBalanceResponse {
     pub amount: Vec<Coin>,
 }
 
-impl From<AllBalanceResponse> for QueryResponse {
+impl<E: Err> From<AllBalanceResponse> for QueryResponse<E> {
     fn from(value: AllBalanceResponse) -> Self {
         BankQueryResponse::AllBalances(value).into()
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SimulateQueryResponse {
-    // TODO
 }
 
 #[derive(Error, Debug, PartialEq)]

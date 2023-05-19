@@ -17,7 +17,7 @@ fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), C
     // get raw format for accurate signing info (to validate sig)
     let raw = TxRaw::decode(bytes)?;
     // FIXME: add tx hash here as well from TxRaw?
-    // TODO: we need to do this in some match statement - only works for direct mode
+    // FIXME: we need to do this in some match statement - only works for direct mode
     let doc = SignDoc {
         body_bytes: raw.body_bytes,
         auth_info_bytes: raw.auth_info_bytes,

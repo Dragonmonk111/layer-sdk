@@ -16,6 +16,6 @@ pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
 pub mod response {
     pub use crate::query::{
         AccountResponse, AllBalanceResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
-        QueryResponse, SimulateQueryResponse, SupplyResponse,
+        QueryResponse, SupplyResponse,
     };
 }

@@ -26,12 +26,13 @@ impl MsgResponse {
 // Errors get codespace = "pulsar", code = 1, log = err.to_string()
 // Success get data and events
 // One entry in data and events per message
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxResponse {
     pub data: Vec<Vec<u8>>,
     pub events: Vec<Vec<Event>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasInfo {
     pub gas_used: u64,
     pub gas_wanted: u64,
@@ -46,6 +47,7 @@ impl GasInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxResult<E: std::error::Error> {
     pub gas: GasInfo,
     pub result: Result<TxResponse, E>,

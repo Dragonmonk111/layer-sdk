@@ -154,7 +154,7 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
-    pub fn query(&self, request: Query) -> PulsarResult<QueryResponse> {
+    pub fn query(&self, request: Query) -> PulsarResult<QueryResponse<PulsarError>> {
         let reader = self.storage.reader();
 
         // note, simulate needs different limit
