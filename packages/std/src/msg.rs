@@ -57,7 +57,7 @@ pub enum MsgError {
     #[error("{0}")]
     Addr(#[from] AccountIdError),
 
-    /// TODO: either ensure all callers of this function produce determinstic strings,
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
     /// Or remove all info
     #[error("Parse: {0}")]
     ParseError(String),

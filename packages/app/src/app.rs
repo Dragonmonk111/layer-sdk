@@ -163,7 +163,6 @@ impl<T: PersistentStorage + 'static> App<T> {
             _ => self.query_gas_meter(),
         };
 
-        // TODO: handle simulate queries
         let block = self.block.read();
         let resp = self
             .logic

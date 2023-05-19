@@ -22,7 +22,7 @@ pub trait GasStorage {
     fn charge_gas(&mut self, gas: u64) -> Result<(), GasError>;
 }
 
-// TODO: readonly variant
+// FIXME: if used, add readonly variant
 pub struct PulsarStorage<'a> {
     storage: &'a mut dyn Storage,
     meter: &'a mut GasMeter,

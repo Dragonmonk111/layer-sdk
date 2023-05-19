@@ -12,7 +12,7 @@ use cosmos_sdk_proto::cosmos::bank::v1beta1::{
     QuerySupplyOfRequest, QuerySupplyOfResponse,
 };
 use cosmos_sdk_proto::prost::Message;
-use cosmos_sdk_proto::traits::MessageExt;
+use cosmos_sdk_proto::traits::{MessageExt, TypeUrl};
 
 use crate::pubkey::encode_cosmos_pubkey;
 use crate::tx::FIXED_ACCOUNT_NUMBER;
@@ -62,7 +62,7 @@ fn parse_store_query(_fragments: &[&str], data: &[u8]) -> Result<Query, QueryErr
 fn parse_app_query(command: &str, data: &[u8], chain_id: &str) -> Result<Query, QueryError> {
     match command {
         "simulate" => {
-            // TODO: error handling is ugly, revise proper types
+            // FIXME: error handling is ugly, revise proper types
             let tx = parse_cosmos_tx(data, chain_id)
                 .map_err(|e| QueryError::ParseError(e.to_string()))?;
             Ok(Query::Simulate(tx))
@@ -210,8 +210,10 @@ fn encode_tx_result(
         .iter()
         .cloned()
         .map(|d| cosmos_sdk_proto::cosmos::base::abci::v1beta1::MsgData {
-            // TODO: what type??
-            msg_type: "unknown".to_string(),
+            // TODO: what type?? do we need to pass this data everywhere in our MsgResult type?
+            // This type used as a placeholder for now, so we don't get parse failure if someone tries
+            // to decode this data (but data dropped)
+            msg_type: cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL.to_string(),
             data: d,
         })
         .collect();

@@ -33,9 +33,7 @@ pub enum Account {
     },
 }
 
-pub struct Auth {
-    // TODO
-}
+pub struct Auth {}
 
 impl Auth {
     pub fn new() -> Self {
@@ -51,6 +49,8 @@ impl Auth {
         _block: &BlockInfo,
         sm: &StateMachine,
         tx: Tx,
+        // Set to false in simulate only
+        validate_sig: bool,
     ) -> PulsarResult<TxData> {
         // later handle other types
         let Tx::Signed(tx) = tx;
@@ -122,7 +122,9 @@ impl Auth {
         };
 
         // validate the signature with that account (Cosmos-specific)
-        pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
+        if validate_sig {
+            pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
+        }
 
         // TODO: filter logic on gas pricing.... charge min fee
 
@@ -141,7 +143,6 @@ impl Auth {
         Ok(TxData {
             signer: tx.signer,
             msgs: tx.msgs,
-            // TODO: make some max gas limit
             gas_wanted: tx.fee.gas_limit,
         })
     }

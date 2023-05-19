@@ -136,7 +136,6 @@ impl Bank {
         Ok(())
     }
 
-    // TODO: supply tracking is completely wrong, as we mint as part of transfer...
     fn mint(
         &self,
         bank_storage: &mut dyn Storage,
