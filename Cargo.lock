@@ -1464,6 +1464,7 @@ dependencies = [
  "figment",
  "parking_lot",
  "pulsar-app",
+ "pulsar-std",
  "pulsar-storage",
  "serde",
  "tendermint-abci",

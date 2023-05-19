@@ -9,6 +9,7 @@ edition = { workspace = true }
 
 [dependencies]
 pulsar-app = { workspace = true }
+pulsar-std = { workspace = true }
 pulsar-storage = { workspace = true }
 
 clap = { version = "4.2.4", features = ["derive"]}

@@ -17,23 +17,16 @@ use tendermint_proto::abci::{
 use pulsar_app::{App, AppLoadError, StateMachine};
 use pulsar_storage::{MemoryStore, PersistentStorage};
 
+use crate::{decode::decode_init_response, encode::encode_init_request};
+
 #[derive(Debug)]
 pub struct Pulsarium<T: PersistentStorage + 'static> {
     // Applications are `Send` + `Clone` + `'static` because they are cloned for
     // each incoming connection to the ABCI [`Server`]. It is up to the
     // application developer to manage shared state between these clones of their
     // application.
-    app: Arc<RwLock<MaybeApp<T>>>,
+    app: Arc<RwLock<App<T>>>,
 }
-
-// TODO: make enum for initiated or waiting app
-#[derive(Debug)]
-enum MaybeApp<T: PersistentStorage + 'static> {
-    Ready(App<T>),
-    WaitingInit(T),
-}
-
-impl<T: PersistentStorage + 'static> MaybeApp<T> {}
 
 impl Default for Pulsarium<MemoryStore> {
     fn default() -> Self {
@@ -53,13 +46,25 @@ impl<T: PersistentStorage + 'static> Clone for Pulsarium<T> {
 unsafe impl<T: PersistentStorage> Send for Pulsarium<T> {}
 
 impl<T: PersistentStorage + 'static> Pulsarium<T> {
+    /// Creates a new app and tries to load state from storage.
+    /// If the storage is empty, the app will be left in an uninitialized state
+    /// and init_chain must be called before any other method.
     pub fn new(store: T) -> Self {
         let logic = StateMachine::new();
-        let app = match App::load_from_storage(store, logic) {
-            Ok(app) => MaybeApp::Ready(app),
-            Err(AppLoadError::NoStoredState(store)) => MaybeApp::WaitingInit(store),
-            Err(e) => panic!("Failed to load app from storage: {}", e),
+        let mut app = App::new(store, logic);
+        match app.load_from_storage() {
+            Ok(_) => {
+                // FIXME: proper logging when we have proper tracing
+                let height = app.info().height;
+                println!("Initialized app from storage at height {}", height);
+            }
+            Err(AppLoadError::NoStoredState) => {
+                // FIXME: proper logging when we have proper tracing
+                println!("No stored state, app is uninitialized");
+            }
+            Err(e) => panic!("Error loading app from storage: {}", e),
         };
+
         Self {
             app: Arc::new(RwLock::new(app)),
         }
@@ -84,10 +89,12 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
     /// Called once upon genesis.
     #[instrument(skip_all)]
-    fn init_chain(&self, _request: RequestInitChain) -> ResponseInitChain {
-        // TODO: this is critical call. Alternative to New to construct it
+    fn init_chain(&self, request: RequestInitChain) -> ResponseInitChain {
         info!("abci init_chain");
-        Default::default()
+        let request = encode_init_request(request);
+        // This requires we are in WaitingInit state, otherwise panic
+        let res = self.app.write().init(request).unwrap();
+        decode_init_response(res)
     }
 
     /// Query the application for data at the current or past height.
