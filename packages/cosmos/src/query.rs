@@ -16,9 +16,9 @@ use crate::tx::FIXED_ACCOUNT_NUMBER;
 use crate::utils::{encode_sdk_coin, encode_sdk_coins};
 use crate::CosmosError;
 
-// "/app" prefix for special application queries
-// /app/simulate returns JSON of {GasInfo, Result}
-// /app/version returns app version string cast to bytes
+/// "/app" prefix for special application queries
+/// TODO: /app/simulate returns JSON of {GasInfo, Result}
+/// /app/version returns app version string cast to bytes
 pub const QUERY_PATH_APP: &str = "app";
 
 /// /store/{substore}/{key} returns ??
@@ -31,22 +31,45 @@ pub const QUERY_PATH_STORE: &str = "store";
 // const QUERY_PATH_P2P: &str = "p2p";
 
 // See relevant code we emulate at https://github.com/cosmos/cosmos-sdk/blob/v0.47.2/baseapp/abci.go#L538-L561
-pub fn parse_cosmos_query(path: &str, _data: &[u8]) -> Result<Query, QueryError> {
-    if let Some(grpc_res) = parse_cosmos_grpc_query(path, _data)? {
+pub fn parse_cosmos_query(path: &str, data: &[u8]) -> Result<Query, QueryError> {
+    if let Some(grpc_res) = parse_cosmos_grpc_query(path, data)? {
         return Ok(grpc_res);
     }
 
     // try some special cases
     let fragments: Vec<&str> = path.split('/').collect();
     match fragments[0] {
-        QUERY_PATH_APP => todo!(),   // add simulate support
-        QUERY_PATH_STORE => todo!(), // for raw queries
+        QUERY_PATH_APP => parse_app_query(&fragments[1..], data),
+        QUERY_PATH_STORE => parse_store_query(&fragments[1..], data),
         p => Err(QueryError::UnsupportedPath(p.to_string())),
     }
 }
 
+/// for raw queries
+fn parse_store_query(_fragments: &[&str], data: &[u8]) -> Result<Query, QueryError> {
+    // TODO: review if this is correct when we have a sample caller for compatibility
+    Ok(Query::Raw { key: data.to_vec() })
+}
+
+/// simulate and version support
+fn parse_app_query(fragments: &[&str], _data: &[u8]) -> Result<Query, QueryError> {
+    if fragments.is_empty() {
+        return Err(QueryError::UnsupportedPath(QUERY_PATH_APP.to_string()));
+    }
+    match fragments[0] {
+        // TODO: add Simulate query (full stack)
+        "simulate" => todo!(),
+        "version" => todo!(),
+        _ => Err(QueryError::UnsupportedPath(format!(
+            "{}/{}",
+            QUERY_PATH_APP,
+            fragments.join("/")
+        ))),
+    }
+}
+
 /// This will use grpc path lookups, returns Ok(None) if not a match, so we try special queries
-pub fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>, QueryError> {
+fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>, QueryError> {
     // TODO: add auth queries
     // FIXME: make more extensible when we add cosmwasm, etc support
     match path {
