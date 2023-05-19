@@ -9,6 +9,7 @@ use crate::pubkey::PubKey;
 /// A list of various tx formats we accept.
 /// We start with Cosmos-SDK format for compatibility, but want to later allow native signing format.
 /// We can pass this around to auth to allow handling multiple types
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tx {
     /// Cosmos Format. Note that we support a subset of the functionality:
     /// Only one signer, no authz or fee grants. But that means 90%+ of tx work, and are "Keplr compatible"
@@ -20,6 +21,7 @@ pub enum Tx {
 /// raw bytes into a proper SignedTx instance.
 /// Once of which is the Cosmos SDK format (direct or legacy amino signing modes)
 /// There will be others more native to Pulsar in the future, or for compatibility with other chains.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedTx {
     // The decoded messages inside this transaction
     pub msgs: Vec<Msg>,
@@ -37,6 +39,7 @@ pub struct SignedTx {
     pub timeout_height: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SigningInfo {
     /// These are the raw bytes that should be properly signed by a pubkey to be valid.
     /// It depends fully on the raw encoding of the transaction.
@@ -63,6 +66,7 @@ impl SigningInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeeInfo {
     // how much they pay
     pub fee: Option<Coin>,

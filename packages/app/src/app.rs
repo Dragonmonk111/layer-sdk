@@ -23,6 +23,7 @@ use crate::sm::StateMachine;
 
 // FIXME: make this configurable on per-node basis
 const DEFAULT_QUERY_GAS: u64 = 500_000;
+const DEFAULT_SIMULATE_GAS: u64 = 10_000_000;
 
 // these are all consensus critical and must be identical over all nodes
 // FIXME: init them from genesis and store them somewhere
@@ -155,7 +156,12 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// Returns serialized response to the query that can be passed back verbatum
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse> {
         let reader = self.storage.reader();
-        let mut meter = GasMeter::new(DEFAULT_QUERY_GAS);
+
+        // note, simulate needs different limit
+        let mut meter = match &request {
+            Query::Simulate(_) => self.simulate_gas_meter(),
+            _ => self.query_gas_meter(),
+        };
 
         // TODO: handle simulate queries
         let block = self.block.read();
@@ -168,12 +174,22 @@ impl<T: PersistentStorage + 'static> App<T> {
         resp
     }
 
-    // initialize block gas meter from params
+    // initialize block gas meter from params, allow infinite if not set
     fn block_gas_meter(&self) -> GasMeter {
         self.params
             .max_gas
             .map(GasMeter::new)
             .unwrap_or_else(GasMeter::infinite)
+    }
+
+    // use block gas limit for simulations, or a default if not set
+    fn simulate_gas_meter(&self) -> GasMeter {
+        let limit = self.params.max_gas.unwrap_or(DEFAULT_SIMULATE_GAS);
+        GasMeter::new(limit)
+    }
+
+    fn query_gas_meter(&self) -> GasMeter {
+        GasMeter::new(DEFAULT_QUERY_GAS)
     }
 
     pub fn check_tx(&self, tx: Tx) -> TxResult {

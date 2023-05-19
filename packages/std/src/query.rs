@@ -1,8 +1,9 @@
+use cosmwasm_std::{Coin, StdError};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
-use cosmwasm_std::{Coin, StdError};
+use crate::tx::Tx;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Query {
@@ -12,6 +13,7 @@ pub enum Query {
     },
     Auth(AuthQuery),
     Bank(BankQuery),
+    Simulate(Tx),
 }
 
 impl From<AuthQuery> for Query {
@@ -66,6 +68,8 @@ pub enum QueryResponse {
     Raw { value: Vec<u8> },
     Auth(AuthQueryResponse),
     Bank(BankQueryResponse),
+    Simulate(SimulateQueryResponse),
+    // Simulate(TxResult),
 }
 
 impl From<AuthQueryResponse> for QueryResponse {
@@ -77,6 +81,12 @@ impl From<AuthQueryResponse> for QueryResponse {
 impl From<BankQueryResponse> for QueryResponse {
     fn from(value: BankQueryResponse) -> Self {
         QueryResponse::Bank(value)
+    }
+}
+
+impl From<SimulateQueryResponse> for QueryResponse {
+    fn from(value: SimulateQueryResponse) -> Self {
+        QueryResponse::Simulate(value)
     }
 }
 
@@ -152,6 +162,11 @@ impl From<AllBalanceResponse> for QueryResponse {
     fn from(value: AllBalanceResponse) -> Self {
         BankQueryResponse::AllBalances(value).into()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimulateQueryResponse {
+    // TODO
 }
 
 #[derive(Error, Debug, PartialEq)]

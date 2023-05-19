@@ -1,4 +1,6 @@
-use pulsar_std::response::{AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse};
+use pulsar_std::response::{
+    AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, SimulateQueryResponse,
+};
 use pulsar_std::{AccountId, AuthQuery, BankQuery, Query, QueryError};
 
 use cosmos_sdk_proto::cosmos::auth::v1beta1::{
@@ -116,6 +118,7 @@ pub fn encode_cosmos_response(res: &QueryResponse) -> Result<Vec<u8>, QueryError
         QueryResponse::Raw { value } => Ok(value.clone()),
         QueryResponse::Auth(auth) => encode_auth_response(auth),
         QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
+        QueryResponse::Simulate(simulate) => Ok(encode_simulate_response(simulate)),
     }
 }
 
@@ -165,4 +168,9 @@ pub fn encode_bank_response(res: &BankQueryResponse) -> Vec<u8> {
             QuerySupplyOfResponse { amount }.encode_to_vec()
         }
     }
+}
+
+pub fn encode_simulate_response(_: &SimulateQueryResponse) -> Vec<u8> {
+    // TODO
+    todo!();
 }
