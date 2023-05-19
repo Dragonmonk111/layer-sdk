@@ -1,6 +1,7 @@
 [workspace]
 members = ["app/*", "packages/*"]
-#default-members   = ["app/pulsariumd"]
+# remove this temporarily as it has huge build dependencies (around 330 for lcd, 230 for cosmos, 110 for others)
+exclude = ["app/lcd"]
 
 [workspace.package]
 edition       = "2021"

@@ -90,7 +90,7 @@ pub enum AccountResponse {
     /// This is External Account in Ethereum terms, controlled by a public key
     External {
         address: AccountId,
-        pubkey: crate::PubKey,
+        pubkey: Option<crate::PubKey>,
         sequence: u64,
     },
     /// No pubkey can control this, either contract or "module account"
@@ -169,4 +169,9 @@ pub enum QueryError {
     /// Or remove all info
     #[error("Parse: {0}")]
     ParseError(String),
+
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Encoding: {0}")]
+    EncodingError(String),
 }

@@ -161,7 +161,7 @@ impl Auth {
                 let res = match account {
                     Account::External { pubkey, sequence } => AccountResponse::External {
                         address,
-                        pubkey,
+                        pubkey: Some(pubkey),
                         sequence,
                     },
                     Account::Internal {} => AccountResponse::Internal { address },

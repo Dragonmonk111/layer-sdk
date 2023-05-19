@@ -1,13 +1,18 @@
-use pulsar_std::response::{AuthQueryResponse, BankQueryResponse, QueryResponse};
+use pulsar_std::response::{AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse};
 use pulsar_std::{AccountId, AuthQuery, BankQuery, Query, QueryError};
 
-use cosmos_sdk_proto::cosmos::auth::v1beta1::QueryAccountRequest;
+use cosmos_sdk_proto::cosmos::auth::v1beta1::{
+    BaseAccount, QueryAccountRequest, QueryAccountResponse,
+};
 use cosmos_sdk_proto::cosmos::bank::v1beta1::{
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
     QuerySupplyOfRequest, QuerySupplyOfResponse,
 };
 use cosmos_sdk_proto::prost::Message;
+use cosmos_sdk_proto::traits::MessageExt;
 
+use crate::pubkey::encode_cosmos_pubkey;
+use crate::tx::FIXED_ACCOUNT_NUMBER;
 use crate::utils::{encode_sdk_coin, encode_sdk_coins};
 use crate::CosmosError;
 
@@ -83,19 +88,40 @@ pub fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>,
     }
 }
 
-pub fn encode_cosmos_response(res: &QueryResponse) -> Vec<u8> {
+pub fn encode_cosmos_response(res: &QueryResponse) -> Result<Vec<u8>, QueryError> {
     match res {
-        QueryResponse::Raw { value } => value.clone(),
+        QueryResponse::Raw { value } => Ok(value.clone()),
         QueryResponse::Auth(auth) => encode_auth_response(auth),
-        QueryResponse::Bank(bank) => encode_bank_response(bank),
+        QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
     }
 }
 
-pub fn encode_auth_response(res: &AuthQueryResponse) -> Vec<u8> {
+pub fn encode_auth_response(res: &AuthQueryResponse) -> Result<Vec<u8>, QueryError> {
     match res {
-        AuthQueryResponse::Account(_) => {
-            // QueryAccountResponse { account: Some(r.account.clone()) }.encode_to_vec()
-            todo!();
+        AuthQueryResponse::Account(acc) => {
+            let (address, pub_key, sequence) = match acc {
+                AccountResponse::External {
+                    address,
+                    pubkey,
+                    sequence,
+                } => {
+                    let pub_key = pubkey.as_ref().map(encode_cosmos_pubkey).transpose()?;
+                    (address.to_string(), pub_key, *sequence)
+                }
+                AccountResponse::Internal { address } => (address.to_string(), None, 0),
+                AccountResponse::Smart { address, .. } => (address.to_string(), None, 0),
+            };
+            let base = BaseAccount {
+                address,
+                account_number: FIXED_ACCOUNT_NUMBER,
+                sequence,
+                pub_key,
+            };
+            let account = Some(
+                base.to_any()
+                    .map_err(|_| QueryError::EncodingError("to_any".to_string()))?,
+            );
+            Ok(QueryAccountResponse { account }.encode_to_vec())
         }
     }
 }
