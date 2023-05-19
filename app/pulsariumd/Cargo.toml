@@ -1,6 +1,6 @@
 [package]
 name = "pulsariumd"
-description = "Rust ABCI app to run Pulsarium with CometBFT"
+description = "Rust ABCI app to run Pulsarium with CometBFT 0.38"
 version = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }

@@ -1,8 +1,11 @@
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, StdError};
+use std::error::Error as Err;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
+use crate::api::TxResult;
+use crate::tx::Tx;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Query {
@@ -10,7 +13,15 @@ pub enum Query {
     Raw {
         key: Vec<u8>,
     },
+    Auth(AuthQuery),
     Bank(BankQuery),
+    Simulate(Tx),
+}
+
+impl From<AuthQuery> for Query {
+    fn from(value: AuthQuery) -> Self {
+        Query::Auth(value)
+    }
 }
 
 impl From<BankQuery> for Query {
@@ -41,14 +52,71 @@ impl Display for BankQuery {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QueryResponse {
-    Raw { value: Vec<u8> },
-    Bank(BankQueryResponse),
+pub enum AuthQuery {
+    /// Return value is of type AccountResponse.
+    Account { address: AccountId },
 }
 
-impl From<BankQueryResponse> for QueryResponse {
+impl Display for AuthQuery {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AuthQuery::Account { .. } => f.write_str("AuthQuery::Account"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueryResponse<E: Err> {
+    Raw { value: Vec<u8> },
+    Auth(AuthQueryResponse),
+    Bank(BankQueryResponse),
+    Simulate(TxResult<E>),
+}
+
+impl<E: Err> From<AuthQueryResponse> for QueryResponse<E> {
+    fn from(value: AuthQueryResponse) -> Self {
+        QueryResponse::Auth(value)
+    }
+}
+
+impl<E: Err> From<BankQueryResponse> for QueryResponse<E> {
     fn from(value: BankQueryResponse) -> Self {
         QueryResponse::Bank(value)
+    }
+}
+
+impl<E: Err> From<TxResult<E>> for QueryResponse<E> {
+    fn from(value: TxResult<E>) -> Self {
+        QueryResponse::Simulate(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthQueryResponse {
+    Account(AccountResponse),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AccountResponse {
+    /// This is External Account in Ethereum terms, controlled by a public key
+    External {
+        address: AccountId,
+        pubkey: Option<crate::PubKey>,
+        sequence: u64,
+    },
+    /// No pubkey can control this, either contract or "module account"
+    Internal { address: AccountId },
+    /// Used for account abstraction, where a contract can validate what a pubkey can do
+    Smart {
+        address: AccountId,
+        // FIXME: any more info to add here?
+        contract: AccountId,
+    },
+}
+
+impl<E: Err> From<AccountResponse> for QueryResponse<E> {
+    fn from(value: AccountResponse) -> Self {
+        AuthQueryResponse::Account(value).into()
     }
 }
 
@@ -66,7 +134,7 @@ pub struct SupplyResponse {
     pub amount: Coin,
 }
 
-impl From<SupplyResponse> for QueryResponse {
+impl<E: Err> From<SupplyResponse> for QueryResponse<E> {
     fn from(value: SupplyResponse) -> Self {
         BankQueryResponse::Supply(value).into()
     }
@@ -79,7 +147,7 @@ pub struct BalanceResponse {
     pub amount: Coin,
 }
 
-impl From<BalanceResponse> for QueryResponse {
+impl<E: Err> From<BalanceResponse> for QueryResponse<E> {
     fn from(value: BalanceResponse) -> Self {
         BankQueryResponse::Balance(value).into()
     }
@@ -91,39 +159,30 @@ pub struct AllBalanceResponse {
     pub amount: Vec<Coin>,
 }
 
-impl From<AllBalanceResponse> for QueryResponse {
+impl<E: Err> From<AllBalanceResponse> for QueryResponse<E> {
     fn from(value: AllBalanceResponse) -> Self {
         BankQueryResponse::AllBalances(value).into()
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum QueryError {
+    #[error("{0}")]
+    Std(#[from] StdError),
+
     #[error("Unsupported path: {0}")]
     UnsupportedPath(String),
 
     #[error("{0}")]
     Addr(#[from] AccountIdError),
+
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Parse: {0}")]
+    ParseError(String),
+
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Encoding: {0}")]
+    EncodingError(String),
 }
-
-mod cosmos {
-    use super::*;
-
-    impl QueryResponse {
-        /// Make a binary protobuf encoding of this type
-        pub fn to_cosmos(&self) -> Result<Vec<u8>, QueryError> {
-            todo!();
-        }
-    }
-}
-
-// mod cosmos {
-//     use cosmos_sdk_proto::{
-//         cosmos::bank::v1beta1::MsgSend,
-//         cosmos::base::v1beta1::Coin as SdkCoin,
-//         prost::DecodeError,
-//         traits::{MessageExt, TypeUrl},
-//     };
-//
-//     use cosmrs::Any;
-// }

@@ -1,9 +1,9 @@
 use cosmwasm_std::{BlockInfo, Event, StdError};
+use pulsar_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
 use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
-use pulsar_storage::{ReadonlyStorage, Storage};
+use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage};
 
-use crate::api::{Block, MsgResponse};
 use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
@@ -42,7 +42,7 @@ impl StateMachine {
         meter: &mut GasMeter,
         block: &BlockInfo,
         request: Query,
-    ) -> Result<QueryResponse, PulsarError> {
+    ) -> Result<QueryResponse<PulsarError>, PulsarError> {
         match request {
             Query::Raw { key } => {
                 let value = storage
@@ -51,7 +51,40 @@ impl StateMachine {
                 Ok(QueryResponse::Raw { value })
             }
             Query::Bank(bank) => self.bank.query(storage, meter, block, self, bank),
+            Query::Auth(auth) => self.auth.query(storage, meter, block, self, auth),
+            Query::Simulate(tx) => {
+                // based on execute_tx
+                let mut store = ScratchTx::new(storage);
+                let result = self.query_simulate(&mut store, meter, block, tx);
+                let gas = GasInfo::from_meter(meter);
+                let res = TxResult { gas, result };
+                Ok(QueryResponse::Simulate(res))
+            }
         }
+    }
+
+    fn query_simulate(
+        &self,
+        store: &mut dyn Storage,
+        meter: &mut GasMeter,
+        block: &BlockInfo,
+        tx: Tx,
+    ) -> PulsarResult<TxResponse> {
+        let data = self
+            .auth
+            .validate_tx(store, meter, block, self, tx, false)?;
+        let resps = data
+            .msgs
+            .into_iter()
+            .map(|msg| self.process_msg(store, meter, &data.signer, block, msg))
+            .collect::<PulsarResult<Vec<_>>>()?;
+        // Question: pull this out to a function? (copied from execute_tx)
+        let data = resps
+            .iter()
+            .map(|r| r.data.clone().unwrap_or_default())
+            .collect();
+        let events = resps.into_iter().map(|r| r.events).collect();
+        Ok(TxResponse { data, events })
     }
 
     pub fn process_msg(
@@ -76,7 +109,7 @@ impl StateMachine {
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxData> {
-        self.auth.validate_tx(storage, meter, block, self, tx)
+        self.auth.validate_tx(storage, meter, block, self, tx, true)
     }
 
     /// Note: erroring here (including exceeding gas limits) will abort block execution. Be careful.

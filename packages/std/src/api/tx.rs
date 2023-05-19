@@ -1,7 +1,6 @@
 use cosmwasm_std::Event;
 
-use crate::error::PulsarError;
-use pulsar_std::GasMeter;
+use crate::GasMeter;
 
 /// Response from one message, to be combined for TxResponse
 #[derive(Debug)]
@@ -27,12 +26,13 @@ impl MsgResponse {
 // Errors get codespace = "pulsar", code = 1, log = err.to_string()
 // Success get data and events
 // One entry in data and events per message
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxResponse {
     pub data: Vec<Vec<u8>>,
     pub events: Vec<Vec<Event>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasInfo {
     pub gas_used: u64,
     pub gas_wanted: u64,
@@ -47,22 +47,8 @@ impl GasInfo {
     }
 }
 
-pub struct TxResult {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TxResult<E: std::error::Error> {
     pub gas: GasInfo,
-    pub result: Result<TxResponse, PulsarError>,
+    pub result: Result<TxResponse, E>,
 }
-
-// Note: we may want to use custom event type to support index bool???
-/*
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EventAttribute {
-    #[prost(string, tag = "1")]
-    pub key: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub value: ::prost::alloc::string::String,
-    /// nondeterministic
-    #[prost(bool, tag = "3")]
-    pub index: bool,
-}
-*/

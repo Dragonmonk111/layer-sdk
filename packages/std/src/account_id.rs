@@ -31,7 +31,7 @@ impl Deref for AccountId {
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum AccountIdError {
-    /// TODO: normalize this, so we don't have possibly non-deterministic errors from different crate versions
+    /// FIXME: normalize this, so we don't have possibly non-deterministic errors from different crate versions
     #[error("Bech32: {0}")]
     Bech32(String),
 
@@ -152,5 +152,3 @@ impl KeyDeserialize for &AccountId {
         Ok(AccountId(value))
     }
 }
-
-// TODO: from pubkey

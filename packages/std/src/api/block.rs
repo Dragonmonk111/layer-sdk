@@ -1,7 +1,7 @@
-use crate::api::validator::Validator;
-use crate::api::{ConsensusParams, TxResult, ValidatorUpdate};
 use cosmwasm_std::{Event, Timestamp};
-use pulsar_std::Tx;
+
+use super::{ConsensusParams, TxResult, Validator, ValidatorUpdate};
+use crate::Tx;
 
 /*
     pub struct RequestFinalizeBlock {
@@ -62,14 +62,14 @@ pub struct ResponseFinalizeBlock {
 }
 **/
 
-pub struct FinalizeBlockResponse {
+pub struct FinalizeBlockResponse<E: std::error::Error> {
     /// set of block events emmitted as part of executing the block
     pub events: Vec<Event>,
 
     /// the result of executing each transaction including the events
     /// the particular transction emitted. This should match the order
     /// of the transactions delivered in the block itself
-    pub tx_results: Vec<TxResult>,
+    pub tx_results: Vec<TxResult<E>>,
 
     /// a list of updates to the validator set. These will reflect the validator set at current height + 2.
     pub validator_updates: Vec<ValidatorUpdate>,

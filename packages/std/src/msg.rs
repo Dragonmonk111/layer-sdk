@@ -1,4 +1,3 @@
-use cosmos_sdk_proto::prost::DecodeError;
 use cosmwasm_std::{Coin, StdError};
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
@@ -55,12 +54,13 @@ pub enum MsgError {
     #[error("Tx requires signatures from multiple addresses - not supported")]
     MultipleSigners,
 
-    // TODO: remove this and replace with deterministic errors
-    #[error("{0}")]
-    ProtoDecode(#[from] DecodeError),
-
     #[error("{0}")]
     Addr(#[from] AccountIdError),
+
+    /// FIXME: either ensure all callers of this function produce determinstic strings,
+    /// Or remove all info
+    #[error("Parse: {0}")]
+    ParseError(String),
 }
 
 impl Msg {
@@ -81,43 +81,4 @@ pub fn required_signer(msgs: &[Msg]) -> Result<AccountId, MsgError> {
         return Err(MsgError::MultipleSigners);
     }
     signers.pop().ok_or(MsgError::NoMessages)
-}
-
-mod cosmos {
-    use super::*;
-    use cosmos_sdk_proto::{
-        cosmos::bank::v1beta1::MsgSend,
-        cosmos::base::v1beta1::Coin as SdkCoin,
-        traits::{MessageExt, TypeUrl},
-    };
-    use cosmrs::Any;
-    use cosmwasm_std::Uint128;
-
-    fn parse_sdk_coin(coin: &SdkCoin) -> Result<Coin, MsgError> {
-        Ok(Coin {
-            denom: coin.denom.clone(),
-            amount: Uint128::try_from(coin.amount.as_str())?,
-        })
-    }
-
-    fn parse_sdk_coins(coins: &[SdkCoin]) -> Result<Vec<Coin>, MsgError> {
-        coins.iter().map(parse_sdk_coin).collect()
-    }
-
-    impl Msg {
-        pub fn from_cosmos(msg: &Any) -> Result<Msg, MsgError> {
-            match msg.type_url.as_str() {
-                MsgSend::TYPE_URL => {
-                    let parsed = MsgSend::from_any(msg)?;
-                    Ok(BankMsg::Send {
-                        sender: AccountId::parse_string(&parsed.from_address)?,
-                        recipient: AccountId::parse_string(&parsed.to_address)?,
-                        amount: parse_sdk_coins(&parsed.amount)?,
-                    }
-                    .into())
-                }
-                _ => Err(MsgError::UnsupportedAnyType(msg.type_url.clone())),
-            }
-        }
-    }
 }

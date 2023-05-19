@@ -1,6 +1,7 @@
 [workspace]
 members = ["app/*", "packages/*"]
-#default-members   = ["app/pulsariumd"]
+# remove this temporarily as it has huge build dependencies (around 330 for lcd, 230 for cosmos, 110 for others)
+exclude = ["app/lcd"]
 
 [workspace.package]
 edition       = "2021"
@@ -23,15 +24,13 @@ cw-storage-plus = "1.0.1"
 cw-utils = "1.0.1"
 serde = { version = "1.0.160", features = ["derive"]}
 tracing = "0.1.37"
-bech32 = "0.9.1"
-cosmrs = {version = "0.13.0", default_features = false, features = ["cosmwasm"] }
-cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
 itertools = "0.10.5"
 sha2 = "0.10.6"
 ripemd = "0.1.3"
 parking_lot = "0.12.1"
 
 pulsar-app = { path = "./packages/app" }
+pulsar-cosmos = { path = "./packages/cosmos" }
 pulsar-std = { path = "./packages/std" }
 pulsar-storage = { path = "./packages/storage" }
 

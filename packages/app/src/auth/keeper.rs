@@ -1,9 +1,12 @@
-use crate::error::PulsarResult;
+use crate::error::{PulsarError, PulsarResult};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
-use pulsar_std::{AccountId, GasMeter, Msg, PubKey, Tx, TxError};
-use pulsar_storage::{prefixed, Map, Storage};
+use pulsar_std::{
+    response::{AccountResponse, QueryResponse},
+    AccountId, AuthQuery, GasMeter, Msg, PubKey, Tx, TxError,
+};
+use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 
 use crate::sm::StateMachine;
 
@@ -30,9 +33,7 @@ pub enum Account {
     },
 }
 
-pub struct Auth {
-    // TODO
-}
+pub struct Auth {}
 
 impl Auth {
     pub fn new() -> Self {
@@ -48,6 +49,8 @@ impl Auth {
         _block: &BlockInfo,
         sm: &StateMachine,
         tx: Tx,
+        // Set to false in simulate only
+        validate_sig: bool,
     ) -> PulsarResult<TxData> {
         // later handle other types
         let Tx::Signed(tx) = tx;
@@ -119,7 +122,9 @@ impl Auth {
         };
 
         // validate the signature with that account (Cosmos-specific)
-        pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
+        if validate_sig {
+            pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
+        }
 
         // TODO: filter logic on gas pricing.... charge min fee
 
@@ -138,9 +143,34 @@ impl Auth {
         Ok(TxData {
             signer: tx.signer,
             msgs: tx.msgs,
-            // TODO: make some max gas limit
             gas_wanted: tx.fee.gas_limit,
         })
+    }
+
+    pub fn query(
+        &self,
+        storage: &dyn ReadonlyStorage,
+        meter: &mut GasMeter,
+        _block: &BlockInfo,
+        _sm: &StateMachine,
+        request: AuthQuery,
+    ) -> PulsarResult<QueryResponse<PulsarError>> {
+        let auth_storage = prefixed_read(storage, NAMESPACE_AUTH);
+        match request {
+            AuthQuery::Account { address } => {
+                let account = ACCOUNTS.load(&auth_storage, meter, &address)?;
+                let res = match account {
+                    Account::External { pubkey, sequence } => AccountResponse::External {
+                        address,
+                        pubkey: Some(pubkey),
+                        sequence,
+                    },
+                    Account::Internal {} => AccountResponse::Internal { address },
+                    Account::Smart { contract } => AccountResponse::Smart { contract, address },
+                };
+                Ok(res.into())
+            }
+        }
     }
 }
 

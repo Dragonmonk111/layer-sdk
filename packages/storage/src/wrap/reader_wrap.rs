@@ -72,7 +72,6 @@ impl ReaderWrapper {
                 }
             };
 
-        // TODO: make this proper
         let base = storage.range(meter, start, end, order)?;
         let merged = MergeOverlay::new(local, base, order);
         Ok(Box::new(merged))
@@ -153,8 +152,6 @@ where
     type Item = GasResult<Record>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: charge proper gas
-
         let (left, right) = (self.left.peek(), self.right.peek());
         match (left, right) {
             (Some(litem), Some(ritem)) => {
