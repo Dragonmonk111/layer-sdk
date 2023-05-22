@@ -19,7 +19,7 @@ pub fn query_response_to_proto(
 ) -> tendermint_proto::abci::ResponseQuery {
     match response {
         Ok(response) => {
-            // TODO: remove unwrap
+            // TODO: error not unwrap
             let value = encode_cosmos_response(&response).unwrap();
             let key = match response {
                 pulsar_std::response::QueryResponse::Raw { key, .. } => key,

@@ -119,8 +119,10 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
         info!("abci query");
-        let request = query_request_from_proto(request);
-        let res = self.app.read().query(request);
+        let app = self.app.read();
+        let chain_id = app.chain_id();
+        let request = query_request_from_proto(request, chain_id);
+        let res = app.query(request);
         query_response_to_proto(res)
     }
 

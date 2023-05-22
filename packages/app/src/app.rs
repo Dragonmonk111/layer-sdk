@@ -179,6 +179,10 @@ impl<T: PersistentStorage + 'static> App<T> {
         self.storage.app_hash()
     }
 
+    pub fn chain_id(&self) -> &str {
+        &self.data.as_ref().unwrap().chain_id
+    }
+
     /// Returns serialized response to the query that can be passed back verbatum
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse<PulsarError>> {
         let reader = self.storage.reader();

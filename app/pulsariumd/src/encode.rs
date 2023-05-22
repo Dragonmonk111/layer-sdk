@@ -1,5 +1,7 @@
 // Convert from abci types into pulsar types
 
+use pulsar_cosmos::parse_cosmos_query;
+
 use crate::convert::{
     consensus_params_from_proto, timestamp_from_proto, validator_updates_from_proto,
 };
@@ -19,9 +21,19 @@ pub fn init_request_from_proto(
 }
 
 pub fn query_request_from_proto(
-    _request: tendermint_proto::abci::RequestQuery,
+    request: tendermint_proto::abci::RequestQuery,
+    // we need to pass in out-of-bound info for simulate
+    chain_id: &str,
 ) -> pulsar_std::Query {
-    todo!()
+    // TODO: no panic
+    if request.prove {
+        panic!("Proofs not supported");
+    }
+    if request.height > 0 {
+        panic!("Height not supported");
+    }
+    // TODO: error not unwrap
+    parse_cosmos_query(&request.path, &request.data, chain_id).unwrap()
 }
 
 pub fn check_request_from_proto(
