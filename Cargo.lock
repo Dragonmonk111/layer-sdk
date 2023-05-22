@@ -1912,7 +1912,7 @@ dependencies = [
 [[package]]
 name = "tendermint-abci"
 version = "0.32.0"
-source = "git+https://github.com/informalsystems/tendermint-rs.git?rev=483a1da#483a1da0a4f6337fa27c129682a3e47c7123a495"
+source = "git+https://github.com/informalsystems/tendermint-rs.git?rev=bdef9884221a850323f98b3fa2b9b7471f5e8437#bdef9884221a850323f98b3fa2b9b7471f5e8437"
 dependencies = [
  "bytes",
  "flex-error",
@@ -1942,7 +1942,7 @@ dependencies = [
 [[package]]
 name = "tendermint-proto"
 version = "0.32.0"
-source = "git+https://github.com/informalsystems/tendermint-rs.git?rev=483a1da#483a1da0a4f6337fa27c129682a3e47c7123a495"
+source = "git+https://github.com/informalsystems/tendermint-rs.git?rev=bdef9884221a850323f98b3fa2b9b7471f5e8437#bdef9884221a850323f98b3fa2b9b7471f5e8437"
 dependencies = [
  "bytes",
  "flex-error",
