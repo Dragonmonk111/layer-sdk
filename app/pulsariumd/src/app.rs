@@ -19,11 +19,12 @@ use pulsar_storage::{MemoryStore, PersistentStorage};
 
 use crate::{
     decode::{
-        decode_check_response, decode_finalize_response, decode_init_response,
-        decode_query_response,
+        check_response_to_proto, finalize_response_to_proto, init_response_to_proto,
+        query_response_to_proto,
     },
     encode::{
-        encode_check_request, encode_finalize_request, encode_init_request, encode_query_request,
+        check_request_from_proto, finalize_request_from_proto, init_request_from_proto,
+        query_request_from_proto,
     },
 };
 
@@ -108,37 +109,37 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn init_chain(&self, request: RequestInitChain) -> ResponseInitChain {
         info!("abci init_chain");
-        let request = encode_init_request(request);
+        let request = init_request_from_proto(request);
         // This requires we are in WaitingInit state, otherwise panic
         let res = self.app.write().init(request).unwrap();
-        decode_init_response(res)
+        init_response_to_proto(res)
     }
 
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
         info!("abci query");
-        let request = encode_query_request(request);
+        let request = query_request_from_proto(request);
         let res = self.app.read().query(request);
-        decode_query_response(res)
+        query_response_to_proto(res)
     }
 
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
         info!("abci check_tx");
-        let request = encode_check_request(request);
+        let request = check_request_from_proto(request);
         let res = self.app.read().check_tx(request);
-        decode_check_response(res)
+        check_response_to_proto(res)
     }
 
     #[instrument(skip_all)]
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
         info!("abci finalize_block");
-        let request = encode_finalize_request(request);
+        let request = finalize_request_from_proto(request);
         // FIXME: crash node on finalize block error?
         let res = self.app.write().finalize_block(request).unwrap();
-        decode_finalize_response(res)
+        finalize_response_to_proto(res)
     }
 
     /// Signals that messages queued on the client should be flushed to the server.

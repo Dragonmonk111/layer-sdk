@@ -1461,9 +1461,11 @@ name = "pulsariumd"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "cosmwasm-std",
  "figment",
  "parking_lot",
  "pulsar-app",
+ "pulsar-cosmos",
  "pulsar-std",
  "pulsar-storage",
  "serde",

@@ -10,6 +10,7 @@ use tracing_subscriber::FmtSubscriber;
 mod app;
 mod cli;
 mod config;
+mod convert;
 mod decode;
 mod encode;
 

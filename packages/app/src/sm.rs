@@ -49,7 +49,7 @@ impl StateMachine {
                 let value = storage
                     .get(meter, &key)?
                     .ok_or_else(|| StdError::not_found("raw"))?;
-                Ok(QueryResponse::Raw { value })
+                Ok(QueryResponse::Raw { key, value })
             }
             Query::Bank(bank) => self.bank.query(storage, meter, block, self, bank),
             Query::Auth(auth) => self.auth.query(storage, meter, block, self, auth),

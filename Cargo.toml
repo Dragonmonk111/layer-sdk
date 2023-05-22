@@ -34,6 +34,9 @@ pulsar-cosmos = { path = "./packages/cosmos" }
 pulsar-std = { path = "./packages/std" }
 pulsar-storage = { path = "./packages/storage" }
 
+tendermint-abci = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
+tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
+
 
 [profile.release]
 lto              = true

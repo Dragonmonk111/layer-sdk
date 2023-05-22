@@ -122,7 +122,7 @@ pub fn encode_cosmos_response<E: std::error::Error>(
     res: &QueryResponse<E>,
 ) -> Result<Vec<u8>, QueryError> {
     match res {
-        QueryResponse::Raw { value } => Ok(value.clone()),
+        QueryResponse::Raw { key: _, value } => Ok(value.clone()),
         QueryResponse::Auth(auth) => encode_auth_response(auth),
         QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
         QueryResponse::Simulate(simulate) => encode_simulate_response(simulate),

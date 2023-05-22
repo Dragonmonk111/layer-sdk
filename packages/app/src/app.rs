@@ -163,7 +163,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         Ok(InitChainResponse {
             consensus_params: request.consensus_params,
             validators: request.validators,
-            app_hash: self.storage.app_hash().into(),
+            app_hash: self.storage.app_hash(),
         })
     }
 }

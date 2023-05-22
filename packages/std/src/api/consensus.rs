@@ -2,7 +2,8 @@
 // but let's make this more generic
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::Timestamp;
+
+use crate::Duration;
 
 const DEFAULT_APP_VERSION: u64 = 1;
 const DEFAULT_BLOCK_SIZE: u64 = 2 * 1024 * 1024;
@@ -48,7 +49,7 @@ impl Default for BlockParams {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvidenceParams {
     pub max_age_blocks: u64,
-    pub max_age_time: Timestamp,
+    pub max_age_time: Duration,
     pub max_bytes: u64,
 }
 
@@ -56,7 +57,7 @@ impl Default for EvidenceParams {
     fn default() -> Self {
         EvidenceParams {
             max_age_blocks: DEFAULT_EVIDENCE_AGE / 5,
-            max_age_time: Timestamp::from_seconds(DEFAULT_EVIDENCE_AGE),
+            max_age_time: Duration::from_seconds(DEFAULT_EVIDENCE_AGE),
             max_bytes: 1024 * 1024,
         }
     }

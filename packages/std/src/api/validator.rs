@@ -17,7 +17,7 @@ pub struct ValidatorUpdate {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TmPubKey {
     Ed25519(Vec<u8>),
-    Secp2556k1(Vec<u8>),
+    Secp256k1(Vec<u8>),
 }
 
 impl TmPubKey {
@@ -31,5 +31,5 @@ impl TmPubKey {
 #[allow(unused)]
 pub enum TmPubKeyType {
     Ed25519,
-    Secp2556k1,
+    Secp256k1,
 }

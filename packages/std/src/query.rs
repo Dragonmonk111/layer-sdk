@@ -67,7 +67,7 @@ impl Display for AuthQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryResponse<E: Err> {
-    Raw { value: Vec<u8> },
+    Raw { key: Vec<u8>, value: Vec<u8> },
     Auth(AuthQueryResponse),
     Bank(BankQueryResponse),
     Simulate(TxResult<E>),
