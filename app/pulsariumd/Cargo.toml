@@ -8,11 +8,24 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+pulsar-app = { workspace = true }
+pulsar-std = { workspace = true }
+pulsar-cosmos = { workspace = true }
+pulsar-storage = { workspace = true }
+
 clap = { version = "4.2.4", features = ["derive"]}
 figment = { version = "0.10.8", features = ["env", "toml"]}
 serde = { workspace = true }
-tendermint-abci = "0.31.1"
-tendermint-proto = "0.31.1"
+
+cosmwasm-std = { workspace = true }
+
+# tendermint-abci = "0.33.0"
+# tendermint-proto = "0.33.0"
+# This rev is merged to main, but not yet tagged
+tendermint-abci = { workspace = true }
+tendermint-proto = { workspace = true }
+
 tracing = { workspace = true }
 thiserror = { workspace = true }
 tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot"]}
+parking_lot = { workspace = true }

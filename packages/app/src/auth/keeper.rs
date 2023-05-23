@@ -1,4 +1,5 @@
-use crate::error::{PulsarError, PulsarResult};
+use tracing::instrument;
+
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
@@ -8,6 +9,7 @@ use pulsar_std::{
 };
 use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 
+use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
 
 pub const NAMESPACE_AUTH: &[u8] = b"auth";
@@ -33,6 +35,7 @@ pub enum Account {
     },
 }
 
+#[derive(Debug, Clone)]
 pub struct Auth {}
 
 impl Auth {
@@ -42,6 +45,7 @@ impl Auth {
 
     /// This checks (and bumps) sequences of the local storage and deducts the fees from the account.
     /// If successful, it returns the TxData with all info that needs to be executed.
+    #[instrument(skip(self, storage))]
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,

@@ -36,5 +36,5 @@ pub struct InitChainRequest {
 pub struct InitChainResponse {
     pub consensus_params: ConsensusParams,
     pub validators: Vec<ValidatorUpdate>,
-    pub app_hash: Binary,
+    pub app_hash: Vec<u8>,
 }

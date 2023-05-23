@@ -32,6 +32,12 @@ impl Default for MemoryStore {
     }
 }
 
+impl fmt::Debug for MemoryStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MemoryStore with {} elements", self.0.read().data.len())
+    }
+}
+
 struct BTreeStorage {
     hash: Vec<u8>,
     data: BTreeMap<Vec<u8>, Vec<u8>>,

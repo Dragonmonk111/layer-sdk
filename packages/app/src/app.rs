@@ -1,17 +1,8 @@
-use parking_lot::RwLock;
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 use thiserror::Error;
+use tracing::{info, instrument};
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
-
-use pulsar_std::response::QueryResponse;
-use pulsar_std::{GasMeter, Query, Tx};
-use pulsar_storage::{
-    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
-    Transaction,
-};
 
 use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
@@ -19,6 +10,12 @@ use crate::sm::StateMachine;
 use pulsar_std::api::{
     Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
     TxResponse, TxResult,
+};
+use pulsar_std::response::QueryResponse;
+use pulsar_std::{GasMeter, Query, Tx};
+use pulsar_storage::{
+    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
+    Transaction,
 };
 
 // FIXME: make this configurable on per-node basis
@@ -33,16 +30,28 @@ const MAX_END_BLOCK_GAS: u64 = 10_000_000;
 
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
 /// application. It *should* be able to run inside an ABCI app as well as an Avalanche Subnet.
-#[allow(dead_code)]
+///
+/// We assume this is wrapped in `Arc<RwLock<App>>` if done in multi-threaded context.
+/// Some methods require &mut.
+/// We also do a two-step creation. `::new()` constructs an App with no state (which can be stored
+/// in the `Arc<RwLock<_>>`), and we need `&mut App` to `init()` or `load_from_storage()` to set
+/// up the inner state.
+/// All other methods require this inner state to be set up and will panic otherwise.
+#[derive(Debug)]
 pub struct App<T: PersistentStorage> {
     // State
-    storage: Arc<T>,
-
-    // Current Block
-    block: RwLock<BlockInfo>,
+    storage: T,
 
     // State Machine Logic
     logic: StateMachine,
+
+    data: Option<InnerData>,
+}
+
+#[derive(Debug, Clone)]
+struct InnerData {
+    // Current Block
+    block: BlockInfo,
 
     // cached chain_id
     chain_id: String,
@@ -73,52 +82,65 @@ pub struct AppState {
     pub params: BlockParams,
 }
 
+// First step to creation
+impl<T: PersistentStorage + 'static> App<T> {
+    pub fn new(storage: T, logic: StateMachine) -> App<T> {
+        App {
+            storage,
+            logic,
+            data: None,
+        }
+    }
+}
+
+// Second creation step
 impl<T: PersistentStorage + 'static> App<T> {
     /// Re-create a blockchain from existing stored state.
     /// If this fails with AppLoadError::NoStoredState, then we wait for init to be called.
     /// Otherwise we fail on loading.
-    pub fn load_from_storage(storage: T, logic: StateMachine) -> Result<App<T>, AppLoadError> {
+    pub fn load_from_storage(&mut self) -> Result<(), AppLoadError> {
         let mut meter = GasMeter::infinite();
         let state = {
-            let reader = storage.reader();
+            let reader = self.storage.reader();
             let app_store = prefixed_read(&reader, NAMESPACE_APP);
             APP_STATE
                 .may_load(&app_store, &mut meter)
                 .map_err(|e| AppLoadError::InvalidState(e.to_string()))?
         };
         match state {
-            Some(state) => Ok(App {
-                storage: Arc::new(storage),
-                logic,
-                block: RwLock::new(state.last_block),
-                chain_id: state.chain_id,
-                params: state.params,
-            }),
+            Some(state) => {
+                let data = InnerData {
+                    block: state.last_block,
+                    chain_id: state.chain_id,
+                    params: state.params,
+                };
+                self.data = Some(data);
+                Ok(())
+            }
             None => Err(AppLoadError::NoStoredState),
         }
     }
 
     /// Called once upon blockchain startup with genesis info, before anything else is called
-    pub fn init(
-        storage: T,
-        logic: StateMachine,
-        request: InitChainRequest,
-    ) -> PulsarResult<(Self, InitChainResponse)> {
+    pub fn init(&mut self, request: InitChainRequest) -> PulsarResult<InitChainResponse> {
         // Store the state
         let chain_id = request.chain_id.clone();
         let last_block = BlockInfo {
-            height: request.initial_height,
+            // If initial height is 10, that means the first block will be 10.
+            // So, we store "last_block" as one less.
+            height: request.initial_height.saturating_sub(1),
             time: request.time,
             chain_id: request.chain_id,
         };
 
         // start a transaction
-        let mut writer = storage.writer();
+        let mut writer = self.storage.writer();
         let mut meter = GasMeter::infinite();
 
         // Set up the state machine here
         let genesis = GenesisState::parse(&request.app_state)?;
-        logic.init(&mut writer, &mut meter, &last_block, genesis)?;
+        self.logic
+            .init(&mut writer, &mut meter, &last_block, genesis)?;
 
         // Store the application data
         let state = AppState {
@@ -136,24 +158,36 @@ impl<T: PersistentStorage + 'static> App<T> {
         writer.commit(&mut meter)?;
 
         // Create the response
-        let response = InitChainResponse {
-            consensus_params: request.consensus_params,
-            validators: request.validators,
-            app_hash: storage.app_hash().into(),
-        };
-        // And initialize the application
-        let app = App {
-            storage: Arc::new(storage),
-            logic,
-            block: RwLock::new(state.last_block),
+        self.data = Some(InnerData {
+            block: state.last_block,
             chain_id: state.chain_id,
             params: state.params,
-        };
+        });
+        Ok(InitChainResponse {
+            consensus_params: request.consensus_params,
+            validators: request.validators,
+            app_hash: self.storage.app_hash(),
+        })
+    }
+}
 
-        Ok((app, response))
+// All these require an initialized app and will panic if neither load_from_storage
+// nor init have been successfully called before.
+impl<T: PersistentStorage + 'static> App<T> {
+    pub fn info(&self) -> Option<&BlockInfo> {
+        self.data.as_ref().map(|d| &d.block)
+    }
+
+    pub fn app_hash(&self) -> Vec<u8> {
+        self.storage.app_hash()
+    }
+
+    pub fn chain_id(&self) -> &str {
+        &self.data.as_ref().unwrap().chain_id
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
+    #[instrument(skip(self))]
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse<PulsarError>> {
         let reader = self.storage.reader();
 
@@ -163,19 +197,17 @@ impl<T: PersistentStorage + 'static> App<T> {
             _ => self.query_gas_meter(),
         };
 
-        let block = self.block.read();
-        let resp = self
-            .logic
-            .query(&reader, &mut meter, block.deref(), request);
-        drop(block);
-
+        info!("query: {:?}", request);
+        let block = &self.data.as_ref().unwrap().block;
+        let resp = self.logic.query(&reader, &mut meter, block, request);
         reader.abort();
         resp
     }
 
     // initialize block gas meter from params, allow infinite if not set
     fn block_gas_meter(&self) -> GasMeter {
-        self.params
+        let params = &self.data.as_ref().unwrap().params;
+        params
             .max_gas
             .map(GasMeter::new)
             .unwrap_or_else(GasMeter::infinite)
@@ -183,7 +215,8 @@ impl<T: PersistentStorage + 'static> App<T> {
 
     // use block gas limit for simulations, or a default if not set
     fn simulate_gas_meter(&self) -> GasMeter {
-        let limit = self.params.max_gas.unwrap_or(DEFAULT_SIMULATE_GAS);
+        let params = &self.data.as_ref().unwrap().params;
+        let limit = params.max_gas.unwrap_or(DEFAULT_SIMULATE_GAS);
         GasMeter::new(limit)
     }
 
@@ -191,6 +224,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         GasMeter::new(DEFAULT_QUERY_GAS)
     }
 
+    #[instrument(skip(self))]
     pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
         // temporary cache we will throw away
         let reader = self.storage.reader();
@@ -198,14 +232,13 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // FIXME: only run auth check? or do full tx simulation?
         let mut meter = self.block_gas_meter();
-        let block = self.block.read();
-        let res = self.execute_tx(&mut store, &mut meter, block.deref(), tx);
-        drop(block);
-
+        let block = &self.data.as_ref().unwrap().block;
+        let res = self.execute_tx(&mut store, &mut meter, block, tx);
         reader.abort();
         res
     }
 
+    #[instrument(skip(self, storage))]
     fn execute_tx(
         &self,
         storage: &mut dyn Storage,
@@ -222,6 +255,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         let data = match val_res {
             Ok(x) => x,
             Err(e) => {
+                info!("tx validation failed: {}", e);
                 // ignore this out of gas error, aborting anyway and future txs will fail
                 let _ = block_meter.charge(val_meter.used());
                 return TxResult {
@@ -283,31 +317,35 @@ impl<T: PersistentStorage + 'static> App<T> {
         TxResult { gas, result }
     }
 
+    #[instrument(skip_all)]
     pub fn finalize_block(
-        &self,
+        &mut self,
         full_block: Block,
     ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
         let mut writer = self.storage.writer();
+
+        let data = self.data.as_ref().unwrap();
 
         // assert we are exactly one block ahead of last known state
         let block = BlockInfo {
             height: full_block.height,
             time: full_block.time,
-            chain_id: self.chain_id.clone(),
+            chain_id: data.chain_id.clone(),
         };
-        let old_block = self.block.read().clone();
+        let old_block = data.block.clone();
         if block.height != old_block.height + 1 {
             return Err(PulsarError::BadBlockHeight {
                 got: block.height,
                 previous: old_block.height,
             });
         }
-        if block.time <= old_block.time {
+        if block.time < old_block.time {
             return Err(PulsarError::DescendingBlockTime {
-                got: old_block.time.seconds(),
-                previous: block.time.seconds(),
+                got: old_block.time.nanos(),
+                previous: block.time.nanos(),
             });
         }
+        info!(target: "Executing block", height=block.height, time=block.time.seconds());
 
         // Run begin block logic (not included in block gas)
         let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
@@ -332,15 +370,12 @@ impl<T: PersistentStorage + 'static> App<T> {
         let end_events = self.logic.end_block(&mut writer, &mut end_meter, &block)?;
         events.extend(end_events);
 
-        // Use lock around commit to block any concurrent queries
-        let mut new_lock = self.block.write();
-
         // Commit to underlying store. Use infinite gas meter to ensure we don't fail here
         let mut meter = GasMeter::infinite();
         writer.commit(&mut meter)?;
 
         // update block in cache
-        *new_lock.deref_mut() = block;
+        self.data.as_mut().unwrap().block = block;
 
         Ok(FinalizeBlockResponse {
             events,
@@ -396,7 +431,8 @@ mod tests {
         let request = mock_init(&genesis);
 
         // create the app
-        let (app, result) = App::init(storage, logic, request.clone()).unwrap();
+        let mut app = App::new(storage, logic);
+        let result = app.init(request.clone()).unwrap();
         assert_eq!(result.validators, request.validators);
         assert_eq!(result.consensus_params, request.consensus_params);
 
@@ -420,7 +456,8 @@ mod tests {
 
         // copy data into new storage (MemoryStore::import only meant for testing)
         let storage = MemoryStore::import(&app.storage.reader(), None).unwrap();
-        let app2 = App::load_from_storage(storage, app.logic).unwrap();
+        let mut app2 = App::new(storage, app.logic);
+        app2.load_from_storage().unwrap();
 
         // query the recovered state
         let result = app2

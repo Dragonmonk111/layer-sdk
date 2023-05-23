@@ -1,38 +1,89 @@
-use tracing::{debug, info, instrument};
+use core::panic;
+use parking_lot::RwLock;
+use std::sync::Arc;
+use tracing::{debug, instrument};
 
 use tendermint_abci::Application;
-
-use tendermint_proto::v0_37::abci::{
-    response_process_proposal, RequestApplySnapshotChunk, RequestBeginBlock, RequestCheckTx,
-    RequestDeliverTx, RequestEcho, RequestEndBlock, RequestInfo, RequestInitChain,
-    RequestLoadSnapshotChunk, RequestOfferSnapshot, RequestPrepareProposal, RequestProcessProposal,
-    RequestQuery, ResponseApplySnapshotChunk, ResponseBeginBlock, ResponseCheckTx, ResponseCommit,
-    ResponseDeliverTx, ResponseEcho, ResponseEndBlock, ResponseFlush, ResponseInfo,
-    ResponseInitChain, ResponseListSnapshots, ResponseLoadSnapshotChunk, ResponseOfferSnapshot,
-    ResponsePrepareProposal, ResponseProcessProposal, ResponseQuery,
+use tendermint_proto::abci::{
+    response_process_proposal, RequestApplySnapshotChunk, RequestCheckTx, RequestEcho,
+    RequestFinalizeBlock, RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
+    RequestOfferSnapshot, RequestPrepareProposal, RequestProcessProposal, RequestQuery,
+    ResponseApplySnapshotChunk, ResponseCheckTx, ResponseCommit, ResponseEcho,
+    ResponseFinalizeBlock, ResponseFlush, ResponseInfo, ResponseInitChain, ResponseListSnapshots,
+    ResponseLoadSnapshotChunk, ResponseOfferSnapshot, ResponsePrepareProposal,
+    ResponseProcessProposal, ResponseQuery,
 };
 
-#[derive(Default, Debug)]
-pub struct Pulsarium {
+use pulsar_app::{App, AppLoadError, StateMachine};
+use pulsar_storage::{MemoryStore, PersistentStorage};
+
+use crate::{
+    decode::{
+        check_response_to_proto, finalize_response_to_proto, init_response_to_proto,
+        query_response_to_proto,
+    },
+    encode::{
+        check_request_from_proto, finalize_request_from_proto, init_request_from_proto,
+        query_request_from_proto,
+    },
+};
+
+#[derive(Debug)]
+pub struct Pulsarium<T: PersistentStorage + 'static> {
     // Applications are `Send` + `Clone` + `'static` because they are cloned for
     // each incoming connection to the ABCI [`Server`]. It is up to the
     // application developer to manage shared state between these clones of their
     // application.
+    app: Arc<RwLock<App<T>>>,
 }
 
-impl Clone for Pulsarium {
-    fn clone(&self) -> Self {
-        debug!("clone Pulsarium");
-        Pulsarium::default()
+impl Default for Pulsarium<MemoryStore> {
+    fn default() -> Self {
+        let store = MemoryStore::new();
+        Self::new(store)
     }
 }
 
-unsafe impl Send for Pulsarium {}
+impl<T: PersistentStorage + 'static> Clone for Pulsarium<T> {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+        }
+    }
+}
 
-impl Application for Pulsarium {
+unsafe impl<T: PersistentStorage> Send for Pulsarium<T> {}
+
+impl<T: PersistentStorage + 'static> Pulsarium<T> {
+    /// Creates a new app and tries to load state from storage.
+    /// If the storage is empty, the app will be left in an uninitialized state
+    /// and init_chain must be called before any other method.
+    pub fn new(store: T) -> Self {
+        let logic = StateMachine::new();
+        let mut app = App::new(store, logic);
+        match app.load_from_storage() {
+            Ok(_) => {
+                // FIXME: proper logging when we have proper tracing
+                let height = app.info().unwrap().height;
+                println!("Initialized app from storage at height {}", height);
+            }
+            Err(AppLoadError::NoStoredState) => {
+                // FIXME: proper logging when we have proper tracing
+                println!("No stored state, app is uninitialized");
+            }
+            Err(e) => panic!("Error loading app from storage: {}", e),
+        };
+
+        Self {
+            app: Arc::new(RwLock::new(app)),
+        }
+    }
+}
+
+impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn echo(&self, request: RequestEcho) -> ResponseEcho {
-        info!("abci echo");
+        debug!("abci echo");
         ResponseEcho {
             message: request.message,
         }
@@ -41,84 +92,98 @@ impl Application for Pulsarium {
     /// Provide information about the ABCI application.
     #[instrument(skip_all)]
     fn info(&self, _request: RequestInfo) -> ResponseInfo {
-        info!("abci info");
-        Default::default()
+        debug!("abci info");
+        let app = self.app.read();
+        let block = app.info();
+        let app_hash = app.app_hash();
+        let last_block_height = block.map(|b| b.height).unwrap_or(0) as i64;
+        ResponseInfo {
+            data: format!("{} {}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION")),
+            version: "".to_string(),
+            app_version: 1,    // FIXME: what to put here?
+            last_block_height, // ugly api :(
+            last_block_app_hash: app_hash.into(),
+        }
     }
 
     /// Called once upon genesis.
     #[instrument(skip_all)]
-    fn init_chain(&self, _request: RequestInitChain) -> ResponseInitChain {
-        info!("abci init_chain");
-        Default::default()
+    fn init_chain(&self, request: RequestInitChain) -> ResponseInitChain {
+        debug!("abci init_chain");
+        let request = init_request_from_proto(request);
+        // This requires we are in WaitingInit state, otherwise panic
+        let res = self.app.write().init(request).unwrap();
+        init_response_to_proto(res)
     }
 
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
-    fn query(&self, _request: RequestQuery) -> ResponseQuery {
-        info!("abci query");
-        Default::default()
+    fn query(&self, request: RequestQuery) -> ResponseQuery {
+        debug!("abci query");
+        let app = self.app.read();
+        let chain_id = app.chain_id();
+        let request = query_request_from_proto(request, chain_id);
+        let res = app.query(request);
+        query_response_to_proto(res)
     }
 
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
-    fn check_tx(&self, _request: RequestCheckTx) -> ResponseCheckTx {
-        info!("abci check_tx");
-        Default::default()
+    fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
+        debug!("abci check_tx");
+        let app = self.app.read();
+        let chain_id = app.chain_id();
+        let request = check_request_from_proto(request, chain_id);
+        let res = app.check_tx(request);
+        check_response_to_proto(res)
     }
 
-    /// Signals the beginning of a new block, prior to any `DeliverTx` calls.
     #[instrument(skip_all)]
-    fn begin_block(&self, _request: RequestBeginBlock) -> ResponseBeginBlock {
-        info!("abci begin_block");
-        Default::default()
-    }
-
-    /// Apply a transaction to the application's state.
-    #[instrument(skip_all)]
-    fn deliver_tx(&self, _request: RequestDeliverTx) -> ResponseDeliverTx {
-        info!("abci deliver_tx");
-        Default::default()
-    }
-
-    /// Signals the end of a block.
-    #[instrument(skip_all)]
-    fn end_block(&self, _request: RequestEndBlock) -> ResponseEndBlock {
-        info!("abci end_block");
-        Default::default()
+    fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
+        debug!("abci finalize_block");
+        let mut app = self.app.write();
+        let chain_id = app.chain_id();
+        let request = finalize_request_from_proto(request, chain_id);
+        // FIXME: crash node on finalize block error?
+        let res = app.finalize_block(request).unwrap();
+        finalize_response_to_proto(res)
     }
 
     /// Signals that messages queued on the client should be flushed to the server.
-    #[instrument]
+    #[instrument(skip_all)]
     fn flush(&self) -> ResponseFlush {
         debug!("abci flush");
         ResponseFlush {}
     }
 
     /// Commit the current state at the current height.
-    #[instrument]
+    #[instrument(skip_all)]
     fn commit(&self) -> ResponseCommit {
-        info!("abci commit");
+        // Note: pulsar commits data in finalize_block. unsure why there is a different command,
+        // and separating them causes issues with lifetimes and static analysis.
+        debug!("abci commit");
+        // TODO: get app data
         Default::default()
     }
 
     /// Used during state sync to discover available snapshots on peers.
-    #[instrument]
+    #[instrument(skip_all)]
     fn list_snapshots(&self) -> ResponseListSnapshots {
-        info!("abci list_snapshots");
+        debug!("abci list_snapshots");
         Default::default()
     }
 
     /// Called when bootstrapping the node using state sync.
     #[instrument(skip_all)]
     fn offer_snapshot(&self, _request: RequestOfferSnapshot) -> ResponseOfferSnapshot {
-        info!("abci offer_snapshot");
+        debug!("abci offer_snapshot");
         Default::default()
     }
 
     /// Used during state sync to retrieve chunks of snapshots from peers.
     #[instrument(skip_all)]
     fn load_snapshot_chunk(&self, _request: RequestLoadSnapshotChunk) -> ResponseLoadSnapshotChunk {
-        info!("abci load_snapshot_chunk");
+        debug!("abci load_snapshot_chunk");
         Default::default()
     }
 
@@ -128,7 +193,7 @@ impl Application for Pulsarium {
         &self,
         _request: RequestApplySnapshotChunk,
     ) -> ResponseApplySnapshotChunk {
-        info!("abci apply_snapshot_chunk");
+        debug!("abci apply_snapshot_chunk");
         Default::default()
     }
 
@@ -145,7 +210,7 @@ impl Application for Pulsarium {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
-        info!("abci prepare_proposal");
+        debug!("abci prepare_proposal");
         // Per the ABCI++ spec: if the size of RequestPrepareProposal.txs is
         // greater than RequestPrepareProposal.max_tx_bytes, the Application
         // MUST remove transactions to ensure that the
@@ -178,7 +243,7 @@ impl Application for Pulsarium {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn process_proposal(&self, _request: RequestProcessProposal) -> ResponseProcessProposal {
-        info!("abci process_proposal");
+        debug!("abci process_proposal");
         ResponseProcessProposal {
             status: response_process_proposal::ProposalStatus::Accept as i32,
         }

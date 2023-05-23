@@ -4,6 +4,7 @@ mod gas;
 mod msg;
 mod pubkey;
 mod query;
+mod time;
 mod tx;
 
 pub use account_id::{AccountId, AccountIdError, DEFAULT_BECH32_PREFIX};
@@ -11,6 +12,7 @@ pub use gas::{GasError, GasMeter, GasResult};
 pub use msg::{required_signer, BankMsg, Msg, MsgError};
 pub use pubkey::PubKey;
 pub use query::{AuthQuery, BankQuery, Query, QueryError};
+pub use time::{Duration, Timestamp};
 pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
 
 pub mod response {

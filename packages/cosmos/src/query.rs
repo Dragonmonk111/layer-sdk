@@ -122,7 +122,7 @@ pub fn encode_cosmos_response<E: std::error::Error>(
     res: &QueryResponse<E>,
 ) -> Result<Vec<u8>, QueryError> {
     match res {
-        QueryResponse::Raw { value } => Ok(value.clone()),
+        QueryResponse::Raw { key: _, value } => Ok(value.clone()),
         QueryResponse::Auth(auth) => encode_auth_response(auth),
         QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
         QueryResponse::Simulate(simulate) => encode_simulate_response(simulate),
@@ -202,24 +202,10 @@ fn encode_gas_info(gas: &GasInfo) -> cosmos_sdk_proto::cosmos::base::abci::v1bet
     }
 }
 
-fn encode_tx_result(
+pub fn encode_tx_result(
     response: &TxResponse,
 ) -> cosmos_sdk_proto::cosmos::base::abci::v1beta1::Result {
-    let data = response
-        .data
-        .iter()
-        .cloned()
-        .map(|d| cosmos_sdk_proto::cosmos::base::abci::v1beta1::MsgData {
-            // TODO: what type?? do we need to pass this data everywhere in our MsgResult type?
-            // This type used as a placeholder for now, so we don't get parse failure if someone tries
-            // to decode this data (but data dropped)
-            msg_type: cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL.to_string(),
-            data: d,
-        })
-        .collect();
-
-    let combined_data =
-        cosmos_sdk_proto::cosmos::base::abci::v1beta1::TxMsgData { data }.encode_to_vec();
+    let combined_data = msg_data_to_proto(response.data.clone());
 
     cosmos_sdk_proto::cosmos::base::abci::v1beta1::Result {
         data: combined_data,
@@ -233,7 +219,22 @@ fn encode_tx_result(
     }
 }
 
-fn encode_cosmos_event(event: Event) -> cosmos_sdk_proto::tendermint::abci::Event {
+pub fn msg_data_to_proto(data: Vec<Vec<u8>>) -> Vec<u8> {
+    let data = data
+        .into_iter()
+        .map(|d| cosmos_sdk_proto::cosmos::base::abci::v1beta1::MsgData {
+            // TODO: what type?? do we need to pass this data everywhere in our MsgResult type?
+            // This type used as a placeholder for now, so we don't get parse failure if someone tries
+            // to decode this data (but data dropped)
+            msg_type: cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL.to_string(),
+            data: d,
+        })
+        .collect();
+
+    cosmos_sdk_proto::cosmos::base::abci::v1beta1::TxMsgData { data }.encode_to_vec()
+}
+
+pub fn encode_cosmos_event(event: Event) -> cosmos_sdk_proto::tendermint::abci::Event {
     let attributes = event
         .attributes
         .into_iter()

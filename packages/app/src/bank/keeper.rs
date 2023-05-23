@@ -23,7 +23,7 @@ const BALANCES: Map<(&AccountId, &str), Uint128> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Bank {}
 
 impl Bank {
