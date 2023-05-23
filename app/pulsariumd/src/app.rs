@@ -130,17 +130,21 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
         info!("abci check_tx");
-        let request = check_request_from_proto(request);
-        let res = self.app.read().check_tx(request);
+        let app = self.app.read();
+        let chain_id = app.chain_id();
+        let request = check_request_from_proto(request, chain_id);
+        let res = app.check_tx(request);
         check_response_to_proto(res)
     }
 
     #[instrument(skip_all)]
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
         info!("abci finalize_block");
-        let request = finalize_request_from_proto(request);
+        let mut app = self.app.write();
+        let chain_id = app.chain_id();
+        let request = finalize_request_from_proto(request, chain_id);
         // FIXME: crash node on finalize block error?
-        let res = self.app.write().finalize_block(request).unwrap();
+        let res = app.finalize_block(request).unwrap();
         finalize_response_to_proto(res)
     }
 

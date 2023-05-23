@@ -1,6 +1,6 @@
 // Convert from abci types into pulsar types
 
-use pulsar_cosmos::parse_cosmos_query;
+use pulsar_cosmos::{parse_cosmos_query, parse_cosmos_tx};
 
 use crate::convert::{
     consensus_params_from_proto, timestamp_from_proto, validator_updates_from_proto,
@@ -37,13 +37,40 @@ pub fn query_request_from_proto(
 }
 
 pub fn check_request_from_proto(
-    _request: tendermint_proto::abci::RequestCheckTx,
+    request: tendermint_proto::abci::RequestCheckTx,
+    chain_id: &str,
 ) -> pulsar_std::Tx {
-    todo!()
+    // TODO: error not unwrap
+    parse_cosmos_tx(&request.tx, chain_id).unwrap()
 }
 
 pub fn finalize_request_from_proto(
-    _request: tendermint_proto::abci::RequestFinalizeBlock,
+    request: tendermint_proto::abci::RequestFinalizeBlock,
+    chain_id: &str,
 ) -> pulsar_std::api::Block {
-    todo!()
+    let txs = request
+        .txs
+        .into_iter()
+        .map(|tx| parse_cosmos_tx(&tx, chain_id).unwrap())
+        .collect();
+    let last_votes = match request.decided_last_commit {
+        None => vec![],
+        Some(commit) => commit
+            .votes
+            .into_iter()
+            .filter_map(|vote| {
+                vote.validator.map(|v| pulsar_std::api::Validator {
+                    address: v.address.into(),
+                    power: v.power.try_into().unwrap(),
+                })
+            })
+            .collect(),
+    };
+    pulsar_std::api::Block {
+        txs,
+        height: request.height.try_into().unwrap(),
+        time: timestamp_from_proto(request.time.unwrap()),
+        proposer_address: request.proposer_address.into(),
+        last_votes,
+    }
 }
