@@ -1,3 +1,5 @@
+use tracing::{info, instrument};
+
 use cosmwasm_std::{BlockInfo, Event, StdError};
 use pulsar_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
 use pulsar_std::response::QueryResponse;
@@ -26,6 +28,7 @@ impl StateMachine {
         }
     }
 
+    #[instrument(skip(self, storage))]
     pub fn init(
         &self,
         storage: &mut dyn Storage,
@@ -33,10 +36,12 @@ impl StateMachine {
         block: &BlockInfo,
         request: GenesisState,
     ) -> PulsarResult<()> {
+        info!("Initializing_app with {:?}", request);
         self.bank.init(storage, meter, block, request.bank, self)?;
         Ok(())
     }
 
+    #[instrument(skip(self, storage))]
     pub fn query(
         &self,
         storage: &dyn ReadonlyStorage,
@@ -44,6 +49,7 @@ impl StateMachine {
         block: &BlockInfo,
         request: Query,
     ) -> Result<QueryResponse<PulsarError>, PulsarError> {
+        info!("Query {:?}", request);
         match request {
             Query::Raw { key } => {
                 let value = storage
@@ -88,6 +94,7 @@ impl StateMachine {
         Ok(TxResponse { data, events })
     }
 
+    #[instrument(skip(self, storage))]
     pub fn process_msg(
         &self,
         storage: &mut dyn Storage,
@@ -96,6 +103,7 @@ impl StateMachine {
         block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<MsgResponse> {
+        info!("Process Msg {:?}", msg);
         match msg {
             Msg::Bank(bank) => self
                 .bank

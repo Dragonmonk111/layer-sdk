@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tracing::{info, instrument};
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
@@ -186,6 +187,7 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
+    #[instrument(skip(self))]
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse<PulsarError>> {
         let reader = self.storage.reader();
 
@@ -195,6 +197,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             _ => self.query_gas_meter(),
         };
 
+        info!("query: {:?}", request);
         let block = &self.data.as_ref().unwrap().block;
         let resp = self.logic.query(&reader, &mut meter, block, request);
         reader.abort();
@@ -221,6 +224,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         GasMeter::new(DEFAULT_QUERY_GAS)
     }
 
+    #[instrument(skip(self))]
     pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
         // temporary cache we will throw away
         let reader = self.storage.reader();
@@ -234,6 +238,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         res
     }
 
+    #[instrument(skip(self, storage))]
     fn execute_tx(
         &self,
         storage: &mut dyn Storage,
@@ -250,6 +255,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         let data = match val_res {
             Ok(x) => x,
             Err(e) => {
+                info!("tx validation failed: {}", e);
                 // ignore this out of gas error, aborting anyway and future txs will fail
                 let _ = block_meter.charge(val_meter.used());
                 return TxResult {
@@ -311,6 +317,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         TxResult { gas, result }
     }
 
+    #[instrument(skip_all)]
     pub fn finalize_block(
         &mut self,
         full_block: Block,
@@ -338,6 +345,7 @@ impl<T: PersistentStorage + 'static> App<T> {
                 previous: block.time.nanos(),
             });
         }
+        info!(target: "Executing block", height=block.height, time=block.time.seconds());
 
         // Run begin block logic (not included in block gas)
         let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);

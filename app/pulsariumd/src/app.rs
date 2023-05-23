@@ -1,7 +1,7 @@
 use core::panic;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 use tendermint_abci::Application;
 use tendermint_proto::abci::{
@@ -83,7 +83,7 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
 impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     #[instrument(skip_all)]
     fn echo(&self, request: RequestEcho) -> ResponseEcho {
-        info!("abci echo");
+        debug!("abci echo");
         ResponseEcho {
             message: request.message,
         }
@@ -92,7 +92,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Provide information about the ABCI application.
     #[instrument(skip_all)]
     fn info(&self, _request: RequestInfo) -> ResponseInfo {
-        info!("abci info");
+        debug!("abci info");
         let app = self.app.read();
         let block = app.info();
         let app_hash = app.app_hash();
@@ -109,7 +109,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Called once upon genesis.
     #[instrument(skip_all)]
     fn init_chain(&self, request: RequestInitChain) -> ResponseInitChain {
-        info!("abci init_chain");
+        debug!("abci init_chain");
         let request = init_request_from_proto(request);
         // This requires we are in WaitingInit state, otherwise panic
         let res = self.app.write().init(request).unwrap();
@@ -119,7 +119,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
-        info!("abci query");
+        debug!("abci query");
         let app = self.app.read();
         let chain_id = app.chain_id();
         let request = query_request_from_proto(request, chain_id);
@@ -130,7 +130,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
-        info!("abci check_tx");
+        debug!("abci check_tx");
         let app = self.app.read();
         let chain_id = app.chain_id();
         let request = check_request_from_proto(request, chain_id);
@@ -140,7 +140,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
     #[instrument(skip_all)]
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
-        info!("abci finalize_block");
+        debug!("abci finalize_block");
         let mut app = self.app.write();
         let chain_id = app.chain_id();
         let request = finalize_request_from_proto(request, chain_id);
@@ -161,7 +161,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     fn commit(&self) -> ResponseCommit {
         // Note: pulsar commits data in finalize_block. unsure why there is a different command,
         // and separating them causes issues with lifetimes and static analysis.
-        info!("abci commit");
+        debug!("abci commit");
         // TODO: get app data
         Default::default()
     }
@@ -169,21 +169,21 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Used during state sync to discover available snapshots on peers.
     #[instrument(skip_all)]
     fn list_snapshots(&self) -> ResponseListSnapshots {
-        info!("abci list_snapshots");
+        debug!("abci list_snapshots");
         Default::default()
     }
 
     /// Called when bootstrapping the node using state sync.
     #[instrument(skip_all)]
     fn offer_snapshot(&self, _request: RequestOfferSnapshot) -> ResponseOfferSnapshot {
-        info!("abci offer_snapshot");
+        debug!("abci offer_snapshot");
         Default::default()
     }
 
     /// Used during state sync to retrieve chunks of snapshots from peers.
     #[instrument(skip_all)]
     fn load_snapshot_chunk(&self, _request: RequestLoadSnapshotChunk) -> ResponseLoadSnapshotChunk {
-        info!("abci load_snapshot_chunk");
+        debug!("abci load_snapshot_chunk");
         Default::default()
     }
 
@@ -193,7 +193,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         &self,
         _request: RequestApplySnapshotChunk,
     ) -> ResponseApplySnapshotChunk {
-        info!("abci apply_snapshot_chunk");
+        debug!("abci apply_snapshot_chunk");
         Default::default()
     }
 
@@ -210,7 +210,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
-        info!("abci prepare_proposal");
+        debug!("abci prepare_proposal");
         // Per the ABCI++ spec: if the size of RequestPrepareProposal.txs is
         // greater than RequestPrepareProposal.max_tx_bytes, the Application
         // MUST remove transactions to ensure that the
@@ -243,7 +243,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn process_proposal(&self, _request: RequestProcessProposal) -> ResponseProcessProposal {
-        info!("abci process_proposal");
+        debug!("abci process_proposal");
         ResponseProcessProposal {
             status: response_process_proposal::ProposalStatus::Accept as i32,
         }
