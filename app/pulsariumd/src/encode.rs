@@ -9,6 +9,7 @@ use crate::convert::{
 pub fn init_request_from_proto(
     request: tendermint_proto::abci::RequestInitChain,
 ) -> pulsar_std::api::InitChainRequest {
+    println!("initial height: {}", request.initial_height);
     pulsar_std::api::InitChainRequest {
         time: timestamp_from_proto(request.time.unwrap()),
         chain_id: request.chain_id,
@@ -16,7 +17,8 @@ pub fn init_request_from_proto(
         validators: validator_updates_from_proto(request.validators),
         app_state: request.app_state_bytes.to_vec().into(),
         // set the height to 1 if not provided or set to 0 (Go zero means "default" means 1)
-        initial_height: request.initial_height.max(1) as u64,
+        // initial_height: request.initial_height.max(1) as u64,
+        initial_height: request.initial_height as u64,
     }
 }
 

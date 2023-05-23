@@ -46,7 +46,7 @@ pub(crate) fn block_params_from_proto(
     proto: tendermint_proto::types::BlockParams,
 ) -> pulsar_std::api::BlockParams {
     let max_gas = match proto.max_gas {
-        0 => None,
+        0 | -1 => None,
         gas => Some(gas.try_into().unwrap()),
     };
     let max_bytes = proto.max_bytes.try_into().unwrap();

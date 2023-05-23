@@ -64,7 +64,7 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
         match app.load_from_storage() {
             Ok(_) => {
                 // FIXME: proper logging when we have proper tracing
-                let height = app.info().height;
+                let height = app.info().unwrap().height;
                 println!("Initialized app from storage at height {}", height);
             }
             Err(AppLoadError::NoStoredState) => {
@@ -96,11 +96,12 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         let app = self.app.read();
         let block = app.info();
         let app_hash = app.app_hash();
+        let last_block_height = block.map(|b| b.height).unwrap_or(0) as i64;
         ResponseInfo {
             data: format!("{} {}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION")),
             version: "".to_string(),
-            app_version: 1,                         // FIXME: what to put here?
-            last_block_height: block.height as i64, // ugly api :(
+            app_version: 1,    // FIXME: what to put here?
+            last_block_height, // ugly api :(
             last_block_app_hash: app_hash.into(),
         }
     }

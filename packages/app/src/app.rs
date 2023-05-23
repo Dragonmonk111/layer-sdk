@@ -125,7 +125,9 @@ impl<T: PersistentStorage + 'static> App<T> {
         // Store the state
         let chain_id = request.chain_id.clone();
         let last_block = BlockInfo {
-            height: request.initial_height,
+            // If initial height is 10, that means the first block will be 10.
+            // So, we store "last_block" as one less.
+            height: request.initial_height.saturating_sub(1),
             time: request.time,
             chain_id: request.chain_id,
         };
@@ -171,8 +173,8 @@ impl<T: PersistentStorage + 'static> App<T> {
 // All these require an initialized app and will panic if neither load_from_storage
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
-    pub fn info(&self) -> &BlockInfo {
-        &self.data.as_ref().unwrap().block
+    pub fn info(&self) -> Option<&BlockInfo> {
+        self.data.as_ref().map(|d| &d.block)
     }
 
     pub fn app_hash(&self) -> Vec<u8> {
@@ -330,10 +332,10 @@ impl<T: PersistentStorage + 'static> App<T> {
                 previous: old_block.height,
             });
         }
-        if block.time <= old_block.time {
+        if block.time < old_block.time {
             return Err(PulsarError::DescendingBlockTime {
-                got: old_block.time.seconds(),
-                previous: block.time.seconds(),
+                got: old_block.time.nanos(),
+                previous: block.time.nanos(),
             });
         }
 
