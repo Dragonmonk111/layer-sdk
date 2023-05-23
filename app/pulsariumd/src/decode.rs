@@ -2,7 +2,7 @@
 use pulsar_app::{PulsarError, PulsarResult};
 use pulsar_cosmos::{encode_cosmos_response, msg_data_to_proto};
 
-use crate::convert::{consensus_params_to_proto, validator_updates_to_proto};
+use crate::convert::{consensus_params_to_proto, events_to_proto, validator_updates_to_proto};
 
 pub fn init_response_to_proto(
     response: pulsar_std::api::InitChainResponse,
@@ -69,6 +69,46 @@ pub fn check_response_to_proto(
     }
 }
 
+// This has the same fields as tendermint_proto::abci::ResponseCheckTx but different name,
+// so we make helper functions to do the same logic.
+pub fn tx_result_to_exec_tx_proto(
+    response: pulsar_std::api::TxResult<PulsarError>,
+) -> tendermint_proto::abci::ExecTxResult {
+    let (gas_wanted, gas_used) = tx_gas_to_proto(response.gas);
+    let (code, data, events, log) = tx_result_to_proto(response.result);
+
+    tendermint_proto::abci::ExecTxResult {
+        code,
+        data: data.into(),
+        log,
+        info: "".to_string(),
+        gas_wanted,
+        gas_used,
+        events,
+        codespace: "".to_string(),
+    }
+}
+
+pub fn finalize_response_to_proto(
+    response: pulsar_std::api::FinalizeBlockResponse<PulsarError>,
+) -> tendermint_proto::abci::ResponseFinalizeBlock {
+    let tx_results = response
+        .tx_results
+        .into_iter()
+        .map(tx_result_to_exec_tx_proto)
+        .collect();
+    tendermint_proto::abci::ResponseFinalizeBlock {
+        events: events_to_proto(response.events),
+        tx_results,
+        // TODO: implement these two maps
+        validator_updates: validator_updates_to_proto(response.validator_updates),
+        consensus_param_updates: response
+            .consensus_param_updates
+            .map(consensus_params_to_proto),
+        app_hash: response.app_hash.into(),
+    }
+}
+
 fn tx_gas_to_proto(gas: pulsar_std::api::GasInfo) -> (i64, i64) {
     (
         gas.gas_wanted.try_into().unwrap(),
@@ -88,80 +128,3 @@ fn tx_result_to_proto(
         Err(e) => (1, Vec::new(), Vec::new(), e.to_string()),
     }
 }
-
-fn events_to_proto(event: Vec<cosmwasm_std::Event>) -> Vec<tendermint_proto::abci::Event> {
-    event.into_iter().map(event_to_proto).collect()
-}
-
-pub fn event_to_proto(event: cosmwasm_std::Event) -> tendermint_proto::abci::Event {
-    let attributes = event
-        .attributes
-        .into_iter()
-        .map(|a| tendermint_proto::abci::EventAttribute {
-            key: a.key,
-            value: a.value,
-            index: true,
-        })
-        .collect();
-    tendermint_proto::abci::Event {
-        r#type: event.ty,
-        attributes,
-    }
-}
-
-/*
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResponseCheckTx {
-    #[prost(uint32, tag = "1")]
-    pub code: u32,
-    #[prost(bytes = "bytes", tag = "2")]
-    pub data: ::prost::bytes::Bytes,
-    /// nondeterministic
-    #[prost(string, tag = "3")]
-    pub log: ::prost::alloc::string::String,
-    /// nondeterministic
-    #[prost(string, tag = "4")]
-    pub info: ::prost::alloc::string::String,
-    #[prost(int64, tag = "5")]
-    pub gas_wanted: i64,
-    #[prost(int64, tag = "6")]
-    pub gas_used: i64,
-    #[prost(message, repeated, tag = "7")]
-    pub events: ::prost::alloc::vec::Vec<Event>,
-    #[prost(string, tag = "8")]
-    pub codespace: ::prost::alloc::string::String,
-}
- */
-
-pub fn finalize_response_to_proto(
-    _response: pulsar_std::api::FinalizeBlockResponse<PulsarError>,
-) -> tendermint_proto::abci::ResponseFinalizeBlock {
-    todo!()
-}
-
-/*
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ExecTxResult {
-    #[prost(uint32, tag = "1")]
-    pub code: u32,
-    #[prost(bytes = "bytes", tag = "2")]
-    pub data: ::prost::bytes::Bytes,
-    /// nondeterministic
-    #[prost(string, tag = "3")]
-    pub log: ::prost::alloc::string::String,
-    /// nondeterministic
-    #[prost(string, tag = "4")]
-    pub info: ::prost::alloc::string::String,
-    #[prost(int64, tag = "5")]
-    pub gas_wanted: i64,
-    #[prost(int64, tag = "6")]
-    pub gas_used: i64,
-    /// nondeterministic
-    #[prost(message, repeated, tag = "7")]
-    pub events: ::prost::alloc::vec::Vec<Event>,
-    #[prost(string, tag = "8")]
-    pub codespace: ::prost::alloc::string::String,
-}
-
- */

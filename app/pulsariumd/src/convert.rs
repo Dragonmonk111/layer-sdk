@@ -133,7 +133,9 @@ pub(crate) fn validator_update_to_proto(
     }
 }
 
-pub fn encode_tm_pubkey(pubkey: pulsar_std::api::TmPubKey) -> tendermint_proto::crypto::PublicKey {
+pub(crate) fn encode_tm_pubkey(
+    pubkey: pulsar_std::api::TmPubKey,
+) -> tendermint_proto::crypto::PublicKey {
     let sum = match pubkey {
         pulsar_std::api::TmPubKey::Ed25519(pk) => {
             tendermint_proto::crypto::public_key::Sum::Ed25519(pk)
@@ -145,7 +147,9 @@ pub fn encode_tm_pubkey(pubkey: pulsar_std::api::TmPubKey) -> tendermint_proto::
     tendermint_proto::crypto::PublicKey { sum: Some(sum) }
 }
 
-pub fn decode_tm_pubkey(pubkey: tendermint_proto::crypto::PublicKey) -> pulsar_std::api::TmPubKey {
+pub(crate) fn decode_tm_pubkey(
+    pubkey: tendermint_proto::crypto::PublicKey,
+) -> pulsar_std::api::TmPubKey {
     match pubkey.sum.unwrap() {
         tendermint_proto::crypto::public_key::Sum::Ed25519(pk) => {
             pulsar_std::api::TmPubKey::Ed25519(pk)
@@ -153,5 +157,27 @@ pub fn decode_tm_pubkey(pubkey: tendermint_proto::crypto::PublicKey) -> pulsar_s
         tendermint_proto::crypto::public_key::Sum::Secp256k1(pk) => {
             pulsar_std::api::TmPubKey::Secp256k1(pk)
         }
+    }
+}
+
+pub(crate) fn events_to_proto(
+    event: Vec<cosmwasm_std::Event>,
+) -> Vec<tendermint_proto::abci::Event> {
+    event.into_iter().map(event_to_proto).collect()
+}
+
+pub(crate) fn event_to_proto(event: cosmwasm_std::Event) -> tendermint_proto::abci::Event {
+    let attributes = event
+        .attributes
+        .into_iter()
+        .map(|a| tendermint_proto::abci::EventAttribute {
+            key: a.key,
+            value: a.value,
+            index: true,
+        })
+        .collect();
+    tendermint_proto::abci::Event {
+        r#type: event.ty,
+        attributes,
     }
 }
