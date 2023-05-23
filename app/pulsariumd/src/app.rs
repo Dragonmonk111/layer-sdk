@@ -122,9 +122,10 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         debug!("abci query");
         let app = self.app.read();
         let chain_id = app.chain_id();
+        let height = app.info().map(|i| i.height).unwrap_or(0);
         let request = query_request_from_proto(request, chain_id);
         let res = app.query(request);
-        query_response_to_proto(res)
+        query_response_to_proto(res, height)
     }
 
     /// Check the given transaction before putting it into the local mempool.

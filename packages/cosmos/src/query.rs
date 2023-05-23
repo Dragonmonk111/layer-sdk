@@ -34,20 +34,20 @@ pub const QUERY_PATH_STORE: &str = "store";
 
 // See relevant code we emulate at https://github.com/cosmos/cosmos-sdk/blob/v0.47.2/baseapp/abci.go#L538-L561
 pub fn parse_cosmos_query(path: &str, data: &[u8], chain_id: &str) -> Result<Query, QueryError> {
-    if let Some(grpc_res) = parse_cosmos_grpc_query(path, data)? {
+    if let Some(grpc_res) = parse_cosmos_grpc_query(path, data, chain_id)? {
         return Ok(grpc_res);
     }
 
     // try some special cases
     let fragments: Vec<&str> = path.split('/').collect();
-    match fragments[0] {
+    match fragments[1] {
         QUERY_PATH_APP => {
             if fragments.len() != 2 {
                 return Err(QueryError::UnsupportedPath(path.to_string()));
             }
-            parse_app_query(fragments[1], data, chain_id)
+            parse_app_query(fragments[2], data, chain_id)
         }
-        QUERY_PATH_STORE => parse_store_query(&fragments[1..], data),
+        QUERY_PATH_STORE => parse_store_query(&fragments[2..], data),
         p => Err(QueryError::UnsupportedPath(p.to_string())),
     }
 }
@@ -76,7 +76,11 @@ fn parse_app_query(command: &str, data: &[u8], chain_id: &str) -> Result<Query, 
 }
 
 /// This will use grpc path lookups, returns Ok(None) if not a match, so we try special queries
-fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>, QueryError> {
+fn parse_cosmos_grpc_query(
+    path: &str,
+    data: &[u8],
+    chain_id: &str,
+) -> Result<Option<Query>, QueryError> {
     // FIXME: add auth queries
     // FIXME: make more extensible when we add cosmwasm, etc support
     match path {
@@ -105,6 +109,19 @@ fn parse_cosmos_grpc_query(path: &str, data: &[u8]) -> Result<Option<Query>, Que
             let address = AccountId::parse_string(&req.address)?;
             let query = AuthQuery::Account { address };
             Ok(Some(query.into()))
+        }
+        "/cosmos.tx.v1beta1.Service/Simulate" => {
+            let tx = parse_cosmos_tx(data, chain_id)
+                .map_err(|e| QueryError::ParseError(e.to_string()))?;
+            Ok(Some(Query::Simulate(tx)))
+
+            /*
+            TEST FIXTURE!
+
+                        Incoming request: Request { value: Some(Query(RequestQuery { data: b"\x12\x82\x02\n\xab\x01\n\x91\x01\n\x1c/cosmos.bank.v1beta1.MsgSend\x12q\n-pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l\x12-pulsar1xuqtjrgftcdq5a92yyahchfe42a5mhqd0wtfgc\x1a\x11\n\x06upulse\x12\x072000000\x12\x15Use your power wisely\x12P\nL\nF\n\x1f/cosmos.crypto.secp256k1.PubKey\x12#\n!\x03O\x04\x18\x1e\xeb\xa3S\x91\xb8Xc:v\\J\x0c\x18\x96\x97\xb4\r!cT\xd5\x08\x90\xd3P\xc7\x02\x90\x12\x02\n\0\x12\0\x1a\0", path: "/cosmos.tx.v1beta1.Service/Simulate", height: 0, prove: false })) }
+            2023-05-23T22:03:34.041426+02:00 DEBUG query: pulsariumd::app: abci query
+            thread '<unnamed>' panicked at 'called `Result::unwrap()` on an `Err` value: ParseError("Parse: failed to decode Protobuf message: SignerInfo.mode_info: AuthInfo.signer_infos: Tx.auth_info: invalid wire type value: 7")', app/pulsariumd/src/encode.rs:38:64
+            */
         }
         // "/cosmos.auth.v1beta1.Query/Accounts" => {
         //     let _ = QueryAccountsRequest::decode(data).map_err(CosmosError::from)?;

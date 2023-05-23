@@ -41,7 +41,7 @@ impl StateMachine {
         Ok(())
     }
 
-    #[instrument(skip(self, storage))]
+    #[instrument(skip_all)]
     pub fn query(
         &self,
         storage: &dyn ReadonlyStorage,
@@ -50,7 +50,7 @@ impl StateMachine {
         request: Query,
     ) -> Result<QueryResponse<PulsarError>, PulsarError> {
         info!("Query {:?}", request);
-        match request {
+        let result = match request {
             Query::Raw { key } => {
                 let value = storage
                     .get(meter, &key)?
@@ -67,7 +67,9 @@ impl StateMachine {
                 let res = TxResult { gas, result };
                 Ok(QueryResponse::Simulate(res))
             }
-        }
+        };
+        info!("Result {:?}", result);
+        result
     }
 
     fn query_simulate(

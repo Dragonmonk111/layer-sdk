@@ -35,7 +35,7 @@ export const defaultGasPrice = GasPrice.fromString("0.025" + DENOM);
 export const defaultSendFee = calculateFee(100_000, defaultGasPrice);
 
 export const pulsarium = {
-  tendermintUrl: "localhost:26657",
+  tendermintUrl: "http://localhost:26657",
   tendermintUrlWs: "ws://localhost:26657",
   tendermintUrlHttp: "http://localhost:26657",
   chainId: "pulsar-dev-1",
@@ -50,6 +50,10 @@ export const defaultSigningClientOptions: SigningStargateClientOptions = {
   broadcastPollIntervalMs: 300,
   broadcastTimeoutMs: 8_000,
   gasPrice: defaultGasPrice,
+};
+
+export const defaultWalletOptions: Partial<DirectSecp256k1HdWalletOptions> = {
+  prefix: PREFIX,
 };
 
 export const faucet = {

@@ -16,6 +16,7 @@ pub fn init_response_to_proto(
 
 pub fn query_response_to_proto(
     response: PulsarResult<pulsar_std::response::QueryResponse<PulsarError>>,
+    height: u64,
 ) -> tendermint_proto::abci::ResponseQuery {
     match response {
         Ok(response) => {
@@ -33,7 +34,7 @@ pub fn query_response_to_proto(
                 key: key.into(),
                 value: value.into(),
                 proof_ops: None,
-                height: 0,
+                height: height.try_into().unwrap(),
                 codespace: "".to_string(),
             }
         }
@@ -45,7 +46,7 @@ pub fn query_response_to_proto(
             key: Vec::new().into(),
             value: Vec::new().into(),
             proof_ops: None,
-            height: 0,
+            height: height.try_into().unwrap(),
             codespace: "".to_string(),
         },
     }

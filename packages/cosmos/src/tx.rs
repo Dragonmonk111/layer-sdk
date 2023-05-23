@@ -11,7 +11,7 @@ use pulsar_std::{FeeInfo, SignedTx, SigningInfo, TxError};
 
 use crate::{parse_cosmos_msg, parse_cosmos_pubkey, CosmosError};
 
-pub const FIXED_ACCOUNT_NUMBER: u64 = 0;
+pub const FIXED_ACCOUNT_NUMBER: u64 = 17;
 
 fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), CosmosError> {
     // get raw format for accurate signing info (to validate sig)

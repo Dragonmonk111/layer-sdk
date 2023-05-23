@@ -27,6 +27,10 @@ Run in one terminal:
 
 ```shell
 pulsariumd start
+
+# or dev mode
+cd ../app/pulsariumd
+cargo run
 ```
 
 Run in another terminal:

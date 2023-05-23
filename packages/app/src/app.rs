@@ -345,7 +345,7 @@ impl<T: PersistentStorage + 'static> App<T> {
                 previous: block.time.nanos(),
             });
         }
-        info!(target: "Executing block", height=block.height, time=block.time.seconds());
+        info!(target: "Executing block", height=block.height, time=block.time.seconds(), txs=full_block.txs.len());
 
         // Run begin block logic (not included in block gas)
         let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);

@@ -62,12 +62,8 @@ impl Auth {
         // load the signer account if any
         let mut auth_store = prefixed(storage, NAMESPACE_AUTH);
         let pubkey = match ACCOUNTS.may_load(&auth_store, meter, &tx.signer)? {
-            Some(Account::External {
-                pubkey,
-                mut sequence,
-            }) => {
-                // ensure sequence is next in line
-                sequence += 1;
+            Some(Account::External { pubkey, sequence }) => {
+                // ensure sequence matches
                 if sequence != tx.signing_info.sequence {
                     return Err(TxError::InvalidSequence {
                         provided: tx.signing_info.sequence,
@@ -84,15 +80,15 @@ impl Auth {
                 // store the bumped sequence
                 let account = Account::External {
                     pubkey: pubkey.clone(),
-                    sequence,
+                    sequence: sequence + 1,
                 };
                 ACCOUNTS.save(&mut auth_store, meter, &tx.signer, &account)?;
                 // use the pubkey in the account to validate
                 pubkey
             }
             None => {
-                // if no account, ensure sequence is 1
-                if tx.signing_info.sequence != 1 {
+                // if no account, ensure sequence is 0
+                if tx.signing_info.sequence != 0 {
                     return Err(TxError::InvalidSequence {
                         provided: tx.signing_info.sequence,
                         expected: 1,
@@ -107,6 +103,7 @@ impl Auth {
                         }
                         let account = Account::External {
                             pubkey: pk.clone(),
+                            // Save with sequence 1, so next tx must use that (not empty 0)
                             sequence: 1,
                         };
                         ACCOUNTS.save(&mut auth_store, meter, &tx.signer, &account)?;
@@ -162,15 +159,22 @@ impl Auth {
         let auth_storage = prefixed_read(storage, NAMESPACE_AUTH);
         match request {
             AuthQuery::Account { address } => {
-                let account = ACCOUNTS.load(&auth_storage, meter, &address)?;
+                let account = ACCOUNTS.may_load(&auth_storage, meter, &address)?;
                 let res = match account {
-                    Account::External { pubkey, sequence } => AccountResponse::External {
+                    Some(Account::External { pubkey, sequence }) => AccountResponse::External {
                         address,
                         pubkey: Some(pubkey),
                         sequence,
                     },
-                    Account::Internal {} => AccountResponse::Internal { address },
-                    Account::Smart { contract } => AccountResponse::Smart { contract, address },
+                    Some(Account::Internal {}) => AccountResponse::Internal { address },
+                    Some(Account::Smart { contract }) => {
+                        AccountResponse::Smart { contract, address }
+                    }
+                    None => AccountResponse::External {
+                        address,
+                        pubkey: None,
+                        sequence: 0,
+                    },
                 };
                 Ok(res.into())
             }
