@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use core::panic;
 use parking_lot::RwLock;
 use sha2::{Digest, Sha256};
@@ -148,9 +149,8 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
-        // TODO: pull out tx hash elsewhere
-        let tx_hash = Sha256::digest(&request.tx);
-        info!(raw_tx = %HexEncode::new(&request.tx), tx_hash = %HexEncode::new(&tx_hash));
+        let hash = tx_hash(&request.tx);
+        info!(raw_tx = %HexEncode::new(&request.tx), tx_hash = %HexEncode::new(&hash));
 
         let app = self.app.read();
         let chain_id = app.chain_id();
@@ -286,4 +286,10 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
             status: response_process_proposal::ProposalStatus::Accept as i32,
         }
     }
+}
+
+// TODO: pull out tx hash elsewhere
+#[instrument(skip_all, level = "trace")]
+fn tx_hash(tx: &Bytes) -> Vec<u8> {
+    Sha256::digest(tx).to_vec()
 }

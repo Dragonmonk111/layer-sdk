@@ -1,3 +1,5 @@
+use tracing::instrument;
+
 use cosmwasm_std::to_vec;
 // Convert from pulsar types into abci types
 use pulsar_app::{PulsarError, PulsarResult};
@@ -53,6 +55,7 @@ pub fn query_response_to_proto(
     }
 }
 
+#[instrument(skip_all, level = "trace")]
 pub fn check_response_to_proto(
     response: pulsar_std::api::TxResult<PulsarError>,
 ) -> tendermint_proto::abci::ResponseCheckTx {
@@ -73,6 +76,7 @@ pub fn check_response_to_proto(
 
 // This has the same fields as tendermint_proto::abci::ResponseCheckTx but different name,
 // so we make helper functions to do the same logic.
+#[instrument(skip_all, level = "trace")]
 pub fn tx_result_to_exec_tx_proto(
     response: pulsar_std::api::TxResult<PulsarError>,
 ) -> tendermint_proto::abci::ExecTxResult {
@@ -91,6 +95,7 @@ pub fn tx_result_to_exec_tx_proto(
     }
 }
 
+#[instrument(skip_all, level = "trace")]
 pub fn finalize_response_to_proto(
     response: pulsar_std::api::FinalizeBlockResponse<PulsarError>,
 ) -> tendermint_proto::abci::ResponseFinalizeBlock {
@@ -118,6 +123,7 @@ fn tx_gas_to_proto(gas: pulsar_std::api::GasInfo) -> (i64, i64) {
     )
 }
 
+#[instrument(skip_all, level = "trace")]
 fn tx_result_to_proto(
     result: PulsarResult<pulsar_std::api::TxResponse>,
 ) -> (u32, Vec<u8>, Vec<tendermint_proto::abci::Event>, String) {
