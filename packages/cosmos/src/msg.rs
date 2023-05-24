@@ -3,12 +3,14 @@ use cosmos_sdk_proto::{
     traits::{MessageExt, TypeUrl},
 };
 use cosmrs::Any;
+use tracing::instrument;
 
 use pulsar_std::{AccountId, BankMsg, Msg, MsgError};
 
 use crate::error::CosmosError;
 use crate::utils::parse_sdk_coins;
 
+#[instrument(skip_all, level = "trace")]
 pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
     match msg.type_url.as_str() {
         MsgSend::TYPE_URL => {

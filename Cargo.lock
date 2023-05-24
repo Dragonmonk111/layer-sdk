@@ -1831,6 +1831,7 @@ dependencies = [
  "pulsar-std",
  "sha2 0.10.6",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
