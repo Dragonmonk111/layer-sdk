@@ -1,5 +1,6 @@
 use ripemd::Ripemd160;
 use sha2::{Digest, Sha256};
+use tracing::instrument;
 
 use cosmwasm_crypto::secp256k1_verify;
 use cosmwasm_schema::cw_serde;
@@ -15,6 +16,7 @@ pub enum PubKey {
 }
 
 impl PubKey {
+    #[instrument(skip_all)]
     pub fn validate_signature(&self, message_hash: &[u8], signature: &[u8]) -> Result<(), TxError> {
         match self {
             PubKey::Secp256k1(pk) => {
