@@ -1,3 +1,4 @@
+use cosmwasm_std::to_vec;
 // Convert from pulsar types into abci types
 use pulsar_app::{PulsarError, PulsarResult};
 use pulsar_cosmos::{encode_cosmos_response, msg_data_to_proto};
@@ -122,9 +123,12 @@ fn tx_result_to_proto(
 ) -> (u32, Vec<u8>, Vec<tendermint_proto::abci::Event>, String) {
     match result {
         Ok(resp) => {
+            // FIXME: needed for compatibility but slow, review later
+            let log =
+                String::from_utf8(to_vec(&resp.events).unwrap()).unwrap_or_else(|e| e.to_string());
             let events = resp.events.into_iter().flat_map(events_to_proto).collect();
             let data = msg_data_to_proto(resp.data); // flatten
-            (0, data, events, "".to_string())
+            (0, data, events, log)
         }
         Err(e) => (1, Vec::new(), Vec::new(), e.to_string()),
     }

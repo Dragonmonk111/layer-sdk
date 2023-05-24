@@ -52,3 +52,13 @@ pub struct TxResult<E: std::error::Error> {
     pub gas: GasInfo,
     pub result: Result<TxResponse, E>,
 }
+
+impl<E: std::error::Error> TxResult<E> {
+    pub fn is_ok(&self) -> bool {
+        self.result.is_ok()
+    }
+
+    pub fn is_err(&self) -> bool {
+        self.result.is_err()
+    }
+}

@@ -30,3 +30,6 @@ thiserror = { workspace = true }
 tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot", "env-filter"]}
 parking_lot = { workspace = true }
 sha2 = { workspace = true }
+
+# TODO: keep in sync with whatever tendermint-rs uses
+bytes = "1.4.0"

@@ -103,7 +103,7 @@ impl StateMachine {
         block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<MsgResponse> {
-        info!(?msg, "Process Message");
+        info!(?msg);
         let res = match msg {
             Msg::Bank(bank) => self
                 .bank

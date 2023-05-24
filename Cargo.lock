@@ -1491,6 +1491,7 @@ dependencies = [
 name = "pulsariumd"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
  "cosmwasm-std",
  "figment",

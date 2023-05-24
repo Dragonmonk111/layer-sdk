@@ -197,12 +197,12 @@ impl<T: PersistentStorage + 'static> App<T> {
             _ => self.query_gas_meter(),
         };
 
-        info!(?request, "query");
+        info!(?request);
         let block = &self.data.as_ref().unwrap().block;
         let resp = self.logic.query(&reader, &mut meter, block, request);
         match &resp {
-            Ok(response) => info!(?response, "query"),
-            Err(error) => info!(?error, "query"),
+            Ok(response) => info!(success = ?response),
+            Err(error) => info!(?error),
         }
         reader.abort();
         resp

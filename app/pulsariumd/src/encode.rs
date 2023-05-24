@@ -39,7 +39,7 @@ pub fn query_request_from_proto(
 }
 
 pub fn check_request_from_proto(
-    request: tendermint_proto::abci::RequestCheckTx,
+    request: &tendermint_proto::abci::RequestCheckTx,
     chain_id: &str,
 ) -> pulsar_std::Tx {
     // TODO: error not unwrap
