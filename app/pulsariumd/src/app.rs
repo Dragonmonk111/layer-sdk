@@ -127,7 +127,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
-        info!(raw_request.path = request.path, raw_request.data = ?request.data);
+        info!(raw_request.path = request.path, raw_request.data = %HexEncode::new(&request.data));
         let app = self.app.read();
         let chain_id = app.chain_id();
         let height = app.info().map(|i| i.height).unwrap_or(0);

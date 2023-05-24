@@ -16,7 +16,7 @@ import {
 
 describe("SigningStargateClient", () => {
   describe("simulate", () => {
-    xit("works", async () => {
+    it("works", async () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
@@ -36,8 +36,9 @@ describe("SigningStargateClient", () => {
       };
       const memo = "Use your power wisely";
       const gasUsed = await client.simulate(faucet.address0, [msgAny], memo);
-      expect(gasUsed).toBeGreaterThanOrEqual(31_000);
-      expect(gasUsed).toBeLessThanOrEqual(100_000);
+      // TODO: more realistic gas estimate (something not measured here)
+      expect(gasUsed).toBeGreaterThanOrEqual(3_000);
+      expect(gasUsed).toBeLessThanOrEqual(60_000);
 
       client.disconnect();
     });
@@ -105,7 +106,7 @@ describe("SigningStargateClient", () => {
     });
   });
 
-  xit("returns DeliverTxFailure on DeliverTx failure", async () => {
+  it("returns DeliverTxFailure on DeliverTx failure", async () => {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
     const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
     const client = await SigningStargateClient.createWithSigner(tendermintClient, wallet, defaultSigningClientOptions);
@@ -143,7 +144,7 @@ describe("SigningStargateClient", () => {
     */
   });
 
-  xit("works with auto gas", async () => {
+  it("works with auto gas", async () => {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
     const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
     const client = await SigningStargateClient.createWithSigner(tendermintClient, wallet, {

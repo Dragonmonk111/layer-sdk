@@ -1,4 +1,4 @@
-use cosmos_sdk_proto::cosmos::tx::v1beta1::SimulateResponse;
+use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmwasm_std::Event;
 use pulsar_std::api::{GasInfo, TxResponse, TxResult};
 use pulsar_std::response::{AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse};
@@ -111,7 +111,8 @@ fn parse_cosmos_grpc_query(
             Ok(Some(query.into()))
         }
         "/cosmos.tx.v1beta1.Service/Simulate" => {
-            let tx = parse_cosmos_tx(data, chain_id)
+            let req = SimulateRequest::decode(data).map_err(CosmosError::from)?;
+            let tx = parse_cosmos_tx(&req.tx_bytes, chain_id)
                 .map_err(|e| QueryError::ParseError(e.to_string()))?;
             Ok(Some(Query::Simulate(tx)))
 
@@ -264,5 +265,22 @@ pub fn encode_cosmos_event(event: Event) -> cosmos_sdk_proto::tendermint::abci::
     cosmos_sdk_proto::tendermint::abci::Event {
         r#type: event.ty,
         attributes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use hex_literal::hex;
+
+    #[test]
+    fn parse_simulate() {
+        let path = "/cosmos.tx.v1beta1.Service/Simulate";
+        let data = hex!("1282020AAB010A91010A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E6412710A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C122D70756C73617231757A3479303579387366736D75657A61616B70706D68326470636667797A72716D39786463731A110A067570756C7365120732303030303030121555736520796F757220706F77657220776973656C7912500A4C0A460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029012020A0012001A00");
+        let chain_id = "pulsar-dev-1";
+
+        let tx = parse_cosmos_query(path, &data, chain_id).unwrap();
+        assert!(matches!(tx, Query::Simulate(_)));
     }
 }

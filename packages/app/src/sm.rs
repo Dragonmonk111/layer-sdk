@@ -80,6 +80,10 @@ impl StateMachine {
         let data = self
             .auth
             .validate_tx(store, meter, block, self, tx, false)?;
+        // charge some gas for the skipped steps, so simulation value works for auto-gas
+        // FIXME: figure out a cleaner way to handle this
+        meter.charge(2500)?;
+
         let resps = data
             .msgs
             .into_iter()

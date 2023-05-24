@@ -91,7 +91,9 @@ pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Vec<u8>) -> Result<Signin
     // assert we have sign-mode-direct (need to add legacy amino support later)
     match info.mode_info {
         cosmrs::tx::mode_info::ModeInfo::Single(s) => match s.mode {
-            SignMode::Direct => Ok(()),
+            // FIXME: some better way of handling this?? SIGN_MODE_UNSPECIFIED should only be used for simulate
+            // For now, we treat it like direct
+            SignMode::Direct | SignMode::Unspecified => Ok(()),
             SignMode::LegacyAminoJson => Err(TxError::UnsupportedSigningMode("legacy_amino")),
             m => Err(TxError::UnsupportedSigningMode(m.as_str_name())),
         },
