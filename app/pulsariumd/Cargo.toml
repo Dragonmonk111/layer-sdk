@@ -29,3 +29,4 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot"]}
 parking_lot = { workspace = true }
+hex = "0.4.3"

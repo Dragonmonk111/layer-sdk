@@ -28,16 +28,16 @@ impl StateMachine {
         }
     }
 
-    #[instrument(skip(self, storage))]
+    #[instrument(skip_all)]
     pub fn init(
         &self,
         storage: &mut dyn Storage,
         meter: &mut GasMeter,
         block: &BlockInfo,
-        request: GenesisState,
+        genesis: GenesisState,
     ) -> PulsarResult<()> {
-        info!("Initializing_app with {:?}", request);
-        self.bank.init(storage, meter, block, request.bank, self)?;
+        info!(?genesis, "Initializing App");
+        self.bank.init(storage, meter, block, genesis.bank, self)?;
         Ok(())
     }
 
@@ -49,7 +49,6 @@ impl StateMachine {
         block: &BlockInfo,
         request: Query,
     ) -> Result<QueryResponse<PulsarError>, PulsarError> {
-        info!("Query {:?}", request);
         let result = match request {
             Query::Raw { key } => {
                 let value = storage
@@ -68,7 +67,6 @@ impl StateMachine {
                 Ok(QueryResponse::Simulate(res))
             }
         };
-        info!("Result {:?}", result);
         result
     }
 
@@ -96,7 +94,7 @@ impl StateMachine {
         Ok(TxResponse { data, events })
     }
 
-    #[instrument(skip(self, storage))]
+    #[instrument(skip_all)]
     pub fn process_msg(
         &self,
         storage: &mut dyn Storage,
@@ -105,12 +103,17 @@ impl StateMachine {
         block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<MsgResponse> {
-        info!("Process Msg {:?}", msg);
-        match msg {
+        info!(?msg, "Process Message");
+        let res = match msg {
             Msg::Bank(bank) => self
                 .bank
                 .process_msg(storage, gas, block, self, sender, bank),
-        }
+        };
+        match &res {
+            Ok(response) => info!(success = ?response.events),
+            Err(error) => info!(failure = ?error),
+        };
+        res
     }
 
     pub fn validate_tx(

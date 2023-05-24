@@ -15,6 +15,7 @@ use tendermint_proto::abci::{
 };
 
 use pulsar_app::{App, AppLoadError, StateMachine};
+use pulsar_std::HexEncode;
 use pulsar_storage::{MemoryStore, PersistentStorage};
 
 use crate::{
@@ -119,24 +120,35 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
-        debug!("abci query");
+        debug!(raw_request.path = request.path, raw_request.data = ?request.data, "ABCI query");
         let app = self.app.read();
         let chain_id = app.chain_id();
         let height = app.info().map(|i| i.height).unwrap_or(0);
         let request = query_request_from_proto(request, chain_id);
         let res = app.query(request);
-        query_response_to_proto(res, height)
+        let out = query_response_to_proto(res, height);
+        // FIXME: make some helper to do hex encode lazy (eg. takes &Bytes) and implements Display
+        // only called if we actually emit debug
+        debug!(
+            raw_response.code = out.code,
+            raw_response.log = out.log,
+            raw_response.key = %HexEncode::new(&out.key),
+            raw_response.value = %HexEncode::new(&out.value)
+        );
+        out
     }
 
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
-        debug!("abci check_tx");
+        debug!(raw_tx = %HexEncode::new(&request.tx), "ABCI check_tx");
         let app = self.app.read();
         let chain_id = app.chain_id();
         let request = check_request_from_proto(request, chain_id);
         let res = app.check_tx(request);
-        check_response_to_proto(res)
+        let out = check_response_to_proto(res);
+        debug!(raw_result = ?out);
+        out
     }
 
     #[instrument(skip_all)]
@@ -211,7 +223,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
-        debug!("abci prepare_proposal");
+        debug!(txs = request.txs.len(), "abci prepare_proposal");
         // Per the ABCI++ spec: if the size of RequestPrepareProposal.txs is
         // greater than RequestPrepareProposal.max_tx_bytes, the Application
         // MUST remove transactions to ensure that the

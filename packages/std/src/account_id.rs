@@ -1,8 +1,7 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
-use cosmwasm_schema::cw_serde;
 use cosmwasm_std::StdResult;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
@@ -17,7 +16,17 @@ fn bech32_prefix() -> &'static str {
     ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
 }
 
-#[cw_serde]
+// Note: this is expanded cw_serde macro minus the Debug implementation, as we want to use Display there
+#[derive(
+    ::cosmwasm_schema::serde::Serialize,
+    ::cosmwasm_schema::serde::Deserialize,
+    ::std::clone::Clone,
+    ::std::cmp::PartialEq,
+    ::cosmwasm_schema::schemars::JsonSchema,
+)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[serde(deny_unknown_fields, crate = "::cosmwasm_schema::serde")]
+#[schemars(crate = "::cosmwasm_schema::schemars")]
 #[derive(Hash, Eq)]
 pub struct AccountId(Vec<u8>);
 
@@ -54,6 +63,12 @@ impl From<Bech32Error> for AccountIdError {
 impl Display for AccountId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         bech32::encode_to_fmt(f, bech32_prefix(), self.0.to_base32(), Variant::Bech32).unwrap()
+    }
+}
+
+impl Debug for AccountId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
     }
 }
 

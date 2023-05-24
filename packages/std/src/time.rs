@@ -34,3 +34,15 @@ impl Add<Timestamp> for Duration {
         self.after(time)
     }
 }
+
+pub fn format_timestamp_rfc3339(time: Timestamp) -> String {
+    use chrono::{DateTime, Utc};
+    use std::time::UNIX_EPOCH;
+
+    // Creates a new SystemTime from the specified number of whole seconds
+    let d = UNIX_EPOCH + std::time::Duration::from_nanos(time.nanos());
+    // Create DateTime from SystemTime
+    let datetime = DateTime::<Utc>::from(d);
+    // Formats the combined date and time with the specified format string.
+    datetime.to_rfc3339()
+}

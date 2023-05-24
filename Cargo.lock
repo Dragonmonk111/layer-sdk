@@ -230,6 +230,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chrono"
+version = "0.4.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e3c5919066adf22df73762e50cffcde3a758f2a848b113b586d1f86728b673b"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "clap"
 version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,6 +1196,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-integer"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
+dependencies = [
+ "autocfg",
+ "num-traits",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1431,10 +1451,12 @@ name = "pulsar-std"
 version = "0.1.0"
 dependencies = [
  "bech32",
+ "chrono",
  "cosmwasm-crypto",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus",
+ "hex",
  "itertools",
  "ripemd",
  "sha2 0.10.6",
@@ -1463,6 +1485,7 @@ dependencies = [
  "clap",
  "cosmwasm-std",
  "figment",
+ "hex",
  "parking_lot",
  "pulsar-app",
  "pulsar-cosmos",

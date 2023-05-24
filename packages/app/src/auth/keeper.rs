@@ -45,7 +45,7 @@ impl Auth {
 
     /// This checks (and bumps) sequences of the local storage and deducts the fees from the account.
     /// If successful, it returns the TxData with all info that needs to be executed.
-    #[instrument(skip(self, storage))]
+    #[instrument(skip_all)]
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
