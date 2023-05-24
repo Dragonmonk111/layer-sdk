@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-require("source-map-support").install();
+// require("source-map-support").install();
 const defaultSpecReporterConfig = require("./jasmine-spec-reporter.config.json");
 
 // setup Jasmine

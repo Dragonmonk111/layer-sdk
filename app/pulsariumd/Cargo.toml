@@ -27,6 +27,6 @@ tendermint-proto = { workspace = true }
 
 tracing = { workspace = true }
 thiserror = { workspace = true }
-tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot"]}
+tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot", "env-filter"]}
 parking_lot = { workspace = true }
-hex = "0.4.3"
+sha2 = { workspace = true }

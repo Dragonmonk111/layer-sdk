@@ -30,7 +30,8 @@ pulsariumd start
 
 # or dev mode
 cd ../app/pulsariumd
-cargo run
+PULSE_LOG=debug,tendermint_abci::application=error cargo run
+PULSE_LOG=info,tendermint_abci::application=error cargo run
 ```
 
 Run in another terminal:

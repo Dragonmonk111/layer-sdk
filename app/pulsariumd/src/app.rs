@@ -1,7 +1,8 @@
 use core::panic;
 use parking_lot::RwLock;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument, trace};
 
 use tendermint_abci::Application;
 use tendermint_proto::abci::{
@@ -120,7 +121,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
-        debug!(raw_request.path = request.path, raw_request.data = ?request.data, "ABCI query");
+        info!(raw_request.path = request.path, raw_request.data = ?request.data, "ABCI query");
         let app = self.app.read();
         let chain_id = app.chain_id();
         let height = app.info().map(|i| i.height).unwrap_or(0);
@@ -129,7 +130,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         let out = query_response_to_proto(res, height);
         // FIXME: make some helper to do hex encode lazy (eg. takes &Bytes) and implements Display
         // only called if we actually emit debug
-        debug!(
+        info!(
             raw_response.code = out.code,
             raw_response.log = out.log,
             raw_response.key = %HexEncode::new(&out.key),
@@ -141,13 +142,16 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
-        debug!(raw_tx = %HexEncode::new(&request.tx), "ABCI check_tx");
+        // TODO: pull out tx hash elsewhere
+        let tx_hash = Sha256::digest(&request.tx);
+        info!(raw_tx = %HexEncode::new(&request.tx), tx_hash = %HexEncode::new(&tx_hash), "ABCI check_tx");
+
         let app = self.app.read();
         let chain_id = app.chain_id();
         let request = check_request_from_proto(request, chain_id);
         let res = app.check_tx(request);
         let out = check_response_to_proto(res);
-        debug!(raw_result = ?out);
+        info!(raw_result = ?out);
         out
     }
 
@@ -165,7 +169,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Signals that messages queued on the client should be flushed to the server.
     #[instrument(skip_all)]
     fn flush(&self) -> ResponseFlush {
-        debug!("abci flush");
+        trace!("abci flush");
         ResponseFlush {}
     }
 

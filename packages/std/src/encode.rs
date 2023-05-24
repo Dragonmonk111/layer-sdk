@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, self};
+use std::fmt::{self, Display, Formatter};
 
 pub struct HexEncode<'a>(&'a [u8]);
 
@@ -10,6 +10,6 @@ impl<'a> HexEncode<'a> {
 
 impl Display for HexEncode<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(self.0))
+        write!(f, "{}", hex::encode_upper(self.0))
     }
 }
