@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use thiserror::Error;
 use tracing::metadata::ParseLevelError;
+use tracing_subscriber::EnvFilter;
 
 /// Raw user input for the global Pulsarium config
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,12 +46,12 @@ impl RawConfig {
         if self.port < 1024 {
             return Err(ConfigError::ReservedPort);
         }
-        let log = tracing::Level::from_str(&self.log)?;
+        let filter = EnvFilter::new(&self.log);
         // TODO: validate host
         Ok(Config {
             host: self.host,
             port: self.port,
-            log,
+            filter,
             read_buf_size: self.read_buf_size,
         })
     }
@@ -67,7 +67,7 @@ pub struct Config {
     pub port: u16,
 
     /// The log level we use
-    pub log: tracing::Level,
+    pub filter: EnvFilter,
 
     pub read_buf_size: u32,
     // /// The directory we read all files from (default $HOME/.pulsarium)

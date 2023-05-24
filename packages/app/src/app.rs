@@ -12,7 +12,7 @@ use pulsar_std::api::{
     TxResponse, TxResult,
 };
 use pulsar_std::response::QueryResponse;
-use pulsar_std::{GasMeter, Query, Tx};
+use pulsar_std::{format_timestamp_rfc3339, GasMeter, Query, Tx};
 use pulsar_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
     Transaction,
@@ -187,7 +187,7 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse<PulsarError>> {
         let reader = self.storage.reader();
 
@@ -197,9 +197,13 @@ impl<T: PersistentStorage + 'static> App<T> {
             _ => self.query_gas_meter(),
         };
 
-        info!("query: {:?}", request);
+        info!(?request);
         let block = &self.data.as_ref().unwrap().block;
         let resp = self.logic.query(&reader, &mut meter, block, request);
+        match &resp {
+            Ok(response) => info!(success = ?response),
+            Err(error) => info!(?error),
+        }
         reader.abort();
         resp
     }
@@ -224,7 +228,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         GasMeter::new(DEFAULT_QUERY_GAS)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
         // temporary cache we will throw away
         let reader = self.storage.reader();
@@ -238,7 +242,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         res
     }
 
-    #[instrument(skip(self, storage))]
+    #[instrument(skip_all)]
     fn execute_tx(
         &self,
         storage: &mut dyn Storage,
@@ -255,7 +259,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         let data = match val_res {
             Ok(x) => x,
             Err(e) => {
-                info!("tx validation failed: {}", e);
+                info!(error = %e, "tx validation failed");
                 // ignore this out of gas error, aborting anyway and future txs will fail
                 let _ = block_meter.charge(val_meter.used());
                 return TxResult {
@@ -345,7 +349,14 @@ impl<T: PersistentStorage + 'static> App<T> {
                 previous: block.time.nanos(),
             });
         }
-        info!(target: "Executing block", height=block.height, time=block.time.seconds());
+        let block_time = format_timestamp_rfc3339(block.time);
+        info!(
+            height = block.height,
+            block.time = block_time,
+            block.nanos = block.time.nanos(),
+            txs = full_block.txs.len(),
+            "Executing Block"
+        );
 
         // Run begin block logic (not included in block gas)
         let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);

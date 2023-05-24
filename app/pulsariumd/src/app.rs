@@ -1,7 +1,8 @@
 use core::panic;
 use parking_lot::RwLock;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument, trace};
 
 use tendermint_abci::Application;
 use tendermint_proto::abci::{
@@ -15,6 +16,7 @@ use tendermint_proto::abci::{
 };
 
 use pulsar_app::{App, AppLoadError, StateMachine};
+use pulsar_std::HexEncode;
 use pulsar_storage::{MemoryStore, PersistentStorage};
 
 use crate::{
@@ -28,6 +30,8 @@ use crate::{
     },
 };
 
+type Tx = bytes::Bytes;
+
 #[derive(Debug)]
 pub struct Pulsarium<T: PersistentStorage + 'static> {
     // Applications are `Send` + `Clone` + `'static` because they are cloned for
@@ -35,6 +39,8 @@ pub struct Pulsarium<T: PersistentStorage + 'static> {
     // application developer to manage shared state between these clones of their
     // application.
     app: Arc<RwLock<App<T>>>,
+
+    mempool: Arc<RwLock<Vec<Tx>>>,
 }
 
 impl Default for Pulsarium<MemoryStore> {
@@ -48,6 +54,7 @@ impl<T: PersistentStorage + 'static> Clone for Pulsarium<T> {
     fn clone(&self) -> Self {
         Self {
             app: self.app.clone(),
+            mempool: self.mempool.clone(),
         }
     }
 }
@@ -76,6 +83,7 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
 
         Self {
             app: Arc::new(RwLock::new(app)),
+            mempool: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -119,23 +127,45 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Query the application for data at the current or past height.
     #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
-        debug!("abci query");
+        info!(raw_request.path = request.path, raw_request.data = %HexEncode::new(&request.data));
         let app = self.app.read();
         let chain_id = app.chain_id();
+        let height = app.info().map(|i| i.height).unwrap_or(0);
         let request = query_request_from_proto(request, chain_id);
         let res = app.query(request);
-        query_response_to_proto(res)
+        let out = query_response_to_proto(res, height);
+        // FIXME: make some helper to do hex encode lazy (eg. takes &Bytes) and implements Display
+        // only called if we actually emit debug
+        info!(
+            raw_response.code = out.code,
+            raw_response.log = out.log,
+            raw_response.key = %HexEncode::new(&out.key),
+            raw_response.value = %HexEncode::new(&out.value)
+        );
+        out
     }
 
     /// Check the given transaction before putting it into the local mempool.
     #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
-        debug!("abci check_tx");
+        // TODO: pull out tx hash elsewhere
+        let tx_hash = Sha256::digest(&request.tx);
+        info!(raw_tx = %HexEncode::new(&request.tx), tx_hash = %HexEncode::new(&tx_hash));
+
         let app = self.app.read();
         let chain_id = app.chain_id();
-        let request = check_request_from_proto(request, chain_id);
-        let res = app.check_tx(request);
-        check_response_to_proto(res)
+        let to_check = check_request_from_proto(&request, chain_id);
+        let res = app.check_tx(to_check);
+        // Really no easier way to release the app lock??
+        parking_lot::lock_api::RwLockReadGuard::unlock_fair(app);
+
+        // add raw tx to mempool if it is valid
+        if res.is_ok() {
+            self.mempool.write().push(request.tx);
+        }
+        let out = check_response_to_proto(res);
+        info!(raw_result = ?out);
+        out
     }
 
     #[instrument(skip_all)]
@@ -152,7 +182,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Signals that messages queued on the client should be flushed to the server.
     #[instrument(skip_all)]
     fn flush(&self) -> ResponseFlush {
-        debug!("abci flush");
+        trace!("abci flush");
         ResponseFlush {}
     }
 
@@ -210,14 +240,21 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// This method is introduced in ABCI++.
     #[instrument(skip_all)]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
-        debug!("abci prepare_proposal");
+        // take txs out of mempool
+        let txs = self.mempool.write().split_off(0);
+        info!(request_txs = request.txs.len(), mempool_txs = txs.len());
+        // TODO: compare/combine these
+        // TODO: Trim down to max bytes
+
+        // TODO: the below makes sense once Tendermint mempool plays nice.
+        // For now, we just use local mempool
+        /*
         // Per the ABCI++ spec: if the size of RequestPrepareProposal.txs is
         // greater than RequestPrepareProposal.max_tx_bytes, the Application
         // MUST remove transactions to ensure that the
         // RequestPrepareProposal.max_tx_bytes limit is respected by those
         // transactions returned in ResponsePrepareProposal.txs.
         let RequestPrepareProposal {
-            mut txs,
             max_tx_bytes,
             ..
         } = request;
@@ -233,6 +270,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
                 break;
             }
         }
+        */
         ResponsePrepareProposal { txs }
     }
 

@@ -11,7 +11,7 @@ use pulsar_std::{FeeInfo, SignedTx, SigningInfo, TxError};
 
 use crate::{parse_cosmos_msg, parse_cosmos_pubkey, CosmosError};
 
-pub const FIXED_ACCOUNT_NUMBER: u64 = 0;
+pub const FIXED_ACCOUNT_NUMBER: u64 = 17;
 
 fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), CosmosError> {
     // get raw format for accurate signing info (to validate sig)
@@ -91,7 +91,9 @@ pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Vec<u8>) -> Result<Signin
     // assert we have sign-mode-direct (need to add legacy amino support later)
     match info.mode_info {
         cosmrs::tx::mode_info::ModeInfo::Single(s) => match s.mode {
-            SignMode::Direct => Ok(()),
+            // FIXME: some better way of handling this?? SIGN_MODE_UNSPECIFIED should only be used for simulate
+            // For now, we treat it like direct
+            SignMode::Direct | SignMode::Unspecified => Ok(()),
             SignMode::LegacyAminoJson => Err(TxError::UnsupportedSigningMode("legacy_amino")),
             m => Err(TxError::UnsupportedSigningMode(m.as_str_name())),
         },

@@ -33,7 +33,7 @@ fn main() {
 
     // set up tracing
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(config.log)
+        .with_env_filter(config.filter)
         .with_timer(LocalTime::rfc_3339())
         .with_ansi(true)
         .finish();
