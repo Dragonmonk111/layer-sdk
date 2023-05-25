@@ -22,7 +22,7 @@ Since you want to see real-world numbers, let's compile release mode:
 
 ```bash
 cargo install --path .
-PULSE_LOG=info,tendermint_abci::application=error pulsariumd --jaeger
+PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger
 ```
 
 cargo run -- --jaeger

@@ -190,6 +190,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
         let _span = info_span!("abci_finalize_block", height = request.height, hash = %HexEncode::new(&request.hash)).entered();
+        info!("Finalize Block");
         let mut app = self.app.write();
         let chain_id = app.chain_id();
         let request = finalize_request_from_proto(request, chain_id);
@@ -200,7 +201,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
     /// Signals that messages queued on the client should be flushed to the server.
     fn flush(&self) -> ResponseFlush {
-        trace!("abci flush");
+        trace!("ABCI Flush");
         ResponseFlush {}
     }
 
@@ -208,7 +209,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     fn commit(&self) -> ResponseCommit {
         // Note: pulsar commits data in finalize_block. unsure why there is a different command,
         // and separating them causes issues with lifetimes and static analysis, so we commit there
-        debug!("abci commit");
+        debug!("ABCI Commit");
         // TODO: retain_height in response. what do we set it to???
         Default::default()
     }
@@ -216,19 +217,19 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// Used during state sync to discover available snapshots on peers.
     fn list_snapshots(&self) -> ResponseListSnapshots {
         // TODO: implement... make snapshot functions all info, so obvious if they are called somehow
-        info!("abci list_snapshots");
+        info!("ABCI list_snapshots");
         Default::default()
     }
 
     /// Called when bootstrapping the node using state sync.
     fn offer_snapshot(&self, _request: RequestOfferSnapshot) -> ResponseOfferSnapshot {
-        info!("abci offer_snapshot");
+        info!("ABCI offer_snapshot");
         Default::default()
     }
 
     /// Used during state sync to retrieve chunks of snapshots from peers.
     fn load_snapshot_chunk(&self, _request: RequestLoadSnapshotChunk) -> ResponseLoadSnapshotChunk {
-        info!("abci load_snapshot_chunk");
+        info!("ABCI load_snapshot_chunk");
         Default::default()
     }
 
@@ -237,7 +238,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         &self,
         _request: RequestApplySnapshotChunk,
     ) -> ResponseApplySnapshotChunk {
-        info!("abci apply_snapshot_chunk");
+        info!("ABCI apply_snapshot_chunk");
         Default::default()
     }
 
@@ -299,7 +300,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     ///
     /// This method is introduced in ABCI++.
     fn process_proposal(&self, _request: RequestProcessProposal) -> ResponseProcessProposal {
-        debug!("abci process_proposal");
+        debug!("ABCI process_proposal");
         ResponseProcessProposal {
             status: response_process_proposal::ProposalStatus::Accept as i32,
         }
