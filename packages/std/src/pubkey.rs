@@ -4,6 +4,7 @@ use tracing::debug_span;
 
 use cosmwasm_crypto::secp256k1_verify;
 use cosmwasm_schema::cw_serde;
+use cosmwasm_std::Binary;
 
 use crate::{AccountId, AccountIdError, TxError};
 
@@ -11,11 +12,19 @@ use crate::{AccountId, AccountIdError, TxError};
 #[cw_serde]
 #[derive(Eq)]
 pub enum PubKey {
-    Ed25519(Vec<u8>),
-    Secp256k1(Vec<u8>),
+    Ed25519(Binary),
+    Secp256k1(Binary),
 }
 
 impl PubKey {
+    pub fn ed25519(pk: impl Into<Binary>) -> Self {
+        PubKey::Ed25519(pk.into())
+    }
+
+    pub fn secp256k1(pk: impl Into<Binary>) -> Self {
+        PubKey::Secp256k1(pk.into())
+    }
+
     pub fn validate_signature(&self, message_hash: &[u8], signature: &[u8]) -> Result<(), TxError> {
         let _span = debug_span!("validate_signature").entered();
         match self {

@@ -1,6 +1,6 @@
 use tracing::{
     debug_span,
-    field::{debug, Empty},
+    field::{debug, display, Empty},
     info_span, trace_span,
 };
 
@@ -118,7 +118,7 @@ impl StateMachine {
         };
         match &res {
             Ok(response) => span.record("success", debug(&response.events)),
-            Err(error) => span.record("error", debug(error)),
+            Err(error) => span.record("error", display(error)),
         };
         res
     }
