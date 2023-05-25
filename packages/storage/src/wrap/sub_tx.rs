@@ -1,3 +1,5 @@
+use tracing::trace_span;
+
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasError, GasMeter, GasResult};
 
@@ -43,6 +45,7 @@ impl<'a> SubTx<'a> {
 
 impl ReadonlyStorage for SubTx<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        let _span = trace_span!("get").entered();
         self.wrap.get(self.storage.as_ref(), meter, key)
     }
 
@@ -53,6 +56,7 @@ impl ReadonlyStorage for SubTx<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        let _span = trace_span!("range").entered();
         self.wrap
             .range(self.storage.as_ref(), meter, start, end, order)
     }
@@ -61,10 +65,12 @@ impl ReadonlyStorage for SubTx<'_> {
 
 impl Storage for SubTx<'_> {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+        let _span = trace_span!("set").entered();
         self.wrap.set(meter, key, value)
     }
 
     fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        let _span = trace_span!("remove").entered();
         self.wrap.remove(meter, key)
     }
 
@@ -77,6 +83,7 @@ impl Transaction for SubTx<'_> {
     // FIXME: better error message - this should never be called, but we expose the API for the trait.
     // Shall we make it no op rather than panic??
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
+        let _span = trace_span!("commit").entered();
         // Write directly to underlying storage without intermediate vector
         for (key, delta) in self.wrap.local_state.into_iter() {
             match delta {

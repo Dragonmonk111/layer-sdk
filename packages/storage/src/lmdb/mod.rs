@@ -1,10 +1,13 @@
 use libc::size_t;
 use lmdb::{Cursor, Database, Environment, Transaction};
+use std::fmt;
 use std::path::Path;
+use tracing::trace_span;
+
+use cosmwasm_std::{Order, Record};
+use pulsar_std::{GasMeter, GasResult, HexEncode};
 
 use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
-use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult};
 
 // 1 GB max... review this later
 pub const DEFAULT_DB_SIZE_MB: u64 = 1024;
@@ -83,6 +86,7 @@ pub struct LmdbReader<'a> {
 
 impl ReadonlyStorage for LmdbReader<'_> {
     fn get(&self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         match self.tx.get(self.db, &key) {
             Ok(v) => Ok(Some(v.to_vec())),
             Err(lmdb::Error::NotFound) => Ok(None),
@@ -97,6 +101,7 @@ impl ReadonlyStorage for LmdbReader<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        let _span = trace_span!("range").entered();
         let mut cursor = self.tx.open_ro_cursor(self.db).unwrap();
         // TODO: handle reverse order
         if !matches!(order, Order::Ascending) {
@@ -133,6 +138,7 @@ impl Iterator for LmdbIterator<'_> {
     type Item = GasResult<Record>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _span = trace_span!("next").entered();
         match self.iter.next() {
             Some((k, v)) => {
                 if let Some(end) = &self.end {
@@ -163,6 +169,7 @@ impl<'a> LmdbWriter<'a> {
 
 impl ReadonlyStorage for LmdbWriter<'_> {
     fn get(&self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         match self.tx.get(self.db, &key) {
             Ok(v) => Ok(Some(v.to_vec())),
             Err(lmdb::Error::NotFound) => Ok(None),
@@ -177,6 +184,7 @@ impl ReadonlyStorage for LmdbWriter<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        let _span = trace_span!("range").entered();
         let mut cursor = self.tx.open_ro_cursor(self.db).unwrap();
         // TODO: handle reverse order
         if !matches!(order, Order::Ascending) {
@@ -204,6 +212,9 @@ impl ReadonlyStorage for LmdbWriter<'_> {
 
 impl Storage for LmdbWriter<'_> {
     fn set(&mut self, _meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+        let _span =
+            trace_span!("set", key = %HexEncode::new(&key), value = %HexEncode::new(&value))
+                .entered();
         self.tx
             .put(self.db, &key, &value, lmdb::WriteFlags::empty())
             .unwrap();
@@ -212,6 +223,7 @@ impl Storage for LmdbWriter<'_> {
     }
 
     fn remove(&mut self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        let _span = trace_span!("remove", key = %HexEncode::new(&key)).entered();
         self.hasher.remove(key);
         match self.tx.del(self.db, &key, None) {
             Ok(_) => Ok(()),

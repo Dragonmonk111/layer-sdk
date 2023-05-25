@@ -8,8 +8,11 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+# default = ["no-trace"]
 # remove any unneeded baggage
 optimize = ["tracing/release_max_level_info"]
+# remove exceessive tracing, we often don't want
+no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
 pulsar-app = { workspace = true }
