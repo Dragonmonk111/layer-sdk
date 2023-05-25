@@ -1,4 +1,4 @@
-use tracing::instrument;
+use tracing::debug_span;
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
@@ -45,7 +45,6 @@ impl Auth {
 
     /// This checks (and bumps) sequences of the local storage and deducts the fees from the account.
     /// If successful, it returns the TxData with all info that needs to be executed.
-    #[instrument(skip_all)]
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
@@ -56,6 +55,8 @@ impl Auth {
         // Set to false in simulate only
         validate_sig: bool,
     ) -> PulsarResult<TxData> {
+        let _span = debug_span!("auth.validate_tx", validate_sig).entered();
+
         // later handle other types
         let Tx::Signed(tx) = tx;
 

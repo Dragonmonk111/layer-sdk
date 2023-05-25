@@ -5,7 +5,7 @@ use cosmos_sdk_proto::prost::Message;
 use cosmrs::tx::SignDoc;
 use cosmwasm_std::{coin, Coin};
 use sha2::{Digest, Sha256};
-use tracing::instrument;
+use tracing::trace_span;
 
 use pulsar_std::required_signer;
 use pulsar_std::{FeeInfo, SignedTx, SigningInfo, TxError};
@@ -37,8 +37,8 @@ fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), C
 // This is parsed from cosmrs::Raw and cosmrs::Tx
 /// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
 /// Extracts all useful info from the Tx in a simpler format for us
-#[instrument(skip_all, level = "trace")]
 pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, TxError> {
+    let _span = trace_span!("parse_cosmos_tx").entered();
     let (tx, message_hash) = parse_raw_tx(bytes, chain_id)?;
 
     let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(parse_cosmos_msg).collect();

@@ -14,7 +14,7 @@ pub use gas::{GasError, GasMeter, GasResult};
 pub use msg::{required_signer, BankMsg, Msg, MsgError};
 pub use pubkey::PubKey;
 pub use query::{AuthQuery, BankQuery, Query, QueryError};
-pub use time::{format_timestamp_rfc3339, Duration, Timestamp};
+pub use time::{format_timestamp_rfc3339, Duration, Rfc3339, Timestamp};
 pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
 
 pub mod response {

@@ -1,4 +1,4 @@
-use tracing::instrument;
+use tracing::trace_span;
 
 use cosmwasm_std::to_vec;
 // Convert from pulsar types into abci types
@@ -55,10 +55,10 @@ pub fn query_response_to_proto(
     }
 }
 
-#[instrument(skip_all, level = "trace")]
 pub fn check_response_to_proto(
     response: pulsar_std::api::TxResult<PulsarError>,
 ) -> tendermint_proto::abci::ResponseCheckTx {
+    let _span = trace_span!("check_response_to_proto").entered();
     let (gas_wanted, gas_used) = tx_gas_to_proto(response.gas);
     let (code, data, events, log) = tx_result_to_proto(response.result);
 
@@ -76,10 +76,10 @@ pub fn check_response_to_proto(
 
 // This has the same fields as tendermint_proto::abci::ResponseCheckTx but different name,
 // so we make helper functions to do the same logic.
-#[instrument(skip_all, level = "trace")]
 pub fn tx_result_to_exec_tx_proto(
     response: pulsar_std::api::TxResult<PulsarError>,
 ) -> tendermint_proto::abci::ExecTxResult {
+    let _span: tracing::span::EnteredSpan = trace_span!("tx_result_to_exec_tx_proto").entered();
     let (gas_wanted, gas_used) = tx_gas_to_proto(response.gas);
     let (code, data, events, log) = tx_result_to_proto(response.result);
 
@@ -95,10 +95,10 @@ pub fn tx_result_to_exec_tx_proto(
     }
 }
 
-#[instrument(skip_all, level = "trace")]
 pub fn finalize_response_to_proto(
     response: pulsar_std::api::FinalizeBlockResponse<PulsarError>,
 ) -> tendermint_proto::abci::ResponseFinalizeBlock {
+    let _span: tracing::span::EnteredSpan = trace_span!("finalize_response_to_proto").entered();
     let tx_results = response
         .tx_results
         .into_iter()
@@ -123,10 +123,10 @@ fn tx_gas_to_proto(gas: pulsar_std::api::GasInfo) -> (i64, i64) {
     )
 }
 
-#[instrument(skip_all, level = "trace")]
 fn tx_result_to_proto(
     result: PulsarResult<pulsar_std::api::TxResponse>,
 ) -> (u32, Vec<u8>, Vec<tendermint_proto::abci::Event>, String) {
+    let _span: tracing::span::EnteredSpan = trace_span!("tx_result_to_proto").entered();
     match result {
         Ok(resp) => {
             // FIXME: needed for compatibility but slow, review later

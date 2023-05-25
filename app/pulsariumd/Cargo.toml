@@ -7,6 +7,10 @@ edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# remove any unneeded baggage
+optimize = ["tracing/release_max_level_info"]
+
 [dependencies]
 pulsar-app = { workspace = true }
 pulsar-std = { workspace = true }

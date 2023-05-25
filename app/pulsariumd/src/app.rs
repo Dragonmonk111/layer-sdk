@@ -3,7 +3,11 @@ use core::panic;
 use parking_lot::RwLock;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use tracing::{debug, info, instrument, trace};
+use tracing::{
+    debug, debug_span,
+    field::{display, Empty},
+    info, info_span, trace,
+};
 
 use tendermint_abci::Application;
 use tendermint_proto::abci::{
@@ -73,11 +77,11 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
             Ok(_) => {
                 // FIXME: proper logging when we have proper tracing
                 let height = app.info().unwrap().height;
-                println!("Initialized app from storage at height {}", height);
+                info!(height, "Initialized app from storage");
             }
             Err(AppLoadError::NoStoredState) => {
                 // FIXME: proper logging when we have proper tracing
-                println!("No stored state, app is uninitialized");
+                info!("No stored state, app is uninitialized");
             }
             Err(e) => panic!("Error loading app from storage: {}", e),
         };
@@ -90,18 +94,16 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
 }
 
 impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
-    #[instrument(skip_all)]
     fn echo(&self, request: RequestEcho) -> ResponseEcho {
-        debug!("abci echo");
+        trace!("abci echo");
         ResponseEcho {
             message: request.message,
         }
     }
 
     /// Provide information about the ABCI application.
-    #[instrument(skip_all)]
     fn info(&self, _request: RequestInfo) -> ResponseInfo {
-        debug!("abci info");
+        let _span = debug_span!("abci_info").entered();
         let app = self.app.read();
         let block = app.info();
         let app_hash = app.app_hash();
@@ -116,9 +118,9 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     }
 
     /// Called once upon genesis.
-    #[instrument(skip_all)]
     fn init_chain(&self, request: RequestInitChain) -> ResponseInitChain {
-        debug!("abci init_chain");
+        let _span =
+            info_span!("abci_init_chain", initial_height = request.initial_height).entered();
         let request = init_request_from_proto(request);
         // This requires we are in WaitingInit state, otherwise panic
         let res = self.app.write().init(request).unwrap();
@@ -126,31 +128,46 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     }
 
     /// Query the application for data at the current or past height.
-    #[instrument(skip_all)]
     fn query(&self, request: RequestQuery) -> ResponseQuery {
-        info!(raw_request.path = request.path, raw_request.data = %HexEncode::new(&request.data));
+        let span = debug_span!(
+            "abci_query", 
+            raw_request.path = request.path,
+            raw_request.data = %HexEncode::new(&request.data),
+            raw_response.code = Empty,
+            raw_response.log = Empty,
+            raw_response.key = Empty,
+            raw_response.value = Empty)
+        .entered();
         let app = self.app.read();
         let chain_id = app.chain_id();
         let height = app.info().map(|i| i.height).unwrap_or(0);
         let request = query_request_from_proto(request, chain_id);
         let res = app.query(request);
         let out = query_response_to_proto(res, height);
-        // FIXME: make some helper to do hex encode lazy (eg. takes &Bytes) and implements Display
-        // only called if we actually emit debug
-        info!(
-            raw_response.code = out.code,
-            raw_response.log = out.log,
-            raw_response.key = %HexEncode::new(&out.key),
-            raw_response.value = %HexEncode::new(&out.value)
-        );
+
+        //Add response into to the same span
+        span.record("raw_response.code", out.code);
+        span.record("raw_response.log", &out.log);
+        span.record("raw_response.key", display(HexEncode::new(&out.key)));
+        span.record("raw_response.value", display(HexEncode::new(&out.value)));
         out
     }
 
     /// Check the given transaction before putting it into the local mempool.
-    #[instrument(skip_all)]
     fn check_tx(&self, request: RequestCheckTx) -> ResponseCheckTx {
         let hash = tx_hash(&request.tx);
-        info!(raw_tx = %HexEncode::new(&request.tx), tx_hash = %HexEncode::new(&hash));
+        // TODO: bump to info if the check_tx failed?
+        // debug should give enough info to debug a failed tx in detail
+        // trace would have info for optimizing
+        let span = debug_span!("abci_check_tx",
+            raw_tx = %HexEncode::new(&request.tx),
+            tx_hash = %HexEncode::new(&hash),
+            gas_wanted = Empty,
+            gas_used = Empty,
+            code = Empty,
+            log = Empty,
+        )
+        .entered();
 
         let app = self.app.read();
         let chain_id = app.chain_id();
@@ -164,13 +181,15 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
             self.mempool.write().push(request.tx);
         }
         let out = check_response_to_proto(res);
-        info!(raw_result = ?out);
+        span.record("gas_wanted", out.gas_wanted);
+        span.record("gas_used", out.gas_used);
+        span.record("code", out.code);
+        span.record("log", &out.log);
         out
     }
 
-    #[instrument(skip_all)]
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
-        debug!("abci finalize_block");
+        let _span = info_span!("abci_finalize_block", height = request.height, hash = %HexEncode::new(&request.hash)).entered();
         let mut app = self.app.write();
         let chain_id = app.chain_id();
         let request = finalize_request_from_proto(request, chain_id);
@@ -180,50 +199,45 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     }
 
     /// Signals that messages queued on the client should be flushed to the server.
-    #[instrument(skip_all)]
     fn flush(&self) -> ResponseFlush {
         trace!("abci flush");
         ResponseFlush {}
     }
 
     /// Commit the current state at the current height.
-    #[instrument(skip_all)]
     fn commit(&self) -> ResponseCommit {
         // Note: pulsar commits data in finalize_block. unsure why there is a different command,
-        // and separating them causes issues with lifetimes and static analysis.
+        // and separating them causes issues with lifetimes and static analysis, so we commit there
         debug!("abci commit");
-        // TODO: get app data
+        // TODO: retain_height in response. what do we set it to???
         Default::default()
     }
 
     /// Used during state sync to discover available snapshots on peers.
-    #[instrument(skip_all)]
     fn list_snapshots(&self) -> ResponseListSnapshots {
-        debug!("abci list_snapshots");
+        // TODO: implement... make snapshot functions all info, so obvious if they are called somehow
+        info!("abci list_snapshots");
         Default::default()
     }
 
     /// Called when bootstrapping the node using state sync.
-    #[instrument(skip_all)]
     fn offer_snapshot(&self, _request: RequestOfferSnapshot) -> ResponseOfferSnapshot {
-        debug!("abci offer_snapshot");
+        info!("abci offer_snapshot");
         Default::default()
     }
 
     /// Used during state sync to retrieve chunks of snapshots from peers.
-    #[instrument(skip_all)]
     fn load_snapshot_chunk(&self, _request: RequestLoadSnapshotChunk) -> ResponseLoadSnapshotChunk {
-        debug!("abci load_snapshot_chunk");
+        info!("abci load_snapshot_chunk");
         Default::default()
     }
 
     /// Apply the given snapshot chunk to the application's state.
-    #[instrument(skip_all)]
     fn apply_snapshot_chunk(
         &self,
         _request: RequestApplySnapshotChunk,
     ) -> ResponseApplySnapshotChunk {
-        debug!("abci apply_snapshot_chunk");
+        info!("abci apply_snapshot_chunk");
         Default::default()
     }
 
@@ -238,11 +252,16 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// more elaborate removal strategies.
     ///
     /// This method is introduced in ABCI++.
-    #[instrument(skip_all)]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
         // take txs out of mempool
+        let span = info_span!(
+            "prepare_proposal",
+            request_txs = request.txs.len(),
+            mempool_txs = Empty
+        )
+        .entered();
         let txs = self.mempool.write().split_off(0);
-        info!(request_txs = request.txs.len(), mempool_txs = txs.len());
+        span.record("mempool_txs", txs.len());
         // TODO: compare/combine these
         // TODO: Trim down to max bytes
 
@@ -279,7 +298,6 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     /// The default implementation returns the status value of `ACCEPT`.
     ///
     /// This method is introduced in ABCI++.
-    #[instrument(skip_all)]
     fn process_proposal(&self, _request: RequestProcessProposal) -> ResponseProcessProposal {
         debug!("abci process_proposal");
         ResponseProcessProposal {
@@ -289,7 +307,6 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 }
 
 // TODO: pull out tx hash elsewhere
-#[instrument(skip_all, level = "trace")]
 fn tx_hash(tx: &Bytes) -> Vec<u8> {
     Sha256::digest(tx).to_vec()
 }

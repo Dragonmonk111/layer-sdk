@@ -1,5 +1,9 @@
 use thiserror::Error;
-use tracing::{info, instrument};
+use tracing::{
+    debug_span,
+    field::{debug, display, Empty},
+    info_span, trace_span,
+};
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
@@ -12,7 +16,7 @@ use pulsar_std::api::{
     TxResponse, TxResult,
 };
 use pulsar_std::response::QueryResponse;
-use pulsar_std::{format_timestamp_rfc3339, GasMeter, Query, Tx};
+use pulsar_std::{GasMeter, Query, Rfc3339, Tx};
 use pulsar_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
     Transaction,
@@ -123,6 +127,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
     /// Called once upon blockchain startup with genesis info, before anything else is called
     pub fn init(&mut self, request: InitChainRequest) -> PulsarResult<InitChainResponse> {
+        let _span = debug_span!("app.init").entered();
         // Store the state
         let chain_id = request.chain_id.clone();
         let last_block = BlockInfo {
@@ -187,8 +192,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     /// Returns serialized response to the query that can be passed back verbatum
-    #[instrument(skip_all)]
     pub fn query(&self, request: Query) -> PulsarResult<QueryResponse<PulsarError>> {
+        let span = debug_span!("query", ?request, success = Empty, error = Empty).entered();
         let reader = self.storage.reader();
 
         // note, simulate needs different limit
@@ -197,13 +202,12 @@ impl<T: PersistentStorage + 'static> App<T> {
             _ => self.query_gas_meter(),
         };
 
-        info!(?request);
         let block = &self.data.as_ref().unwrap().block;
         let resp = self.logic.query(&reader, &mut meter, block, request);
         match &resp {
-            Ok(response) => info!(success = ?response),
-            Err(error) => info!(?error),
-        }
+            Ok(response) => span.record("success", debug(response)),
+            Err(error) => span.record("error", display(error)),
+        };
         reader.abort();
         resp
     }
@@ -228,8 +232,8 @@ impl<T: PersistentStorage + 'static> App<T> {
         GasMeter::new(DEFAULT_QUERY_GAS)
     }
 
-    #[instrument(skip_all)]
     pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
+        let _span = trace_span!("check_tx").entered();
         // temporary cache we will throw away
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
@@ -242,7 +246,6 @@ impl<T: PersistentStorage + 'static> App<T> {
         res
     }
 
-    #[instrument(skip_all)]
     fn execute_tx(
         &self,
         storage: &mut dyn Storage,
@@ -250,6 +253,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         block: &BlockInfo,
         tx: Tx,
     ) -> TxResult<PulsarError> {
+        let _span = debug_span!("execute_tx", ?tx, height = block.height).entered();
         // validate the transaction. if this passes, we commit the auth info (sequence / fee)
         // even if messages fail and are reverted
         let mut val_meter = GasMeter::new(MAX_VALIDATE_GAS);
@@ -259,7 +263,6 @@ impl<T: PersistentStorage + 'static> App<T> {
         let data = match val_res {
             Ok(x) => x,
             Err(e) => {
-                info!(error = %e, "tx validation failed");
                 // ignore this out of gas error, aborting anyway and future txs will fail
                 let _ = block_meter.charge(val_meter.used());
                 return TxResult {
@@ -321,11 +324,19 @@ impl<T: PersistentStorage + 'static> App<T> {
         TxResult { gas, result }
     }
 
-    #[instrument(skip_all)]
     pub fn finalize_block(
         &mut self,
         full_block: Block,
     ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
+        let _span = info_span!(
+            "finalize_block",
+            height = full_block.height,
+            block.time = %Rfc3339(full_block.time),
+            block.nanos = full_block.time.nanos(),
+            txs = full_block.txs.len(),
+        )
+        .entered();
+
         let mut writer = self.storage.writer();
 
         let data = self.data.as_ref().unwrap();
@@ -349,14 +360,6 @@ impl<T: PersistentStorage + 'static> App<T> {
                 previous: block.time.nanos(),
             });
         }
-        let block_time = format_timestamp_rfc3339(block.time);
-        info!(
-            height = block.height,
-            block.time = block_time,
-            block.nanos = block.time.nanos(),
-            txs = full_block.txs.len(),
-            "Executing Block"
-        );
 
         // Run begin block logic (not included in block gas)
         let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
