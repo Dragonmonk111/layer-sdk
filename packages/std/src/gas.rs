@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tracing::trace;
 
 /// Tracks gas usage and returns error when it hits the limit
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,7 @@ impl GasMeter {
     }
 
     pub fn charge(&mut self, cost: u64) -> Result<(), GasError> {
+        trace!(cost, "charge gas");
         self.used += cost;
         if self.used >= self.limit {
             Err(GasError::OutOfGas)

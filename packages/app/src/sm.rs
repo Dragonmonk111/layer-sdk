@@ -1,4 +1,8 @@
-use tracing::{info, instrument};
+use tracing::{
+    debug_span,
+    field::{debug, display, Empty},
+    info_span, trace_span,
+};
 
 use cosmwasm_std::{BlockInfo, Event, StdError};
 use pulsar_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
@@ -28,7 +32,6 @@ impl StateMachine {
         }
     }
 
-    #[instrument(skip_all)]
     pub fn init(
         &self,
         storage: &mut dyn Storage,
@@ -36,12 +39,11 @@ impl StateMachine {
         block: &BlockInfo,
         genesis: GenesisState,
     ) -> PulsarResult<()> {
-        info!(?genesis, "Initializing App");
+        info_span!("sm.init", ?genesis);
         self.bank.init(storage, meter, block, genesis.bank, self)?;
         Ok(())
     }
 
-    #[instrument(skip_all)]
     pub fn query(
         &self,
         storage: &dyn ReadonlyStorage,
@@ -49,6 +51,7 @@ impl StateMachine {
         block: &BlockInfo,
         request: Query,
     ) -> Result<QueryResponse<PulsarError>, PulsarError> {
+        let _span = trace_span!("sm.query").entered();
         let result = match request {
             Query::Raw { key } => {
                 let value = storage
@@ -77,6 +80,7 @@ impl StateMachine {
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxResponse> {
+        let _span = debug_span!("sm.query_simulate").entered();
         let data = self
             .auth
             .validate_tx(store, meter, block, self, tx, false)?;
@@ -98,7 +102,6 @@ impl StateMachine {
         Ok(TxResponse { data, events })
     }
 
-    #[instrument(skip_all)]
     pub fn process_msg(
         &self,
         storage: &mut dyn Storage,
@@ -107,15 +110,15 @@ impl StateMachine {
         block: &BlockInfo,
         msg: Msg,
     ) -> PulsarResult<MsgResponse> {
-        info!(?msg);
+        let span = debug_span!("sm.process_msg", ?msg, success = Empty, error = Empty).entered();
         let res = match msg {
             Msg::Bank(bank) => self
                 .bank
                 .process_msg(storage, gas, block, self, sender, bank),
         };
         match &res {
-            Ok(response) => info!(success = ?response.events),
-            Err(error) => info!(failure = ?error),
+            Ok(response) => span.record("success", debug(&response.events)),
+            Err(error) => span.record("error", display(error)),
         };
         res
     }

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::iter;
 use std::iter::Peekable;
 use std::ops::{Bound, RangeBounds};
+use tracing::trace_span;
 
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
@@ -152,6 +153,7 @@ where
     type Item = GasResult<Record>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _span = trace_span!("next").entered();
         let (left, right) = (self.left.peek(), self.right.peek());
         match (left, right) {
             (Some(litem), Some(ritem)) => {

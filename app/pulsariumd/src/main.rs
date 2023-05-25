@@ -4,7 +4,9 @@ use figment::{
     Figment,
 };
 use tendermint_abci::ServerBuilder;
+use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
+use tracing_subscriber::prelude::*;
 use tracing_subscriber::FmtSubscriber;
 
 mod app;
@@ -28,16 +30,40 @@ fn main() {
         .merge(Serialized::defaults(args))
         .extract()
         .unwrap();
-    println!("{:?}", config);
     let config = config.validate().unwrap();
+    // We print this out for debugging before the logger is set up
+    println!("{:?}", config);
 
     // set up tracing
-    let subscriber = FmtSubscriber::builder()
+    let fmt_subscriber = FmtSubscriber::builder()
         .with_env_filter(config.filter)
         .with_timer(LocalTime::rfc_3339())
         .with_ansi(true)
         .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    // add open telemetry
+    if config.jaeger {
+        opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+        let tracer = opentelemetry_jaeger::new_agent_pipeline()
+            .with_service_name("pulsariumd")
+            .install_simple()
+            .unwrap();
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        let subscriber = fmt_subscriber.with(telemetry);
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("setting default subscriber failed");
+        info!("jaeger tracing enabled");
+
+    //     let tracer = opentelemetry_jaeger::new_collector_pipeline()
+    //         .with_endpoint("http://localhost:14268/api/traces")
+    //         // optionally set username and password as well.
+    //         // .with_username("username")
+    //         // .with_password("s3cr3t")
+    //         .install_batch().unwrap();
+    } else {
+        tracing::subscriber::set_global_default(fmt_subscriber)
+            .expect("setting default subscriber failed");
+    }
 
     // Create the app
     let app = Pulsarium::default();
@@ -47,4 +73,9 @@ fn main() {
         .bind(format!("{}:{}", config.host, config.port), app)
         .unwrap();
     server.listen().unwrap();
+
+    // proper shutdown
+    if config.jaeger {
+        opentelemetry::global::shutdown_tracer_provider();
+    }
 }

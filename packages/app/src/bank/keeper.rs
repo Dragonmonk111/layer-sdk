@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-
 use itertools::Itertools;
+use std::collections::HashMap;
+use tracing::debug_span;
 
 use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
-use pulsar_std::{AccountId, BankMsg, BankQuery, GasMeter};
+use pulsar_std::{AccountId, BankMsg, BankQuery, CoinEncode, GasMeter};
 use pulsar_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
 };
@@ -195,6 +195,9 @@ impl Bank {
         to_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
+        let _span =
+            debug_span!("transfer", %from_address, %to_address, amount = %CoinEncode(&amount))
+                .entered();
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
         self.send(&mut bank_storage, meter, from_address, to_address, amount)
     }
@@ -207,6 +210,7 @@ impl Bank {
         from_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
+        let _span = debug_span!("burn", %from_address, amount = %CoinEncode(&amount)).entered();
         let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
         self.burn_tokens(&mut bank_storage, meter, from_address, amount)
     }
@@ -236,7 +240,6 @@ impl Bank {
         signer: &AccountId,
         msg: BankMsg,
     ) -> PulsarResult<MsgResponse> {
-        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
         match msg {
             BankMsg::Send {
                 sender,
@@ -248,7 +251,7 @@ impl Bank {
                     .add_attribute("recipient", &recipient)
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
-                self.send(&mut bank_storage, meter, sender, recipient, amount)?;
+                self.transfer(storage, meter, sender, recipient, amount)?;
                 Ok(MsgResponse::events(events))
             }
             BankMsg::Burn { sender, amount } => {
@@ -256,7 +259,7 @@ impl Bank {
                 let events = vec![Event::new("burn")
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
-                self.burn_tokens(&mut bank_storage, meter, sender, amount)?;
+                self.burn(storage, meter, sender, amount)?;
                 Ok(MsgResponse::events(events))
             }
         }

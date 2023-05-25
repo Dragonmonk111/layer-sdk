@@ -1,0 +1,35 @@
+# Telemetry
+
+How to collect great data via [OpenTelemetry](https://crates.io/crates/opentelemetry)
+
+## Run Jaeger
+
+There are many possible servers, for now we only support running a local Jaeger instance.
+
+Start this in a terminal to run the server in the background:
+
+```
+# optionally specify 1.45 rather than latest
+docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 -p14268:14268 jaegertracing/all-in-one:latest
+```
+
+You should now see the Web interface at http://localhost:16686
+
+## Run Pulsarimd with OpenTelemetry
+
+You can enable jaeger tracing either with `--jaeger` flag or settings `PULSE_JAEGER=true` in the environment.
+Since you want to see real-world numbers, let's compile release mode:
+
+```bash
+cargo install --path .
+PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger
+```
+
+cargo run -- --jaeger
+```
+
+
+## Test with integration tests
+
+Check out the setup for [Integration Tests](../../integration/README.md) and initialize and run CometBFT
+as they stated. When you run the test suite, you should generate activity in the Jaeger UI.

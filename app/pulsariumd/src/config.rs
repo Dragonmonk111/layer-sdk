@@ -16,6 +16,9 @@ pub struct RawConfig {
     pub log: String,
 
     pub read_buf_size: u32,
+
+    // whether to add jaeger tracing
+    pub jaeger: bool,
     // /// The directory we read all files from (default $HOME/.pulsarium)
     // pub basedir: String,
 }
@@ -27,6 +30,7 @@ impl Default for RawConfig {
             port: 26658,
             log: "info".to_string(),
             read_buf_size: 4 * 1024 * 1024,
+            jaeger: false,
         }
     }
 }
@@ -53,6 +57,7 @@ impl RawConfig {
             port: self.port,
             filter,
             read_buf_size: self.read_buf_size,
+            jaeger: self.jaeger,
         })
     }
 }
@@ -70,6 +75,8 @@ pub struct Config {
     pub filter: EnvFilter,
 
     pub read_buf_size: u32,
+
+    pub jaeger: bool,
     // /// The directory we read all files from (default $HOME/.pulsarium)
     // pub basedir: String,
 }

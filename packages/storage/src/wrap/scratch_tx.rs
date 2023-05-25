@@ -1,3 +1,5 @@
+use tracing::trace_span;
+
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
@@ -25,6 +27,7 @@ impl<'a> ScratchTx<'a> {
 
 impl ReadonlyStorage for ScratchTx<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        let _span = trace_span!("get").entered();
         self.wrap.get(self.storage, meter, key)
     }
 
@@ -35,6 +38,7 @@ impl ReadonlyStorage for ScratchTx<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        let _span = trace_span!("range").entered();
         self.wrap.range(self.storage, meter, start, end, order)
     }
 
@@ -43,10 +47,12 @@ impl ReadonlyStorage for ScratchTx<'_> {
 
 impl Storage for ScratchTx<'_> {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+        let _span = trace_span!("set").entered();
         self.wrap.set(meter, key, value)
     }
 
     fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        let _span = trace_span!("remove").entered();
         self.wrap.remove(meter, key)
     }
 

@@ -46,3 +46,12 @@ pub fn format_timestamp_rfc3339(time: Timestamp) -> String {
     // Formats the combined date and time with the specified format string.
     datetime.to_rfc3339()
 }
+
+/// Simple wrapper for delayed execution of the time calculation to save when logging
+pub struct Rfc3339(pub Timestamp);
+
+impl std::fmt::Display for Rfc3339 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format_timestamp_rfc3339(self.0))
+    }
+}

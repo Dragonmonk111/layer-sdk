@@ -13,3 +13,14 @@ impl Display for HexEncode<'_> {
         write!(f, "{}", hex::encode_upper(self.0))
     }
 }
+
+pub struct CoinEncode<'a>(pub &'a [cosmwasm_std::Coin]);
+
+impl Display for CoinEncode<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for coin in self.0 {
+            write!(f, "{}{},", coin.amount, coin.denom)?;
+        }
+        Ok(())
+    }
+}

@@ -1,10 +1,13 @@
-use cosmwasm_std::{Order, Record};
 use parking_lot::{RwLock, RwLockReadGuard};
-use pulsar_std::{GasMeter, GasResult};
+use pulsar_std::HexEncode;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
+use tracing::trace_span;
+
+use cosmwasm_std::{Order, Record};
+use pulsar_std::{GasMeter, GasResult};
 
 use crate::traits::Transaction;
 use crate::wrap::{Op, ReaderWrapper};
@@ -66,6 +69,7 @@ pub struct MemoryStorageReader<'a>(RwLockReadGuard<'a, BTreeStorage>);
 
 impl ReadonlyStorage for MemoryStorageReader<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         self.0.get(meter, key)
     }
 
@@ -76,6 +80,7 @@ impl ReadonlyStorage for MemoryStorageReader<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        let _span = trace_span!("range").entered();
         self.0.range(meter, start, end, order)
     }
 
@@ -104,6 +109,7 @@ impl<'a> MemoryStorageWriter<'a> {
 
 impl ReadonlyStorage for MemoryStorageWriter<'_> {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+        let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         self.wrapper.get(&self.reader, meter, key)
     }
 
@@ -114,6 +120,7 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
+        let _span = trace_span!("range").entered();
         self.wrapper.range(&self.reader, meter, start, end, order)
     }
 
@@ -122,10 +129,14 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
 
 impl Storage for MemoryStorageWriter<'_> {
     fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+        let _span =
+            trace_span!("set", key = %HexEncode::new(&key), value = %HexEncode::new(&value))
+                .entered();
         self.wrapper.set(meter, key, value)
     }
 
     fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+        let _span = trace_span!("remove", key = %HexEncode::new(&key)).entered();
         self.wrapper.remove(meter, key)
     }
 
@@ -136,6 +147,7 @@ impl Storage for MemoryStorageWriter<'_> {
 
 impl Transaction for MemoryStorageWriter<'_> {
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
+        let _span = trace_span!("commit").entered();
         // destructure and force dropping reader to remove read lock (otherwise, deadlock on getting writer below)
         // println!(
         //     "lock status: {}, exclusive: {}",
@@ -238,6 +250,7 @@ impl BTreeStorage {
         let cost = 1000u64;
         meter.charge(cost)?;
 
+        // FIXME: wrap this so we can instrument next to for timing
         let iter = self
             .data
             .range(bounds)

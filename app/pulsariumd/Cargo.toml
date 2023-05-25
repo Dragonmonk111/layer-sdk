@@ -7,6 +7,13 @@ edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# default = ["no-trace"]
+# remove any unneeded baggage
+optimize = ["tracing/release_max_level_info"]
+# remove exceessive tracing, we often don't want
+no-trace = ["tracing/release_max_level_debug"]
+
 [dependencies]
 pulsar-app = { workspace = true }
 pulsar-std = { workspace = true }
@@ -26,10 +33,14 @@ tendermint-abci = { workspace = true }
 tendermint-proto = { workspace = true }
 
 tracing = { workspace = true }
-thiserror = { workspace = true }
 tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot", "env-filter"]}
+thiserror = { workspace = true }
 parking_lot = { workspace = true }
 sha2 = { workspace = true }
+
+opentelemetry = { workspace = true }
+opentelemetry-jaeger = { workspace = true, features = ["isahc_collector_client"] }
+tracing-opentelemetry = {workspace = true}
 
 # TODO: keep in sync with whatever tendermint-rs uses
 bytes = "1.4.0"

@@ -3,6 +3,7 @@ use cosmos_sdk_proto::{
     traits::{MessageExt, TypeUrl},
 };
 use cosmrs::Any;
+use tracing::trace_span;
 
 use pulsar_std::{AccountId, BankMsg, Msg, MsgError};
 
@@ -10,6 +11,7 @@ use crate::error::CosmosError;
 use crate::utils::parse_sdk_coins;
 
 pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
+    let _span = trace_span!("parse_cosmos_msg").entered();
     match msg.type_url.as_str() {
         MsgSend::TYPE_URL => {
             let parsed = MsgSend::from_any(msg).map_err(CosmosError::from)?;
