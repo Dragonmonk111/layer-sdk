@@ -3,7 +3,7 @@ use cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw;
 use cosmos_sdk_proto::prost::Message;
 
 use cosmrs::tx::SignDoc;
-use cosmwasm_std::{coin, Coin};
+use cosmwasm_std::{coin, Binary, Coin};
 use sha2::{Digest, Sha256};
 use tracing::trace_span;
 
@@ -47,7 +47,7 @@ pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, T
 
     // other needed info
     let fee = get_fee(&tx)?;
-    let signing_info = get_signing_info(&tx, message_hash)?;
+    let signing_info = get_signing_info(&tx, message_hash.into())?;
     let timeout_height = match tx.body.timeout_height.value() {
         0 => None,
         v => Some(v),
@@ -68,11 +68,11 @@ pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, T
     Ok(pulsar_std::Tx::Signed(tx))
 }
 
-pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Vec<u8>) -> Result<SigningInfo, TxError> {
+pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Binary) -> Result<SigningInfo, TxError> {
     let sigs = &tx.signatures;
     let signature = match sigs.len() {
         0 => Err(TxError::NoSigner),
-        1 => Ok(sigs[0].clone()),
+        1 => Ok(Binary::from(sigs[0].as_slice())),
         _ => Err(TxError::MultipleSigners),
     }?;
 

@@ -1,4 +1,4 @@
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Binary, Coin};
 use thiserror::Error;
 
 use crate::account_id::AccountId;
@@ -44,7 +44,7 @@ pub struct SigningInfo {
     /// These are the raw bytes that should be properly signed by a pubkey to be valid.
     /// It depends fully on the raw encoding of the transaction.
     /// It is a hash of the sign bytes that can be fed into a public key verification function
-    pub message_hash: Vec<u8>,
+    pub message_hash: Binary,
 
     /// This is the sequence number from the given pubkey -
     pub sequence: u64,
@@ -54,7 +54,7 @@ pub struct SigningInfo {
     pub pubkey: Option<PubKey>,
 
     /// These are raw signature bytes that make sense based on the pubkey type
-    pub signature: Vec<u8>,
+    pub signature: Binary,
 }
 
 impl SigningInfo {

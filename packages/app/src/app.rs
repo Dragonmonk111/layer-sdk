@@ -1,7 +1,7 @@
 use thiserror::Error;
 use tracing::{
-    debug_span,
-    field::{debug, display, Empty},
+    debug, debug_span,
+    field::{debug as dbg, display, Empty},
     info_span, trace_span,
 };
 
@@ -208,7 +208,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         let block = &self.data.as_ref().unwrap().block;
         let resp = self.logic.query(&reader, &mut meter, block, request);
         match &resp {
-            Ok(response) => span.record("success", debug(response)),
+            Ok(response) => span.record("success", dbg(response)),
             Err(error) => span.record("error", display(error)),
         };
         reader.abort();
@@ -285,6 +285,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         let data = match val_res {
             Ok(x) => x,
             Err(e) => {
+                debug!(error = %e, "Tx auth error");
                 // ignore this out of gas error, aborting anyway and future txs will fail
                 let _ = block_meter.charge(val_meter.used());
                 return TxResult {
@@ -300,6 +301,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         if let Err(e) = meter.charge(val_meter.used()) {
             // ignore this out of gas error, aborting anyway and future txs will fail
             let _ = block_meter.charge(val_meter.used());
+            debug!(error = %e, "Tx auth error");
             return TxResult {
                 gas: GasInfo::from_meter(&meter),
                 result: Err(e.into()),
@@ -309,12 +311,14 @@ impl<T: PersistentStorage + 'static> App<T> {
         // cap at some block limit - if more requested that fits in the block,
         // abort before trying to run the tx
         if gas_wanted > block_meter.remaining() {
+            let err = PulsarError::ExceedsRemainingBlockGas {
+                requested: gas_wanted,
+                remaining: block_meter.remaining(),
+            };
+            debug!(error = %err, "Tx auth error");
             return TxResult {
                 gas: GasInfo::from_meter(&meter),
-                result: Err(PulsarError::ExceedsRemainingBlockGas {
-                    requested: gas_wanted,
-                    remaining: block_meter.remaining(),
-                }),
+                result: Err(err),
             };
         }
 
@@ -340,6 +344,10 @@ impl<T: PersistentStorage + 'static> App<T> {
             let events = all.into_iter().map(|r| r.events).collect();
             TxResponse { data, events }
         });
+        match &result {
+            Ok(r) => debug!(success = ?r, "Tx success"),
+            Err(e) => debug!(error = %e, "Tx error"),
+        };
 
         // return result
         let gas = GasInfo::from_meter(&meter);
