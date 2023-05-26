@@ -78,6 +78,12 @@ impl From<&AccountId> for String {
     }
 }
 
+/// This is meant as a helper for testcode
+/// Panics on error
+pub fn must_id(str: &str) -> AccountId {
+    AccountId::parse_string(str).unwrap()
+}
+
 impl AccountId {
     /// This takes
     pub fn new(raw: &[u8]) -> Result<Self, AccountIdError> {

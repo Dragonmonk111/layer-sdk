@@ -21,6 +21,8 @@ You can enable jaeger tracing either with `--jaeger` flag or settings `PULSE_JAE
 Since you want to see real-world numbers, let's compile release mode:
 
 ```bash
+# this will make runtime a bit faster if we don't want low-level tracing info
+cargo install --path . --features no-trace
 cargo install --path .
 PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger
 ```

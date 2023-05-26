@@ -30,9 +30,9 @@ fn main() {
         .merge(Serialized::defaults(args))
         .extract()
         .unwrap();
-    let config = config.validate().unwrap();
     // We print this out for debugging before the logger is set up
     println!("{:?}", config);
+    let config = config.validate().unwrap();
 
     // set up tracing
     let fmt_subscriber = FmtSubscriber::builder()

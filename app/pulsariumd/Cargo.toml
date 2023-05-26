@@ -44,3 +44,6 @@ tracing-opentelemetry = {workspace = true}
 
 # TODO: keep in sync with whatever tendermint-rs uses
 bytes = "1.4.0"
+
+[dev-dependencies]
+hex-literal = {workspace = true }

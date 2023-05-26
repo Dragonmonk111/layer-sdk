@@ -139,3 +139,116 @@ fn tx_result_to_proto(
         Err(e) => (1, Vec::new(), Vec::new(), e.to_string()),
     }
 }
+
+/// These were pulled from Jaeger fed by CosmJS tests.
+/// That means the input formats are ensured to be compatible with CosmJS and what we can expect.
+#[cfg(test)]
+mod fixtures {
+    use super::*;
+
+    use cosmwasm_std::{coin, Binary, Event};
+    use hex_literal::hex;
+    use pulsar_app::PulsarError;
+    use pulsar_std::{
+        api::{GasInfo, TxResponse, TxResult},
+        must_id,
+        response::{
+            AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse, QueryResponse,
+        },
+        PubKey,
+    };
+
+    #[test]
+    fn encode_account_response() {
+        let request = QueryResponse::<PulsarError>::Auth(AuthQueryResponse::Account(
+            AccountResponse::External {
+                address: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
+                pubkey: Some(PubKey::Secp256k1(Binary::from(
+                    hex!("034f04181eeba35391b858633a765c4a0c189697b40d216354d50890d350c70290")
+                        .as_slice(),
+                ))),
+                sequence: 3,
+            },
+        ));
+
+        let height = 45;
+        let value = hex!("0A9F010A202F636F736D6F732E617574682E763162657461312E426173654163636F756E74127B0A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C12460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029018112003");
+        let expected = build_query_success(value.as_slice(), height);
+        let proto = query_response_to_proto(Ok(request), height);
+
+        assert_eq!(proto, expected);
+
+        // // response
+        // let value = hex!("0A9F010A202F636F736D6F732E617574682E763162657461312E426173654163636F756E74127B0A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C12460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029018112003");
+        // let expected = Auth(Account(External { address: pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l, pubkey: Some(Secp256k1(Binary(034f04181eeba35391b858633a765c4a0c189697b40d216354d50890d350c70290))), sequence: 3 }))
+    }
+
+    #[test]
+    fn encode_balance_response_empty() {
+        let request =
+            QueryResponse::<PulsarError>::Bank(BankQueryResponse::Balance(BalanceResponse {
+                amount: coin(0, "upulse"),
+            }));
+        let height = 46;
+        let value = hex!("0A0B0A067570756C7365120130");
+        let expected = build_query_success(value.as_slice(), height);
+        let proto = query_response_to_proto(Ok(request), height);
+        assert_eq!(proto, expected);
+    }
+
+    #[test]
+    fn encode_balance_response_full() {
+        let request =
+            QueryResponse::<PulsarError>::Bank(BankQueryResponse::Balance(BalanceResponse {
+                amount: coin(7890, "upulse"),
+            }));
+        let height = 47;
+        let value = hex!("0A0E0A067570756C7365120437383930");
+        let expected = build_query_success(value.as_slice(), height);
+        let proto = query_response_to_proto(Ok(request), height);
+        assert_eq!(proto, expected);
+    }
+
+    #[test]
+    fn encode_simulate_response() {
+        let request = QueryResponse::<PulsarError>::Simulate(TxResult {
+            gas: GasInfo {
+                gas_used: 5733,
+                gas_wanted: 10000000,
+            },
+            result: Ok(TxResponse {
+                data: vec![vec![]],
+                events: vec![vec![Event::new("transfer")
+                    .add_attribute("recipient", "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2")
+                    .add_attribute("sender", "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l")
+                    .add_attribute("amount", "2000000upulse")]],
+            }),
+        });
+        let height = 46;
+        let value = hex!("0A080880ADE20410E52C12C3010A200A1E0A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E641A9E010A087472616E73666572123C0A09726563697069656E74122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E32180112390A0673656E646572122D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C180112190A06616D6F756E74120D323030303030307570756C73651801");
+        let expected = build_query_success(value.as_slice(), height);
+        let proto = query_response_to_proto(Ok(request), height);
+        assert_eq!(proto, expected);
+
+        // // response
+        // let value = hex!("0A0B0A067570756C7365120130");
+        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "upulse", amount: Uint128(0) } }))
+
+        // let value = hex!("0A0E0A067570756C7365120437383930");
+        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "upulse", amount: Uint128(7890) } }))
+    }
+
+    fn build_query_success(value: &[u8], height: u64) -> tendermint_proto::abci::ResponseQuery {
+        tendermint_proto::abci::ResponseQuery {
+            code: 0,
+            log: "".to_string(),
+            info: "".to_string(),
+            index: 0,
+            key: vec![].into(),
+            value: value.to_vec().into(),
+            proof_ops: None,
+            height: height as i64,
+            codespace: "".to_string(),
+        }
+    }
+}
