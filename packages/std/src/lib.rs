@@ -8,7 +8,7 @@ mod query;
 mod time;
 mod tx;
 
-pub use account_id::{AccountId, AccountIdError, DEFAULT_BECH32_PREFIX};
+pub use account_id::{must_id, AccountId, AccountIdError, DEFAULT_BECH32_PREFIX};
 pub use encode::{CoinEncode, HexEncode};
 pub use gas::{GasError, GasMeter, GasResult};
 pub use msg::{required_signer, BankMsg, Msg, MsgError};

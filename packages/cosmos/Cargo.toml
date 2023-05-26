@@ -17,4 +17,4 @@ cosmrs = {version = "0.13.0", default_features = false, features = ["cosmwasm"] 
 cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
 
 [dev_dependencies]
-hex-literal = "0.4.1"
+hex-literal = {workspace = true }
