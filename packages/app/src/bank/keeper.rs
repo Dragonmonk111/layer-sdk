@@ -614,7 +614,10 @@ mod test {
         let err = bank
             .process_msg(&mut store, &mut meter, &block, &sm, &rcpt, msg)
             .unwrap_err();
-        assert!(matches!(err, PulsarError::Std(StdError::Overflow { .. })));
+        assert_eq!(
+            err,
+            PulsarError::Bank(BankError::InsufficientFunds(rcpt.to_string()))
+        );
     }
 
     #[test]
