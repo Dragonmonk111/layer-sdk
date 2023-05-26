@@ -8,9 +8,12 @@ use tracing::{
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
-use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
+use crate::{
+    auth::TxData,
+    error::{PulsarError, PulsarResult},
+};
 use pulsar_std::api::{
     Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
     TxResponse, TxResult,
@@ -238,12 +241,31 @@ impl<T: PersistentStorage + 'static> App<T> {
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
 
-        // FIXME: only run auth check? or do full tx simulation?
+        // only run auth check
         let mut meter = self.block_gas_meter();
         let block = &self.data.as_ref().unwrap().block;
-        let res = self.execute_tx(&mut store, &mut meter, block, tx);
+        let res = atomic(&mut store, &mut meter, |store, m| {
+            self.logic.validate_tx(store, m, block, tx)
+        });
         reader.abort();
-        res
+
+        match res {
+            Ok(TxData { gas_wanted, .. }) => {
+                let gas_used = gas_wanted;
+                let gas = GasInfo {
+                    gas_used,
+                    gas_wanted,
+                };
+                TxResult {
+                    gas,
+                    result: Ok(TxResponse::empty()),
+                }
+            }
+            Err(e) => TxResult {
+                gas: GasInfo::zero(),
+                result: Err(e),
+            },
+        }
     }
 
     fn execute_tx(

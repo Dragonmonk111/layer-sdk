@@ -32,6 +32,19 @@ pub struct TxResponse {
     pub events: Vec<Vec<Event>>,
 }
 
+impl TxResponse {
+    pub fn new(data: Vec<Vec<u8>>, events: Vec<Vec<Event>>) -> Self {
+        TxResponse { data, events }
+    }
+
+    pub fn empty() -> Self {
+        TxResponse {
+            data: vec![],
+            events: vec![],
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasInfo {
     pub gas_used: u64,
@@ -43,6 +56,13 @@ impl GasInfo {
         GasInfo {
             gas_used: meter.used(),
             gas_wanted: meter.limit(),
+        }
+    }
+
+    pub fn zero() -> Self {
+        GasInfo {
+            gas_used: 0,
+            gas_wanted: 0,
         }
     }
 }
