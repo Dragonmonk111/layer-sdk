@@ -12,10 +12,15 @@ pub struct Cli {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub port: Option<u16>,
 
-    // /// Log level. One of debug, info, warn, or error
+    /// Log level. One of debug, info, warn, or error
     #[arg(long)]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub log: Option<String>,
+
+    /// Set to writable directory to use for lmdb storage, otherwise use in-memory storage
+    #[arg(long)]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub lmdb: Option<String>,
 
     #[arg(long)]
     #[serde(skip_serializing_if = "is_false")]
