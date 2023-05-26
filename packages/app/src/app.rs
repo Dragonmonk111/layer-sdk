@@ -116,6 +116,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         };
         match state {
             Some(state) => {
+                debug!(?state, "Loaded state from storage");
                 let data = InnerData {
                     block: state.last_block,
                     chain_id: state.chain_id,
@@ -183,7 +184,9 @@ impl<T: PersistentStorage + 'static> App<T> {
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
     pub fn info(&self) -> Option<&BlockInfo> {
-        self.data.as_ref().map(|d| &d.block)
+        let block = self.data.as_ref().map(|d| &d.block);
+        debug!(?block, "info");
+        block
     }
 
     pub fn app_hash(&self) -> Vec<u8> {
@@ -416,6 +419,13 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Commit to underlying store. Use infinite gas meter to ensure we don't fail here
         let mut meter = GasMeter::infinite();
+        {
+            // ensure we drop app_store before the commit
+            let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
+            let mut state = APP_STATE.load(&app_store, &mut meter)?;
+            state.last_block = block.clone();
+            APP_STATE.save(&mut app_store, &mut meter, &state)?;
+        }
         writer.commit(&mut meter)?;
 
         // update block in cache

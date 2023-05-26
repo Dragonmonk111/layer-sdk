@@ -75,12 +75,10 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
         let mut app = App::new(store, logic);
         match app.load_from_storage() {
             Ok(_) => {
-                // FIXME: proper logging when we have proper tracing
                 let height = app.info().unwrap().height;
                 info!(height, "Initialized app from storage");
             }
             Err(AppLoadError::NoStoredState) => {
-                // FIXME: proper logging when we have proper tracing
                 info!("No stored state, app is uninitialized");
             }
             Err(e) => panic!("Error loading app from storage: {}", e),
