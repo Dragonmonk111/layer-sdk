@@ -7,7 +7,7 @@ use tracing::trace_span;
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult, HexEncode};
 
-use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
+use crate::{FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage};
 
 // 1 GB max... review this later
 pub const DEFAULT_DB_SIZE_MB: u64 = 1024;
@@ -62,7 +62,11 @@ impl PersistentStorage for LmdbStore {
     // open a read-only view of the storage. should abort it to free space for write
     fn reader(&self) -> LmdbReader<'_> {
         let tx = self.env.begin_ro_txn().unwrap();
-        LmdbReader { tx, db: self.db }
+        LmdbReader {
+            tx,
+            db: self.db,
+            price_list: PriceList::default(),
+        }
     }
 
     // open a read-write view of the storage. takes exclusive access to the storage until completed
@@ -82,26 +86,31 @@ impl PersistentStorage for LmdbStore {
 pub struct LmdbReader<'a> {
     tx: lmdb::RoTransaction<'a>,
     db: Database,
+    price_list: PriceList,
 }
 
 impl ReadonlyStorage for LmdbReader<'_> {
-    fn get(&self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
-        match self.tx.get(self.db, &key) {
-            Ok(v) => Ok(Some(v.to_vec())),
-            Err(lmdb::Error::NotFound) => Ok(None),
+        let val = match self.tx.get(self.db, &key) {
+            Ok(v) => Some(v.to_vec()),
+            Err(lmdb::Error::NotFound) => None,
             Err(e) => panic!("Error reading from LMDB: {:?}", e),
-        }
+        };
+        self.price_list
+            .charge_read(meter, key, val.as_ref().map(|x| x.as_slice()))?;
+        Ok(val)
     }
 
     fn range<'a>(
         &'a self,
-        _meter: &'a mut GasMeter,
+        meter: &'a mut GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
         let _span = trace_span!("range").entered();
+        self.price_list.charge_range(meter)?;
         let mut cursor = self.tx.open_ro_cursor(self.db).unwrap();
         // TODO: handle reverse order
         if !matches!(order, Order::Ascending) {
@@ -113,11 +122,7 @@ impl ReadonlyStorage for LmdbReader<'_> {
             None => cursor.iter(),
         };
 
-        let res = LmdbIterator {
-            cursor,
-            iter,
-            end: end.map(|s| s.to_vec()),
-        };
+        let res = LmdbIterator::new(cursor, iter, end, meter, &self.price_list);
         Ok(Box::new(res))
     }
 
@@ -132,6 +137,26 @@ pub struct LmdbIterator<'a> {
     cursor: lmdb::RoCursor<'a>,
     iter: lmdb::Iter<'a>,
     end: Option<Vec<u8>>,
+    meter: &'a mut GasMeter,
+    price_list: &'a PriceList,
+}
+
+impl<'a> LmdbIterator<'a> {
+    pub fn new(
+        cursor: lmdb::RoCursor<'a>,
+        iter: lmdb::Iter<'a>,
+        end: Option<&[u8]>,
+        meter: &'a mut GasMeter,
+        price_list: &'a PriceList,
+    ) -> Self {
+        Self {
+            cursor,
+            iter,
+            end: end.map(|s| s.to_vec()),
+            meter,
+            price_list,
+        }
+    }
 }
 
 impl Iterator for LmdbIterator<'_> {
@@ -146,6 +171,9 @@ impl Iterator for LmdbIterator<'_> {
                         return None;
                     }
                 }
+                if let Err(e) = self.price_list.charge_read(self.meter, &k, Some(&v)) {
+                    return Some(Err(e));
+                }
                 Some(Ok((k.to_vec(), v.to_vec())))
             }
             None => None,
@@ -157,34 +185,45 @@ pub struct LmdbWriter<'a> {
     hasher: FastHasher,
     tx: lmdb::RwTransaction<'a>,
     db: Database,
+    price_list: PriceList,
 }
 
 impl<'a> LmdbWriter<'a> {
     pub fn new(tx: lmdb::RwTransaction<'a>, db: Database) -> Self {
         let app_hash = read_app_hash(&tx, db);
         let hasher = FastHasher::new(&app_hash);
-        LmdbWriter { tx, db, hasher }
+        let price_list = PriceList::default();
+        LmdbWriter {
+            tx,
+            db,
+            hasher,
+            price_list,
+        }
     }
 }
 
 impl ReadonlyStorage for LmdbWriter<'_> {
-    fn get(&self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
-        match self.tx.get(self.db, &key) {
-            Ok(v) => Ok(Some(v.to_vec())),
-            Err(lmdb::Error::NotFound) => Ok(None),
+        let val = match self.tx.get(self.db, &key) {
+            Ok(v) => Some(v.to_vec()),
+            Err(lmdb::Error::NotFound) => None,
             Err(e) => panic!("Error reading from LMDB: {:?}", e),
-        }
+        };
+        self.price_list
+            .charge_read(meter, key, val.as_ref().map(|x| x.as_slice()))?;
+        Ok(val)
     }
 
     fn range<'a>(
         &'a self,
-        _meter: &'a mut GasMeter,
+        meter: &'a mut GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
         let _span = trace_span!("range").entered();
+        self.price_list.charge_range(meter)?;
         let mut cursor = self.tx.open_ro_cursor(self.db).unwrap();
         // TODO: handle reverse order
         if !matches!(order, Order::Ascending) {
@@ -196,11 +235,7 @@ impl ReadonlyStorage for LmdbWriter<'_> {
             None => cursor.iter(),
         };
 
-        let res = LmdbIterator {
-            cursor,
-            iter,
-            end: end.map(|s| s.to_vec()),
-        };
+        let res = LmdbIterator::new(cursor, iter, end, meter, &self.price_list);
         Ok(Box::new(res))
     }
 
@@ -211,10 +246,11 @@ impl ReadonlyStorage for LmdbWriter<'_> {
 }
 
 impl Storage for LmdbWriter<'_> {
-    fn set(&mut self, _meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span =
             trace_span!("set", key = %HexEncode::new(&key), value = %HexEncode::new(&value))
                 .entered();
+        self.price_list.charge_write(meter, key, value)?;
         self.tx
             .put(self.db, &key, &value, lmdb::WriteFlags::empty())
             .unwrap();
@@ -222,8 +258,9 @@ impl Storage for LmdbWriter<'_> {
         Ok(())
     }
 
-    fn remove(&mut self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove", key = %HexEncode::new(&key)).entered();
+        self.price_list.charge_remove(meter, key)?;
         self.hasher.remove(key);
         match self.tx.del(self.db, &key, None) {
             Ok(_) => Ok(()),
