@@ -2,7 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum BankError {
-    // FIXME: use this for send rather than the generic underflow/overflow error
     #[error("Account {0} has insufficient funds")]
     InsufficientFunds(String),
 

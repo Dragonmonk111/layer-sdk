@@ -1,5 +1,10 @@
 import { coins, DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
-import { assertIsDeliverTxSuccess, MsgSendEncodeObject, SigningStargateClient } from "@cosmjs/stargate";
+import {
+  assertIsDeliverTxFailure,
+  assertIsDeliverTxSuccess,
+  MsgSendEncodeObject,
+  SigningStargateClient,
+} from "@cosmjs/stargate";
 import { Tendermint37Client } from "@cosmjs/tendermint-rpc";
 import { MsgSend } from "cosmjs-types/cosmos/bank/v1beta1/tx";
 
@@ -125,23 +130,11 @@ describe("SigningStargateClient", () => {
       gas: "99000",
     };
 
-    // Note: if we didn't run in CheckTx, this would be different (like CosmJS test).
-    try {
-      const res = await client.signAndBroadcast(faucet.address0, [msgAny], fee);
-      fail(`should have thrown error, got: ${res}`);
-    } catch (e) {
-      // Throwing error is good here
-    }
-
     // Only auth check in CheckTx gives this:
-    /*
     const result = await client.signAndBroadcast(faucet.address0, [msgAny], fee);
     assertIsDeliverTxFailure(result);
     expect(result.code).toBeGreaterThan(0);
-    expect(result.gasWanted).toEqual(99_000);
-    expect(result.gasUsed).toBeLessThanOrEqual(99_000);
-    expect(result.gasUsed).toBeGreaterThan(40_000);
-    */
+    expect(result.rawLog).toMatch(/insufficient funds/);
   });
 
   it("works with auto gas", async () => {

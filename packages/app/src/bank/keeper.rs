@@ -119,12 +119,14 @@ impl Bank {
         for coin in ValidCoins::new(&amount) {
             let coin = coin?;
             // remove from old account account balance
-            BALANCES.update::<_, PlusError>(
-                bank_storage,
-                meter,
-                (&from_address, &coin.denom),
-                |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
-            )?;
+            BALANCES
+                .update::<_, PlusError>(
+                    bank_storage,
+                    meter,
+                    (&from_address, &coin.denom),
+                    |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
+                )
+                .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
             // add to new account balance
             BALANCES.update::<_, PulsarError>(
                 bank_storage,
@@ -174,12 +176,14 @@ impl Bank {
                 Ok(supply.unwrap_or_default().checked_sub(coin.amount)?)
             })?;
             // and to the account balance
-            BALANCES.update::<_, PlusError>(
-                bank_storage,
-                meter,
-                (&from_address, &coin.denom),
-                |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
-            )?;
+            BALANCES
+                .update::<_, PlusError>(
+                    bank_storage,
+                    meter,
+                    (&from_address, &coin.denom),
+                    |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
+                )
+                .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
         }
         Ok(())
     }
@@ -610,7 +614,10 @@ mod test {
         let err = bank
             .process_msg(&mut store, &mut meter, &block, &sm, &rcpt, msg)
             .unwrap_err();
-        assert!(matches!(err, PulsarError::Std(StdError::Overflow { .. })));
+        assert_eq!(
+            err,
+            PulsarError::Bank(BankError::InsufficientFunds(rcpt.to_string()))
+        );
     }
 
     #[test]

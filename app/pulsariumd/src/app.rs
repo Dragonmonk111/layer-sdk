@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{
-    debug, debug_span,
+    debug_span,
     field::{display, Empty},
     info, info_span, trace,
 };
@@ -201,17 +201,14 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
     /// Signals that messages queued on the client should be flushed to the server.
     fn flush(&self) -> ResponseFlush {
-        trace!("ABCI Flush");
         ResponseFlush {}
     }
 
     /// Commit the current state at the current height.
     fn commit(&self) -> ResponseCommit {
-        // Note: pulsar commits data in finalize_block. unsure why there is a different command,
-        // and separating them causes issues with lifetimes and static analysis, so we commit there
-        debug!("ABCI Commit");
-        // TODO: retain_height in response. what do we set it to???
-        Default::default()
+        // See explanation here: https://github.com/cometbft/cometbft/blob/main/spec/abci/abci%2B%2B_basic_concepts.md#method-overview
+        // Always return retain_height = 0, so we never lose tendermint blocks
+        ResponseCommit { retain_height: 0 }
     }
 
     /// Used during state sync to discover available snapshots on peers.
@@ -300,7 +297,6 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     ///
     /// This method is introduced in ABCI++.
     fn process_proposal(&self, _request: RequestProcessProposal) -> ResponseProcessProposal {
-        debug!("ABCI process_proposal");
         ResponseProcessProposal {
             status: response_process_proposal::ProposalStatus::Accept as i32,
         }
