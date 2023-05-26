@@ -222,7 +222,7 @@ impl BTreeStorage {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let value = self.data.get(key).cloned();
 
-        let val_len = value.as_ref().map(|x| x.as_slice());
+        let val_len = value.as_deref();
         self.price_list.charge_read(meter, key, val_len)?;
         Ok(value)
     }

@@ -22,12 +22,30 @@ pub struct LmdbStore {
 
 impl LmdbStore {
     pub fn new(path: &str, max_size_mb: impl Into<Option<u64>>) -> LmdbStore {
-        let path = Path::new(path);
+        let db_path = Path::new(path);
         let max_size = max_size_mb.into().unwrap_or(DEFAULT_DB_SIZE_MB) * 1024 * 1024;
-        let env = Environment::new()
+        let renv = Environment::new()
             .set_map_size(max_size as size_t)
-            .open(path)
-            .unwrap();
+            .open(db_path);
+        let env = match renv {
+            Ok(x) => x,
+            Err(lmdb::Error::Other(2)) => panic!(
+                "LMDB database directory does not exist. \
+                 Please create it first with `mkdir -p {}`",
+                path,
+            ),
+            Err(lmdb::Error::Other(13)) => panic!(
+                "Process does not have write-access to LMDB database directory. \
+                 Please update with `chmod +rwx {}`",
+                path,
+            ),
+            Err(lmdb::Error::Other(20)) => panic!(
+                "Expected LMDB database directory at {} but found a file. \
+                 Please provide a path to a writeable directory.",
+                path,
+            ),
+            Err(e) => panic!("Error opening LMDB database: {:?}", e),
+        };
         let db = env.open_db(None).unwrap();
         LmdbStore { env, db }
     }
@@ -97,8 +115,7 @@ impl ReadonlyStorage for LmdbReader<'_> {
             Err(lmdb::Error::NotFound) => None,
             Err(e) => panic!("Error reading from LMDB: {:?}", e),
         };
-        self.price_list
-            .charge_read(meter, key, val.as_ref().map(|x| x.as_slice()))?;
+        self.price_list.charge_read(meter, key, val.as_deref())?;
         Ok(val)
     }
 
@@ -171,7 +188,7 @@ impl Iterator for LmdbIterator<'_> {
                         return None;
                     }
                 }
-                if let Err(e) = self.price_list.charge_read(self.meter, &k, Some(&v)) {
+                if let Err(e) = self.price_list.charge_read(self.meter, k, Some(v)) {
                     return Some(Err(e));
                 }
                 Some(Ok((k.to_vec(), v.to_vec())))
@@ -210,8 +227,7 @@ impl ReadonlyStorage for LmdbWriter<'_> {
             Err(lmdb::Error::NotFound) => None,
             Err(e) => panic!("Error reading from LMDB: {:?}", e),
         };
-        self.price_list
-            .charge_read(meter, key, val.as_ref().map(|x| x.as_slice()))?;
+        self.price_list.charge_read(meter, key, val.as_deref())?;
         Ok(val)
     }
 
