@@ -434,14 +434,22 @@ impl<T: PersistentStorage + 'static> App<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis::BankAccount;
 
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{coin, to_binary};
+    use cosmwasm_std::{coin, coins, to_binary, Binary, Timestamp};
+    use hex_literal::hex;
+
     use pulsar_std::api::{TmPubKey, ValidatorUpdate};
-    use pulsar_std::response::BankQueryResponse;
-    use pulsar_std::{AccountId, BankQuery};
+    use pulsar_std::response::{
+        AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
+    };
+    use pulsar_std::{
+        must_id, AccountId, AuthQuery, BankMsg, BankQuery, FeeInfo, Msg, PubKey, SignedTx,
+        SigningInfo,
+    };
     use pulsar_storage::MemoryStore;
+
+    use crate::genesis::BankAccount;
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_binary(genesis).unwrap();
@@ -512,6 +520,189 @@ mod tests {
                 assert_eq!(res.amount, balance);
             }
             x => panic!("Exected AllBalancesResponse, got {:?}", x),
+        }
+    }
+
+    // this emulates the run of a transaction being submitted
+    // query account + balances
+    // run simulate
+    // run check_tx
+    // run finalize_block
+    // query account + balances for update
+    #[test]
+    fn transaction_workflow() {
+        let sender = must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l");
+        let recipient = must_id("pulsar1y5hl7x8hxl72dc9gu920eaz6l7vhl0lu264u06");
+        let denom: &str = "upulse";
+
+        // assert the proper pubkey for the account
+        let sender_key = PubKey::Secp256k1(Binary::from(
+            hex!("034f04181eeba35391b858633a765c4a0c189697b40d216354d50890d350c70290").as_slice(),
+        ));
+        assert_eq!(sender, sender_key.account_id().unwrap());
+
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: sender.to_string(),
+                balance: coins(2_000_000_000, denom),
+            }],
+        };
+        let storage = MemoryStore::default();
+        // TODO: remove from App args, build inside (with config)
+        let logic = StateMachine::new();
+        let request = mock_init(&genesis);
+
+        // create the app
+        let mut app = App::new(storage, logic);
+        app.init(request).unwrap();
+
+        // first empty block
+        let block = Block {
+            txs: vec![],
+            height: 1,
+            time: Timestamp::from_seconds(1690406618),
+            proposer_address: vec![1u8; 32],
+            last_votes: vec![],
+        };
+        app.finalize_block(block).unwrap();
+
+        // query the sender account
+        assert_balance(&app, &sender, denom, 2_000_000_000);
+        assert_balance(&app, &recipient, denom, 0);
+
+        // query the sender account
+        let acct = query_account(&app, &sender);
+        assert_eq!(
+            acct,
+            AccountResponse::External {
+                address: sender.clone(),
+                pubkey: None,
+                sequence: 0
+            }
+        );
+
+        // simulate to calculate gas
+        let mut tx = SignedTx {
+            msgs: vec![Msg::Bank(BankMsg::Send {
+                sender: sender.clone(),
+                recipient: recipient.clone(),
+                amount: coins(2_000_000, denom),
+            })],
+            signer: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
+            signing_info: SigningInfo {
+                message_hash: Binary::from(
+                    hex!("6d368a4b8436e0b19a2d06069e0b70086ba7c40e91a9d04d31946c10346d79a9")
+                        .as_slice(),
+                ),
+                sequence: 0,
+                pubkey: Some(sender_key.clone()),
+                signature: Binary::from(b""),
+            },
+            fee: FeeInfo {
+                fee: None,
+                gas_limit: 0,
+            },
+            timeout_height: None,
+        };
+        let sim = Query::Simulate(Tx::Signed(tx.clone()));
+        let sim_res = app.query(sim).unwrap();
+        let gas_used = match sim_res {
+            QueryResponse::<PulsarError>::Simulate(TxResult {
+                gas:
+                    GasInfo {
+                        gas_used,
+                        gas_wanted,
+                    },
+                ..
+            }) => {
+                assert_eq!(gas_wanted, pulsar_std::api::DEFAULT_BLOCK_GAS);
+                gas_used
+            }
+            x => panic!("Expected SimulateResponse, got {:?}", x),
+        };
+        // check gas range
+        assert!(gas_used > 5000);
+        assert!(gas_used < 7000);
+
+        // create proper tx (from cosmjs)
+        tx.fee = FeeInfo {
+            fee: Some(coin(2500, "upulse")),
+            gas_limit: 100000,
+        };
+        tx.signing_info.signature = Binary::from(hex!("e5367dc058d8942bddc453eb1b61119bf71186693d8fd0f1683ff7a1b4666e3b67d32f3ddf52360e365099f72b2417a9d6034883032ad1ac97b48f73e754351c").as_slice());
+
+        // pass via check_tx
+        app.check_tx(Tx::Signed(tx.clone())).result.unwrap();
+
+        // execute in finalize_block (next height)
+        let block = Block {
+            txs: vec![Tx::Signed(tx)],
+            height: 2,
+            time: Timestamp::from_seconds(1690406620),
+            proposer_address: vec![1u8; 32],
+            last_votes: vec![],
+        };
+        let block_res = app.finalize_block(block).unwrap();
+        assert_eq!(block_res.tx_results.len(), 1);
+        let tx_res = &block_res.tx_results[0];
+        // TODO: more checks
+        assert!(tx_res.is_ok());
+
+        // check balances updated (note sender deducts 2500 in gas fees)
+        assert_balance(&app, &sender, denom, 1_997_997_500);
+        assert_balance(&app, &recipient, denom, 2_000_000);
+
+        // check account set
+        let acct = query_account(&app, &sender);
+        assert_eq!(
+            acct,
+            AccountResponse::External {
+                address: sender,
+                pubkey: Some(sender_key),
+                sequence: 1
+            }
+        );
+    }
+
+    fn assert_balance<T: PersistentStorage + 'static>(
+        app: &App<T>,
+        account: &AccountId,
+        denom: &str,
+        amount: u128,
+    ) {
+        let result = app
+            .query(
+                BankQuery::Balance {
+                    address: account.clone(),
+                    denom: denom.to_string(),
+                }
+                .into(),
+            )
+            .unwrap();
+        assert_eq!(
+            result,
+            BankQueryResponse::Balance(BalanceResponse {
+                amount: coin(amount, denom)
+            })
+            .into()
+        );
+    }
+
+    fn query_account<T: PersistentStorage + 'static>(
+        app: &App<T>,
+        account: &AccountId,
+    ) -> AccountResponse {
+        let result = app
+            .query(
+                AuthQuery::Account {
+                    address: account.clone(),
+                }
+                .into(),
+            )
+            .unwrap();
+        match result {
+            QueryResponse::Auth(AuthQueryResponse::Account(res)) => res,
+            x => panic!("Exected AccountResponse, got {:?}", x),
         }
     }
 }

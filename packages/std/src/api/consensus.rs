@@ -7,7 +7,7 @@ use crate::Duration;
 
 const DEFAULT_APP_VERSION: u64 = 1;
 const DEFAULT_BLOCK_SIZE: u64 = 2 * 1024 * 1024;
-const DEFAULT_BLOCK_GAS: u64 = 20_000_000;
+pub const DEFAULT_BLOCK_GAS: u64 = 20_000_000;
 
 const DEFAULT_EVIDENCE_AGE: u64 = 21 * 86400;
 
