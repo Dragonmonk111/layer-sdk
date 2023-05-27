@@ -106,12 +106,12 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// If this fails with AppLoadError::NoStoredState, then we wait for init to be called.
     /// Otherwise we fail on loading.
     pub fn load_from_storage(&mut self) -> Result<(), AppLoadError> {
-        let mut meter = GasMeter::infinite();
+        let meter = GasMeter::infinite();
         let state = {
             let reader = self.storage.reader();
             let app_store = prefixed_read(&reader, NAMESPACE_APP);
             APP_STATE
-                .may_load(&app_store, &mut meter)
+                .may_load(&app_store, &meter)
                 .map_err(|e| AppLoadError::InvalidState(e.to_string()))?
         };
         match state {
@@ -144,12 +144,11 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // start a transaction
         let mut writer = self.storage.writer();
-        let mut meter = GasMeter::infinite();
+        let meter = GasMeter::infinite();
 
         // Set up the state machine here
         let genesis = GenesisState::parse(&request.app_state)?;
-        self.logic
-            .init(&mut writer, &mut meter, &last_block, genesis)?;
+        self.logic.init(&mut writer, &meter, &last_block, genesis)?;
 
         // Store the application data
         let state = AppState {
@@ -160,11 +159,11 @@ impl<T: PersistentStorage + 'static> App<T> {
         {
             // ensure we drop app_store before the commit
             let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
-            APP_STATE.save(&mut app_store, &mut meter, &state)?;
+            APP_STATE.save(&mut app_store, &meter, &state)?;
         }
 
         // commit to disk
-        writer.commit(&mut meter)?;
+        writer.commit(&meter)?;
 
         // Create the response
         self.data = Some(InnerData {
@@ -203,13 +202,13 @@ impl<T: PersistentStorage + 'static> App<T> {
         let reader = self.storage.reader();
 
         // note, simulate needs different limit
-        let mut meter = match &request {
+        let meter = match &request {
             Query::Simulate(_) => self.simulate_gas_meter(),
             _ => self.query_gas_meter(),
         };
 
         let block = &self.data.as_ref().unwrap().block;
-        let resp = self.logic.query(&reader, &mut meter, block, request);
+        let resp = self.logic.query(&reader, &meter, block, request);
         match &resp {
             Ok(response) => span.record("success", dbg(response)),
             Err(error) => span.record("error", display(error)),
@@ -245,9 +244,9 @@ impl<T: PersistentStorage + 'static> App<T> {
         let mut store = ScratchTx::new(&reader);
 
         // only run auth check
-        let mut meter = self.block_gas_meter();
+        let meter = self.block_gas_meter();
         let block = &self.data.as_ref().unwrap().block;
-        let res = atomic(&mut store, &mut meter, |store, m| {
+        let res = atomic(&mut store, &meter, |store, m| {
             self.logic.validate_tx(store, m, block, tx)
         });
         reader.abort();
@@ -274,15 +273,15 @@ impl<T: PersistentStorage + 'static> App<T> {
     fn execute_tx(
         &self,
         storage: &mut dyn Storage,
-        block_meter: &mut GasMeter,
+        block_meter: &GasMeter,
         block: &BlockInfo,
         tx: Tx,
     ) -> TxResult<PulsarError> {
         let _span = debug_span!("execute_tx", ?tx, height = block.height).entered();
         // validate the transaction. if this passes, we commit the auth info (sequence / fee)
         // even if messages fail and are reverted
-        let mut val_meter = GasMeter::new(MAX_VALIDATE_GAS);
-        let val_res = atomic(storage, &mut val_meter, |store, m| {
+        let val_meter = GasMeter::new(MAX_VALIDATE_GAS);
+        let val_res = atomic(storage, &val_meter, |store, m| {
             self.logic.validate_tx(store, m, block, tx)
         });
         let data = match val_res {
@@ -300,7 +299,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // prepare this tx-specific gas meter and charge for previous validation
         let gas_wanted = data.gas_wanted;
-        let mut meter = GasMeter::new(gas_wanted);
+        let meter = GasMeter::new(gas_wanted);
         if let Err(e) = meter.charge(val_meter.used()) {
             // ignore this out of gas error, aborting anyway and future txs will fail
             let _ = block_meter.charge(val_meter.used());
@@ -327,7 +326,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // execute all messages atomically. if any fail, we don't write any state changes
         // from any of the messages
-        let resps: PulsarResult<Vec<_>> = atomic(storage, &mut meter, |store, m| {
+        let resps: PulsarResult<Vec<_>> = atomic(storage, &meter, |store, m| {
             data.msgs
                 .into_iter()
                 .map(|msg| self.logic.process_msg(store, m, &data.signer, block, msg))
@@ -395,38 +394,38 @@ impl<T: PersistentStorage + 'static> App<T> {
         }
 
         // Run begin block logic (not included in block gas)
-        let mut begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
+        let begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
         let mut events = self
             .logic
-            .begin_block(&mut writer, &mut begin_meter, &full_block)?;
+            .begin_block(&mut writer, &begin_meter, &full_block)?;
 
         // Set the block gas meter to limit total gas usage by all txs
-        let mut meter = self.block_gas_meter();
+        let meter = self.block_gas_meter();
         // Execute all transactions within this global limit
         let tx_results: Vec<_> = full_block
             .txs
             .into_iter()
             .map(|tx| {
                 // execute tx takes care of atomically committing or aborting auth and msg state writes
-                self.execute_tx(&mut writer, &mut meter, &block, tx)
+                self.execute_tx(&mut writer, &meter, &block, tx)
             })
             .collect();
 
         // Run end block logic (not included in block gas)
-        let mut end_meter = GasMeter::new(MAX_END_BLOCK_GAS);
-        let end_events = self.logic.end_block(&mut writer, &mut end_meter, &block)?;
+        let end_meter = GasMeter::new(MAX_END_BLOCK_GAS);
+        let end_events = self.logic.end_block(&mut writer, &end_meter, &block)?;
         events.extend(end_events);
 
         // Commit to underlying store. Use infinite gas meter to ensure we don't fail here
-        let mut meter = GasMeter::infinite();
+        let meter = GasMeter::infinite();
         {
             // ensure we drop app_store before the commit
             let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
-            let mut state = APP_STATE.load(&app_store, &mut meter)?;
+            let mut state = APP_STATE.load(&app_store, &meter)?;
             state.last_block = block.clone();
-            APP_STATE.save(&mut app_store, &mut meter, &state)?;
+            APP_STATE.save(&mut app_store, &meter, &state)?;
         }
-        writer.commit(&mut meter)?;
+        writer.commit(&meter)?;
 
         // update block in cache
         self.data.as_mut().unwrap().block = block;

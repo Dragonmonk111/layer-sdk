@@ -48,7 +48,7 @@ impl Auth {
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         _block: &BlockInfo,
         sm: &StateMachine,
         tx: Tx,
@@ -152,7 +152,7 @@ impl Auth {
     pub fn query(
         &self,
         storage: &dyn ReadonlyStorage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         _block: &BlockInfo,
         _sm: &StateMachine,
         request: AuthQuery,
