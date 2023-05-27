@@ -45,13 +45,13 @@ impl<'a> PrefixedStorage<'a> {
 }
 
 impl<'b> ReadonlyStorage for PrefixedStorage<'b> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         self.storage.get(meter, &concat(&self.prefix, key))
     }
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -73,11 +73,11 @@ impl<'b> ReadonlyStorage for PrefixedStorage<'b> {
 }
 
 impl<'a> Storage for PrefixedStorage<'a> {
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         self.storage.set(meter, &concat(&self.prefix, key), value)
     }
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         self.storage.remove(meter, &concat(&self.prefix, key))
     }
 
@@ -110,13 +110,13 @@ impl<'a> ReadonlyPrefixedStorage<'a> {
 }
 
 impl<'b> ReadonlyStorage for ReadonlyPrefixedStorage<'b> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         self.storage.get(meter, &concat(&self.prefix, key))
     }
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,

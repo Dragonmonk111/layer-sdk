@@ -26,14 +26,14 @@ impl<'a> ScratchTx<'a> {
 }
 
 impl ReadonlyStorage for ScratchTx<'_> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get").entered();
         self.wrap.get(self.storage, meter, key)
     }
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -46,12 +46,12 @@ impl ReadonlyStorage for ScratchTx<'_> {
 }
 
 impl Storage for ScratchTx<'_> {
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span = trace_span!("set").entered();
         self.wrap.set(meter, key, value)
     }
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove").entered();
         self.wrap.remove(meter, key)
     }
@@ -64,7 +64,7 @@ impl Storage for ScratchTx<'_> {
 impl Transaction for ScratchTx<'_> {
     // FIXME: better error message - this should never be called, but we expose the API for the trait.
     // Shall we make it no op rather than panic??
-    fn commit(self, _meter: &mut GasMeter) -> GasResult<()> {
+    fn commit(self, _meter: &GasMeter) -> GasResult<()> {
         unimplemented!()
     }
 

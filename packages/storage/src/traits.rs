@@ -30,11 +30,11 @@ pub trait ReadonlyStorage {
     /// May be needed to free up resources
     fn abort(self);
 
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>>;
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>>;
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -42,16 +42,16 @@ pub trait ReadonlyStorage {
 }
 
 pub trait Storage: ReadonlyStorage {
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()>;
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()>;
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()>;
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()>;
 
     fn as_ref(&self) -> &dyn ReadonlyStorage;
 }
 
 pub trait Transaction: Storage {
     // This writes all changes to the underlying storage and consumes this wrapper
-    fn commit(self, meter: &mut GasMeter) -> GasResult<()>;
+    fn commit(self, meter: &GasMeter) -> GasResult<()>;
 
     fn as_mut(&mut self) -> &mut dyn Storage;
 }

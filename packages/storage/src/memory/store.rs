@@ -22,9 +22,9 @@ impl MemoryStore {
     }
 
     /// This is only meant for testing as a way to "Clone" a DB from one app to another
-    pub fn import(src: &dyn ReadonlyStorage, meter: Option<&mut GasMeter>) -> GasResult<Self> {
-        let mut inf = GasMeter::infinite();
-        let meter = meter.unwrap_or(&mut inf);
+    pub fn import(src: &dyn ReadonlyStorage, meter: Option<&GasMeter>) -> GasResult<Self> {
+        let inf = GasMeter::infinite();
+        let meter = meter.unwrap_or(&inf);
         let btree = BTreeStorage::import(src, meter)?;
         Ok(MemoryStore(RwLock::new(btree)))
     }
@@ -70,14 +70,14 @@ impl PersistentStorage for MemoryStore {
 pub struct MemoryStorageReader<'a>(RwLockReadGuard<'a, BTreeStorage>);
 
 impl ReadonlyStorage for MemoryStorageReader<'_> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         self.0.get(meter, key)
     }
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -110,14 +110,14 @@ impl<'a> MemoryStorageWriter<'a> {
 }
 
 impl ReadonlyStorage for MemoryStorageWriter<'_> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         self.wrapper.get(&self.reader, meter, key)
     }
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -130,14 +130,14 @@ impl ReadonlyStorage for MemoryStorageWriter<'_> {
 }
 
 impl Storage for MemoryStorageWriter<'_> {
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span =
             trace_span!("set", key = %HexEncode::new(&key), value = %HexEncode::new(&value))
                 .entered();
         self.wrapper.set(meter, key, value)
     }
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove", key = %HexEncode::new(&key)).entered();
         self.wrapper.remove(meter, key)
     }
@@ -148,7 +148,7 @@ impl Storage for MemoryStorageWriter<'_> {
 }
 
 impl Transaction for MemoryStorageWriter<'_> {
-    fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
+    fn commit(self, meter: &GasMeter) -> GasResult<()> {
         let _span = debug_span!("commit", db = "memory",).entered();
         // destructure and force dropping reader to remove read lock (otherwise, deadlock on getting writer below)
         // println!(
@@ -208,10 +208,9 @@ impl Default for BTreeStorage {
 
 impl BTreeStorage {
     // Make a copy of another storage
-    fn import(source: &dyn ReadonlyStorage, meter: &mut GasMeter) -> GasResult<Self> {
+    fn import(source: &dyn ReadonlyStorage, meter: &GasMeter) -> GasResult<Self> {
         let mut storage = BTreeStorage::new();
-        let mut gas_copy = meter.clone();
-        let keys = source.range(&mut gas_copy, None, None, Order::Ascending)?;
+        let keys = source.range(meter, None, None, Order::Ascending)?;
         for r in keys {
             let (key, value) = r?;
             storage.set(meter, key, value).unwrap();
@@ -219,7 +218,7 @@ impl BTreeStorage {
         Ok(storage)
     }
 
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let value = self.data.get(key).cloned();
 
         let val_len = value.as_deref();
@@ -231,7 +230,7 @@ impl BTreeStorage {
     /// uses standard rust range notation, and eg db.range(b"foo"..b"bar") also works reverse
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -264,7 +263,7 @@ impl BTreeStorage {
         }
     }
 
-    fn set(&mut self, meter: &mut GasMeter, key: Vec<u8>, value: Vec<u8>) -> GasResult<()> {
+    fn set(&mut self, meter: &GasMeter, key: Vec<u8>, value: Vec<u8>) -> GasResult<()> {
         if value.is_empty() {
             panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
         }
@@ -273,7 +272,7 @@ impl BTreeStorage {
         Ok(())
     }
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         self.price_list.charge_remove(meter, key)?;
         self.data.remove(key);
         Ok(())

@@ -25,11 +25,11 @@ pub trait GasStorage {
 // FIXME: if used, add readonly variant
 pub struct PulsarStorage<'a> {
     storage: &'a mut dyn Storage,
-    meter: &'a mut GasMeter,
+    meter: &'a GasMeter,
 }
 
 impl<'a> PulsarStorage<'a> {
-    pub fn new(storage: &'a mut dyn Storage, meter: &'a mut GasMeter) -> Self {
+    pub fn new(storage: &'a mut dyn Storage, meter: &'a GasMeter) -> Self {
         PulsarStorage { storage, meter }
     }
 }

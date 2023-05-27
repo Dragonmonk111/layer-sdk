@@ -34,7 +34,7 @@ impl ReaderWrapper {
     pub(crate) fn get(
         &self,
         storage: &dyn ReadonlyStorage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         key: &[u8],
     ) -> GasResult<Option<Vec<u8>>> {
         match self.local_state.get(key) {
@@ -50,7 +50,7 @@ impl ReaderWrapper {
     pub(crate) fn range<'b>(
         &'b self,
         storage: &'b dyn ReadonlyStorage,
-        meter: &'b mut GasMeter,
+        meter: &'b GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -78,7 +78,7 @@ impl ReaderWrapper {
         Ok(Box::new(merged))
     }
 
-    pub(crate) fn set(&mut self, _meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    pub(crate) fn set(&mut self, _meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let delta = Delta::Set {
             value: value.to_vec(),
         };
@@ -86,7 +86,7 @@ impl ReaderWrapper {
         Ok(())
     }
 
-    pub(crate) fn remove(&mut self, _meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    pub(crate) fn remove(&mut self, _meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let delta = Delta::Delete {};
         self.local_state.insert(key.to_vec(), delta);
         Ok(())
