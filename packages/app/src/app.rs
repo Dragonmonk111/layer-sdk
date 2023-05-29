@@ -444,6 +444,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 mod tests {
     use super::*;
 
+    use bytes::Bytes;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, coins, to_binary, Binary, Timestamp};
     use hex_literal::hex;
@@ -629,6 +630,7 @@ mod tests {
                 gas_limit: 0,
             },
             timeout_height: None,
+            raw_tx: Bytes::from("Some text here"),
         };
         let sim = Query::Simulate(Tx::Signed(tx.clone()));
         let sim_res = app.query(sim).unwrap();

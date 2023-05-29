@@ -34,15 +34,15 @@ pub fn query_request_from_proto(
         panic!("Height not supported");
     }
     // TODO: error not unwrap
-    parse_cosmos_query(&request.path, &request.data, chain_id).unwrap()
+    parse_cosmos_query(&request.path, request.data, chain_id).unwrap()
 }
 
 pub fn check_request_from_proto(
-    request: &tendermint_proto::abci::RequestCheckTx,
+    request: tendermint_proto::abci::RequestCheckTx,
     chain_id: &str,
 ) -> pulsar_std::Tx {
     // TODO: error not unwrap
-    parse_cosmos_tx(&request.tx, chain_id).unwrap()
+    parse_cosmos_tx(request.tx, chain_id).unwrap()
 }
 
 pub fn finalize_request_from_proto(
@@ -52,7 +52,7 @@ pub fn finalize_request_from_proto(
     let txs = request
         .txs
         .into_iter()
-        .map(|tx| parse_cosmos_tx(&tx, chain_id).unwrap())
+        .map(|tx| parse_cosmos_tx(tx, chain_id).unwrap())
         .collect();
     let last_votes = match request.decided_last_commit {
         None => vec![],
@@ -142,12 +142,15 @@ mod fixtures {
     #[test]
     fn parse_simulate_query() {
         // query
+        let raw_tx = hex!("0AAB010A91010A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E6412710A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E321A110A067570756C7365120732303030303030121555736520796F757220706F77657220776973656C7912520A4E0A460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029012020A00180312001A00");
+        let encoded_query = hex!("1284020AAB010A91010A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E6412710A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E321A110A067570756C7365120732303030303030121555736520796F757220706F77657220776973656C7912520A4E0A460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029012020A00180312001A00");
+
         let request = tendermint_proto::abci::RequestQuery {
-                    data: hex!("1284020AAB010A91010A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E6412710A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E321A110A067570756C7365120732303030303030121555736520796F757220706F77657220776973656C7912520A4E0A460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029012020A00180312001A00").as_slice().into(),
-                    path: "/cosmos.tx.v1beta1.Service/Simulate".to_string(),
-                    height: 0,
-                    prove: false,
-                };
+            data: encoded_query.to_vec().into(),
+            path: "/cosmos.tx.v1beta1.Service/Simulate".to_string(),
+            height: 0,
+            prove: false,
+        };
 
         let expected = Query::Simulate(Tx::Signed(SignedTx {
             msgs: vec![Msg::Bank(BankMsg::Send {
@@ -176,9 +179,9 @@ mod fixtures {
                 gas_limit: 0,
             },
             timeout_height: None,
+            raw_tx: raw_tx.to_vec().into(),
         }));
         let query = query_request_from_proto(request, CHAIN_ID);
-
         assert_eq!(query, expected);
 
         // // response

@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmwasm_std::Event;
 use pulsar_std::api::{GasInfo, TxResponse, TxResult};
@@ -33,8 +34,8 @@ pub const QUERY_PATH_STORE: &str = "store";
 // const QUERY_PATH_P2P: &str = "p2p";
 
 // See relevant code we emulate at https://github.com/cosmos/cosmos-sdk/blob/v0.47.2/baseapp/abci.go#L538-L561
-pub fn parse_cosmos_query(path: &str, data: &[u8], chain_id: &str) -> Result<Query, QueryError> {
-    if let Some(grpc_res) = parse_cosmos_grpc_query(path, data, chain_id)? {
+pub fn parse_cosmos_query(path: &str, data: Bytes, chain_id: &str) -> Result<Query, QueryError> {
+    if let Some(grpc_res) = parse_cosmos_grpc_query(path, data.clone(), chain_id)? {
         return Ok(grpc_res);
     }
 
@@ -53,13 +54,13 @@ pub fn parse_cosmos_query(path: &str, data: &[u8], chain_id: &str) -> Result<Que
 }
 
 /// for raw queries
-fn parse_store_query(_fragments: &[&str], data: &[u8]) -> Result<Query, QueryError> {
+fn parse_store_query(_fragments: &[&str], data: Bytes) -> Result<Query, QueryError> {
     // FIXME: review if this is correct when we have a sample caller for compatibility
-    Ok(Query::Raw { key: data.to_vec() })
+    Ok(Query::Raw { key: data.into() })
 }
 
 /// simulate and version support
-fn parse_app_query(command: &str, data: &[u8], chain_id: &str) -> Result<Query, QueryError> {
+fn parse_app_query(command: &str, data: Bytes, chain_id: &str) -> Result<Query, QueryError> {
     match command {
         "simulate" => {
             // FIXME: error handling is ugly, revise proper types
@@ -78,7 +79,7 @@ fn parse_app_query(command: &str, data: &[u8], chain_id: &str) -> Result<Query, 
 /// This will use grpc path lookups, returns Ok(None) if not a match, so we try special queries
 fn parse_cosmos_grpc_query(
     path: &str,
-    data: &[u8],
+    data: Bytes,
     chain_id: &str,
 ) -> Result<Option<Query>, QueryError> {
     // FIXME: add auth queries
@@ -112,7 +113,7 @@ fn parse_cosmos_grpc_query(
         }
         "/cosmos.tx.v1beta1.Service/Simulate" => {
             let req = SimulateRequest::decode(data).map_err(CosmosError::from)?;
-            let tx = parse_cosmos_tx(&req.tx_bytes, chain_id)
+            let tx = parse_cosmos_tx(req.tx_bytes.into(), chain_id)
                 .map_err(|e| QueryError::ParseError(e.to_string()))?;
             Ok(Some(Query::Simulate(tx)))
 
@@ -280,7 +281,7 @@ mod tests {
         let data = hex!("1282020AAB010A91010A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E6412710A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C122D70756C73617231757A3479303579387366736D75657A61616B70706D68326470636667797A72716D39786463731A110A067570756C7365120732303030303030121555736520796F757220706F77657220776973656C7912500A4C0A460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029012020A0012001A00");
         let chain_id = "pulsar-dev-1";
 
-        let tx = parse_cosmos_query(path, &data, chain_id).unwrap();
+        let tx = parse_cosmos_query(path, Bytes::from(data.to_vec()), chain_id).unwrap();
         assert!(matches!(tx, Query::Simulate(_)));
     }
 }
