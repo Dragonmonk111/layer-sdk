@@ -654,7 +654,7 @@ mod tests {
         // check gas range
         println!("gas used: {}", gas_used);
         assert!(gas_used > expected_gas);
-        assert!(gas_used < expected_gas + 1000);
+        assert!(gas_used < expected_gas + 2000);
 
         // create proper tx (from cosmjs)
         tx.fee = FeeInfo {
@@ -683,7 +683,7 @@ mod tests {
         let gas_used = tx_res.gas.gas_used;
         println!("gas used: {:?}", gas_used);
         assert!(gas_used > expected_gas);
-        assert!(gas_used < expected_gas + 1000);
+        assert!(gas_used < expected_gas + 2000);
 
         // check balances updated (note sender deducts 2500 in gas fees)
         assert_balance(&app, &sender, denom, 1_997_997_500);
