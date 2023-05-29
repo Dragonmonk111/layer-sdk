@@ -8,7 +8,7 @@ use cosmwasm_std::{BlockInfo, Event, StdError};
 use pulsar_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
 use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
-use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage};
+use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
 
 use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
@@ -81,12 +81,12 @@ impl StateMachine {
         tx: Tx,
     ) -> PulsarResult<TxResponse> {
         let _span = debug_span!("sm.query_simulate").entered();
-        let data = self
-            .auth
-            .validate_tx(store, meter, block, self, tx, false)?;
-        // charge some gas for the skipped steps, so simulation value works for auto-gas
-        // FIXME: figure out a cleaner way to handle this
-        meter.charge(2500)?;
+        let data =
+            self.auth
+                .validate_tx(&mut AppMeter::new(store), meter, block, self, tx, false)?;
+        // It's roughly 6000 gas to transfer fees, which is not done in simulate.
+        // We charge here to make sure estimates are good.
+        meter.charge(6000)?;
 
         let resps = data
             .msgs
@@ -112,9 +112,11 @@ impl StateMachine {
     ) -> PulsarResult<MsgResponse> {
         let span = debug_span!("sm.process_msg", ?msg, success = Empty, error = Empty).entered();
         let res = match msg {
-            Msg::Bank(bank) => self
-                .bank
-                .process_msg(storage, gas, block, self, sender, bank),
+            Msg::Bank(bank) => {
+                let mut metered = AppMeter::new(storage);
+                self.bank
+                    .process_msg(&mut metered, gas, block, self, sender, bank)
+            }
         };
         match &res {
             Ok(response) => span.record("success", debug(&response.events)),
@@ -130,7 +132,9 @@ impl StateMachine {
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxData> {
-        self.auth.validate_tx(storage, meter, block, self, tx, true)
+        let mut metered = AppMeter::new(storage);
+        self.auth
+            .validate_tx(&mut metered, meter, block, self, tx, true)
     }
 
     /// Note: erroring here (including exceeding gas limits) will abort block execution. Be careful.

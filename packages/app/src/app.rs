@@ -326,6 +326,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // execute all messages atomically. if any fail, we don't write any state changes
         // from any of the messages
+        // We don't wrap with AppMeter here, we allow state machine to do that (for eg wasm)x
         let resps: PulsarResult<Vec<_>> = atomic(storage, &meter, |store, m| {
             data.msgs
                 .into_iter()
@@ -563,6 +564,8 @@ mod tests {
         let recipient = must_id("pulsar1y5hl7x8hxl72dc9gu920eaz6l7vhl0lu264u06");
         let denom: &str = "upulse";
 
+        let expected_gas = 16_000u64;
+
         // assert the proper pubkey for the account
         let sender_key = PubKey::Secp256k1(Binary::from(
             hex!("034f04181eeba35391b858633a765c4a0c189697b40d216354d50890d350c70290").as_slice(),
@@ -650,8 +653,8 @@ mod tests {
         };
         // check gas range
         println!("gas used: {}", gas_used);
-        assert!(gas_used > 6000);
-        assert!(gas_used < 7000);
+        assert!(gas_used > expected_gas);
+        assert!(gas_used < expected_gas + 1000);
 
         // create proper tx (from cosmjs)
         tx.fee = FeeInfo {
@@ -676,6 +679,11 @@ mod tests {
         let tx_res = &block_res.tx_results[0];
         // TODO: more checks
         assert!(tx_res.is_ok());
+        // check gas range
+        let gas_used = tx_res.gas.gas_used;
+        println!("gas used: {:?}", gas_used);
+        assert!(gas_used > expected_gas);
+        assert!(gas_used < expected_gas + 1000);
 
         // check balances updated (note sender deducts 2500 in gas fees)
         assert_balance(&app, &sender, denom, 1_997_997_500);
