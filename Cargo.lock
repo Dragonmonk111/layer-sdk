@@ -1807,6 +1807,7 @@ dependencies = [
 name = "pulsar-app"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus",
@@ -1824,6 +1825,7 @@ dependencies = [
 name = "pulsar-cosmos"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "cosmos-sdk-proto",
  "cosmrs",
  "cosmwasm-std",
@@ -1840,6 +1842,7 @@ name = "pulsar-std"
 version = "0.1.0"
 dependencies = [
  "bech32",
+ "bytes",
  "chrono",
  "cosmwasm-crypto",
  "cosmwasm-schema",

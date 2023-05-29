@@ -1,4 +1,6 @@
+use bytes::Bytes;
 use cosmwasm_std::{Binary, Coin};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::account_id::AccountId;
@@ -37,6 +39,19 @@ pub struct SignedTx {
 
     /// if set and the chain height is greater than this, abort the tx in all cases
     pub timeout_height: Option<u64>,
+
+    // The original transaction bytes (generally not needed, except to calculate the length for gas)
+    pub raw_tx: Bytes,
+}
+
+impl SignedTx {
+    pub fn tx_len(&self) -> u64 {
+        self.raw_tx.len() as u64
+    }
+
+    pub fn tx_hash(&self) -> Vec<u8> {
+        Sha256::digest(&self.raw_tx).to_vec()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

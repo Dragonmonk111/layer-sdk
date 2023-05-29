@@ -1,5 +1,6 @@
 use pulsar_std::{GasMeter, GasResult};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PriceList {
     // gas cost for a read
     pub read_flat: u64,
@@ -20,19 +21,41 @@ pub struct PriceList {
     pub range_flat: u64,
 }
 
-impl Default for PriceList {
-    fn default() -> Self {
-        Self {
-            read_flat: 1000,
-            read_per_byte_percent: 100,
-            write_flat: 2000,
-            write_per_byte_percent: 200,
-            remove_flat: 2000,
-            remove_per_byte_percent: 200,
-            range_flat: 1000,
-        }
-    }
-}
+/// We charge for the reads from persisted store. Writes happen at end of block, not in a tx.
+/// We use DEFAULT_COMMIT_PRICES to charge for writes.
+pub const DEFAULT_PERSISTED_PRICES: PriceList = PriceList {
+    read_flat: 1000,
+    read_per_byte_percent: 100,
+    write_flat: 0,
+    write_per_byte_percent: 0,
+    remove_flat: 0,
+    remove_per_byte_percent: 0,
+    range_flat: 1000,
+};
+
+/// This should be set on the last level of cache, when performing the actual app-level logic.
+/// Expecially with wasmd, sub msg will have different cache levels, and we need to charge carefully to avoid double-charging.
+pub const DEFAULT_COMMIT_PRICES: PriceList = PriceList {
+    read_flat: 0,
+    read_per_byte_percent: 0,
+    write_flat: 2000,
+    write_per_byte_percent: 200,
+    remove_flat: 2000,
+    remove_per_byte_percent: 200,
+    range_flat: 0,
+};
+
+/// For now we charge nothing for each cache level, but we could add some minor cost to prevent abuse of memory storage.
+/// Note this applies to every level, and tx may be many levels deep.
+pub const DEFAULT_CACHE_PRICES: PriceList = PriceList {
+    read_flat: 0,
+    read_per_byte_percent: 0,
+    write_flat: 0,
+    write_per_byte_percent: 0,
+    remove_flat: 0,
+    remove_per_byte_percent: 0,
+    range_flat: 0,
+};
 
 impl PriceList {
     pub fn charge_read(&self, meter: &GasMeter, key: &[u8], value: Option<&[u8]>) -> GasResult<()> {

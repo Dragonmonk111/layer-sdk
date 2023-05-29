@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use cosmos_sdk_proto::cosmos::tx::signing::v1beta1::SignMode;
 use cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw;
 use cosmos_sdk_proto::prost::Message;
@@ -37,9 +38,9 @@ fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), C
 // This is parsed from cosmrs::Raw and cosmrs::Tx
 /// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
 /// Extracts all useful info from the Tx in a simpler format for us
-pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, TxError> {
+pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<pulsar_std::Tx, TxError> {
     let _span = trace_span!("parse_cosmos_tx").entered();
-    let (tx, message_hash) = parse_raw_tx(bytes, chain_id)?;
+    let (tx, message_hash) = parse_raw_tx(&bytes, chain_id)?;
 
     let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(parse_cosmos_msg).collect();
     let msgs = msgs?;
@@ -64,6 +65,7 @@ pub fn parse_cosmos_tx(bytes: &[u8], chain_id: &str) -> Result<pulsar_std::Tx, T
         signing_info,
         fee,
         timeout_height,
+        raw_tx: bytes,
     };
     Ok(pulsar_std::Tx::Signed(tx))
 }
@@ -192,7 +194,7 @@ mod test {
         let tx_bytes = tx_signed.to_bytes().unwrap();
 
         // now let's parse and see if we have the proper values
-        let tx = parse_cosmos_tx(&tx_bytes, chain_id.as_str()).unwrap();
+        let tx = parse_cosmos_tx(tx_bytes.into(), chain_id.as_str()).unwrap();
 
         // validate we have the expected values
         let pulsar_std::Tx::Signed(tx) = tx;

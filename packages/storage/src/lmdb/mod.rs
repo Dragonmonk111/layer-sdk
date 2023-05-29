@@ -7,7 +7,9 @@ use tracing::{debug_span, trace_span};
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult, HexEncode};
 
-use crate::{FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage};
+use crate::{
+    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, DEFAULT_PERSISTED_PRICES,
+};
 
 // 1 GB max... review this later
 pub const DEFAULT_DB_SIZE_MB: u64 = 1024;
@@ -83,7 +85,7 @@ impl PersistentStorage for LmdbStore {
         LmdbReader {
             tx,
             db: self.db,
-            price_list: PriceList::default(),
+            price_list: DEFAULT_PERSISTED_PRICES,
         }
     }
 
@@ -209,7 +211,7 @@ impl<'a> LmdbWriter<'a> {
     pub fn new(tx: lmdb::RwTransaction<'a>, db: Database) -> Self {
         let app_hash = read_app_hash(&tx, db);
         let hasher = FastHasher::new(&app_hash);
-        let price_list = PriceList::default();
+        let price_list = DEFAULT_PERSISTED_PRICES;
         LmdbWriter {
             tx,
             db,
