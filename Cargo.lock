@@ -2383,6 +2383,7 @@ dependencies = [
  "cosmwasm-std",
  "cosmwasm-vm",
  "cw-storage-plus",
+ "pulsar-app",
  "pulsar-std",
  "pulsar-storage",
  "serde",

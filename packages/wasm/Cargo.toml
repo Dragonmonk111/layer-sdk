@@ -11,6 +11,7 @@ edition = { workspace = true }
 default = []
 
 [dependencies]
+pulsar-app = { workspace = true }
 pulsar-std = { workspace = true }
 pulsar-storage = { workspace = true }
 cosmwasm-std = { workspace = true }
