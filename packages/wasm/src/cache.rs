@@ -4,7 +4,7 @@ use cosmwasm_std::{Empty, Env, MessageInfo, Response};
 use cosmwasm_vm::{
     call_instantiate, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
 };
-use pulsar_app::App;
+use pulsar_app::StateMachine;
 use pulsar_std::GasMeter;
 use pulsar_storage::{MemoryStore, PersistentStorage, Storage};
 
@@ -12,19 +12,20 @@ use crate::backend::{danger_will_robinson, VmApi, VmQuerier, VmStore};
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
-const CAPABILITIES: &[&str] = &["iterator"];
+// const CAPABILITIES: &[&str] = &["iterator"];
+const CAPABILITIES: &[&str] = &["iterator", "staking", "stargate"];
 const PRINT_DEBUG: bool = false;
 
 fn capabilities() -> HashSet<String> {
     CAPABILITIES.iter().map(|s| s.to_string()).collect()
 }
 
-pub struct VmCache<T: PersistentStorage + 'static> {
-    cache: Cache<VmApi, VmStore, VmQuerier<T>>,
+pub struct VmCache {
+    cache: Cache<VmApi, VmStore, VmQuerier>,
     print_debug: bool,
 }
 
-impl<T: PersistentStorage + 'static> VmCache<T> {
+impl VmCache {
     // TODO: make more args?
     pub fn init(cache_dir: &str) -> Self {
         let cache_options = CacheOptions {
@@ -57,6 +58,7 @@ impl<T: PersistentStorage + 'static> VmCache<T> {
     }
 
     // TODO: return gas_info, Response
+    #[allow(clippy::too_many_arguments)]
     pub fn instantiate(
         &mut self,
         checksum: &Checksum,
@@ -65,7 +67,7 @@ impl<T: PersistentStorage + 'static> VmCache<T> {
         msg: &[u8],
         storage: &mut dyn Storage,
         meter: &GasMeter,
-        app: &App<T>,
+        sm: &StateMachine,
         gas_limit: u64,
     ) -> Result<(), VmError> {
         let options = InstanceOptions {
@@ -81,7 +83,7 @@ impl<T: PersistentStorage + 'static> VmCache<T> {
         let query = fake.reader();
 
         // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(app, storage, &query, meter) };
+        let backend = unsafe { danger_will_robinson(sm, storage, &query, meter) };
         let mut instance = self.cache.get_instance(checksum, backend, options)?;
         let result = call_instantiate(&mut instance, env, info, msg);
         instance.recycle();
@@ -89,5 +91,65 @@ impl<T: PersistentStorage + 'static> VmCache<T> {
         // TODO: proper parsing and return values
         let _: Response<Empty> = result.unwrap().unwrap();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cosmwasm_std::{
+        coin,
+        testing::{mock_env, mock_info}, to_vec, Order,
+    };
+    use pulsar_std::AccountId;
+    use pulsar_storage::ReadonlyStorage;
+
+    use super::*;
+
+    // v1.0.1
+    const CW20_BASE: &[u8] = include_bytes!("../fixtures/cw20_base.wasm");
+
+    #[test]
+    fn can_instatiate() {
+        let path = "/tmp/pulsar/test-can-instantiate";
+        std::fs::create_dir_all(path).unwrap();
+
+        let mut vm = VmCache::init(path);
+        let checksum = vm.store_code(CW20_BASE).unwrap();
+
+        // try to instantiate
+        let env = mock_env();
+        let sender = AccountId::unchecked("Sillyness");
+        let info = mock_info(&sender.to_string(), &[coin(55_000, "upulse")]);
+        let meter = GasMeter::infinite();
+        let sm = StateMachine::new();
+        let store = MemoryStore::new();
+
+        let msg = cw20_base::msg::InstantiateMsg {
+            name: "pulsar".to_string(),
+            symbol: "PLS".to_string(),
+            decimals: 6,
+            initial_balances: vec![],
+            mint: None,
+            marketing: None,
+        };
+        let msg = to_vec(&msg).unwrap();
+
+        let mut writer = store.writer();
+        vm.instantiate(
+            &checksum,
+            &env,
+            &info,
+            &msg,
+            &mut writer,
+            &meter,
+            &sm,
+            meter.limit(),
+        )
+        .unwrap();
+
+        // query the state was written
+        let num = writer.range(&meter, None, None, Order::Ascending).unwrap().count();
+        assert_eq!(num, 2);
+
     }
 }

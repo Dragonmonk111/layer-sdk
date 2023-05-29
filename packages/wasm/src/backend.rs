@@ -5,27 +5,27 @@ use cosmwasm_vm::{
     Storage as BackendStorage,
 };
 
-use pulsar_app::App;
+use pulsar_app::StateMachine;
 use pulsar_std::{AccountId, AccountIdError, GasError, GasMeter};
-use pulsar_storage::{PersistentStorage, ReadonlyStorage, Storage};
+use pulsar_storage::{ReadonlyStorage, Storage};
 
 pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
 
 /// A bunch of unsafe lifetime games here...
 /// Only call it where you are sure all usage of this backend and instance is completed before the references
-pub(crate) unsafe fn danger_will_robinson<T: PersistentStorage + 'static>(
-    app: &App<T>,
+pub(crate) unsafe fn danger_will_robinson(
+    sm: &StateMachine,
     contract_storage: &mut dyn Storage,
     query_storage: &dyn ReadonlyStorage,
     meter: &GasMeter,
-) -> Backend<VmApi, VmStore, VmQuerier<T>> {
+) -> Backend<VmApi, VmStore, VmQuerier> {
     let storage = VmStore {
         storage: transmute(contract_storage),
         meter: &*(meter as *const GasMeter),
     };
     let querier = VmQuerier {
-        _app: &*(app as *const App<T>),
+        _sm: &*(sm as *const StateMachine),
         _storage: transmute(query_storage),
     };
 
@@ -61,12 +61,12 @@ fn account_error_to_backend(e: AccountIdError) -> BackendError {
     BackendError::UserErr { msg: e.to_string() }
 }
 
-pub struct VmQuerier<T: PersistentStorage + 'static> {
-    _app: &'static App<T>,
+pub struct VmQuerier {
+    _sm: &'static StateMachine,
     _storage: &'static dyn ReadonlyStorage,
 }
 
-impl<T: PersistentStorage + 'static> BackendQuerier for VmQuerier<T> {
+impl BackendQuerier for VmQuerier {
     fn query_raw(
         &self,
         _request: &[u8],
@@ -98,14 +98,14 @@ impl BackendStorage for VmStore {
 
     fn scan(
         &mut self,
-        start: Option<&[u8]>,
-        end: Option<&[u8]>,
-        order: cosmwasm_std::Order,
+        _start: Option<&[u8]>,
+        _end: Option<&[u8]>,
+        _order: cosmwasm_std::Order,
     ) -> BackendResult<u32> {
         todo!()
     }
 
-    fn next(&mut self, iterator_id: u32) -> BackendResult<Option<cosmwasm_std::Record>> {
+    fn next(&mut self, _iterator_id: u32) -> BackendResult<Option<cosmwasm_std::Record>> {
         todo!()
     }
 
