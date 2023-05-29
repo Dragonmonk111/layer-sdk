@@ -116,6 +116,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         };
         match state {
             Some(state) => {
+                debug!(?state, "Loaded state from storage");
                 let data = InnerData {
                     block: state.last_block,
                     chain_id: state.chain_id,
@@ -183,7 +184,9 @@ impl<T: PersistentStorage + 'static> App<T> {
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
     pub fn info(&self) -> Option<&BlockInfo> {
-        self.data.as_ref().map(|d| &d.block)
+        let block = self.data.as_ref().map(|d| &d.block);
+        debug!(?block, "info");
+        block
     }
 
     pub fn app_hash(&self) -> Vec<u8> {
@@ -416,6 +419,13 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Commit to underlying store. Use infinite gas meter to ensure we don't fail here
         let mut meter = GasMeter::infinite();
+        {
+            // ensure we drop app_store before the commit
+            let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
+            let mut state = APP_STATE.load(&app_store, &mut meter)?;
+            state.last_block = block.clone();
+            APP_STATE.save(&mut app_store, &mut meter, &state)?;
+        }
         writer.commit(&mut meter)?;
 
         // update block in cache
@@ -523,14 +533,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn transaction_workflow_memory() {
+        let storage = MemoryStore::default();
+        transaction_workflow(storage);
+    }
+
+    #[cfg(feature = "lmdb")]
+    #[test]
+    fn transaction_workflow_lmdb() {
+        // always delete, ignore "does not exist" error
+        let path = "/tmp/pulsar-test-lmdb";
+        let _ = std::fs::remove_dir_all(path);
+        std::fs::create_dir_all(path).unwrap();
+
+        // create lmdb store and run same tests
+        let storage = pulsar_storage::LmdbStore::new(path, None);
+        transaction_workflow(storage);
+    }
+
     // this emulates the run of a transaction being submitted
     // query account + balances
     // run simulate
     // run check_tx
     // run finalize_block
     // query account + balances for update
-    #[test]
-    fn transaction_workflow() {
+    fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
         let sender = must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l");
         let recipient = must_id("pulsar1y5hl7x8hxl72dc9gu920eaz6l7vhl0lu264u06");
         let denom: &str = "upulse";
@@ -547,7 +575,6 @@ mod tests {
                 balance: coins(2_000_000_000, denom),
             }],
         };
-        let storage = MemoryStore::default();
         // TODO: remove from App args, build inside (with config)
         let logic = StateMachine::new();
         let request = mock_init(&genesis);

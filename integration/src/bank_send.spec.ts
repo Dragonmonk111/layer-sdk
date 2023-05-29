@@ -154,7 +154,9 @@ describe("SigningStargateClient", () => {
       typeUrl: "/cosmos.bank.v1beta1.MsgSend",
       value: msg,
     };
-    const result = await client.signAndBroadcast(faucet.address0, [msgAny], "auto");
+    // TODO: clairfy simulate gas for lmdb
+    // const result = await client.signAndBroadcast(faucet.address0, [msgAny], "auto");
+    const result = await client.signAndBroadcast(faucet.address0, [msgAny], 3);
     assertIsDeliverTxSuccess(result);
   });
 });

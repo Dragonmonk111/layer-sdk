@@ -118,7 +118,7 @@ For debugging, let's run a quick build of `pulsariumd`:
 
 ```shell
 cd ./app/pulsariumd
-PULSE_LOG=debug cargo run
+PULSE_LOG=debug,tendermint_abci::application=error cargo run
 ```
 
 For cometbft, we also need to reset state every crash.

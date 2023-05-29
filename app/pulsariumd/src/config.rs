@@ -19,6 +19,9 @@ pub struct RawConfig {
 
     // whether to add jaeger tracing
     pub jaeger: bool,
+
+    // A directory to store the LMDB database (if missing use memory db)
+    pub lmdb: Option<String>,
     // /// The directory we read all files from (default $HOME/.pulsarium)
     // pub basedir: String,
 }
@@ -31,6 +34,7 @@ impl Default for RawConfig {
             log: "info".to_string(),
             read_buf_size: 4 * 1024 * 1024,
             jaeger: false,
+            lmdb: None,
         }
     }
 }
@@ -52,12 +56,14 @@ impl RawConfig {
         }
         let filter = EnvFilter::new(&self.log);
         // TODO: validate host
+        // TODO: check if lmdb path exists
         Ok(Config {
             host: self.host,
             port: self.port,
             filter,
             read_buf_size: self.read_buf_size,
             jaeger: self.jaeger,
+            lmdb: self.lmdb,
         })
     }
 }
@@ -77,6 +83,9 @@ pub struct Config {
     pub read_buf_size: u32,
 
     pub jaeger: bool,
+
+    // A directory to store the LMDB database (if missing use memory db)
+    pub lmdb: Option<String>,
     // /// The directory we read all files from (default $HOME/.pulsarium)
     // pub basedir: String,
 }

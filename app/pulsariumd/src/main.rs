@@ -66,13 +66,30 @@ fn main() {
     }
 
     // Create the app
-    let app = Pulsarium::default();
+    match config.lmdb {
+        Some(path) => {
+            info!("using lmdb database at {}", path);
+            let storage = pulsar_storage::LmdbStore::new(&path, None);
+            let app = Pulsarium::new(storage);
 
-    // Start ABCI server
-    let server = ServerBuilder::new(config.read_buf_size as usize)
-        .bind(format!("{}:{}", config.host, config.port), app)
-        .unwrap();
-    server.listen().unwrap();
+            // Start ABCI server
+            let server = ServerBuilder::new(config.read_buf_size as usize)
+                .bind(format!("{}:{}", config.host, config.port), app)
+                .unwrap();
+            server.listen().unwrap();
+        }
+        None => {
+            info!("using in-memory database");
+            let storage = pulsar_storage::MemoryStore::new();
+            let app = Pulsarium::new(storage);
+
+            // Start ABCI server
+            let server = ServerBuilder::new(config.read_buf_size as usize)
+                .bind(format!("{}:{}", config.host, config.port), app)
+                .unwrap();
+            server.listen().unwrap();
+        }
+    }
 
     // proper shutdown
     if config.jaeger {

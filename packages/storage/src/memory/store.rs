@@ -4,11 +4,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
-use tracing::trace_span;
+use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
+use crate::prices::PriceList;
 use crate::traits::Transaction;
 use crate::wrap::{Op, ReaderWrapper};
 use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
@@ -44,6 +45,7 @@ impl fmt::Debug for MemoryStore {
 struct BTreeStorage {
     hash: Vec<u8>,
     data: BTreeMap<Vec<u8>, Vec<u8>>,
+    price_list: PriceList,
 }
 
 impl PersistentStorage for MemoryStore {
@@ -147,7 +149,7 @@ impl Storage for MemoryStorageWriter<'_> {
 
 impl Transaction for MemoryStorageWriter<'_> {
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
-        let _span = trace_span!("commit").entered();
+        let _span = debug_span!("commit", db = "memory",).entered();
         // destructure and force dropping reader to remove read lock (otherwise, deadlock on getting writer below)
         // println!(
         //     "lock status: {}, exclusive: {}",
@@ -193,6 +195,7 @@ impl BTreeStorage {
         BTreeStorage {
             hash: vec![0; 32],
             data: BTreeMap::new(),
+            price_list: PriceList::default(),
         }
     }
 }
@@ -219,10 +222,8 @@ impl BTreeStorage {
     fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let value = self.data.get(key).cloned();
 
-        // TODO: abstract better
-        let val_len = value.as_ref().map(|x| x.len()).unwrap_or_default();
-        let cost = 1000u64 + (key.len() + val_len) as u64;
-        meter.charge(cost)?;
+        let val_len = value.as_deref();
+        self.price_list.charge_read(meter, key, val_len)?;
         Ok(value)
     }
 
@@ -246,18 +247,15 @@ impl BTreeStorage {
             _ => {}
         }
 
-        // TODO: abstract better
-        let cost = 1000u64;
-        meter.charge(cost)?;
+        self.price_list.charge_range(meter)?;
 
         // FIXME: wrap this so we can instrument next to for timing
         let iter = self
             .data
             .range(bounds)
             .map(|(key, value)| -> GasResult<BTreeMapRecordRef> {
-                // TODO: abstract better
-                let cost = 1000u64 + (key.len() + value.len()) as u64;
-                meter.charge(cost)?;
+                self.price_list
+                    .charge_read(meter, key, Some(value.as_slice()))?;
                 Ok((key, value))
             });
         match order {
@@ -270,23 +268,13 @@ impl BTreeStorage {
         if value.is_empty() {
             panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
         }
-        // TODO: abstract better
-        let cost = 2000u64 + 2 * (key.len() + value.len()) as u64;
-        meter.charge(cost)?;
-
-        // TODO: add to hasher...
-
+        self.price_list.charge_write(meter, &key, &value)?;
         self.data.insert(key, value);
         Ok(())
     }
 
     fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
-        // TODO: abstract better
-        let cost = 2000u64;
-        meter.charge(cost)?;
-
-        // TODO: add to hasher...
-
+        self.price_list.charge_remove(meter, key)?;
         self.data.remove(key);
         Ok(())
     }
