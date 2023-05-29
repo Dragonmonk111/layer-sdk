@@ -19,6 +19,8 @@ pub use fast_hash::FastHasher;
 pub use gas::{GasStorage, PulsarStorage};
 pub use plus::{Item, Map, PlusError, PlusResult};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
-pub use prices::PriceList;
+pub use prices::{
+    PriceList, DEFAULT_CACHE_PRICES, DEFAULT_COMMIT_PRICES, DEFAULT_PERSISTED_PRICES,
+};
 pub use traits::{PersistentStorage, ReadonlyStorage, Storage, Transaction};
 pub use wrap::{atomic, ScratchTx, SubTx};

@@ -4,7 +4,7 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
 
 use super::ReaderWrapper;
-use crate::{traits::Transaction, ReadonlyStorage, Storage};
+use crate::{traits::Transaction, PriceList, ReadonlyStorage, Storage, DEFAULT_CACHE_PRICES};
 
 /// This wraps ReadonlyStorage, providing a scratch-pad that acts like normal Storage
 /// but can never be persisted to the underlying state.
@@ -14,6 +14,7 @@ use crate::{traits::Transaction, ReadonlyStorage, Storage};
 pub struct ScratchTx<'a> {
     storage: &'a dyn ReadonlyStorage,
     wrap: ReaderWrapper,
+    price_list: PriceList,
 }
 
 impl<'a> ScratchTx<'a> {
@@ -21,6 +22,7 @@ impl<'a> ScratchTx<'a> {
         ScratchTx {
             storage,
             wrap: ReaderWrapper::new(),
+            price_list: DEFAULT_CACHE_PRICES,
         }
     }
 }
@@ -28,7 +30,9 @@ impl<'a> ScratchTx<'a> {
 impl ReadonlyStorage for ScratchTx<'_> {
     fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get").entered();
-        self.wrap.get(self.storage, meter, key)
+        let value = self.wrap.get(self.storage, meter, key)?;
+        self.price_list.charge_read(meter, key, value.as_deref())?;
+        Ok(value)
     }
 
     fn range<'a>(
@@ -39,6 +43,7 @@ impl ReadonlyStorage for ScratchTx<'_> {
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
         let _span = trace_span!("range").entered();
+        self.price_list.charge_range(meter)?;
         self.wrap.range(self.storage, meter, start, end, order)
     }
 
@@ -48,11 +53,13 @@ impl ReadonlyStorage for ScratchTx<'_> {
 impl Storage for ScratchTx<'_> {
     fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span = trace_span!("set").entered();
+        self.price_list.charge_range(meter)?;
         self.wrap.set(meter, key, value)
     }
 
     fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove").entered();
+        self.price_list.charge_remove(meter, key)?;
         self.wrap.remove(meter, key)
     }
 

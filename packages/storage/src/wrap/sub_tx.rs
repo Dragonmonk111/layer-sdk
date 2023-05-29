@@ -4,7 +4,9 @@ use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasError, GasMeter, GasResult};
 
 use super::{Delta, ReaderWrapper};
-use crate::{traits::Transaction, ReadonlyStorage, ScratchTx, Storage};
+use crate::{
+    traits::Transaction, PriceList, ReadonlyStorage, ScratchTx, Storage, DEFAULT_CACHE_PRICES,
+};
 
 pub fn atomic<T, E: From<GasError>>(
     storage: &mut dyn Storage,
@@ -28,6 +30,7 @@ pub fn atomic<T, E: From<GasError>>(
 pub struct SubTx<'a> {
     storage: &'a mut dyn Storage,
     wrap: ReaderWrapper,
+    price_list: PriceList,
 }
 
 impl<'a> SubTx<'a> {
@@ -35,6 +38,7 @@ impl<'a> SubTx<'a> {
         SubTx {
             storage,
             wrap: ReaderWrapper::new(),
+            price_list: DEFAULT_CACHE_PRICES,
         }
     }
 
@@ -46,7 +50,9 @@ impl<'a> SubTx<'a> {
 impl ReadonlyStorage for SubTx<'_> {
     fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get").entered();
-        self.wrap.get(self.storage.as_ref(), meter, key)
+        let value = self.wrap.get(self.storage.as_ref(), meter, key)?;
+        self.price_list.charge_read(meter, key, value.as_deref())?;
+        Ok(value)
     }
 
     fn range<'a>(
@@ -57,6 +63,7 @@ impl ReadonlyStorage for SubTx<'_> {
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
         let _span = trace_span!("range").entered();
+        self.price_list.charge_range(meter)?;
         self.wrap
             .range(self.storage.as_ref(), meter, start, end, order)
     }
@@ -66,11 +73,13 @@ impl ReadonlyStorage for SubTx<'_> {
 impl Storage for SubTx<'_> {
     fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span = trace_span!("set").entered();
+        self.price_list.charge_range(meter)?;
         self.wrap.set(meter, key, value)
     }
 
     fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove").entered();
+        self.price_list.charge_remove(meter, key)?;
         self.wrap.remove(meter, key)
     }
 

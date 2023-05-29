@@ -12,6 +12,7 @@ use pulsar_std::{GasMeter, GasResult};
 use crate::prices::PriceList;
 use crate::traits::Transaction;
 use crate::wrap::{Op, ReaderWrapper};
+use crate::DEFAULT_PERSISTED_PRICES;
 use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
 
 pub struct MemoryStore(RwLock<BTreeStorage>);
@@ -195,7 +196,7 @@ impl BTreeStorage {
         BTreeStorage {
             hash: vec![0; 32],
             data: BTreeMap::new(),
-            price_list: PriceList::default(),
+            price_list: DEFAULT_PERSISTED_PRICES,
         }
     }
 }
