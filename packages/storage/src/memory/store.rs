@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
-use tracing::trace_span;
+use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult};
@@ -149,7 +149,7 @@ impl Storage for MemoryStorageWriter<'_> {
 
 impl Transaction for MemoryStorageWriter<'_> {
     fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
-        let _span = trace_span!("commit").entered();
+        let _span = debug_span!("commit", db = "memory",).entered();
         // destructure and force dropping reader to remove read lock (otherwise, deadlock on getting writer below)
         // println!(
         //     "lock status: {}, exclusive: {}",

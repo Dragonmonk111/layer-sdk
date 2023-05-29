@@ -21,6 +21,7 @@ Copy over startup files
 ```shell
 rm -rf ~/.pulse-test
 cp -r ./etc ~/.pulse-test
+mkdir -p ~/.pulse-test/lmdb-1
 ```
 
 Run in one terminal:

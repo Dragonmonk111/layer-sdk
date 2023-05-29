@@ -2,7 +2,7 @@ use libc::size_t;
 use lmdb::{Cursor, Database, Environment, Transaction};
 use std::fmt;
 use std::path::Path;
-use tracing::trace_span;
+use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
 use pulsar_std::{GasMeter, GasResult, HexEncode};
@@ -293,6 +293,7 @@ impl Storage for LmdbWriter<'_> {
 impl crate::Transaction for LmdbWriter<'_> {
     // This writes all changes to the underlying storage and consumes this wrapper
     fn commit(mut self, _meter: &mut GasMeter) -> GasResult<()> {
+        let _span = debug_span!("commit", db = "lmdb",).entered();
         let app_hash = self.hasher.hash();
         write_app_hash(&mut self.tx, self.db, &app_hash);
         self.tx.commit().unwrap();

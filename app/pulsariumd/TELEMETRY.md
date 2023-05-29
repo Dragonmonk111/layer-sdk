@@ -27,9 +27,11 @@ cargo install --path .
 PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger
 ```
 
-cargo run -- --jaeger
-```
+Or with lmdb:
 
+```bash
+PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger --lmdb ~/.pulse-test/lmdb-1
+```
 
 ## Test with integration tests
 
