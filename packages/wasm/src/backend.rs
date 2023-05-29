@@ -1,14 +1,40 @@
+use std::mem::transmute;
+
 use cosmwasm_vm::{
-    BackendApi, BackendError, BackendResult, GasInfo, Querier as BackendQuerier,
+    Backend, BackendApi, BackendError, BackendResult, GasInfo, Querier as BackendQuerier,
     Storage as BackendStorage,
 };
 
 use pulsar_app::App;
-use pulsar_std::{AccountId, AccountIdError, GasMeter};
+use pulsar_std::{AccountId, AccountIdError, GasError, GasMeter};
 use pulsar_storage::{PersistentStorage, ReadonlyStorage, Storage};
 
 pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
+
+/// A bunch of unsafe lifetime games here...
+/// Only call it where you are sure all usage of this backend and instance is completed before the references
+pub(crate) unsafe fn danger_will_robinson<T: PersistentStorage + 'static>(
+    app: &App<T>,
+    contract_storage: &mut dyn Storage,
+    query_storage: &dyn ReadonlyStorage,
+    meter: &GasMeter,
+) -> Backend<VmApi, VmStore, VmQuerier<T>> {
+    let storage = VmStore {
+        storage: transmute(contract_storage),
+        meter: &*(meter as *const GasMeter),
+    };
+    let querier = VmQuerier {
+        _app: &*(app as *const App<T>),
+        _storage: transmute(query_storage),
+    };
+
+    Backend {
+        api: VmApi,
+        storage,
+        querier,
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct VmApi;
@@ -52,13 +78,22 @@ impl<T: PersistentStorage + 'static> BackendQuerier for VmQuerier<T> {
 }
 
 pub struct VmStore {
-    _storage: &'static mut dyn Storage,
-    _meter: &'static GasMeter,
+    storage: &'static mut dyn Storage,
+    meter: &'static GasMeter,
+}
+
+fn out_of_gas(err: GasError) -> BackendError {
+    match err {
+        GasError::OutOfGas { .. } => BackendError::OutOfGas {},
+    }
 }
 
 impl BackendStorage for VmStore {
     fn get(&self, key: &[u8]) -> BackendResult<Option<Vec<u8>>> {
-        todo!()
+        let pre = self.meter.used();
+        let val = self.storage.get(self.meter, key).map_err(out_of_gas);
+        let used = self.meter.used() - pre;
+        (val, GasInfo::with_externally_used(used))
     }
 
     fn scan(
@@ -75,10 +110,16 @@ impl BackendStorage for VmStore {
     }
 
     fn set(&mut self, key: &[u8], value: &[u8]) -> BackendResult<()> {
-        todo!()
+        let pre = self.meter.used();
+        let val = self.storage.set(self.meter, key, value).map_err(out_of_gas);
+        let used = self.meter.used() - pre;
+        (val, GasInfo::with_externally_used(used))
     }
 
     fn remove(&mut self, key: &[u8]) -> BackendResult<()> {
-        todo!()
+        let pre = self.meter.used();
+        let val = self.storage.remove(self.meter, key).map_err(out_of_gas);
+        let used = self.meter.used() - pre;
+        (val, GasInfo::with_externally_used(used))
     }
 }
