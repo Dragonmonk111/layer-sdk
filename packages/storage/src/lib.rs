@@ -1,3 +1,4 @@
+mod app_meter;
 mod fast_hash;
 mod gas;
 mod memory;
@@ -15,6 +16,7 @@ mod lmdb;
 #[cfg(feature = "lmdb")]
 pub use crate::lmdb::LmdbStore;
 
+pub use app_meter::AppMeter;
 pub use fast_hash::FastHasher;
 pub use gas::{GasStorage, PulsarStorage};
 pub use plus::{Item, Map, PlusError, PlusResult};
