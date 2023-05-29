@@ -8,8 +8,8 @@ use crate::{traits::Transaction, ReadonlyStorage, ScratchTx, Storage};
 
 pub fn atomic<T, E: From<GasError>>(
     storage: &mut dyn Storage,
-    meter: &mut GasMeter,
-    f: impl FnOnce(&mut SubTx, &mut GasMeter) -> Result<T, E>,
+    meter: &GasMeter,
+    f: impl FnOnce(&mut SubTx, &GasMeter) -> Result<T, E>,
 ) -> Result<T, E> {
     let mut tx = SubTx::new(storage);
     let res = f(&mut tx, meter);
@@ -44,14 +44,14 @@ impl<'a> SubTx<'a> {
 }
 
 impl ReadonlyStorage for SubTx<'_> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get").entered();
         self.wrap.get(self.storage.as_ref(), meter, key)
     }
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -64,12 +64,12 @@ impl ReadonlyStorage for SubTx<'_> {
 }
 
 impl Storage for SubTx<'_> {
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span = trace_span!("set").entered();
         self.wrap.set(meter, key, value)
     }
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove").entered();
         self.wrap.remove(meter, key)
     }
@@ -82,7 +82,7 @@ impl Storage for SubTx<'_> {
 impl Transaction for SubTx<'_> {
     // FIXME: better error message - this should never be called, but we expose the API for the trait.
     // Shall we make it no op rather than panic??
-    fn commit(self, meter: &mut GasMeter) -> GasResult<()> {
+    fn commit(self, meter: &GasMeter) -> GasResult<()> {
         let _span = trace_span!("commit").entered();
         // Write directly to underlying storage without intermediate vector
         for (key, delta) in self.wrap.local_state.into_iter() {

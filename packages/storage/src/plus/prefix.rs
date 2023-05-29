@@ -121,7 +121,7 @@ where
     pub fn range_raw<'a>(
         &self,
         store: &'a dyn ReadonlyStorage,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
@@ -149,7 +149,7 @@ where
     pub fn keys_raw<'a>(
         &self,
         store: &'a dyn ReadonlyStorage,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
@@ -169,7 +169,7 @@ where
     pub fn range<'a>(
         &self,
         store: &'a dyn ReadonlyStorage,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
@@ -198,7 +198,7 @@ where
     pub fn keys<'a>(
         &self,
         store: &'a dyn ReadonlyStorage,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         min: Option<Bound<'b, B>>,
         max: Option<Bound<'b, B>>,
         order: Order,
@@ -228,7 +228,7 @@ where
 
 pub fn range_with_prefix<'a>(
     storage: &'a dyn ReadonlyStorage,
-    meter: &'a mut GasMeter,
+    meter: &'a GasMeter,
     namespace: &[u8],
     start: Option<RawBound>,
     end: Option<RawBound>,
@@ -269,7 +269,7 @@ fn calc_end_bound(namespace: &[u8], bound: Option<RawBound>) -> Vec<u8> {
 
 pub fn namespaced_prefix_range<'a, 'c, K: Prefixer<'a>>(
     storage: &'c dyn ReadonlyStorage,
-    meter: &'c mut GasMeter,
+    meter: &'c GasMeter,
     namespace: &[u8],
     start: Option<PrefixBound<'a, K>>,
     end: Option<PrefixBound<'a, K>>,
@@ -346,8 +346,8 @@ mod test {
     fn ensure_proper_range_bounds() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // manually create this - not testing nested prefixes here
         let prefix: Prefix<Vec<u8>, u64> = Prefix {

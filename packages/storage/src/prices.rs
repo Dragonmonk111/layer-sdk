@@ -35,29 +35,24 @@ impl Default for PriceList {
 }
 
 impl PriceList {
-    pub fn charge_read(
-        &self,
-        meter: &mut GasMeter,
-        key: &[u8],
-        value: Option<&[u8]>,
-    ) -> GasResult<()> {
+    pub fn charge_read(&self, meter: &GasMeter, key: &[u8], value: Option<&[u8]>) -> GasResult<()> {
         let val_len = value.map(|x| x.len()).unwrap_or_default();
         let cost = self.read_flat + (key.len() + val_len) as u64 * self.read_per_byte_percent / 100;
         meter.charge(cost)
     }
 
-    pub fn charge_write(&self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    pub fn charge_write(&self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let cost =
             self.write_flat + (key.len() + value.len()) as u64 * self.write_per_byte_percent / 100;
         meter.charge(cost)
     }
 
-    pub fn charge_remove(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    pub fn charge_remove(&self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let cost = self.remove_flat + key.len() as u64 * self.remove_per_byte_percent / 100;
         meter.charge(cost)
     }
 
-    pub fn charge_range(&self, meter: &mut GasMeter) -> GasResult<()> {
+    pub fn charge_range(&self, meter: &GasMeter) -> GasResult<()> {
         let cost = self.range_flat;
         meter.charge(cost)
     }

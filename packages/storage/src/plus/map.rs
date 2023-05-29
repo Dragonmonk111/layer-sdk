@@ -55,19 +55,19 @@ where
     pub fn save(
         &self,
         store: &mut dyn Storage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         k: K,
         data: &T,
     ) -> PlusResult<()> {
         self.key(k).save(store, meter, data)
     }
 
-    pub fn remove(&self, store: &mut dyn Storage, meter: &mut GasMeter, k: K) -> GasResult<()> {
+    pub fn remove(&self, store: &mut dyn Storage, meter: &GasMeter, k: K) -> GasResult<()> {
         self.key(k).remove(store, meter)
     }
 
     /// load will return an error if no data is set at the given key, or on parse error
-    pub fn load(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter, k: K) -> PlusResult<T> {
+    pub fn load(&self, store: &dyn ReadonlyStorage, meter: &GasMeter, k: K) -> PlusResult<T> {
         self.key(k).load(store, meter)
     }
 
@@ -76,7 +76,7 @@ where
     pub fn may_load(
         &self,
         store: &dyn ReadonlyStorage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         k: K,
     ) -> PlusResult<Option<T>> {
         self.key(k).may_load(store, meter)
@@ -84,7 +84,7 @@ where
 
     /// has returns true or false if any data is at this key, without parsing or interpreting the
     /// contents.
-    pub fn has(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter, k: K) -> GasResult<bool> {
+    pub fn has(&self, store: &dyn ReadonlyStorage, meter: &GasMeter, k: K) -> GasResult<bool> {
         self.key(k).has(store, meter)
     }
 
@@ -95,7 +95,7 @@ where
     pub fn update<A, E>(
         &self,
         store: &mut dyn Storage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         k: K,
         action: A,
     ) -> Result<T, E>
@@ -124,7 +124,7 @@ where
     }
 
     /// Clears the map, removing all elements.
-    pub fn clear(&self, store: &mut dyn Storage, meter: &mut GasMeter) -> GasResult<()> {
+    pub fn clear(&self, store: &mut dyn Storage, meter: &GasMeter) -> GasResult<()> {
         const TAKE: usize = 10;
         let mut cleared = false;
 
@@ -159,7 +159,7 @@ where
     }
 
     /// Returns `true` if the map is empty.
-    pub fn is_empty(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter) -> GasResult<bool> {
+    pub fn is_empty(&self, store: &dyn ReadonlyStorage, meter: &GasMeter) -> GasResult<bool> {
         let empty = self
             .no_prefix_raw()
             .keys_raw(store, meter, None, None, cosmwasm_std::Order::Ascending)?
@@ -199,7 +199,7 @@ where
     pub fn prefix_range_raw<'c>(
         &self,
         store: &'c dyn ReadonlyStorage,
-        meter: &'c mut GasMeter,
+        meter: &'c GasMeter,
         min: Option<PrefixBound<'a, K::Prefix>>,
         max: Option<PrefixBound<'a, K::Prefix>>,
         order: cosmwasm_std::Order,
@@ -231,7 +231,7 @@ where
     pub fn prefix_range<'c>(
         &self,
         store: &'c dyn ReadonlyStorage,
-        meter: &'c mut GasMeter,
+        meter: &'c GasMeter,
         min: Option<PrefixBound<'a, K::Prefix>>,
         max: Option<PrefixBound<'a, K::Prefix>>,
         order: cosmwasm_std::Order,
@@ -263,7 +263,7 @@ where
     pub fn range_raw<'c>(
         &self,
         store: &'c dyn ReadonlyStorage,
-        meter: &'c mut GasMeter,
+        meter: &'c GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
@@ -278,7 +278,7 @@ where
     pub fn keys_raw<'c>(
         &self,
         store: &'c dyn ReadonlyStorage,
-        meter: &'c mut GasMeter,
+        meter: &'c GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
@@ -298,7 +298,7 @@ where
     pub fn range<'c>(
         &self,
         store: &'c dyn ReadonlyStorage,
-        meter: &'c mut GasMeter,
+        meter: &'c GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
@@ -313,7 +313,7 @@ where
     pub fn keys<'c>(
         &self,
         store: &'c dyn ReadonlyStorage,
-        meter: &'c mut GasMeter,
+        meter: &'c GasMeter,
         min: Option<Bound<'a, K>>,
         max: Option<Bound<'a, K>>,
         order: cosmwasm_std::Order,
@@ -390,8 +390,8 @@ mod test {
     fn save_and_load() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on one key
         let john = PEOPLE.key(b"john");
@@ -418,8 +418,8 @@ mod test {
     fn existence() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // set data in proper format
         let data = Data {
@@ -450,8 +450,8 @@ mod test {
     fn composite_keys() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on a composite key
         let allow = ALLOWANCE.key((b"owner", b"spender"));
@@ -476,8 +476,8 @@ mod test {
     fn triple_keys() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on a triple composite key
         let triple = TRIPLE.key((b"owner", 10u8, "recipient"));
@@ -502,8 +502,8 @@ mod test {
     fn range_raw_simple_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on two keys
         let data = Data {
@@ -571,8 +571,8 @@ mod test {
     fn range_simple_string_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys
         let data = Data {
@@ -647,8 +647,8 @@ mod test {
     fn range_key_broken_deserialization_errors() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys
         let data = Data {
@@ -762,8 +762,8 @@ mod test {
     fn range_simple_integer_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on two keys
         let data = Data {
@@ -822,8 +822,8 @@ mod test {
     fn range_simple_integer_key_with_bounder_trait() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on two keys
         let data = Data {
@@ -882,8 +882,8 @@ mod test {
     fn range_simple_signed_integer_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys
         let data = Data {
@@ -952,8 +952,8 @@ mod test {
     fn range_simple_signed_integer_key_with_bounder_trait() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys
         let data = Data {
@@ -1022,8 +1022,8 @@ mod test {
     fn range_raw_composite_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys, one under different owner
         ALLOWANCE
@@ -1070,8 +1070,8 @@ mod test {
     fn range_composite_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys, one under different owner
         ALLOWANCE
@@ -1153,8 +1153,8 @@ mod test {
     fn range_raw_triple_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys, one under different owner
         TRIPLE
@@ -1238,8 +1238,8 @@ mod test {
     fn range_triple_key() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on three keys, one under different owner
         TRIPLE
@@ -1348,8 +1348,8 @@ mod test {
     fn basic_update() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let add_ten = |a: Option<u64>| -> PlusResult<_> { Ok(a.unwrap_or_default() + 10) };
 
@@ -1366,8 +1366,8 @@ mod test {
     fn readme_works() -> PlusResult<()> {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let data = Data {
             name: "John".to_string(),
@@ -1423,8 +1423,8 @@ mod test {
     fn readme_works_composite_keys() -> PlusResult<()> {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on a composite key
         let empty = ALLOWANCE.may_load(&store, meter, (b"owner", b"spender"))?;
@@ -1456,8 +1456,8 @@ mod test {
     fn readme_works_with_path() -> PlusResult<()> {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let data = Data {
             name: "John".to_string(),
@@ -1495,8 +1495,8 @@ mod test {
     fn readme_with_range_raw() -> PlusResult<()> {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // save and load on two keys
         let data = Data {
@@ -1574,8 +1574,8 @@ mod test {
 
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         AGES.save(&mut store, meter, (2, vec![1, 2, 3]), &123)
             .unwrap();
@@ -1680,8 +1680,8 @@ mod test {
 
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         AGES.save(&mut store, meter, (2, "123"), &123).unwrap();
         AGES.save(&mut store, meter, (3, "456"), &456).unwrap();
@@ -1781,8 +1781,8 @@ mod test {
 
         let store = MemoryStore::new();
         let mut storage = store.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         TEST_MAP.save(&mut storage, meter, "key0", &0u32).unwrap();
         TEST_MAP.save(&mut storage, meter, "key1", &1u32).unwrap();
@@ -1805,8 +1805,8 @@ mod test {
 
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         assert!(TEST_MAP.is_empty(&store, meter).unwrap());
 

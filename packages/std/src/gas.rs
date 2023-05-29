@@ -1,9 +1,41 @@
+use std::cell::RefCell;
+
 use thiserror::Error;
 use tracing::trace;
 
 /// Tracks gas usage and returns error when it hits the limit
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GasMeter {
+pub struct GasMeter(RefCell<GasCounter>);
+
+impl GasMeter {
+    pub fn new(limit: u64) -> Self {
+        Self(RefCell::new(GasCounter::new(limit)))
+    }
+
+    pub fn infinite() -> Self {
+        Self(RefCell::new(GasCounter::infinite()))
+    }
+
+    pub fn used(&self) -> u64 {
+        self.0.borrow().used()
+    }
+
+    pub fn limit(&self) -> u64 {
+        self.0.borrow().limit()
+    }
+
+    pub fn remaining(&self) -> u64 {
+        self.0.borrow().remaining()
+    }
+
+    pub fn charge(&self, cost: u64) -> Result<(), GasError> {
+        self.0.borrow_mut().charge(cost)
+    }
+}
+
+/// Tracks gas usage and returns error when it hits the limit
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GasCounter {
     limit: u64,
     used: u64,
 }
@@ -16,28 +48,28 @@ pub enum GasError {
 
 pub type GasResult<T> = Result<T, GasError>;
 
-impl GasMeter {
-    pub fn new(limit: u64) -> Self {
-        GasMeter { limit, used: 0 }
+impl GasCounter {
+    fn new(limit: u64) -> Self {
+        GasCounter { limit, used: 0 }
     }
 
-    pub fn infinite() -> Self {
-        GasMeter::new(u64::MAX)
+    fn infinite() -> Self {
+        GasCounter::new(u64::MAX)
     }
 
-    pub fn used(&self) -> u64 {
+    fn used(&self) -> u64 {
         self.used
     }
 
-    pub fn limit(&self) -> u64 {
+    fn limit(&self) -> u64 {
         self.limit
     }
 
-    pub fn remaining(&self) -> u64 {
+    fn remaining(&self) -> u64 {
         self.limit.saturating_sub(self.used)
     }
 
-    pub fn charge(&mut self, cost: u64) -> Result<(), GasError> {
+    fn charge(&mut self, cost: u64) -> Result<(), GasError> {
         trace!(cost, "charge gas");
         self.used += cost;
         if self.used >= self.limit {

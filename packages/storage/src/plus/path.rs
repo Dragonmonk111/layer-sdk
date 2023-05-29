@@ -55,35 +55,31 @@ where
     }
 
     /// save will serialize the model and store, returns an error on serialization issues
-    pub fn save(&self, store: &mut dyn Storage, meter: &mut GasMeter, data: &T) -> PlusResult<()> {
+    pub fn save(&self, store: &mut dyn Storage, meter: &GasMeter, data: &T) -> PlusResult<()> {
         store.set(meter, &self.storage_key, &to_vec(data)?)?;
         Ok(())
     }
 
-    pub fn remove(&self, store: &mut dyn Storage, meter: &mut GasMeter) -> GasResult<()> {
+    pub fn remove(&self, store: &mut dyn Storage, meter: &GasMeter) -> GasResult<()> {
         store.remove(meter, &self.storage_key)
     }
 
     /// load will return an error if no data is set at the given key, or on parse error
-    pub fn load(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter) -> PlusResult<T> {
+    pub fn load(&self, store: &dyn ReadonlyStorage, meter: &GasMeter) -> PlusResult<T> {
         let value = store.get(meter, &self.storage_key)?;
         Ok(must_deserialize(&value)?)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
     /// returns an error on issues parsing
-    pub fn may_load(
-        &self,
-        store: &dyn ReadonlyStorage,
-        meter: &mut GasMeter,
-    ) -> PlusResult<Option<T>> {
+    pub fn may_load(&self, store: &dyn ReadonlyStorage, meter: &GasMeter) -> PlusResult<Option<T>> {
         let value = store.get(meter, &self.storage_key)?;
         Ok(may_deserialize(&value)?)
     }
 
     /// has returns true or false if any data is at this key, without parsing or interpreting the
     /// contents. It will returns true for an length-0 byte array (Some(b"")), if you somehow manage to set that.
-    pub fn has(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter) -> GasResult<bool> {
+    pub fn has(&self, store: &dyn ReadonlyStorage, meter: &GasMeter) -> GasResult<bool> {
         Ok(store.get(meter, &self.storage_key)?.is_some())
     }
 
@@ -91,12 +87,7 @@ where
     /// in the database. This is shorthand for some common sequences, which may be useful.
     ///
     /// If the data exists, `action(Some(value))` is called. Otherwise `action(None)` is called.
-    pub fn update<A, E>(
-        &self,
-        store: &mut dyn Storage,
-        meter: &mut GasMeter,
-        action: A,
-    ) -> Result<T, E>
+    pub fn update<A, E>(&self, store: &mut dyn Storage, meter: &GasMeter, action: A) -> Result<T, E>
     where
         A: FnOnce(Option<T>) -> Result<T, E>,
         E: From<PlusError>,

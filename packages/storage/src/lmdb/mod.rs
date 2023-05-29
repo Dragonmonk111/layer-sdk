@@ -108,7 +108,7 @@ pub struct LmdbReader<'a> {
 }
 
 impl ReadonlyStorage for LmdbReader<'_> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         let val = match self.tx.get(self.db, &key) {
             Ok(v) => Some(v.to_vec()),
@@ -121,7 +121,7 @@ impl ReadonlyStorage for LmdbReader<'_> {
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -154,7 +154,7 @@ pub struct LmdbIterator<'a> {
     cursor: lmdb::RoCursor<'a>,
     iter: lmdb::Iter<'a>,
     end: Option<Vec<u8>>,
-    meter: &'a mut GasMeter,
+    meter: &'a GasMeter,
     price_list: &'a PriceList,
 }
 
@@ -163,7 +163,7 @@ impl<'a> LmdbIterator<'a> {
         cursor: lmdb::RoCursor<'a>,
         iter: lmdb::Iter<'a>,
         end: Option<&[u8]>,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         price_list: &'a PriceList,
     ) -> Self {
         Self {
@@ -220,7 +220,7 @@ impl<'a> LmdbWriter<'a> {
 }
 
 impl ReadonlyStorage for LmdbWriter<'_> {
-    fn get(&self, meter: &mut GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
         let val = match self.tx.get(self.db, &key) {
             Ok(v) => Some(v.to_vec()),
@@ -233,7 +233,7 @@ impl ReadonlyStorage for LmdbWriter<'_> {
 
     fn range<'a>(
         &'a self,
-        meter: &'a mut GasMeter,
+        meter: &'a GasMeter,
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: Order,
@@ -262,7 +262,7 @@ impl ReadonlyStorage for LmdbWriter<'_> {
 }
 
 impl Storage for LmdbWriter<'_> {
-    fn set(&mut self, meter: &mut GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         let _span =
             trace_span!("set", key = %HexEncode::new(&key), value = %HexEncode::new(&value))
                 .entered();
@@ -274,7 +274,7 @@ impl Storage for LmdbWriter<'_> {
         Ok(())
     }
 
-    fn remove(&mut self, meter: &mut GasMeter, key: &[u8]) -> GasResult<()> {
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         let _span = trace_span!("remove", key = %HexEncode::new(&key)).entered();
         self.price_list.charge_remove(meter, key)?;
         self.hasher.remove(key);
@@ -292,7 +292,7 @@ impl Storage for LmdbWriter<'_> {
 
 impl crate::Transaction for LmdbWriter<'_> {
     // This writes all changes to the underlying storage and consumes this wrapper
-    fn commit(mut self, _meter: &mut GasMeter) -> GasResult<()> {
+    fn commit(mut self, _meter: &GasMeter) -> GasResult<()> {
         let _span = debug_span!("commit", db = "lmdb",).entered();
         let app_hash = self.hasher.hash();
         write_app_hash(&mut self.tx, self.db, &app_hash);

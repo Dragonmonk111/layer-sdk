@@ -38,28 +38,24 @@ where
     }
 
     /// save will serialize the model and store, returns an error on serialization issues
-    pub fn save(&self, store: &mut dyn Storage, meter: &mut GasMeter, data: &T) -> PlusResult<()> {
+    pub fn save(&self, store: &mut dyn Storage, meter: &GasMeter, data: &T) -> PlusResult<()> {
         store.set(meter, self.storage_key, &to_vec(data)?)?;
         Ok(())
     }
 
-    pub fn remove(&self, store: &mut dyn Storage, meter: &mut GasMeter) -> GasResult<()> {
+    pub fn remove(&self, store: &mut dyn Storage, meter: &GasMeter) -> GasResult<()> {
         store.remove(meter, self.storage_key)
     }
 
     /// load will return an error if no data is set at the given key, or on parse error
-    pub fn load(&self, store: &dyn ReadonlyStorage, meter: &mut GasMeter) -> PlusResult<T> {
+    pub fn load(&self, store: &dyn ReadonlyStorage, meter: &GasMeter) -> PlusResult<T> {
         let value = store.get(meter, self.storage_key)?;
         Ok(must_deserialize(&value)?)
     }
 
     /// may_load will parse the data stored at the key if present, returns `Ok(None)` if no data there.
     /// returns an error on issues parsing
-    pub fn may_load(
-        &self,
-        store: &dyn ReadonlyStorage,
-        meter: &mut GasMeter,
-    ) -> PlusResult<Option<T>> {
+    pub fn may_load(&self, store: &dyn ReadonlyStorage, meter: &GasMeter) -> PlusResult<Option<T>> {
         let value = store.get(meter, self.storage_key)?;
         Ok(may_deserialize(&value)?)
     }
@@ -69,12 +65,7 @@ where
     ///
     /// It assumes, that data was initialized before, and if it doesn't exist, `Err(StdError::NotFound)`
     /// is returned.
-    pub fn update<A, E>(
-        &self,
-        store: &mut dyn Storage,
-        meter: &mut GasMeter,
-        action: A,
-    ) -> Result<T, E>
+    pub fn update<A, E>(&self, store: &mut dyn Storage, meter: &GasMeter, action: A) -> Result<T, E>
     where
         A: FnOnce(T) -> Result<T, E>,
         E: From<PlusError>,
@@ -124,8 +115,8 @@ mod test {
     fn save_and_load() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         assert!(CONFIG.load(&store, meter).is_err());
         assert_eq!(CONFIG.may_load(&store, meter).unwrap(), None);
@@ -143,8 +134,8 @@ mod test {
     fn remove_works() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // store data
         let cfg = Config {
@@ -167,8 +158,8 @@ mod test {
     fn isolated_reads() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
@@ -187,8 +178,8 @@ mod test {
     fn update_success() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
@@ -212,8 +203,8 @@ mod test {
     fn update_can_change_variable_from_outer_scope() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
@@ -236,8 +227,8 @@ mod test {
     fn update_does_not_change_data_on_error() {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
@@ -281,8 +272,8 @@ mod test {
 
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         let cfg = Config {
             owner: "admin".to_string(),
@@ -314,8 +305,8 @@ mod test {
     fn readme_works() -> PlusResult<()> {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
-        let mut gas_meter = GasMeter::infinite();
-        let meter = &mut gas_meter;
+        let gas_meter = GasMeter::infinite();
+        let meter = &gas_meter;
 
         // may_load returns Option<T>, so None if data is missing
         // load returns T and Err(StdError::NotFound{}) if data is missing

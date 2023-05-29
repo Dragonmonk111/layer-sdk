@@ -35,7 +35,7 @@ impl StateMachine {
     pub fn init(
         &self,
         storage: &mut dyn Storage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         block: &BlockInfo,
         genesis: GenesisState,
     ) -> PulsarResult<()> {
@@ -47,7 +47,7 @@ impl StateMachine {
     pub fn query(
         &self,
         storage: &dyn ReadonlyStorage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         block: &BlockInfo,
         request: Query,
     ) -> Result<QueryResponse<PulsarError>, PulsarError> {
@@ -76,7 +76,7 @@ impl StateMachine {
     fn query_simulate(
         &self,
         store: &mut dyn Storage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxResponse> {
@@ -105,7 +105,7 @@ impl StateMachine {
     pub fn process_msg(
         &self,
         storage: &mut dyn Storage,
-        gas: &mut GasMeter,
+        gas: &GasMeter,
         sender: &AccountId,
         block: &BlockInfo,
         msg: Msg,
@@ -126,7 +126,7 @@ impl StateMachine {
     pub fn validate_tx(
         &self,
         storage: &mut dyn Storage,
-        meter: &mut GasMeter,
+        meter: &GasMeter,
         block: &BlockInfo,
         tx: Tx,
     ) -> PulsarResult<TxData> {
@@ -138,7 +138,7 @@ impl StateMachine {
         &self,
         _storage: &mut dyn Storage,
         // this is set to the gas limit for begin blockers
-        _meter: &mut GasMeter,
+        _meter: &GasMeter,
         // here we have full block info including proposer and voters (for rewards if needed)
         _block: &Block,
     ) -> PulsarResult<Vec<Event>> {
@@ -151,7 +151,7 @@ impl StateMachine {
         &self,
         _storage: &mut dyn Storage,
         // this is set to the gas limit for end blockers
-        _meter: &mut GasMeter,
+        _meter: &GasMeter,
         // this is just block metadata
         _block: &BlockInfo,
     ) -> PulsarResult<Vec<Event>> {
