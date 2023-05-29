@@ -649,7 +649,8 @@ mod tests {
             x => panic!("Expected SimulateResponse, got {:?}", x),
         };
         // check gas range
-        assert!(gas_used > 5000);
+        println!("gas used: {}", gas_used);
+        assert!(gas_used > 6000);
         assert!(gas_used < 7000);
 
         // create proper tx (from cosmjs)
