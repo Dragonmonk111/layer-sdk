@@ -1,6 +1,5 @@
 mod app_meter;
 mod fast_hash;
-mod gas;
 mod memory;
 pub mod plus;
 mod prefixed_storage;
@@ -18,7 +17,6 @@ pub use crate::lmdb::LmdbStore;
 
 pub use app_meter::AppMeter;
 pub use fast_hash::FastHasher;
-pub use gas::{GasStorage, PulsarStorage};
 pub use plus::{Item, Map, PlusError, PlusResult};
 pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
 pub use prices::{
