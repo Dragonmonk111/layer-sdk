@@ -82,7 +82,7 @@ impl VmCache {
         let query = storage.as_ref();
 
         // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter) };
+        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -133,7 +133,7 @@ impl VmCache {
         let query = storage.as_ref();
 
         // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter) };
+        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -182,7 +182,7 @@ impl VmCache {
         let mut scratch = ScratchTx::new(storage);
 
         // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut scratch, storage, meter) };
+        let backend = unsafe { danger_will_robinson(sm, &mut scratch, storage, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
