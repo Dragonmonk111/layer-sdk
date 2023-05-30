@@ -207,10 +207,11 @@ impl VmCache {
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::{
-        coin,
+        coin, from_slice,
         testing::{mock_env, mock_info},
-        to_vec, Order,
+        to_vec, Order, Uint128,
     };
+    use cw20::Cw20Coin;
     use pulsar_std::AccountId;
     use pulsar_storage::{MemoryStore, PersistentStorage};
 
@@ -239,8 +240,10 @@ mod tests {
             name: "pulsar".to_string(),
             symbol: "PLS".to_string(),
             decimals: 6,
-            // TODO: add balances, more things to write
-            initial_balances: vec![],
+            initial_balances: vec![Cw20Coin {
+                address: sender.to_string(),
+                amount: Uint128::new(1234567),
+            }],
             mint: None,
             marketing: None,
         };
@@ -253,13 +256,121 @@ mod tests {
         assert_eq!(res.messages.len(), 0);
         assert_eq!(res.events.len(), 0);
         assert_eq!(res.attributes.len(), 0);
-        assert_eq!(gas_used, 7018500000);
+        assert_eq!(gas_used, 8800200070);
 
         // query the state was written - token_info and total supply
         let num = writer
             .range(&meter, None, None, Order::Ascending)
             .unwrap()
             .count();
-        assert_eq!(num, 2);
+        assert_eq!(num, 3);
+    }
+
+    #[test]
+    fn happy_path_create_send_query() {
+        let path = "/tmp/pulsar/test-happy-path-create-send-query";
+        std::fs::create_dir_all(path).unwrap();
+
+        let mut vm = VmCache::init(path);
+        let checksum = vm.store_code(CW20_BASE).unwrap();
+
+        // try to instantiate
+        let env = mock_env();
+        let sender = AccountId::unchecked("Sillyness");
+        let info = mock_info(&sender.to_string(), &[]);
+        let meter = GasMeter::infinite();
+        let sm = StateMachine::new();
+        let store = MemoryStore::new();
+        let mut writer = store.writer();
+
+        // instantiate
+        let msg = cw20_base::msg::InstantiateMsg {
+            name: "pulsar".to_string(),
+            symbol: "PLS".to_string(),
+            decimals: 6,
+            initial_balances: vec![Cw20Coin {
+                address: sender.to_string(),
+                amount: Uint128::new(1234567),
+            }],
+            mint: None,
+            marketing: None,
+        };
+        let msg = to_vec(&msg).unwrap();
+        let (res, _) = vm.instantiate(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let _ = res.unwrap().unwrap();
+
+        // query two addresses
+        let rcpt = AccountId::unchecked("Bystander");
+        let hero = query_balance(
+            &mut vm,
+            &checksum,
+            &env,
+            &sender,
+            writer.as_ref(),
+            &meter,
+            &sm,
+        );
+        assert_eq!(hero.u128(), 1234567u128);
+        let zero = query_balance(
+            &mut vm,
+            &checksum,
+            &env,
+            &rcpt,
+            writer.as_ref(),
+            &meter,
+            &sm,
+        );
+        assert_eq!(zero.u128(), 0u128);
+
+        // send some surpise tokens
+        let msg = cw20_base::msg::ExecuteMsg::Transfer {
+            recipient: rcpt.to_string(),
+            amount: Uint128::new(23456),
+        };
+        let msg = to_vec(&msg).unwrap();
+        let (res, _) = vm.execute(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let _ = res.unwrap().unwrap();
+
+        // query two addresses wirh new balances
+        let rcpt = AccountId::unchecked("Bystander");
+        let hero = query_balance(
+            &mut vm,
+            &checksum,
+            &env,
+            &sender,
+            writer.as_ref(),
+            &meter,
+            &sm,
+        );
+        assert_eq!(hero.u128(), 1211111u128);
+        let zero = query_balance(
+            &mut vm,
+            &checksum,
+            &env,
+            &rcpt,
+            writer.as_ref(),
+            &meter,
+            &sm,
+        );
+        assert_eq!(zero.u128(), 23456u128);
+    }
+
+    fn query_balance(
+        vm: &mut VmCache,
+        checksum: &Checksum,
+        env: &Env,
+        account: &AccountId,
+        storage: &dyn ReadonlyStorage,
+        meter: &GasMeter,
+        sm: &StateMachine,
+    ) -> Uint128 {
+        let msg = cw20_base::msg::QueryMsg::Balance {
+            address: account.to_string(),
+        };
+        let msg = to_vec(&msg).unwrap();
+        let (res, _) = vm.query(&checksum, &env, &msg, storage, &meter, &sm);
+        let res = res.unwrap().unwrap();
+        let balance: cw20::BalanceResponse = from_slice(&res).unwrap();
+        balance.balance
     }
 }
