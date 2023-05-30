@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::transmute};
+use std::{collections::HashMap, fmt, mem::transmute};
 use thiserror::Error;
 
 use cosmwasm_std::{
@@ -159,14 +159,18 @@ fn cosmwasm_query_to_pulsar(
                     AccountId::parse_string(&address).map_err(account_error_to_backend)?;
                 Ok(pulsar_std::BankQuery::AllBalances { address }.into())
             }
-            _ => todo!(),
+            x => unsupported_request(&x),
         },
         QueryRequest::Wasm(_wasm) => todo!(),
-        x => Err(SystemError::UnsupportedRequest {
-            kind: format!("{:?}", x),
-        }
-        .into()),
+        x => unsupported_request(&x),
     }
+}
+
+fn unsupported_request<T, U: fmt::Debug>(kind: &U) -> Result<T, QueryError> {
+    Err(SystemError::UnsupportedRequest {
+        kind: format!("{:?}", kind),
+    }
+    .into())
 }
 
 fn pulsar_response_to_cosmwasm(
@@ -188,10 +192,19 @@ fn pulsar_response_to_cosmwasm(
                 };
                 Ok(to_binary(&res).unwrap())
             }
-            _ => todo!(),
+            x => unsupported_response(&x),
         },
-        _ => todo!(),
+        // Wasm(wasm) => todo!(),
+        x => unsupported_response(&x),
     }
+}
+
+fn unsupported_response<T, U: fmt::Debug>(kind: &U) -> Result<T, QueryError> {
+    Err(SystemError::InvalidResponse {
+        error: format!("Unknown Response {:?}", kind),
+        response: Binary::from(b""),
+    }
+    .into())
 }
 
 pub struct VmStore {
