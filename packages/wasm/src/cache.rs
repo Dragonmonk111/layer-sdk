@@ -355,6 +355,66 @@ mod tests {
         assert_eq!(zero.u128(), 23456u128);
     }
 
+    #[test]
+    fn query_with_iterator() {
+        let path = "/tmp/pulsar/test-happy-path-create-send-query";
+        std::fs::create_dir_all(path).unwrap();
+
+        let mut vm = VmCache::init(path);
+        let checksum = vm.store_code(CW20_BASE).unwrap();
+
+        // try to instantiate
+        let env = mock_env();
+        let one = AccountId::unchecked("One");
+        let two = AccountId::unchecked("Two");
+        let three = AccountId::unchecked("Xyz");
+        let info = mock_info(&one.to_string(), &[]);
+        let meter = GasMeter::infinite();
+        let sm = StateMachine::new();
+        let store = MemoryStore::new();
+        let mut writer = store.writer();
+
+        // instantiate
+        let msg = cw20_base::msg::InstantiateMsg {
+            name: "pulsar".to_string(),
+            symbol: "PLS".to_string(),
+            decimals: 6,
+            initial_balances: vec![
+                Cw20Coin {
+                    address: one.to_string(),
+                    amount: Uint128::new(1234567),
+                },
+                Cw20Coin {
+                    address: two.to_string(),
+                    amount: Uint128::new(7654321),
+                },
+                Cw20Coin {
+                    address: three.to_string(),
+                    amount: Uint128::new(818818),
+                },
+            ],
+            mint: None,
+            marketing: None,
+        };
+        let msg = to_vec(&msg).unwrap();
+        let (res, _) = vm.instantiate(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let _ = res.unwrap().unwrap();
+
+        // now list all accounts
+        let msg = cw20_base::msg::QueryMsg::AllAccounts {
+            start_after: None,
+            limit: None,
+        };
+        let msg = to_vec(&msg).unwrap();
+        let (res, _) = vm.query(&checksum, &env, &msg, writer.as_ref(), &meter, &sm);
+        let res = res.unwrap().unwrap();
+        let cw20::AllAccountsResponse { accounts } = from_slice(&res).unwrap();
+        assert_eq!(
+            accounts,
+            vec![two.to_string(), one.to_string(), three.to_string()]
+        );
+    }
+
     fn query_balance(
         vm: &mut VmCache,
         checksum: &Checksum,
@@ -368,7 +428,7 @@ mod tests {
             address: account.to_string(),
         };
         let msg = to_vec(&msg).unwrap();
-        let (res, _) = vm.query(&checksum, &env, &msg, storage, &meter, &sm);
+        let (res, _) = vm.query(checksum, env, &msg, storage, meter, sm);
         let res = res.unwrap().unwrap();
         let balance: cw20::BalanceResponse = from_slice(&res).unwrap();
         balance.balance
