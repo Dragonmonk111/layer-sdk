@@ -27,6 +27,7 @@ pub(crate) unsafe fn danger_will_robinson(
     let querier = VmQuerier {
         _sm: &*(sm as *const StateMachine),
         _storage: transmute(query_storage),
+        _meter: &*(meter as *const GasMeter),
     };
 
     Backend {
@@ -64,6 +65,7 @@ fn account_error_to_backend(e: AccountIdError) -> BackendError {
 pub struct VmQuerier {
     _sm: &'static StateMachine,
     _storage: &'static dyn ReadonlyStorage,
+    _meter: &'static GasMeter,
 }
 
 impl BackendQuerier for VmQuerier {
