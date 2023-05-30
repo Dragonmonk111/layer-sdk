@@ -6,9 +6,9 @@ use cosmwasm_vm::{
 };
 use pulsar_app::StateMachine;
 use pulsar_std::GasMeter;
-use pulsar_storage::{MemoryStore, PersistentStorage, Storage};
+use pulsar_storage::{ReadonlyStorage, Storage, WeakSubTx};
 
-use crate::backend::{danger_will_robinson, VmApi, VmQuerier, VmStore};
+use crate::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
@@ -77,28 +77,37 @@ impl VmCache {
             print_debug: self.print_debug,
         };
 
-        // TODO: create SubTx
-
-        // TODO: sub tx that only holds readable access
-        // let sub_tx = SubTx::new(storage);
-        let fake = MemoryStore::new();
-        let query = fake.reader();
+        // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
+        let mut working = WeakSubTx::new(storage.as_ref());
+        let query = storage.as_ref();
 
         // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, storage, &query, meter) };
+        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter) };
+
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
             // No gas used yet
             Err(e) => return (Err(e), 0),
         };
 
-        // FIXME: use raw to charge for deserialization?
+        // execute the contract and get gas_used
+        instance.set_storage_readonly(false);
         let result = call_instantiate(&mut instance, env, info, msg);
+        let result = result.map(|x| x.into_result());
         let gas_used = instance.create_gas_report().used_internally;
+
+        // commit or abort the open WeakSubTx
+        match &result {
+            Ok(Ok(_)) => {
+                let ops = working.prepare();
+                if let Err(e) = ops.commit(storage, meter).map_err(out_of_gas) {
+                    return (Err(e.into()), gas_used);
+                }
+            }
+            _ => working.abort(),
+        };
         instance.recycle();
 
-        // TODO: proper parsing and return values
-        let result = result.map(|x| x.into_result());
         (result, gas_used)
     }
 }
@@ -111,7 +120,7 @@ mod tests {
         to_vec, Order,
     };
     use pulsar_std::AccountId;
-    use pulsar_storage::ReadonlyStorage;
+    use pulsar_storage::{MemoryStore, PersistentStorage};
 
     use super::*;
 

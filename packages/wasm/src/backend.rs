@@ -84,7 +84,7 @@ pub struct VmStore {
     meter: &'static GasMeter,
 }
 
-fn out_of_gas(err: GasError) -> BackendError {
+pub(crate) fn out_of_gas(err: GasError) -> BackendError {
     match err {
         GasError::OutOfGas { .. } => BackendError::OutOfGas {},
     }
