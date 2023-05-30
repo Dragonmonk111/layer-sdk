@@ -1,12 +1,13 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use cosmwasm_std::{Empty, Env, MessageInfo, Response};
+use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Response};
 use cosmwasm_vm::{
-    call_instantiate, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
+    call_execute, call_instantiate, call_query, Cache, CacheOptions, Checksum, InstanceOptions,
+    Size, VmError,
 };
 use pulsar_app::StateMachine;
 use pulsar_std::GasMeter;
-use pulsar_storage::{ReadonlyStorage, Storage, WeakSubTx};
+use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
 use crate::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
 
@@ -59,7 +60,6 @@ impl VmCache {
         self.cache.unpin(checksum)
     }
 
-    // TODO: return gas_info, Response
     #[allow(clippy::too_many_arguments)]
     pub fn instantiate(
         &mut self,
@@ -106,6 +106,98 @@ impl VmCache {
             }
             _ => working.abort(),
         };
+        instance.recycle();
+
+        (result, gas_used)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute(
+        &mut self,
+        checksum: &Checksum,
+        env: &Env,
+        info: &MessageInfo,
+        msg: &[u8],
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        sm: &StateMachine,
+    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+        let gas_limit = meter.remaining().saturating_mul(SDK_TO_WASMER_GAS_FACTOR);
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
+
+        // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
+        let mut working = WeakSubTx::new(storage.as_ref());
+        let query = storage.as_ref();
+
+        // This is where we fake all the lifetimes....
+        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter) };
+
+        let mut instance = match self.cache.get_instance(checksum, backend, options) {
+            Ok(i) => i,
+            // No gas used yet
+            Err(e) => return (Err(e), 0),
+        };
+
+        // execute the contract and get gas_used
+        instance.set_storage_readonly(false);
+        let result = call_execute(&mut instance, env, info, msg);
+        let result = result.map(|x| x.into_result());
+        let gas_used = instance.create_gas_report().used_internally;
+
+        // commit or abort the open WeakSubTx
+        match &result {
+            Ok(Ok(_)) => {
+                let ops = working.prepare();
+                if let Err(e) = ops.commit(storage, meter).map_err(out_of_gas) {
+                    return (Err(e.into()), gas_used);
+                }
+            }
+            _ => working.abort(),
+        };
+        instance.recycle();
+
+        (result, gas_used)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query(
+        &mut self,
+        checksum: &Checksum,
+        env: &Env,
+        msg: &[u8],
+        storage: &dyn ReadonlyStorage,
+        meter: &GasMeter,
+        sm: &StateMachine,
+    ) -> (Result<Result<Binary, String>, VmError>, u64) {
+        let gas_limit = meter.remaining().saturating_mul(SDK_TO_WASMER_GAS_FACTOR);
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
+
+        // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
+        let mut scratch = ScratchTx::new(storage);
+
+        // This is where we fake all the lifetimes....
+        let backend = unsafe { danger_will_robinson(sm, &mut scratch, storage, meter) };
+
+        let mut instance = match self.cache.get_instance(checksum, backend, options) {
+            Ok(i) => i,
+            // No gas used yet
+            Err(e) => return (Err(e), 0),
+        };
+
+        // execute the contract and get gas_used
+        instance.set_storage_readonly(false);
+        let result = call_query(&mut instance, env, msg);
+        let result = result.map(|x| x.into_result());
+        let gas_used = instance.create_gas_report().used_internally;
+
+        // always abort scratch, as we don't want to commit anything
+        scratch.abort();
         instance.recycle();
 
         (result, gas_used)

@@ -46,8 +46,7 @@ impl ReadonlyStorage for WeakSubTx<'_> {
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
         let _span = trace_span!("range").entered();
         self.price_list.charge_range(meter)?;
-        self.wrap
-            .range(self.storage, meter, start, end, order)
+        self.wrap.range(self.storage, meter, start, end, order)
     }
     fn abort(self) {}
 }
@@ -106,7 +105,7 @@ mod test {
         assert_eq!(Some(b"bar".to_vec()), writer.get(&meter, b"foo").unwrap());
     }
 
-/*
+    /*
     #[test]
     fn wrap_ref_cell() {
         let store = RefCell::new(MemoryStore::new());
