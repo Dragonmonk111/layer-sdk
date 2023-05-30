@@ -1,9 +1,9 @@
-use std::mem::transmute;
+use std::{collections::HashMap, mem::transmute};
 use thiserror::Error;
 
 use cosmwasm_std::{
-    from_slice, to_binary, Binary, BlockInfo, ContractResult, Empty, QueryRequest, SystemError,
-    SystemResult,
+    from_slice, to_binary, Binary, BlockInfo, ContractResult, Empty, Order, QueryRequest,
+    SystemError, SystemResult,
 };
 use cosmwasm_vm::{
     Backend, BackendApi, BackendError, BackendResult, GasInfo, Querier as BackendQuerier,
@@ -31,6 +31,7 @@ pub(crate) unsafe fn danger_will_robinson(
     let storage = VmStore {
         storage: transmute(contract_storage),
         meter: &*(meter as *const GasMeter),
+        iterators: HashMap::new(),
     };
     let querier = VmQuerier {
         sm: &*(sm as *const StateMachine),
@@ -196,6 +197,7 @@ fn pulsar_response_to_cosmwasm(
 pub struct VmStore {
     storage: &'static mut dyn Storage,
     meter: &'static GasMeter,
+    iterators: HashMap<u32, Iter>,
 }
 
 pub(crate) fn out_of_gas(err: GasError) -> BackendError {
@@ -214,15 +216,95 @@ impl BackendStorage for VmStore {
 
     fn scan(
         &mut self,
-        _start: Option<&[u8]>,
-        _end: Option<&[u8]>,
-        _order: cosmwasm_std::Order,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+        order: cosmwasm_std::Order,
     ) -> BackendResult<u32> {
-        todo!()
+        // TODO: figure out gas here
+        let gas_info = GasInfo::free();
+        let iter = Iter {
+            start: start.map(|x| x.to_vec()),
+            end: end.map(|x| x.to_vec()),
+            order,
+            done: false,
+        };
+        let idx = (self.iterators.len() + 1) as u32;
+        self.iterators.insert(idx, iter);
+        (Ok(idx), gas_info)
     }
 
-    fn next(&mut self, _iterator_id: u32) -> BackendResult<Option<cosmwasm_std::Record>> {
-        todo!()
+    fn next(&mut self, iterator_id: u32) -> BackendResult<Option<cosmwasm_std::Record>> {
+        // get the iterator and ensure it is live
+        let iter = match self.iterators.get_mut(&iterator_id) {
+            Some(i) => i,
+            None => {
+                return (
+                    Err(BackendError::iterator_does_not_exist(iterator_id)),
+                    GasInfo::free(),
+                )
+            }
+        };
+        if iter.done {
+            return (Ok(None), GasInfo::free());
+        }
+
+        let start_gas = self.meter.used();
+
+        // read the next value
+        let start = iter.start.as_deref();
+        let end = iter.end.as_deref();
+        let mut ptr = match self
+            .storage
+            .as_ref()
+            .range(self.meter, start, end, iter.order)
+        {
+            Ok(x) => x,
+            Err(e) => {
+                let used = self.meter.used() - start_gas;
+                let gas = GasInfo::with_externally_used(used);
+                return (Err(out_of_gas(e)), gas);
+            }
+        };
+        let record = match ptr.next() {
+            Some(Ok(x)) => Some(x),
+            None => None,
+            Some(Err(e)) => {
+                let used = self.meter.used() - start_gas;
+                let gas = GasInfo::with_externally_used(used);
+                return (Err(out_of_gas(e)), gas);
+            }
+        };
+        let (val, gas) = match record {
+            Some((k, v)) => {
+                match iter.order {
+                    Order::Ascending => {
+                        // move up the start to right after this value
+                        // see: extend_one_byte(limit: &[u8]) in cw_storage_plus
+                        let mut start = k.clone();
+                        start.push(0);
+                        iter.start = Some(start);
+                    }
+                    Order::Descending => {
+                        // move down the end to this value
+                        iter.end = Some(k.clone());
+                    }
+                }
+
+                // and return this one
+                let used = self.meter.used() - start_gas;
+                let gas = GasInfo::with_externally_used(used);
+                (Some((k, v)), gas)
+            }
+            None => {
+                // we hit the end, record that
+                iter.done = true;
+                let used = self.meter.used() - start_gas;
+                let gas = GasInfo::with_externally_used(used);
+                (None, gas)
+            }
+        };
+
+        (Ok(val), gas)
     }
 
     fn set(&mut self, key: &[u8], value: &[u8]) -> BackendResult<()> {
@@ -238,4 +320,11 @@ impl BackendStorage for VmStore {
         let used = self.meter.used() - pre;
         (val, GasInfo::with_externally_used(used))
     }
+}
+
+struct Iter {
+    start: Option<Vec<u8>>,
+    end: Option<Vec<u8>>,
+    order: Order,
+    done: bool,
 }
