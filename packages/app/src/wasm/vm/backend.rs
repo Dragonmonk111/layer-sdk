@@ -10,9 +10,10 @@ use cosmwasm_vm::{
     Storage as BackendStorage,
 };
 
-use pulsar_app::{PulsarError, StateMachine};
 use pulsar_std::{AccountId, AccountIdError, GasError, GasMeter};
 use pulsar_storage::{ReadonlyStorage, Storage};
+
+use crate::{PulsarError, StateMachine};
 
 pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;

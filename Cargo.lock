@@ -2363,8 +2363,11 @@ dependencies = [
  "bytes",
  "cosmwasm-schema",
  "cosmwasm-std",
+ "cosmwasm-vm",
  "cw-storage-plus",
  "cw-utils",
+ "cw20",
+ "cw20-base",
  "hex-literal",
  "itertools",
  "parking_lot",
@@ -2422,23 +2425,6 @@ dependencies = [
  "pulsar-std",
  "serde",
  "sha2 0.10.6",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "pulsar-wasm"
-version = "0.1.0"
-dependencies = [
- "cosmwasm-std",
- "cosmwasm-vm",
- "cw-storage-plus",
- "cw20",
- "cw20-base",
- "pulsar-app",
- "pulsar-std",
- "pulsar-storage",
- "serde",
  "thiserror",
  "tracing",
 ]

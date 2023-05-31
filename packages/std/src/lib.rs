@@ -14,14 +14,14 @@ pub use encode::{CoinEncode, HexEncode};
 pub use gas::{GasError, GasMeter, GasResult};
 pub use msg::{required_signer, BankMsg, Msg, MsgError, WasmMsg};
 pub use pubkey::PubKey;
-pub use query::{AuthQuery, BankQuery, Query, QueryError};
+pub use query::{AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 pub use time::{format_timestamp_rfc3339, Duration, Rfc3339, Timestamp};
 pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
 
 pub mod response {
     pub use crate::query::{
         AccountResponse, AllBalanceResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
-        QueryResponse, SupplyResponse,
+        QueryResponse, SupplyResponse, WasmQueryResponse,
     };
 }
 

@@ -461,6 +461,7 @@ mod tests {
     use pulsar_storage::MemoryStore;
 
     use crate::genesis::BankAccount;
+    use crate::sm::AppConfig;
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_binary(genesis).unwrap();
@@ -490,7 +491,7 @@ mod tests {
         };
 
         let storage = MemoryStore::default();
-        let logic = StateMachine::new();
+        let logic = StateMachine::new(&AppConfig::new("/tmp/pulsar/initialize_and_query_bank"));
         let request = mock_init(&genesis);
 
         // create the app
@@ -579,7 +580,7 @@ mod tests {
             }],
         };
         // TODO: remove from App args, build inside (with config)
-        let logic = StateMachine::new();
+        let logic = StateMachine::new(&AppConfig::new("/tmp/pulsar/transaction_workflow"));
         let request = mock_init(&genesis);
 
         // create the app

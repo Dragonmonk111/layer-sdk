@@ -14,6 +14,7 @@ impl Display for HexEncode<'_> {
     }
 }
 
+// TODO: check if we can just use Display on &[Coin] as the default Coin.Display is good
 pub struct CoinEncode<'a>(pub &'a [cosmwasm_std::Coin]);
 
 impl Display for CoinEncode<'_> {

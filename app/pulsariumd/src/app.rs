@@ -20,9 +20,9 @@ use tendermint_proto::abci::{
     ResponseProcessProposal, ResponseQuery,
 };
 
-use pulsar_app::{App, AppLoadError, StateMachine};
+use pulsar_app::{App, AppConfig, AppLoadError, StateMachine};
 use pulsar_std::HexEncode;
-use pulsar_storage::{MemoryStore, PersistentStorage};
+use pulsar_storage::PersistentStorage;
 
 use crate::{
     decode::{
@@ -48,13 +48,6 @@ pub struct Pulsarium<T: PersistentStorage + 'static> {
     mempool: Arc<RwLock<Vec<Tx>>>,
 }
 
-impl Default for Pulsarium<MemoryStore> {
-    fn default() -> Self {
-        let store = MemoryStore::new();
-        Self::new(store)
-    }
-}
-
 impl<T: PersistentStorage + 'static> Clone for Pulsarium<T> {
     fn clone(&self) -> Self {
         Self {
@@ -70,8 +63,8 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
     /// Creates a new app and tries to load state from storage.
     /// If the storage is empty, the app will be left in an uninitialized state
     /// and init_chain must be called before any other method.
-    pub fn new(store: T) -> Self {
-        let logic = StateMachine::new();
+    pub fn new(store: T, config: AppConfig) -> Self {
+        let logic = StateMachine::new(&config);
         let mut app = App::new(store, logic);
         match app.load_from_storage() {
             Ok(_) => {

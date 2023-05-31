@@ -358,6 +358,7 @@ mod test {
     use super::*;
 
     use crate::error::PulsarError;
+    use crate::AppConfig;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, coins, StdError};
     use pulsar_std::response::BankQueryResponse;
@@ -369,7 +370,7 @@ mod test {
         };
         let block = mock_env().block;
         let meter = GasMeter::new(500_000);
-        let sm = StateMachine::default();
+        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/query_balance"));
 
         let resp = bank
             .query(store.as_ref(), &meter, &block, &sm, req)
@@ -388,7 +389,7 @@ mod test {
         };
         let block = mock_env().block;
         let meter = GasMeter::new(500_000);
-        let sm = StateMachine::default();
+        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/query_supply"));
 
         let resp = bank
             .query(store.as_ref(), &meter, &block, &sm, req)
@@ -406,7 +407,7 @@ mod test {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
         let block = mock_env().block;
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/get_set_balance"));
         let meter = GasMeter::new(500_000);
 
         let owner = AccountId::unchecked("owner");
@@ -516,7 +517,7 @@ mod test {
         let mut store = storage.writer();
         let meter = GasMeter::new(1_000_000);
         let block = mock_env().block;
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/send_coins"));
 
         let owner = AccountId::unchecked("owner");
         let rcpt = AccountId::unchecked("receiver");
@@ -569,7 +570,7 @@ mod test {
         let mut store = storage.writer();
         let block = mock_env().block;
         let meter = GasMeter::new(1_000_000);
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/burn_coins"));
 
         let owner = AccountId::unchecked("owner");
         let rcpt = AccountId::unchecked("recipient");
@@ -679,7 +680,7 @@ mod test {
         let mut store = storage.writer();
         let meter = GasMeter::new(1_000_000);
         let block = mock_env().block;
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/fail_on_zero_values"));
 
         let owner = AccountId::unchecked("owner");
         let rcpt = AccountId::unchecked("recipient");

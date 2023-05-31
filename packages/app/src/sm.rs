@@ -10,25 +10,46 @@ use pulsar_std::response::QueryResponse;
 use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
 use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
 
-use crate::auth::{Auth, TxData};
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
+use crate::wasm::Wasm;
+use crate::{
+    auth::{Auth, TxData},
+    wasm::WasmConfig,
+};
 
 /// This is an immutable State Machine logic that processes incoming transactions.
 /// All mutable state held in Storage, which is passed as an argument to these methods.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StateMachine {
     pub auth: Auth,
-
     pub bank: Bank,
+    pub wasm: Wasm,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+    pub wasm: WasmConfig,
+}
+
+impl AppConfig {
+    // (Temporary?) helper to construct with important fields filled
+    pub fn new(cache_dir: &str) -> AppConfig {
+        AppConfig {
+            wasm: WasmConfig {
+                cache_dir: cache_dir.to_string(),
+            },
+        }
+    }
 }
 
 impl StateMachine {
-    pub fn new() -> Self {
+    pub fn new(config: &AppConfig) -> Self {
         StateMachine {
             auth: Auth::new(),
             bank: Bank::new(),
+            wasm: Wasm::new(&config.wasm),
         }
     }
 
@@ -163,11 +184,5 @@ impl StateMachine {
     ) -> PulsarResult<Vec<Event>> {
         // FIXME: implement this later
         Ok(vec![])
-    }
-}
-
-impl Default for StateMachine {
-    fn default() -> Self {
-        Self::new()
     }
 }

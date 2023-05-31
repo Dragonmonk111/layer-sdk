@@ -1,15 +1,16 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, fmt, path::PathBuf};
 
 use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Response};
 use cosmwasm_vm::{
     call_execute, call_instantiate, call_query, Cache, CacheOptions, Checksum, InstanceOptions,
     Size, VmError,
 };
-use pulsar_app::StateMachine;
 use pulsar_std::GasMeter;
 use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
-use crate::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
+use crate::StateMachine;
+
+use super::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
@@ -26,6 +27,14 @@ fn capabilities() -> HashSet<String> {
 pub struct VmCache {
     cache: Cache<VmApi, VmStore, VmQuerier>,
     print_debug: bool,
+}
+
+impl fmt::Debug for VmCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VmCache")
+            .field("print_debug", &self.print_debug)
+            .finish()
+    }
 }
 
 impl VmCache {
@@ -215,10 +224,12 @@ mod tests {
     use pulsar_std::AccountId;
     use pulsar_storage::{MemoryStore, PersistentStorage};
 
+    use crate::AppConfig;
+
     use super::*;
 
     // v1.0.1
-    const CW20_BASE: &[u8] = include_bytes!("../fixtures/cw20_base.wasm");
+    const CW20_BASE: &[u8] = include_bytes!("../../../fixtures/cw20_base.wasm");
 
     #[test]
     fn can_instatiate() {
@@ -234,7 +245,7 @@ mod tests {
         let sender = AccountId::unchecked("Sillyness");
         let info = mock_info(&sender.to_string(), &[coin(55_000, "upulse")]);
         let meter = GasMeter::infinite();
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
 
         let msg = cw20_base::msg::InstantiateMsg {
@@ -281,7 +292,7 @@ mod tests {
         let sender = AccountId::unchecked("Sillyness");
         let info = mock_info(&sender.to_string(), &[]);
         let meter = GasMeter::infinite();
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
 
@@ -373,7 +384,7 @@ mod tests {
         let three = AccountId::unchecked("Xyz");
         let info = mock_info(&one.to_string(), &[]);
         let meter = GasMeter::infinite();
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
 
