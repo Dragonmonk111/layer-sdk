@@ -117,6 +117,7 @@ impl StateMachine {
                 self.bank
                     .process_msg(&mut metered, gas, block, self, sender, bank)
             }
+            Msg::Wasm(_) => todo!(),
         };
         match &res {
             Ok(response) => span.record("success", debug(&response.events)),
