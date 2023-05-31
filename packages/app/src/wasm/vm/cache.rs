@@ -53,25 +53,25 @@ impl VmCache {
         }
     }
 
-    pub fn store_code(&mut self, wasm: &[u8]) -> Result<Checksum, VmError> {
+    pub fn store_code(&self, wasm: &[u8]) -> Result<Checksum, VmError> {
         self.cache.save_wasm(wasm)
     }
 
-    pub fn load_code(&mut self, checksum: &Checksum) -> Result<Vec<u8>, VmError> {
+    pub fn load_code(&self, checksum: &Checksum) -> Result<Vec<u8>, VmError> {
         self.cache.load_wasm(checksum)
     }
 
-    pub fn pin(&mut self, checksum: &Checksum) -> Result<(), VmError> {
+    pub fn pin(&self, checksum: &Checksum) -> Result<(), VmError> {
         self.cache.pin(checksum)
     }
 
-    pub fn unpin(&mut self, checksum: &Checksum) -> Result<(), VmError> {
+    pub fn unpin(&self, checksum: &Checksum) -> Result<(), VmError> {
         self.cache.unpin(checksum)
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn instantiate(
-        &mut self,
+        &self,
         checksum: &Checksum,
         env: &Env,
         info: &MessageInfo,
@@ -103,7 +103,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_instantiate(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally;
+        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
 
         // commit or abort the open WeakSubTx
         match &result {
@@ -122,7 +122,7 @@ impl VmCache {
 
     #[allow(clippy::too_many_arguments)]
     pub fn execute(
-        &mut self,
+        &self,
         checksum: &Checksum,
         env: &Env,
         info: &MessageInfo,
@@ -154,7 +154,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_execute(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally;
+        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
 
         // commit or abort the open WeakSubTx
         match &result {
@@ -173,7 +173,7 @@ impl VmCache {
 
     #[allow(clippy::too_many_arguments)]
     pub fn query(
-        &mut self,
+        &self,
         checksum: &Checksum,
         env: &Env,
         msg: &[u8],
@@ -203,7 +203,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_query(&mut instance, env, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally;
+        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
 
         // always abort scratch, as we don't want to commit anything
         scratch.abort();
@@ -237,7 +237,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
-        let mut vm = VmCache::init(path);
+        let vm = VmCache::init(path);
         let checksum = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(res.messages.len(), 0);
         assert_eq!(res.events.len(), 0);
         assert_eq!(res.attributes.len(), 0);
-        assert_eq!(gas_used, 8800200070);
+        assert_eq!(gas_used, 58);
 
         // query the state was written - token_info and total supply
         let num = writer
@@ -374,7 +374,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
-        let mut vm = VmCache::init(path);
+        let vm = VmCache::init(path);
         let checksum = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate

@@ -90,7 +90,7 @@ impl StateMachine {
                 let res = TxResult { gas, result };
                 Ok(QueryResponse::Simulate(res))
             }
-            Query::Wasm(_) => todo!(),
+            Query::Wasm(wasm) => self.wasm.query(storage, meter, block, self, wasm),
         };
         result
     }
@@ -139,7 +139,11 @@ impl StateMachine {
                 self.bank
                     .process_msg(&mut metered, gas, block, self, sender, bank)
             }
-            Msg::Wasm(_) => todo!(),
+            Msg::Wasm(wasm) => {
+                let mut metered = AppMeter::new(storage);
+                self.wasm
+                    .process_msg(&mut metered, gas, block, self, sender, wasm)
+            }
         };
         match &res {
             Ok(response) => span.record("success", debug(&response.events)),

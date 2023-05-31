@@ -120,6 +120,10 @@ impl AccountId {
         v.resize(VALID_ADDR_LENGTH[0], 0u8);
         AccountId(v)
     }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
 }
 
 impl<'a> PrimaryKey<'a> for AccountId {
