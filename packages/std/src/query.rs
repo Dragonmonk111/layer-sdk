@@ -1,4 +1,5 @@
-use cosmwasm_std::{Coin, StdError};
+use cosmwasm_std::{Binary, Coin, StdError};
+use derivative::Derivative;
 use std::error::Error as Err;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
@@ -16,6 +17,7 @@ pub enum Query {
     Auth(AuthQuery),
     Bank(BankQuery),
     Simulate(Tx),
+    Wasm(WasmQuery),
 }
 
 impl From<AuthQuery> for Query {
@@ -71,6 +73,7 @@ pub enum QueryResponse<E: Err> {
     Auth(AuthQueryResponse),
     Bank(BankQueryResponse),
     Simulate(TxResult<E>),
+    Wasm(WasmQueryResponse),
 }
 
 impl<E: Err> From<AuthQueryResponse> for QueryResponse<E> {
@@ -163,6 +166,66 @@ impl<E: Err> From<AllBalanceResponse> for QueryResponse<E> {
     fn from(value: AllBalanceResponse) -> Self {
         BankQueryResponse::AllBalances(value).into()
     }
+}
+
+#[derive(Derivative, Debug, Clone, PartialEq, Eq)]
+pub enum WasmQuery {
+    /// this queries the public API of another contract at a known address (with known ABI)
+    /// Return value is whatever the contract returns (caller should know), wrapped in a
+    /// ContractResult that is JSON encoded.
+    Smart {
+        contract_addr: AccountId,
+        /// msg is the json-encoded QueryMsg struct
+        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        msg: Binary,
+    },
+    /// this queries the raw kv-store of the contract.
+    /// returns the raw, unparsed data stored at that key, which may be an empty vector if not present
+    Raw {
+        contract_addr: AccountId,
+        /// Key is the raw key used in the contracts Storage
+        key: Binary,
+    },
+    /// Returns a [`ContractInfoResponse`] with metadata on the contract from the runtime
+    ContractInfo { contract_addr: AccountId },
+    /// Returns a [`CodeInfoResponse`] with metadata of the code
+    CodeInfo { code_id: u64 },
+}
+
+#[derive(Derivative, Debug, Clone, PartialEq, Eq)]
+pub enum WasmQueryResponse {
+    Smart(#[derivative(Debug(format_with = "pulsar_std::binary_to_string"))] Binary),
+    Raw(#[derivative(Debug(format_with = "pulsar_std::binary_to_string"))] Binary),
+    ContractInfo(ContractInfoResponse),
+    CodeInfo(CodeInfoResponse),
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContractInfoResponse {
+    pub code_id: u64,
+    /// address that instantiated this contract
+    pub creator: AccountId,
+    /// admin who can run migrations (if any)
+    pub admin: Option<AccountId>,
+    /// if set, the contract is pinned to the cache, and thus uses less gas when called
+    pub pinned: bool,
+    /// set if this contract has bound an IBC port
+    pub ibc_port: Option<String>,
+}
+
+/// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].
+///
+/// `code_hash`/`data_hash` was renamed to `checksum` to follow the CosmWasm
+/// convention and naming in `instantiate2_address`.
+///
+/// [CodeInfo]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/types.proto#L62-L72
+/// [CodeInfoResponse]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/query.proto#L184-L199
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeInfoResponse {
+    pub code_id: u64,
+    /// The address that initially stored the code
+    pub creator: AccountId,
+    /// The hash of the Wasm blob
+    pub checksum: Binary,
 }
 
 #[derive(Error, Debug, PartialEq)]

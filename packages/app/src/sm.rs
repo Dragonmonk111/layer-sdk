@@ -69,6 +69,7 @@ impl StateMachine {
                 let res = TxResult { gas, result };
                 Ok(QueryResponse::Simulate(res))
             }
+            Query::Wasm(_) => todo!(),
         };
         result
     }
