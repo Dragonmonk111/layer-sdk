@@ -149,7 +149,7 @@ impl Wasm {
                         .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
                 }
 
-                // TODO: call instantiate on cache
+                // call instantiate on cache
                 let mut sub_store = self.contract_storage(storage, &contract_addr);
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.instantiate(
@@ -170,7 +170,44 @@ impl Wasm {
                 MsgResponse::new(result.events, result.data.unwrap_or_default().into())
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
-            WasmMsg::Execute { .. } => todo!(),
+            WasmMsg::Execute {
+                sender,
+                contract_addr,
+                msg,
+                funds,
+            } => {
+                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
+
+                // send funds
+                // TODO: make this not mock
+                let info = mock_info(&sender.to_string(), &funds);
+                if !funds.is_empty() {
+                    sm.bank
+                        .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
+                }
+
+                // call execute on cache
+                let mut sub_store = self.contract_storage(storage, &contract_addr);
+                let env = build_env(block, &contract_addr);
+                let (result, gas) = self.cache.execute(
+                    &code.to_checksum(),
+                    &env,
+                    &info,
+                    &msg,
+                    &mut sub_store,
+                    meter,
+                    sm,
+                );
+                meter.charge(gas)?;
+                let result = map_cache_result(result)?;
+
+                // Return response
+                // TODO: handle attributes to events
+                // TODO: handle messages
+                MsgResponse::new(result.events, result.data.unwrap_or_default().into())
+            }
             WasmMsg::Migrate { .. } => todo!(),
             WasmMsg::ClearAdmin {
                 sender,

@@ -121,7 +121,6 @@ impl VmCache {
         (result, gas_used)
     }
 
-    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &self,
