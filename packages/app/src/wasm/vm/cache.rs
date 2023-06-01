@@ -57,6 +57,7 @@ impl VmCache {
         self.cache.save_wasm(wasm)
     }
 
+    #[allow(dead_code)]
     pub fn load_code(&self, checksum: &Checksum) -> Result<Vec<u8>, VmError> {
         self.cache.load_wasm(checksum)
     }
@@ -120,6 +121,7 @@ impl VmCache {
         (result, gas_used)
     }
 
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &self,

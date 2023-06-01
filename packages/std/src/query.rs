@@ -226,6 +226,8 @@ pub struct CodeInfoResponse {
     pub creator: AccountId,
     /// The hash of the Wasm blob
     pub checksum: Binary,
+    /// If this code is pinned to the cache
+    pub pinned: bool,
 }
 
 #[derive(Error, Debug, PartialEq)]

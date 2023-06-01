@@ -116,7 +116,7 @@ pub enum WasmMsg {
     UpdateAdmin {
         sender: AccountId,
         contract_addr: AccountId,
-        admin: String,
+        admin: AccountId,
     },
     /// Clears the admin on the given contract, so no more migration possible.
     /// Fails if this contract is not currently admin of the target contract.
@@ -130,11 +130,11 @@ pub enum WasmMsg {
     },
     Pin {
         sender: AccountId,
-        contract_addr: AccountId,
+        code_id: u64,
     },
     Unpin {
         sender: AccountId,
-        contract_addr: AccountId,
+        code_id: u64,
     },
 }
 
