@@ -2,7 +2,7 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_vm::{Checksum, VmError};
 use sha2::{Digest, Sha256};
 
-use cosmwasm_std::{ensure_eq, Addr, Binary, BlockInfo, Coin, Empty, Env, Event, MessageInfo};
+use cosmwasm_std::{ensure_eq, Addr, Binary, BlockInfo, Coin, Empty, Env, MessageInfo};
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
@@ -18,9 +18,12 @@ use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
+use crate::wasm::events::{
+    build_contract_events, clear_admin_event, execute_event, instantiate_event, pin_code_event,
+    store_code_event, unpin_code_event, update_admin_event,
+};
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
-// const CONTRACT_ATTR: &str = "_contract_addr";
 
 // Contract state is kept in Storage, separate from the contracts themselves
 const CONTRACTS: Map<&AccountId, ContractData> = Map::new("contracts");
@@ -150,7 +153,7 @@ impl Wasm {
         let resp = match msg {
             WasmMsg::StoreCode { sender, code } => {
                 ensure_eq!(signer, &sender, WasmError::Unauthorized);
-                let checksum = self.cache.store_code(&code).map_err(map_vm_error)?;
+                let (checksum, analysis) = self.cache.store_code(&code).map_err(map_vm_error)?;
                 let info = CodeInfo {
                     creator: sender,
                     checksum: Vec::<u8>::from(checksum).into(),
@@ -159,7 +162,7 @@ impl Wasm {
                 let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
                 let id = self.next_id(&mut wasm_store, meter)?;
                 CODES.save(&mut wasm_store, meter, id, &info)?;
-                let event = Event::new("store_code").add_attribute("id", id.to_string());
+                let event = store_code_event(id, analysis);
                 MsgResponse::events(vec![event])
             }
             WasmMsg::Instantiate {
@@ -206,10 +209,14 @@ impl Wasm {
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
 
-                // Return response
-                // FIXME: handle attributes to events
+                // Build events
+                let mut events =
+                    build_contract_events(&contract_addr, result.events, result.attributes)?;
+                let event = instantiate_event(&contract_addr, code_id);
+                events.insert(0, event);
+
                 // FIXME: handle messages
-                MsgResponse::new(result.events, result.data.unwrap_or_default().into())
+                MsgResponse::new(events, result.data.unwrap_or_default().into())
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
             WasmMsg::Execute {
@@ -244,10 +251,14 @@ impl Wasm {
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
 
-                // Return response
-                // FIXME: handle attributes to events
+                // Build events
+                let mut events =
+                    build_contract_events(&contract_addr, result.events, result.attributes)?;
+                let event = execute_event(&contract_addr);
+                events.insert(0, event);
+
                 // FIXME: handle messages
-                MsgResponse::new(result.events, result.data.unwrap_or_default().into())
+                MsgResponse::new(events, result.data.unwrap_or_default().into())
             }
             WasmMsg::Migrate { .. } => todo!(),
             WasmMsg::ClearAdmin {
@@ -262,7 +273,8 @@ impl Wasm {
                 }?;
                 contract.admin = None;
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
-                MsgResponse::events(vec![])
+                let event = clear_admin_event(&contract_addr);
+                MsgResponse::events(vec![event])
             }
             WasmMsg::UpdateAdmin {
                 sender,
@@ -275,9 +287,10 @@ impl Wasm {
                     Some(admin) if admin == &sender => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
+                let event = update_admin_event(&contract_addr, &admin);
                 contract.admin = Some(admin);
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
-                MsgResponse::events(vec![])
+                MsgResponse::events(vec![event])
             }
             WasmMsg::Pin { sender, code_id } => {
                 // only special sender can do this - stored as param
@@ -297,8 +310,9 @@ impl Wasm {
                         &Empty {},
                     )?;
                 }
-                // TODO: add events
-                MsgResponse::events(vec![])
+                // add events
+                let event = pin_code_event(code_id);
+                MsgResponse::events(vec![event])
             }
             WasmMsg::Unpin { sender, code_id } => {
                 // only special sender can do this - stored as param
@@ -315,8 +329,9 @@ impl Wasm {
                         .map_err(map_vm_error)?;
                     PINNED.remove(&mut prefixed(storage, NAMESPACE_WASM), meter, code_id)?;
                 }
-                // TODO: add events
-                MsgResponse::events(vec![])
+                // add events
+                let event = unpin_code_event(code_id);
+                MsgResponse::events(vec![event])
             }
         };
         Ok(resp)
@@ -457,7 +472,7 @@ fn build_env(block: &BlockInfo, contract: &AccountId) -> Env {
 fn build_info(sender: &AccountId, funds: Vec<Coin>) -> MessageInfo {
     MessageInfo {
         sender: Addr::unchecked(sender.to_string()),
-        funds: funds.into(),
+        funds,
     }
 }
 

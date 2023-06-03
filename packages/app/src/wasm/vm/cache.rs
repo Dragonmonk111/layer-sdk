@@ -2,8 +2,8 @@ use std::{collections::HashSet, fmt, path::PathBuf};
 
 use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Response};
 use cosmwasm_vm::{
-    call_execute, call_instantiate, call_query, Cache, CacheOptions, Checksum, InstanceOptions,
-    Size, VmError,
+    call_execute, call_instantiate, call_query, AnalysisReport, Cache, CacheOptions, Checksum,
+    InstanceOptions, Size, VmError,
 };
 use pulsar_std::GasMeter;
 use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
@@ -53,8 +53,10 @@ impl VmCache {
         }
     }
 
-    pub fn store_code(&self, wasm: &[u8]) -> Result<Checksum, VmError> {
-        self.cache.save_wasm(wasm)
+    pub fn store_code(&self, wasm: &[u8]) -> Result<(Checksum, AnalysisReport), VmError> {
+        let checksum = self.cache.save_wasm(wasm)?;
+        let analysis = self.cache.analyze(&checksum)?;
+        Ok((checksum, analysis))
     }
 
     #[allow(dead_code)]
@@ -239,7 +241,7 @@ mod tests {
         std::fs::create_dir_all(path).unwrap();
 
         let vm = VmCache::init(path);
-        let checksum = vm.store_code(CW20_BASE).unwrap();
+        let (checksum, _) = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
         let env = mock_env();
@@ -286,7 +288,7 @@ mod tests {
         std::fs::create_dir_all(path).unwrap();
 
         let mut vm = VmCache::init(path);
-        let checksum = vm.store_code(CW20_BASE).unwrap();
+        let (checksum, _) = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
         let env = mock_env();
@@ -376,7 +378,7 @@ mod tests {
         std::fs::create_dir_all(path).unwrap();
 
         let vm = VmCache::init(path);
-        let checksum = vm.store_code(CW20_BASE).unwrap();
+        let (checksum, _) = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
         let env = mock_env();

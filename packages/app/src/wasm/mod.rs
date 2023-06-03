@@ -1,4 +1,5 @@
 mod error;
+mod events;
 mod keeper;
 mod vm;
 

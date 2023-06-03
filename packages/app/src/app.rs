@@ -462,7 +462,6 @@ mod tests {
 
     use crate::genesis::{BankAccount, WasmParams};
     use crate::sm::AppConfig;
-    use crate::WasmConfig;
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_binary(genesis).unwrap();
@@ -489,6 +488,9 @@ mod tests {
                 address: account.to_string(),
                 balance: balance.clone(),
             }],
+            wasm: WasmParams {
+                gov_account: account.to_string(),
+            },
         };
 
         let storage = MemoryStore::default();
