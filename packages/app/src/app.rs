@@ -460,8 +460,9 @@ mod tests {
     };
     use pulsar_storage::MemoryStore;
 
-    use crate::genesis::BankAccount;
+    use crate::genesis::{BankAccount, WasmParams};
     use crate::sm::AppConfig;
+    use crate::WasmConfig;
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_binary(genesis).unwrap();
@@ -578,6 +579,9 @@ mod tests {
                 address: sender.to_string(),
                 balance: coins(2_000_000_000, denom),
             }],
+            wasm: WasmParams {
+                gov_account: sender.to_string(),
+            },
         };
         // TODO: remove from App args, build inside (with config)
         let logic = StateMachine::new(&AppConfig::new("/tmp/pulsar/transaction_workflow"));

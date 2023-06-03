@@ -1,8 +1,8 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::testing::mock_info;
 use cosmwasm_vm::{Checksum, VmError};
+use sha2::{Digest, Sha256};
 
-use cosmwasm_std::{ensure_eq, Addr, Binary, BlockInfo, Env, Event};
+use cosmwasm_std::{ensure_eq, Addr, Binary, BlockInfo, Coin, Empty, Env, Event, MessageInfo};
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
@@ -18,7 +18,6 @@ use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
-// use crate::wasm::WasmError;
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
 // const CONTRACT_ATTR: &str = "_contract_addr";
@@ -26,7 +25,19 @@ pub const NAMESPACE_WASM: &[u8] = b"wasm";
 // Contract state is kept in Storage, separate from the contracts themselves
 const CONTRACTS: Map<&AccountId, ContractData> = Map::new("contracts");
 const CODES: Map<u64, CodeInfo> = Map::new("codes");
+
+// list of all pinned code_ids, so you can range over them
+const PINNED: Map<u64, Empty> = Map::new("pinned");
+
 const CODE_ID: Item<u64> = Item::new("code_id");
+const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
+
+const PARAMS: Item<WasmParams> = Item::new("params");
+
+#[cw_serde]
+pub struct WasmParams {
+    pub gov_account: AccountId,
+}
 
 /// Contract Data includes information about contract, equivalent of `ContractInfo` in wasmd
 /// interface.
@@ -42,8 +53,7 @@ pub struct ContractData {
     pub label: String,
     /// Blockchain height in the moment of instantiating the contract
     pub created: u64,
-    // TODO: add ibc info
-    // TODO: reverse lookup on pinned contracts
+    // LATER: add ibc info
 }
 
 #[cw_serde]
@@ -67,6 +77,7 @@ pub struct Wasm {
     cache: VmCache,
 }
 
+/// This can be set different on each node, outside of consensus
 #[derive(Debug, Clone)]
 pub struct WasmConfig {
     pub cache_dir: String,
@@ -82,8 +93,40 @@ impl Wasm {
         }
     }
 
-    fn generate_address(&self) -> Result<AccountId, PulsarError> {
-        todo!()
+    // This sets constant params used
+    pub fn init(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        _block: &BlockInfo,
+        params: crate::genesis::WasmParams,
+        _sm: &StateMachine,
+    ) -> PulsarResult<()> {
+        let mut wasm_storage = prefixed(storage, NAMESPACE_WASM);
+        let validated = WasmParams {
+            gov_account: AccountId::parse_string(&params.gov_account)?,
+        };
+        PARAMS.save(&mut wasm_storage, meter, &validated)?;
+        Ok(())
+    }
+
+    /// This is v1 contract address generation
+    fn generate_address(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        sender: &AccountId,
+        code_id: u64,
+    ) -> Result<AccountId, PulsarError> {
+        let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
+        let counter = CONTRACT_COUNTER.load(wasm_store.as_ref(), meter)? + 1;
+        CONTRACT_COUNTER.save(&mut wasm_store, meter, &counter)?;
+        let mut prehash = Vec::with_capacity(sender.len() + 8 + 8);
+        prehash.extend_from_slice(sender.as_slice());
+        prehash.extend(code_id.to_be_bytes());
+        prehash.extend(counter.to_be_bytes());
+        let raw = Sha256::digest(prehash);
+        Ok(AccountId::new(&raw)?)
     }
 
     fn next_id(&self, wasm_store: &mut dyn Storage, meter: &GasMeter) -> Result<u64, PulsarError> {
@@ -129,7 +172,7 @@ impl Wasm {
             } => {
                 ensure_eq!(signer, &sender, WasmError::Unauthorized);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
-                let contract_addr = self.generate_address()?;
+                let contract_addr = self.generate_address(storage, meter, &sender, code_id)?;
 
                 // save contract
                 let contract = ContractData {
@@ -142,8 +185,7 @@ impl Wasm {
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
 
                 // send funds
-                // TODO: make this not mock
-                let info = mock_info(&sender.to_string(), &funds);
+                let info = build_info(&sender, funds.clone());
                 if !funds.is_empty() {
                     sm.bank
                         .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
@@ -165,8 +207,8 @@ impl Wasm {
                 let result = map_cache_result(result)?;
 
                 // Return response
-                // TODO: handle attributes to events
-                // TODO: handle messages
+                // FIXME: handle attributes to events
+                // FIXME: handle messages
                 MsgResponse::new(result.events, result.data.unwrap_or_default().into())
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
@@ -181,8 +223,7 @@ impl Wasm {
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
                 // send funds
-                // TODO: make this not mock
-                let info = mock_info(&sender.to_string(), &funds);
+                let info = build_info(&sender, funds.clone());
                 if !funds.is_empty() {
                     sm.bank
                         .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
@@ -204,8 +245,8 @@ impl Wasm {
                 let result = map_cache_result(result)?;
 
                 // Return response
-                // TODO: handle attributes to events
-                // TODO: handle messages
+                // FIXME: handle attributes to events
+                // FIXME: handle messages
                 MsgResponse::new(result.events, result.data.unwrap_or_default().into())
             }
             WasmMsg::Migrate { .. } => todo!(),
@@ -238,19 +279,33 @@ impl Wasm {
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
                 MsgResponse::events(vec![])
             }
-            WasmMsg::Pin { sender: _, code_id } => {
-                // TODO: only special sender can do this - store as param
+            WasmMsg::Pin { sender, code_id } => {
+                // only special sender can do this - stored as param
+                let WasmParams { gov_account } =
+                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
+                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+
                 let mut code = self.load_code(storage.as_ref(), meter, code_id)?;
                 if !code.pinned {
                     code.pinned = true;
                     self.save_code(storage, meter, code_id, &code)?;
                     self.cache.pin(&code.to_checksum()).map_err(map_vm_error)?;
+                    PINNED.save(
+                        &mut prefixed(storage, NAMESPACE_WASM),
+                        meter,
+                        code_id,
+                        &Empty {},
+                    )?;
                 }
                 // TODO: add events
                 MsgResponse::events(vec![])
             }
-            WasmMsg::Unpin { sender: _, code_id } => {
-                // TODO: only special sender can do this - store as param
+            WasmMsg::Unpin { sender, code_id } => {
+                // only special sender can do this - stored as param
+                let WasmParams { gov_account } =
+                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
+                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+
                 let mut code = self.load_code(storage.as_ref(), meter, code_id)?;
                 if code.pinned {
                     code.pinned = false;
@@ -258,6 +313,7 @@ impl Wasm {
                     self.cache
                         .unpin(&code.to_checksum())
                         .map_err(map_vm_error)?;
+                    PINNED.remove(&mut prefixed(storage, NAMESPACE_WASM), meter, code_id)?;
                 }
                 // TODO: add events
                 MsgResponse::events(vec![])
@@ -398,12 +454,21 @@ fn build_env(block: &BlockInfo, contract: &AccountId) -> Env {
     }
 }
 
-fn map_vm_error(_err: VmError) -> PulsarError {
-    todo!()
+fn build_info(sender: &AccountId, funds: Vec<Coin>) -> MessageInfo {
+    MessageInfo {
+        sender: Addr::unchecked(sender.to_string()),
+        funds: funds.into(),
+    }
 }
 
-fn map_contract_error(_err: String) -> PulsarError {
-    todo!()
+fn map_vm_error(err: VmError) -> PulsarError {
+    // TODO
+    panic!("{}", err);
+}
+
+fn map_contract_error(err: String) -> PulsarError {
+    // TODO
+    panic!("{}", err);
 }
 
 fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, PulsarError> {

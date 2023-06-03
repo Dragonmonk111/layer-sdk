@@ -84,13 +84,25 @@ impl BackendQuerier for VmQuerier {
     fn query_raw(
         &self,
         request: &[u8],
-        _gas_limit: u64,
+        gas_limit: u64,
     ) -> BackendResult<cosmwasm_std::SystemResult<cosmwasm_std::ContractResult<cosmwasm_std::Binary>>>
     {
-        let start = self.meter.used();
-        // TODO: apply gas limit here on top of meter
-        let res = self.do_query_raw(request, self.meter);
-        let gas_used = self.meter.used() - start;
+        let sub_limit = gas_limit < self.meter.remaining();
+        let (res, gas_used) = if sub_limit {
+            let sub_meter = GasMeter::new(gas_limit);
+            let res = self.do_query_raw(request, &sub_meter);
+            let gas_used = sub_meter.used();
+            let gas_res = self.meter.charge(gas_used);
+            if let Err(e) = gas_res {
+                return (Err(out_of_gas(e)), GasInfo::with_externally_used(gas_used));
+            }
+            (res, gas_used)
+        } else {
+            let start = self.meter.used();
+            let res = self.do_query_raw(request, self.meter);
+            let gas_used = self.meter.used() - start;
+            (res, gas_used)
+        };
         (encode_error(res), GasInfo::with_externally_used(gas_used))
     }
 }

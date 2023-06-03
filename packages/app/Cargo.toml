@@ -21,6 +21,7 @@ thiserror = { workspace = true }
 itertools = { workspace = true }
 parking_lot = {workspace = true}
 bytes = {workspace = true}
+sha2 = {workspace = true}
 
 cosmwasm-vm = { version = "1.2.0", default-features = false, features = ["iterator"] }
 

@@ -2373,6 +2373,7 @@ dependencies = [
  "parking_lot",
  "pulsar-std",
  "pulsar-storage",
+ "sha2 0.10.6",
  "thiserror",
  "tracing",
 ]

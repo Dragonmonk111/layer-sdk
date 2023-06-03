@@ -53,6 +53,7 @@ impl StateMachine {
         }
     }
 
+    // TODO: similar call for "load_from_storage" to let them rehydrate on start
     pub fn init(
         &self,
         storage: &mut dyn Storage,
@@ -62,6 +63,7 @@ impl StateMachine {
     ) -> PulsarResult<()> {
         info_span!("sm.init", ?genesis);
         self.bank.init(storage, meter, block, genesis.bank, self)?;
+        self.wasm.init(storage, meter, block, genesis.wasm, self)?;
         Ok(())
     }
 
