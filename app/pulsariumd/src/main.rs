@@ -47,7 +47,7 @@ async fn main() {
         opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
         let tracer = opentelemetry_jaeger::new_agent_pipeline()
             .with_service_name("pulsariumd")
-            .install_simple()
+            .install_batch(opentelemetry::runtime::Tokio)
             .unwrap();
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
         let subscriber = fmt_subscriber.with(telemetry);

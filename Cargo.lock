@@ -2028,6 +2028,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "thiserror",
  "thrift",
+ "tokio",
 ]
 
 [[package]]
@@ -2073,6 +2074,8 @@ dependencies = [
  "percent-encoding",
  "rand",
  "thiserror",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
