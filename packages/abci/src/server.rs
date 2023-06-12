@@ -104,19 +104,23 @@ impl<A: Application> Server<A> {
     /// Listen for incoming connections, and route their requests to the
     /// specified ABCI application.
     pub async fn listen(self) -> Result<(), AbciError> {
-        let mut next_conn = Some(ConnectionType::new());
-        loop {
-            let (stream, _) = self.listener.accept().await?;
+        let mut handles = vec![];
+        for conn in ConnectionType::ordering() {
+            let (stream, _) = self.listener.accept().await.unwrap();
             let app = self.app.clone();
             let config = self.config.clone();
-            let this_conn = next_conn.unwrap();
-            next_conn = this_conn.next();
-            tokio::spawn(async move {
-                if let Err(e) = Self::handle_connection(stream, app, config, this_conn).await {
+            let handle = tokio::spawn(async move {
+                if let Err(e) = Self::handle_connection(stream, app, config, conn).await {
                     error!("Error handling connection: {}", e);
                 }
             });
+            handles.push(handle);
         }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+        Ok(())
     }
 
     async fn handle_connection<App>(
@@ -158,24 +162,20 @@ impl<A: Application> Server<A> {
 #[derive(Debug, Copy, Clone)]
 pub enum ConnectionType {
     Query,
-    Check,
     Snapshot,
+    Check,
     Process,
 }
 
 impl ConnectionType {
-    pub(crate) fn new() -> Self {
-        ConnectionType::Query
-    }
-
-    pub(crate) fn next(&self) -> Option<Self> {
-        // Verified experimentally running the ABCI server against cometbft 0.38.0
-        match self {
-            ConnectionType::Query => Some(ConnectionType::Snapshot),
-            ConnectionType::Snapshot => Some(ConnectionType::Check),
-            ConnectionType::Check => Some(ConnectionType::Process),
-            ConnectionType::Process => None,
-        }
+    // Verified experimentally running the ABCI server against cometbft 0.38.0
+    pub fn ordering() -> Vec<Self> {
+        vec![
+            ConnectionType::Query,
+            ConnectionType::Snapshot,
+            ConnectionType::Check,
+            ConnectionType::Process,
+        ]
     }
 
     fn is_query(&self) -> bool {
