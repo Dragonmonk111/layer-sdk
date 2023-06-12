@@ -162,7 +162,7 @@ pub trait RequestDispatcher {
 // Implement `RequestDispatcher` for all `Application`s.
 impl<A: Application> RequestDispatcher for A {
     fn handle(&self, request: Request) -> Response {
-        tracing::debug!("Incoming request: {:?}", request);
+        tracing::trace!("Incoming request: {:?}", request);
         Response {
             value: Some(match request.value.unwrap() {
                 Value::Echo(req) => response::Value::Echo(self.echo(req)),

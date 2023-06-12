@@ -35,22 +35,22 @@ async fn main() {
     println!("{:?}", config);
     let config = config.validate().unwrap();
 
-    // set up tracing
-    let fmt_subscriber = FmtSubscriber::builder()
-        .with_env_filter(config.filter)
-        .with_timer(LocalTime::rfc_3339())
-        .with_ansi(true)
-        .finish();
-
     // add open telemetry
     if config.jaeger {
         opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
-        let tracer = opentelemetry_jaeger::new_agent_pipeline()
+        let tracer = opentelemetry_jaeger::new_collector_pipeline()
+            .with_endpoint("http://localhost:14268/api/traces")
             .with_service_name("pulsariumd")
+            .with_isahc()
+            .with_timeout(std::time::Duration::from_secs(2))
             .install_batch(opentelemetry::runtime::Tokio)
             .unwrap();
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-        let subscriber = fmt_subscriber.with(telemetry);
+        let subscriber = tracing_subscriber::Registry::default()
+            .with(config.filter)
+            .with(telemetry);
+
+        // let subscriber = fmt_subscriber.with(telemetry);
         tracing::subscriber::set_global_default(subscriber)
             .expect("setting default subscriber failed");
         info!("jaeger tracing enabled");
@@ -62,6 +62,12 @@ async fn main() {
     //         // .with_password("s3cr3t")
     //         .install_batch().unwrap();
     } else {
+        let fmt_subscriber = FmtSubscriber::builder()
+            .with_env_filter(config.filter)
+            .with_timer(LocalTime::rfc_3339())
+            .with_ansi(true)
+            .finish();
+
         tracing::subscriber::set_global_default(fmt_subscriber)
             .expect("setting default subscriber failed");
     }

@@ -2021,6 +2021,7 @@ dependencies = [
  "async-trait",
  "futures",
  "futures-executor",
+ "http",
  "isahc",
  "once_cell",
  "opentelemetry",

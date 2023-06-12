@@ -2,7 +2,7 @@ use thiserror::Error;
 use tracing::{
     debug, debug_span,
     field::{debug as dbg, display, Empty},
-    info_span, trace_span,
+    info_span,
 };
 
 use cosmwasm_schema::cw_serde;
@@ -238,7 +238,7 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
-        let _span = trace_span!("check_tx").entered();
+        let _span = debug_span!("check_tx").entered();
         // temporary cache we will throw away
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
