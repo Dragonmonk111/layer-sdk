@@ -15,6 +15,7 @@ optimize = ["tracing/release_max_level_info"]
 no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
+pulsar-abci = { workspace = true }
 pulsar-app = { workspace = true }
 pulsar-std = { workspace = true }
 pulsar-cosmos = { workspace = true }
@@ -44,6 +45,7 @@ tracing-opentelemetry = {workspace = true}
 
 # TODO: keep in sync with whatever tendermint-rs uses
 bytes = "1.4.0"
+tokio = { version = "1.28.0", features = ["full"] }
 
 [dev-dependencies]
 hex-literal = {workspace = true }

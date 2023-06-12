@@ -3,7 +3,7 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
-use tendermint_abci::ServerBuilder;
+use pulsar_abci::{ServerConfig};
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
@@ -20,7 +20,8 @@ use crate::app::Pulsarium;
 use crate::cli::Cli;
 use crate::config::RawConfig;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Parse all config info
     let args = Cli::parse();
     // Thanks to https://steezeburger.com/2023/03/rust-hierarchical-configuration/ for this tip
@@ -73,10 +74,12 @@ fn main() {
             let app = Pulsarium::new(storage);
 
             // Start ABCI server
-            let server = ServerBuilder::new(config.read_buf_size as usize)
+            let server = ServerConfig::new()
+                .with_read_buf(config.read_buf_size as usize)
                 .bind(format!("{}:{}", config.host, config.port), app)
+                .await
                 .unwrap();
-            server.listen().unwrap();
+            server.listen().await.unwrap();
         }
         None => {
             info!("using in-memory database");
@@ -84,10 +87,12 @@ fn main() {
             let app = Pulsarium::new(storage);
 
             // Start ABCI server
-            let server = ServerBuilder::new(config.read_buf_size as usize)
+            let server = ServerConfig::new()
+                .with_read_buf(config.read_buf_size as usize)
                 .bind(format!("{}:{}", config.host, config.port), app)
+                .await
                 .unwrap();
-            server.listen().unwrap();
+            server.listen().await.unwrap();
         }
     }
 

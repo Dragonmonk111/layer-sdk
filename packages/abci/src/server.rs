@@ -51,6 +51,14 @@ impl ServerConfig {
         // TODO: read values for larger pools
         1
     }
+
+    pub async fn bind<Addr, App>(self, addr: Addr, app: App) -> Result<Server<App>, AbciError>
+    where
+        Addr: ToSocketAddrs,
+        App: Application,
+    {
+        Server::bind::<Addr, App>(self, addr, app).await
+    }
 }
 
 impl Default for ServerConfig {
@@ -76,7 +84,6 @@ impl<A: Application> Server<A> {
     /// [`Server::listen`] method in order for incoming connections' requests
     /// to be routed to the specified ABCI application.
     pub async fn bind<Addr, App>(
-        self,
         config: ServerConfig,
         addr: Addr,
         app: A,
@@ -152,23 +159,22 @@ impl<A: Application> Server<A> {
 pub enum ConnectionType {
     Query,
     Check,
-    Process,
     Snapshot,
+    Process,
 }
 
 impl ConnectionType {
     pub(crate) fn new() -> Self {
-        // TODO: which is the first one?
         ConnectionType::Query
     }
 
     pub(crate) fn next(&self) -> Option<Self> {
-        // TODO: what is the order of connections?
+        // Verified experimentally running the ABCI server against cometbft 0.38.0
         match self {
-            ConnectionType::Query => Some(ConnectionType::Check),
+            ConnectionType::Query => Some(ConnectionType::Snapshot),
+            ConnectionType::Snapshot => Some(ConnectionType::Check),
             ConnectionType::Check => Some(ConnectionType::Process),
-            ConnectionType::Process => Some(ConnectionType::Snapshot),
-            ConnectionType::Snapshot => None,
+            ConnectionType::Process => None,
         }
     }
 
@@ -192,7 +198,7 @@ impl ConnectionType {
         let (is_valid, expected_type) = match request.value.as_ref().unwrap() {
             Value::Echo(_) => (true, "Echo"),
             Value::Flush(_) => (true, "Flush"),
-            Value::Info(_) => (self.is_query(), "Info"),
+            Value::Info(_) => (true, "Info"),
             Value::Query(_) => (self.is_query(), "Query"),
             Value::CheckTx(_) => (self.is_check(), "CheckTx"),
             Value::Commit(_) => (self.is_process(), "Commit"),
