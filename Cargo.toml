@@ -29,6 +29,7 @@ parking_lot = "0.12.1"
 hex-literal = "0.4.1"
 bytes = { version = "1.4.0", default_features = false, features = ["serde"] }
 
+pulsar-abci = { path = "./packages/abci" }
 pulsar-app = { path = "./packages/app" }
 pulsar-cosmos = { path = "./packages/cosmos" }
 pulsar-std = { path = "./packages/std" }

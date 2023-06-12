@@ -2339,6 +2339,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulsar-abci"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "tendermint-proto 0.32.0",
+ "tokio",
+]
+
+[[package]]
 name = "pulsar-app"
 version = "0.1.0"
 dependencies = [
@@ -2883,6 +2892,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3240,7 +3258,10 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "num_cpus",
+ "parking_lot",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.48.0",
