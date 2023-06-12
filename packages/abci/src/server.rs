@@ -1,10 +1,14 @@
 //! ABCI application server interface.
 
+use std::collections::VecDeque;
+
 use rayon::ThreadPoolBuilder;
-use tendermint_proto::v0_38::abci::{request::Value, Request};
+use tendermint_proto::v0_38::abci::{request::Value, Request, Response};
 
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::select;
 
+use tokio_rayon::AsyncRayonHandle;
 use tracing::{error, info};
 
 use crate::application::RequestDispatcher;
@@ -47,9 +51,12 @@ impl ServerConfig {
         self
     }
 
-    pub fn thread_pool_size(&self, _conn: ConnectionType) -> usize {
-        // TODO: read values for larger pools
-        1
+    pub fn thread_pool_size(&self, conn: ConnectionType) -> usize {
+        match conn {
+            ConnectionType::Query => self.query_threads,
+            ConnectionType::Check => self.check_threads,
+            _ => 1,
+        }
     }
 
     pub async fn bind<Addr, App>(self, addr: Addr, app: App) -> Result<Server<App>, AbciError>
@@ -133,30 +140,57 @@ impl<A: Application> Server<A> {
         App: Application,
     {
         let mut codec = ServerCodec::new(stream, config.read_buf_size);
-        let _pool = ThreadPoolBuilder::new()
-            .num_threads(config.thread_pool_size(conn))
-            .build()
-            .unwrap();
+        let n = config.thread_pool_size(conn);
+        let pool = ThreadPoolBuilder::new().num_threads(n).build().unwrap();
+        info!("Starting {conn:?} pool with {n} threads");
+
+        let mut pending = VecDeque::<AsyncRayonHandle<Response>>::with_capacity(32);
 
         info!("Listening for ABCI requests, connection: {conn:?}");
         loop {
-            let request = match codec.next().await {
-                Some(Ok(request)) => request,
-                Some(Err(e)) => return Err(e),
-                None => {
-                    info!("Connection closed, connection: {conn:?}");
-                    return Ok(());
+            let step: Step = if let Some(processed) = pending.front_mut() {
+                select! {
+                    res = processed => {
+                        let _ = pending.pop_front();
+                        Step::Output(res)
+                    }
+                    input = codec.next() => Step::Input(input),
                 }
+            } else {
+                Step::Input(codec.next().await)
             };
-            // assert this is valid for our connection type
-            conn.assert_valid_message(&request)?;
+            match step {
+                Step::Input(input) => {
+                    let request = match input {
+                        Some(Ok(request)) => request,
+                        Some(Err(e)) => return Err(e),
+                        None => {
+                            info!("Connection closed, connection: {conn:?}");
+                            return Ok(());
+                        }
+                    };
+                    // assert this is valid for our connection type
+                    conn.assert_valid_message(&request)?;
 
-            // TODO: send request to rayon thread pool
-            let response = app.handle(request);
-
-            codec.send(response).await?;
+                    // TODO: keep reading while we have outstanding work in threadpool...
+                    // ensure these are ordered
+                    // send request to rayon thread pool
+                    let call_app = app.clone();
+                    let response = pool
+                        .install(move || tokio_rayon::spawn_fifo(move || call_app.handle(request)));
+                    pending.push_back(response);
+                }
+                Step::Output(response) => {
+                    codec.send(response).await?;
+                }
+            }
         }
     }
+}
+
+enum Step {
+    Input(Option<Result<Request, AbciError>>),
+    Output(Response),
 }
 
 #[derive(Debug, Copy, Clone)]
