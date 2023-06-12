@@ -9,7 +9,7 @@ use tracing::{
     info, info_span, trace,
 };
 
-use tendermint_abci::Application;
+use pulsar_abci::Application;
 use tendermint_proto::abci::{
     response_process_proposal, RequestApplySnapshotChunk, RequestCheckTx, RequestEcho,
     RequestFinalizeBlock, RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
