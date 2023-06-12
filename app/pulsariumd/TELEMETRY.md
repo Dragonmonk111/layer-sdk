@@ -15,6 +15,9 @@ docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 -p14268:14268 jaeger
 
 You should now see the Web interface at http://localhost:16686
 
+
+**Note** If you enable jaeger, all logs will go to that server via an async batch API. Nothing will be written out to the shell, as it added too much overhead for tracing information.
+
 ## Run Pulsarimd with OpenTelemetry
 
 You can enable jaeger tracing either with `--jaeger` flag or settings `PULSE_JAEGER=true` in the environment.

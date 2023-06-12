@@ -30,7 +30,9 @@ fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), C
     let message_hash = Sha256::digest(sign_bytes).to_vec();
 
     // parse into cosmrs::Tx so we can understand what we have
+    let span = trace_span!("cosmrs::Tx::from_bytes").entered();
     let tx = cosmrs::Tx::from_bytes(bytes)?;
+    span.exit();
 
     Ok((tx, message_hash))
 }
