@@ -81,7 +81,7 @@ impl SigningInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FeeInfo {
     // how much they pay
     pub fee: Option<Coin>,

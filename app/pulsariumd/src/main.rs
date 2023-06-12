@@ -3,8 +3,8 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
-use pulsar_app::AppConfig;
 use pulsar_abci::ServerConfig;
+use pulsar_app::AppConfig;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
