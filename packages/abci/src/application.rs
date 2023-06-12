@@ -149,12 +149,7 @@ pub trait Application: Send + Clone + 'static {
     }
 }
 
-/*
-
-use tendermint_proto::v0_38::abci::{
-    request::Value, response, Request, Response
-};
-
+use tendermint_proto::v0_38::abci::{request::Value, response, Request, Response};
 
 /// Provides a mechanism for the [`Server`] to execute incoming requests while
 /// expecting the correct response types.
@@ -180,28 +175,27 @@ impl<A: Application> RequestDispatcher for A {
                 Value::ListSnapshots(_) => response::Value::ListSnapshots(self.list_snapshots()),
                 Value::OfferSnapshot(req) => {
                     response::Value::OfferSnapshot(self.offer_snapshot(req))
-                },
+                }
                 Value::LoadSnapshotChunk(req) => {
                     response::Value::LoadSnapshotChunk(self.load_snapshot_chunk(req))
-                },
+                }
                 Value::ApplySnapshotChunk(req) => {
                     response::Value::ApplySnapshotChunk(self.apply_snapshot_chunk(req))
-                },
+                }
                 Value::PrepareProposal(req) => {
                     response::Value::PrepareProposal(self.prepare_proposal(req))
-                },
+                }
                 Value::ProcessProposal(req) => {
                     response::Value::ProcessProposal(self.process_proposal(req))
-                },
+                }
                 Value::ExtendVote(req) => response::Value::ExtendVote(self.extend_vote(req)),
                 Value::VerifyVoteExtension(req) => {
                     response::Value::VerifyVoteExtension(self.verify_vote_extension(req))
-                },
+                }
                 Value::FinalizeBlock(req) => {
                     response::Value::FinalizeBlock(self.finalize_block(req))
-                },
+                }
             }),
         }
     }
 }
-*/
