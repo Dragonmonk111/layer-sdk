@@ -3,6 +3,7 @@
 use bytes::Bytes;
 use cosmwasm_std::{testing::mock_env, to_binary, Binary, Coin, Uint128};
 use hex_literal::hex;
+use itertools::enumerate;
 use pulsar_std::{
     api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate},
     response::{BankQueryResponse, QueryResponse},
@@ -128,7 +129,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    pub fn with_fee_info(mut self, gas_limit: u64, fee: Coin) -> Self {
+    pub fn with_fee(mut self, gas_limit: u64, fee: Coin) -> Self {
         self.fee = FeeInfo {
             gas_limit,
             fee: Some(fee),
@@ -223,6 +224,15 @@ impl PrivateKey {
     }
 }
 
+pub fn assert_block_success(res: &[TxResult<PulsarError>]) {
+    for (idx, r) in enumerate(res.iter()) {
+        match &r.result {
+            Ok(_) => {}
+            Err(e) => panic!("Tx {} failed: {}", idx, e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use cosmwasm_std::coin;
@@ -312,7 +322,7 @@ mod test {
                 recipient: acct.clone(),
                 amount: vec![coin(123_000, "upulsar")],
             })
-            .with_fee_info(100_000, coin(300_000, "upulsar"))
+            .with_fee(100_000, coin(300_000, "upulsar"))
             .with_signer(&pk, 0);
 
         // make sure it succeeds
@@ -337,7 +347,7 @@ mod test {
                 recipient: rcpt.clone(),
                 amount: vec![coin(123_000, "upulsar")],
             })
-            .with_fee_info(100_000, coin(3_000_000, "upulsar"))
+            .with_fee(100_000, coin(3_000_000, "upulsar"))
             .with_signer(&pk, 0);
         app.check_tx(&tx).result.unwrap_err();
 
@@ -373,5 +383,54 @@ mod test {
 
         // make sure it works (even without signer)
         app.simulate(&tx).unwrap();
+    }
+
+    #[test]
+    fn process_block_with_send() {
+        let pk = PrivateKey::random();
+        let signer = pk.to_pubkey();
+        let acct = signer.account_id().unwrap();
+        let rcpt = AccountId::unchecked("getting paid");
+
+        let mut app = TestApp::new("can_check_tx");
+        let genesis = sample_genesis(&acct);
+        app.init(&genesis, "super-chain");
+
+        // query works
+        let bal = app.balance(&acct, "upulsar").unwrap();
+        assert_eq!(bal.u128(), 1_000_000);
+
+        // submit this in a block successfully
+        let msg = BankMsg::Send {
+            sender: acct.clone(),
+            recipient: rcpt.clone(),
+            amount: vec![coin(123_000, "upulsar")],
+        };
+        let tx = TxBuilder::new()
+            .with_msg(msg.clone())
+            .with_fee(100_000, coin(10_000, "upulsar"))
+            .with_signer(&pk, 0);
+
+        let res = app.block(&[tx]);
+        assert_eq!(res.len(), 1);
+        assert_block_success(&res);
+
+        // height is 2
+        assert_eq!(app.height(), 2);
+
+        // balances updated
+        let bal = app.balance(&acct, "upulsar").unwrap();
+        assert_eq!(bal.u128(), 1_000_000 - 123_000 - 10_000);
+
+        let bal = app.balance(&rcpt, "upulsar").unwrap();
+        assert_eq!(bal.u128(), 123_000);
+
+        // note, we now reject with sequence 0
+        let tx = TxBuilder::new().with_msg(msg.clone()).with_signer(&pk, 0);
+        app.check_tx(&tx).result.unwrap_err();
+
+        // and need sequence 1
+        let tx = TxBuilder::new().with_msg(msg.clone()).with_signer(&pk, 1);
+        app.check_tx(&tx).result.unwrap();
     }
 }
