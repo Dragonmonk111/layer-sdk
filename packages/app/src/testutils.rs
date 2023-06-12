@@ -261,13 +261,29 @@ mod test {
         let account = AccountId::unchecked("foobar");
         let genesis = sample_genesis(&account);
 
-        let mut app = TestApp::new("can_init_and_query_chain");
+        let wasm_dir = "can_init_and_query_chain";
+        let mut app = TestApp::new(wasm_dir);
         app.init(&genesis, "super-chain");
 
         let bal = app.balance(&account, "upulsar").unwrap();
         assert_eq!(bal.u128(), 1_000_000);
 
         let bals = app.all_balances(&account).unwrap();
+        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, "upulsar")];
+        assert_eq!(bals, expected);
+
+        // copy data and try load_from_store
+        let storage = app.app.copy_storage_to_memory();
+        let logic = StateMachine::new(&AppConfig::new(wasm_dir));
+        let mut app2 = App::new(storage, logic);
+        app2.load_from_storage().unwrap();
+        let new_app = TestApp { app: app2 };
+
+        // make sure same data here
+        let bal = new_app.balance(&account, "upulsar").unwrap();
+        assert_eq!(bal.u128(), 1_000_000);
+
+        let bals = new_app.all_balances(&account).unwrap();
         let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, "upulsar")];
         assert_eq!(bals, expected);
     }
@@ -318,8 +334,8 @@ mod test {
         // and bad tx works, as long as we pay fees
         let tx = TxBuilder::new()
             .with_msg(BankMsg::Send {
-                sender: rcpt.clone(),
-                recipient: acct.clone(),
+                sender: rcpt,
+                recipient: acct,
                 amount: vec![coin(123_000, "upulsar")],
             })
             .with_fee(100_000, coin(300_000, "upulsar"))
@@ -354,8 +370,8 @@ mod test {
         // as does an invalid signature
         let tx = TxBuilder::new()
             .with_msg(BankMsg::Send {
-                sender: acct.clone(),
-                recipient: rcpt.clone(),
+                sender: acct,
+                recipient: rcpt,
                 amount: vec![coin(123_000, "upulsar")],
             })
             .with_invalid_sig()
@@ -376,7 +392,7 @@ mod test {
         let tx = TxBuilder::new()
             .with_msg(BankMsg::Send {
                 sender: sender.clone(),
-                recipient: rcpt.clone(),
+                recipient: rcpt,
                 amount: vec![coin(123_000, "upulsar")],
             })
             .with_sender(&sender);
@@ -430,7 +446,7 @@ mod test {
         app.check_tx(&tx).result.unwrap_err();
 
         // and need sequence 1
-        let tx = TxBuilder::new().with_msg(msg.clone()).with_signer(&pk, 1);
+        let tx = TxBuilder::new().with_msg(msg).with_signer(&pk, 1);
         app.check_tx(&tx).result.unwrap();
     }
 }
