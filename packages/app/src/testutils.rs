@@ -24,7 +24,7 @@ impl TestApp {
         let logic = StateMachine::new(&AppConfig::new(wasm_dir));
 
         // create the app
-        let mut app = App::new(storage, logic);
+        let app = App::new(storage, logic);
 
         Self { app }
     }
@@ -45,6 +45,12 @@ impl TestApp {
             initial_height: 1,
         };
         self.app.init(request).unwrap();
+        // process empty genesis block
+        self.block(&[]);
+    }
+
+    pub fn height(&self) -> u64 {
+        self.app.info().unwrap().height
     }
 
     pub fn check_tx(&self, tx: &TxBuilder) -> TxResult<PulsarError> {
@@ -98,15 +104,15 @@ impl TestApp {
     }
 }
 
-pub struct TxBuilder {
+pub struct TxBuilder<'a> {
     msgs: Vec<Msg>,
     fee: FeeInfo,
     sender: Option<AccountId>,
-    signer: Option<(PrivateKey, u64)>,
+    signer: Option<(&'a PrivateKey, u64)>,
     invalid_sig: bool,
 }
 
-impl TxBuilder {
+impl<'a> TxBuilder<'a> {
     pub fn new() -> Self {
         Self {
             msgs: vec![],
@@ -122,37 +128,42 @@ impl TxBuilder {
         self
     }
 
-    pub fn with_fee_info(mut self, fee_info: FeeInfo) -> Self {
-        self.fee = fee_info;
+    pub fn with_fee_info(mut self, gas_limit: u64, fee: Coin) -> Self {
+        self.fee = FeeInfo {
+            gas_limit,
+            fee: Some(fee),
+        };
         self
     }
 
     // use to simulate unsigned tx, or tx signed by other account
     // if you set a signer, we will determine this automatically
-    pub fn with_sender(mut self, sender: AccountId) -> Self {
-        self.sender = Some(sender);
+    pub fn with_sender(mut self, sender: &AccountId) -> Self {
+        self.sender = Some(sender.clone());
         self
     }
 
     // use to simulate unsigned tx, or tx signed by other account
     // if you set a signer, we will determine this automatically
-    pub fn with_signer(mut self, signer: PrivateKey, sequence: u64) -> Self {
+    pub fn with_signer(mut self, signer: &'a PrivateKey, sequence: u64) -> Self {
         self.signer = Some((signer, sequence));
+        self
+    }
+
+    pub fn with_invalid_sig(mut self) -> Self {
+        self.invalid_sig = true;
         self
     }
 
     pub fn build(&self) -> Tx {
         // hardcode this for now..
-        let message_hash = Binary::from(
+        let raw_tx = Vec::from(
             hex!("00cafe00deadbeef00cafe009e0b70086ba7c40e91a9d04d31946c10346d79a9").as_slice(),
         );
+        let message_hash = Sha256::new_with_prefix(&raw_tx).finalize().to_vec().into();
 
         let (sequence, pubkey, mut signature) = match self.signer.as_ref() {
-            Some((signer, sequence)) => (
-                *sequence,
-                Some(signer.to_pubkey()),
-                signer.sign(&message_hash),
-            ),
+            Some((signer, sequence)) => (*sequence, Some(signer.to_pubkey()), signer.sign(&raw_tx)),
             None => (0, None, Binary::from(b"")),
         };
         if self.invalid_sig && !signature.is_empty() {
@@ -175,32 +186,39 @@ impl TxBuilder {
                 pubkey,
                 signature,
             },
-            fee: FeeInfo {
-                fee: None,
-                gas_limit: 0,
-            },
+            fee: self.fee.clone(),
             timeout_height: None,
-            raw_tx: Bytes::from("Hardedcoded value for now"),
+            raw_tx: Bytes::from(raw_tx),
         })
     }
 }
 
-use cosmrs::crypto::secp256k1;
+use k256::ecdsa::{signature::DigestSigner, Signature, SigningKey};
+use k256::elliptic_curve::rand_core::OsRng;
+use sha2::{Digest, Sha256};
 
-pub struct PrivateKey(secp256k1::SigningKey);
+pub struct PrivateKey(SigningKey);
 
 impl PrivateKey {
-    pub fn to_pubkey(&self) -> PubKey {
-        let pk = self.0.public_key();
-        match pk.type_url() {
-            cosmrs::crypto::PublicKey::ED25519_TYPE_URL => PubKey::ed25519(pk.to_bytes()),
-            cosmrs::crypto::PublicKey::SECP256K1_TYPE_URL => PubKey::secp256k1(pk.to_bytes()),
-            url => panic!("UnsupportedPubKey {url}"),
-        }
+    #[allow(dead_code)]
+    pub fn from_slice(secret: &[u8]) -> Self {
+        let sk = SigningKey::from_slice(secret).unwrap();
+        Self(sk)
     }
 
-    pub fn sign(&self, message_hash: &[u8]) -> Binary {
-        let signature = self.0.sign(message_hash).unwrap();
+    pub fn random() -> Self {
+        let sk = SigningKey::random(&mut OsRng);
+        Self(sk)
+    }
+
+    pub fn to_pubkey(&self) -> PubKey {
+        let pk = self.0.verifying_key().to_encoded_point(true);
+        PubKey::secp256k1(Binary::from(pk.as_bytes()))
+    }
+
+    pub fn sign(&self, message: &[u8]) -> Binary {
+        let digest = Sha256::new_with_prefix(message);
+        let signature: Signature = self.0.sign_digest(digest);
         signature.to_vec().into()
     }
 }
@@ -208,17 +226,16 @@ impl PrivateKey {
 #[cfg(test)]
 mod test {
     use cosmwasm_std::coin;
+    use pulsar_std::BankMsg;
 
     use crate::genesis::{BankAccount, WasmParams};
 
     use super::*;
 
-    #[test]
-    fn can_init_and_query_chain() {
-        // FIXME: simplify genesis building?
-        let account = AccountId::unchecked("foobar");
+    // FIXME: use genesis building pattern?
+    fn sample_genesis(account: &AccountId) -> GenesisState {
         let balance = vec![coin(1_000_000, "upulsar"), coin(2_000_000, "umagic")];
-        let genesis = GenesisState {
+        GenesisState {
             bank: vec![BankAccount {
                 address: account.to_string(),
                 balance,
@@ -226,15 +243,135 @@ mod test {
             wasm: WasmParams {
                 gov_account: account.to_string(),
             },
-        };
+        }
+    }
+
+    #[test]
+    fn can_init_and_query_chain() {
+        let account = AccountId::unchecked("foobar");
+        let genesis = sample_genesis(&account);
 
         let mut app = TestApp::new("can_init_and_query_chain");
         app.init(&genesis, "super-chain");
 
         let bal = app.balance(&account, "upulsar").unwrap();
         assert_eq!(bal.u128(), 1_000_000);
+
+        let bals = app.all_balances(&account).unwrap();
+        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, "upulsar")];
+        assert_eq!(bals, expected);
     }
 
     #[test]
-    fn can_check_tx() {}
+    fn run_empty_blocks() {
+        let account = AccountId::unchecked("foobar");
+        let genesis = sample_genesis(&account);
+
+        let mut app = TestApp::new("run_empty_blocks");
+        app.init(&genesis, "super-chain");
+
+        app.block(&[]);
+        app.block(&[]);
+        app.block(&[]);
+
+        // query works
+        let bal = app.balance(&account, "upulsar").unwrap();
+        assert_eq!(bal.u128(), 1_000_000);
+
+        // height is 4
+        assert_eq!(app.height(), 4);
+    }
+
+    #[test]
+    fn can_check_tx() {
+        let pk = PrivateKey::random();
+        let signer = pk.to_pubkey();
+        let acct = signer.account_id().unwrap();
+        let rcpt = AccountId::unchecked("getting paid");
+
+        let mut app = TestApp::new("can_check_tx");
+        let genesis = sample_genesis(&acct);
+        app.init(&genesis, "super-chain");
+
+        // build and check tx
+        let tx = TxBuilder::new()
+            .with_msg(BankMsg::Send {
+                sender: acct.clone(),
+                recipient: rcpt.clone(),
+                amount: vec![coin(123_000, "upulsar")],
+            })
+            .with_signer(&pk, 0);
+
+        // make sure it works
+        app.check_tx(&tx).result.unwrap();
+
+        // and bad tx works, as long as we pay fees
+        let tx = TxBuilder::new()
+            .with_msg(BankMsg::Send {
+                sender: rcpt.clone(),
+                recipient: acct.clone(),
+                amount: vec![coin(123_000, "upulsar")],
+            })
+            .with_fee_info(100_000, coin(300_000, "upulsar"))
+            .with_signer(&pk, 0);
+
+        // make sure it succeeds
+        app.check_tx(&tx).result.unwrap();
+    }
+
+    #[test]
+    fn check_tx_failures() {
+        let pk = PrivateKey::random();
+        let signer = pk.to_pubkey();
+        let acct = signer.account_id().unwrap();
+        let rcpt = AccountId::unchecked("getting paid");
+
+        let mut app = TestApp::new("can_check_tx");
+        let genesis = sample_genesis(&acct);
+        app.init(&genesis, "super-chain");
+
+        // but too many fees fails
+        let tx = TxBuilder::new()
+            .with_msg(BankMsg::Send {
+                sender: acct.clone(),
+                recipient: rcpt.clone(),
+                amount: vec![coin(123_000, "upulsar")],
+            })
+            .with_fee_info(100_000, coin(3_000_000, "upulsar"))
+            .with_signer(&pk, 0);
+        app.check_tx(&tx).result.unwrap_err();
+
+        // as does an invalid signature
+        let tx = TxBuilder::new()
+            .with_msg(BankMsg::Send {
+                sender: acct.clone(),
+                recipient: rcpt.clone(),
+                amount: vec![coin(123_000, "upulsar")],
+            })
+            .with_invalid_sig()
+            .with_signer(&pk, 0);
+        app.check_tx(&tx).result.unwrap_err();
+    }
+
+    #[test]
+    fn can_simulate_tx() {
+        let sender = AccountId::unchecked("no private key");
+        let rcpt = AccountId::unchecked("getting paid");
+
+        let mut app = TestApp::new("can_check_tx");
+        let genesis = sample_genesis(&sender);
+        app.init(&genesis, "super-chain");
+
+        // build and simulate tx (even without private key)
+        let tx = TxBuilder::new()
+            .with_msg(BankMsg::Send {
+                sender: sender.clone(),
+                recipient: rcpt.clone(),
+                amount: vec![coin(123_000, "upulsar")],
+            })
+            .with_sender(&sender);
+
+        // make sure it works (even without signer)
+        app.simulate(&tx).unwrap();
+    }
 }

@@ -2399,7 +2399,6 @@ name = "pulsar-app"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "cosmrs",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-vm",
@@ -2409,6 +2408,7 @@ dependencies = [
  "cw20-base",
  "hex-literal",
  "itertools",
+ "k256 0.13.1",
  "parking_lot",
  "pulsar-std",
  "pulsar-storage",
