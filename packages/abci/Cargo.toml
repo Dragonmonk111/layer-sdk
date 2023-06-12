@@ -9,5 +9,11 @@ edition = { workspace = true }
 
 [dependencies]
 tendermint-proto = { workspace = true }
+tracing = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+
+prost = { version = "0.11", default-features = false, features = ["std"] }
 tokio = { version = "1.28.0", features = ["full"] }
 rayon = "1.5.1"
+

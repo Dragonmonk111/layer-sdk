@@ -2342,9 +2342,13 @@ dependencies = [
 name = "pulsar-abci"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "prost",
  "rayon",
  "tendermint-proto 0.32.0",
+ "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
