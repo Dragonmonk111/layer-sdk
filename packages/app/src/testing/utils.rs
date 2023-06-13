@@ -254,6 +254,10 @@ impl PrivateKey {
         PubKey::secp256k1(Binary::from(pk.as_bytes()))
     }
 
+    pub fn account_id(&self) -> AccountId {
+        self.to_pubkey().account_id().unwrap()
+    }
+
     pub fn sign(&self, message: &[u8]) -> Binary {
         let digest = Sha256::new_with_prefix(message);
         let signature: Signature = self.0.sign_digest(digest);

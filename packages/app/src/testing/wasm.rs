@@ -1,6 +1,3 @@
-// v1.0.1
-const CW20_BASE: &[u8] = include_bytes!("../../fixtures/cw20_base.wasm");
-
 use cosmwasm_std::{coin, coins, to_binary, to_vec, Uint128};
 use cw20::Cw20Coin;
 use pulsar_std::{AccountId, WasmMsg};
@@ -9,6 +6,9 @@ use crate::{
     genesis::{BankAccount, GenesisState, WasmParams},
     testing::utils::*,
 };
+
+// v1.0.1
+const CW20_BASE: &[u8] = include_bytes!("../../fixtures/cw20_base.wasm");
 
 fn cw20_genesis(account: &AccountId) -> GenesisState {
     GenesisState {
