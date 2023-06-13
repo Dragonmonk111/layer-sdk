@@ -20,6 +20,14 @@ const PRINT_DEBUG: bool = false;
 // TODO: what is this really?
 const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000_000;
 
+pub fn sdk_gas_to_wasmer(gas: u64) -> u64 {
+    gas.saturating_mul(SDK_TO_WASMER_GAS_FACTOR)
+}
+
+pub fn wasmer_gas_to_sdk(gas: u64) -> u64 {
+    gas / SDK_TO_WASMER_GAS_FACTOR
+}
+
 fn capabilities() -> HashSet<String> {
     CAPABILITIES.iter().map(|s| s.to_string()).collect()
 }
@@ -84,7 +92,7 @@ impl VmCache {
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
-        let gas_limit = meter.remaining().saturating_mul(SDK_TO_WASMER_GAS_FACTOR);
+        let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
             print_debug: self.print_debug,
@@ -108,7 +116,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_instantiate(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
+        let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
 
         // commit or abort the open WeakSubTx
         match &result {
@@ -137,7 +145,7 @@ impl VmCache {
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
-        let gas_limit = meter.remaining().saturating_mul(SDK_TO_WASMER_GAS_FACTOR);
+        let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
             print_debug: self.print_debug,
@@ -161,7 +169,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_execute(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
+        let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
 
         // commit or abort the open WeakSubTx
         match &result {
@@ -189,7 +197,7 @@ impl VmCache {
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Binary, String>, VmError>, u64) {
-        let gas_limit = meter.remaining().saturating_mul(SDK_TO_WASMER_GAS_FACTOR);
+        let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
             print_debug: self.print_debug,
@@ -214,7 +222,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_query(&mut instance, env, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
+        let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
 
         // always abort scratch, as we don't want to commit anything
         scratch.abort();

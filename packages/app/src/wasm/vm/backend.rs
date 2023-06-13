@@ -15,6 +15,8 @@ use pulsar_storage::{ReadonlyStorage, Storage};
 
 use crate::{PulsarError, StateMachine};
 
+use super::cache::{sdk_gas_to_wasmer, wasmer_gas_to_sdk};
+
 pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
 
@@ -87,14 +89,18 @@ impl BackendQuerier for VmQuerier {
         gas_limit: u64,
     ) -> BackendResult<cosmwasm_std::SystemResult<cosmwasm_std::ContractResult<cosmwasm_std::Binary>>>
     {
-        let sub_limit = gas_limit < self.meter.remaining();
+        let sdk_gas_limit = wasmer_gas_to_sdk(gas_limit);
+        let sub_limit = sdk_gas_limit < self.meter.remaining();
         let (res, gas_used) = if sub_limit {
-            let sub_meter = GasMeter::new(gas_limit);
+            let sub_meter = GasMeter::new(sdk_gas_limit);
             let res = self.do_query_raw(request, &sub_meter);
             let gas_used = sub_meter.used();
             let gas_res = self.meter.charge(gas_used);
             if let Err(e) = gas_res {
-                return (Err(out_of_gas(e)), GasInfo::with_externally_used(gas_used));
+                return (
+                    Err(out_of_gas(e)),
+                    GasInfo::with_externally_used(sdk_gas_to_wasmer(gas_used)),
+                );
             }
             (res, gas_used)
         } else {
@@ -103,7 +109,10 @@ impl BackendQuerier for VmQuerier {
             let gas_used = self.meter.used() - start;
             (res, gas_used)
         };
-        (encode_error(res), GasInfo::with_externally_used(gas_used))
+        (
+            encode_error(res),
+            GasInfo::with_externally_used(sdk_gas_to_wasmer(gas_used)),
+        )
     }
 }
 

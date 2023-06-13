@@ -1,8 +1,9 @@
 use cosmwasm_std::{coin, coins, to_binary};
-use pulsar_std::{AccountId, WasmMsg};
+use pulsar_std::{AccountId, GasError, WasmMsg};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
+use crate::PulsarError;
 
 // v1.2.6
 const HACKATOM: &[u8] = include_bytes!("../../fixtures/hackatom.wasm");
@@ -222,13 +223,34 @@ fn check_query_recursion() {
         10_000_000,
     );
 
+    // note: gas limit is currently 500k from crate::app::DEFAULT_QUERY_GAS
+
     // use internal dispatched query and compare to normal query
     let query = &msgs::QueryMsg::Recurse {
-        depth: 10,
+        depth: 5,
         work: 100,
     };
     let rec: msgs::RecurseResponse = app.query_wasm(&contract, &query).unwrap();
     assert_eq!(rec.hashed.len(), 32);
+
+    // TODO: this crashes the node - stack overflow
+    // Note: I safely did 50, 80 fails... let's make a limit like 10
+    // let query = &msgs::QueryMsg::Recurse {
+    //     depth: 100,
+    //     work: 500,
+    // };
+
+    // too much gas will eventually panic (50_000 - 100_000 cycles triggers out of gas)
+    // This should run out of gas around 20 depth, instead it stack overflows at 100.
+    // (Relies on proper gas accounting in `impl BackendQuerier for VmQuerier`::query_raw
+    let query = &msgs::QueryMsg::Recurse {
+        depth: 100,
+        work: 5000,
+    };
+    let err = app
+        .query_wasm::<_, msgs::RecurseResponse>(&contract, &query)
+        .unwrap_err();
+    assert_eq!(err, PulsarError::Gas(GasError::OutOfGas));
 }
 
 #[test]
