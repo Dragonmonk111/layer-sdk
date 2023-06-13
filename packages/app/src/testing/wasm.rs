@@ -1,14 +1,13 @@
 // v1.0.1
 const CW20_BASE: &[u8] = include_bytes!("../../fixtures/cw20_base.wasm");
 
-use cosmwasm_std::{coin, coins, to_binary, to_vec, Event, Uint128};
+use cosmwasm_std::{coin, coins, to_binary, to_vec, Uint128};
 use cw20::Cw20Coin;
-use pulsar_std::{api::TxResult, AccountId, WasmMsg};
+use pulsar_std::{AccountId, WasmMsg};
 
 use crate::{
     genesis::{BankAccount, GenesisState, WasmParams},
     testing::utils::*,
-    PulsarError,
 };
 
 fn cw20_genesis(account: &AccountId) -> GenesisState {
@@ -29,19 +28,6 @@ fn query_cw20_balance(app: &TestApp, contract: &AccountId, account: &AccountId) 
     };
     let cw20::BalanceResponse { balance } = app.query_wasm(contract, &msg).unwrap();
     balance
-}
-
-fn msg_events(res: &TxResult<PulsarError>, msg: usize) -> &[Event] {
-    &res.result.as_ref().unwrap().events[msg]
-}
-
-fn event_value<'a>(events: &'a [Event], ty: &str, key: &str) -> Option<&'a str> {
-    events.iter().find(|a| a.ty == ty).and_then(|evt| {
-        evt.attributes
-            .iter()
-            .find(|a| a.key == key)
-            .map(|attr| attr.value.as_str())
-    })
 }
 
 #[test]

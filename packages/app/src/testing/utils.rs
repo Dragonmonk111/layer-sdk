@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use cosmwasm_schema::serde::{de::DeserializeOwned, Serialize};
-use cosmwasm_std::{from_slice, testing::mock_env, to_binary, Binary, Coin, Uint128};
+use cosmwasm_std::{from_slice, testing::mock_env, to_binary, Binary, Coin, Event, Uint128};
 use hex_literal::hex;
 use itertools::enumerate;
 use pulsar_std::{
@@ -16,12 +16,6 @@ const NANO_SECOND_PER_BLOCK: u64 = 2_400 * 1_000_000; // 2.4 seconds
 
 pub struct TestApp {
     pub app: App<MemoryStore>,
-}
-
-pub fn prepare_cache(path: &'_ str) -> &'_ str {
-    let _ = std::fs::remove_dir_all(path);
-    std::fs::create_dir_all(path).unwrap();
-    path
 }
 
 impl TestApp {
@@ -124,6 +118,25 @@ impl TestApp {
         };
         Ok(from_slice(&res)?)
     }
+}
+
+pub fn prepare_cache(path: &'_ str) -> &'_ str {
+    let _ = std::fs::remove_dir_all(path);
+    std::fs::create_dir_all(path).unwrap();
+    path
+}
+
+pub fn msg_events(res: &TxResult<PulsarError>, msg: usize) -> &[Event] {
+    &res.result.as_ref().unwrap().events[msg]
+}
+
+pub fn event_value<'a>(events: &'a [Event], ty: &str, key: &str) -> Option<&'a str> {
+    events.iter().find(|a| a.ty == ty).and_then(|evt| {
+        evt.attributes
+            .iter()
+            .find(|a| a.key == key)
+            .map(|attr| attr.value.as_str())
+    })
 }
 
 pub struct TxBuilder<'a> {
