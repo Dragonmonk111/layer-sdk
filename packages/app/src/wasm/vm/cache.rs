@@ -6,7 +6,7 @@ use cosmwasm_vm::{
     InstanceOptions, Size, VmError,
 };
 use pulsar_std::{AccountId, GasMeter};
-use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
+use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
 use crate::{wasm::keeper::contract_storage, StateMachine};
 
@@ -197,7 +197,8 @@ impl VmCache {
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let mut scratch = ScratchTx::new(global_storage);
-        let mut contract = contract_storage(&mut scratch, contract_addr);
+        let mut unmetered = contract_storage(&mut scratch, contract_addr);
+        let mut contract = AppMeter::new(&mut unmetered);
 
         // This is where we fake all the lifetimes....
         let backend =
