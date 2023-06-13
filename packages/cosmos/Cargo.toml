@@ -14,8 +14,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 bytes = { worksapce = true }
 
-cosmrs = {version = "0.13.0", default_features = false, features = ["cosmwasm"] }
-cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
+cosmrs = { worksapce = true }
+cosmos-sdk-proto = { worksapce = true }
 
 [dev_dependencies]
 hex-literal = {workspace = true }

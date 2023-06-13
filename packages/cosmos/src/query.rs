@@ -145,6 +145,7 @@ pub fn encode_cosmos_response<E: std::error::Error>(
         QueryResponse::Auth(auth) => encode_auth_response(auth),
         QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
         QueryResponse::Simulate(simulate) => encode_simulate_response(simulate),
+        QueryResponse::Wasm(_) => todo!(),
     }
 }
 

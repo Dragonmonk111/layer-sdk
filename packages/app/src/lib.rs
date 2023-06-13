@@ -4,7 +4,10 @@ mod bank;
 mod error;
 pub mod genesis;
 mod sm;
+pub(crate) mod testing;
+mod wasm;
 
 pub use app::{App, AppLoadError};
 pub use error::{PulsarError, PulsarResult};
-pub use sm::StateMachine;
+pub use sm::{AppConfig, StateMachine};
+pub use wasm::WasmConfig;

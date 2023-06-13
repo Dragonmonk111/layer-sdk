@@ -1,4 +1,5 @@
-use cosmwasm_std::{Coin, StdError};
+use cosmwasm_std::{Binary, Coin, StdError};
+use derivative::Derivative;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
@@ -10,11 +11,18 @@ use crate::account_id::{AccountId, AccountIdError};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
     Bank(BankMsg),
+    Wasm(WasmMsg),
 }
 
 impl From<BankMsg> for Msg {
     fn from(value: BankMsg) -> Self {
         Msg::Bank(value)
+    }
+}
+
+impl From<WasmMsg> for Msg {
+    fn from(value: WasmMsg) -> Self {
+        Msg::Wasm(value)
     }
 }
 
@@ -36,6 +44,118 @@ impl Display for BankMsg {
         match self {
             BankMsg::Send { .. } => f.write_str("BankMsg::Send"),
             BankMsg::Burn { .. } => f.write_str("BankMsg::Burn"),
+        }
+    }
+}
+
+#[derive(Derivative, Debug, Clone, PartialEq, Eq)]
+pub enum WasmMsg {
+    /// Dispatches a call to another contract at a known address (with known ABI).
+    ///
+    /// This is translated to a [MsgExecuteContract](https://github.com/CosmWasm/wasmd/blob/v0.14.0/x/wasm/internal/types/tx.proto#L68-L78).
+    /// `sender` is automatically filled with the current contract's address.
+    Execute {
+        sender: AccountId,
+        contract_addr: AccountId,
+        /// msg is the json-encoded ExecuteMsg struct (as raw Binary)
+        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        msg: Binary,
+        funds: Vec<Coin>,
+    },
+    /// Instantiates a new contracts from previously uploaded Wasm code.
+    ///
+    /// The contract address is non-predictable. But it is guaranteed that
+    /// when emitting the same Instantiate message multiple times,
+    /// multiple instances on different addresses will be generated. See also
+    /// Instantiate2.
+    ///
+    /// This is translated to a [MsgInstantiateContract](https://github.com/CosmWasm/wasmd/blob/v0.29.2/proto/cosmwasm/wasm/v1/tx.proto#L53-L71).
+    /// `sender` is automatically filled with the current contract's address.
+    Instantiate {
+        sender: AccountId,
+        admin: Option<AccountId>,
+        code_id: u64,
+        /// msg is the JSON-encoded InstantiateMsg struct (as raw Binary)
+        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        msg: Binary,
+        funds: Vec<Coin>,
+        /// A human-readbale label for the contract
+        label: String,
+    },
+    /// Instantiates a new contracts from previously uploaded Wasm code
+    /// using a predictable address derivation algorithm implemented in
+    /// [`cosmwasm_std::instantiate2_address`].
+    ///
+    /// This is translated to a [MsgInstantiateContract2](https://github.com/CosmWasm/wasmd/blob/v0.29.2/proto/cosmwasm/wasm/v1/tx.proto#L73-L96).
+    /// `sender` is automatically filled with the current contract's address.
+    /// `fix_msg` is automatically set to false.
+    Instantiate2 {
+        sender: AccountId,
+        admin: Option<AccountId>,
+        code_id: u64,
+        /// A human-readbale label for the contract
+        label: String,
+        /// msg is the JSON-encoded InstantiateMsg struct (as raw Binary)
+        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        msg: Binary,
+        funds: Vec<Coin>,
+        salt: Binary,
+    },
+    /// Migrates a given contracts to use new wasm code. Passes a MigrateMsg to allow us to
+    /// customize behavior.
+    ///
+    /// Only the contract admin (as defined in wasmd), if any, is able to make this call.
+    ///
+    /// This is translated to a [MsgMigrateContract](https://github.com/CosmWasm/wasmd/blob/v0.14.0/x/wasm/internal/types/tx.proto#L86-L96).
+    /// `sender` is automatically filled with the current contract's address.
+    Migrate {
+        sender: AccountId,
+        contract_addr: AccountId,
+        /// the code_id of the new logic to place in the given contract
+        new_code_id: u64,
+        /// msg is the json-encoded MigrateMsg struct that will be passed to the new code
+        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        msg: Binary,
+    },
+    /// Sets a new admin (for migrate) on the given contract.
+    /// Fails if this contract is not currently admin of the target contract.
+    UpdateAdmin {
+        sender: AccountId,
+        contract_addr: AccountId,
+        admin: AccountId,
+    },
+    /// Clears the admin on the given contract, so no more migration possible.
+    /// Fails if this contract is not currently admin of the target contract.
+    ClearAdmin {
+        sender: AccountId,
+        contract_addr: AccountId,
+    },
+    StoreCode {
+        sender: AccountId,
+        code: Binary,
+    },
+    Pin {
+        sender: AccountId,
+        code_id: u64,
+    },
+    Unpin {
+        sender: AccountId,
+        code_id: u64,
+    },
+}
+
+impl Display for WasmMsg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WasmMsg::Execute { .. } => f.write_str("WasmMsg::Execute"),
+            WasmMsg::Instantiate { .. } => f.write_str("WasmMsg::Instantiate"),
+            WasmMsg::Instantiate2 { .. } => f.write_str("WasmMsg::Instantiate2"),
+            WasmMsg::Migrate { .. } => f.write_str("WasmMsg::Migrate"),
+            WasmMsg::ClearAdmin { .. } => f.write_str("WasmMsg::ClearAdmin"),
+            WasmMsg::UpdateAdmin { .. } => f.write_str("WasmMsg::UpdateAdmin"),
+            WasmMsg::StoreCode { .. } => f.write_str("WasmMsg::StoreCode"),
+            WasmMsg::Pin { .. } => f.write_str("WasmMsg::Pin"),
+            WasmMsg::Unpin { .. } => f.write_str("WasmMsg::Unpin"),
         }
     }
 }
@@ -67,8 +187,21 @@ impl Msg {
     /// List which addresses must sign the message for it to be valid
     pub fn required_signer(&self) -> AccountId {
         match &self {
-            Msg::Bank(BankMsg::Send { sender, .. }) => sender.clone(),
-            Msg::Bank(BankMsg::Burn { sender, .. }) => sender.clone(),
+            Msg::Bank(bank) => match bank {
+                BankMsg::Send { sender, .. } => sender.clone(),
+                BankMsg::Burn { sender, .. } => sender.clone(),
+            },
+            Msg::Wasm(wasm) => match wasm {
+                WasmMsg::Execute { sender, .. } => sender.clone(),
+                WasmMsg::Instantiate { sender, .. } => sender.clone(),
+                WasmMsg::Instantiate2 { sender, .. } => sender.clone(),
+                WasmMsg::Migrate { sender, .. } => sender.clone(),
+                WasmMsg::UpdateAdmin { sender, .. } => sender.clone(),
+                WasmMsg::ClearAdmin { sender, .. } => sender.clone(),
+                WasmMsg::StoreCode { sender, .. } => sender.clone(),
+                WasmMsg::Pin { sender, .. } => sender.clone(),
+                WasmMsg::Unpin { sender, .. } => sender.clone(),
+            },
         }
     }
 }

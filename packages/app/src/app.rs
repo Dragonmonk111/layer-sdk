@@ -439,6 +439,11 @@ impl<T: PersistentStorage + 'static> App<T> {
             app_hash: self.storage.app_hash(),
         })
     }
+
+    #[cfg(test)]
+    pub fn copy_storage_to_memory(&self) -> pulsar_storage::MemoryStore {
+        pulsar_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -460,7 +465,8 @@ mod tests {
     };
     use pulsar_storage::MemoryStore;
 
-    use crate::genesis::BankAccount;
+    use crate::genesis::{BankAccount, WasmParams};
+    use crate::sm::AppConfig;
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_binary(genesis).unwrap();
@@ -475,62 +481,6 @@ mod tests {
             }],
             app_state,
             initial_height: 1,
-        }
-    }
-
-    #[test]
-    fn initialize_and_query_bank() {
-        let account = AccountId::unchecked("foobar");
-        let mut balance = vec![coin(1_000_000, "upulsar"), coin(2_000_000, "umagic")];
-        let genesis = GenesisState {
-            bank: vec![BankAccount {
-                address: account.to_string(),
-                balance: balance.clone(),
-            }],
-        };
-
-        let storage = MemoryStore::default();
-        let logic = StateMachine::new();
-        let request = mock_init(&genesis);
-
-        // create the app
-        let mut app = App::new(storage, logic);
-        let result = app.init(request.clone()).unwrap();
-        assert_eq!(result.validators, request.validators);
-        assert_eq!(result.consensus_params, request.consensus_params);
-
-        // query the original bank account
-        let result = app
-            .query(
-                BankQuery::AllBalances {
-                    address: account.clone(),
-                }
-                .into(),
-            )
-            .unwrap();
-        // sort balance, output will be in denom order
-        balance.sort_by(|a, b| a.denom.cmp(&b.denom));
-        match result {
-            QueryResponse::Bank(BankQueryResponse::AllBalances(res)) => {
-                assert_eq!(res.amount, balance);
-            }
-            x => panic!("Exected AllBalancesResponse, got {:?}", x),
-        }
-
-        // copy data into new storage (MemoryStore::import only meant for testing)
-        let storage = MemoryStore::import(&app.storage.reader(), None).unwrap();
-        let mut app2 = App::new(storage, app.logic);
-        app2.load_from_storage().unwrap();
-
-        // query the recovered state
-        let result = app2
-            .query(BankQuery::AllBalances { address: account }.into())
-            .unwrap();
-        match result {
-            QueryResponse::Bank(BankQueryResponse::AllBalances(res)) => {
-                assert_eq!(res.amount, balance);
-            }
-            x => panic!("Exected AllBalancesResponse, got {:?}", x),
         }
     }
 
@@ -577,9 +527,12 @@ mod tests {
                 address: sender.to_string(),
                 balance: coins(2_000_000_000, denom),
             }],
+            wasm: WasmParams {
+                gov_account: sender.to_string(),
+            },
         };
         // TODO: remove from App args, build inside (with config)
-        let logic = StateMachine::new();
+        let logic = StateMachine::new(&AppConfig::new("/tmp/pulsar/transaction_workflow"));
         let request = mock_init(&genesis);
 
         // create the app

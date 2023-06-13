@@ -4,6 +4,7 @@ use figment::{
     Figment,
 };
 use pulsar_abci::ServerConfig;
+use pulsar_app::AppConfig;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
@@ -72,12 +73,15 @@ async fn main() {
             .expect("setting default subscriber failed");
     }
 
+    // TODO: put this in cli/config args
+    let app_config = AppConfig::new("/tmp/pulsar/TODO");
+
     // Create the app
     match config.lmdb {
         Some(path) => {
             info!("using lmdb database at {}", path);
             let storage = pulsar_storage::LmdbStore::new(&path, None);
-            let app = Pulsarium::new(storage);
+            let app = Pulsarium::new(storage, app_config);
 
             // Start ABCI server
             let server = ServerConfig::new()
@@ -90,7 +94,7 @@ async fn main() {
         None => {
             info!("using in-memory database");
             let storage = pulsar_storage::MemoryStore::new();
-            let app = Pulsarium::new(storage);
+            let app = Pulsarium::new(storage, app_config);
 
             // Start ABCI server
             let server = ServerConfig::new()

@@ -1,15 +1,16 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, fmt, path::PathBuf};
 
 use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Response};
 use cosmwasm_vm::{
-    call_execute, call_instantiate, call_query, Cache, CacheOptions, Checksum, InstanceOptions,
-    Size, VmError,
+    call_execute, call_instantiate, call_query, AnalysisReport, Cache, CacheOptions, Checksum,
+    InstanceOptions, Size, VmError,
 };
-use pulsar_app::StateMachine;
 use pulsar_std::GasMeter;
 use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
-use crate::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
+use crate::StateMachine;
+
+use super::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
@@ -28,6 +29,14 @@ pub struct VmCache {
     print_debug: bool,
 }
 
+impl fmt::Debug for VmCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VmCache")
+            .field("print_debug", &self.print_debug)
+            .finish()
+    }
+}
+
 impl VmCache {
     // TODO: make more args?
     pub fn init(cache_dir: &str) -> Self {
@@ -44,25 +53,28 @@ impl VmCache {
         }
     }
 
-    pub fn store_code(&mut self, wasm: &[u8]) -> Result<Checksum, VmError> {
-        self.cache.save_wasm(wasm)
+    pub fn store_code(&self, wasm: &[u8]) -> Result<(Checksum, AnalysisReport), VmError> {
+        let checksum = self.cache.save_wasm(wasm)?;
+        let analysis = self.cache.analyze(&checksum)?;
+        Ok((checksum, analysis))
     }
 
-    pub fn load_code(&mut self, checksum: &Checksum) -> Result<Vec<u8>, VmError> {
+    #[allow(dead_code)]
+    pub fn load_code(&self, checksum: &Checksum) -> Result<Vec<u8>, VmError> {
         self.cache.load_wasm(checksum)
     }
 
-    pub fn pin(&mut self, checksum: &Checksum) -> Result<(), VmError> {
+    pub fn pin(&self, checksum: &Checksum) -> Result<(), VmError> {
         self.cache.pin(checksum)
     }
 
-    pub fn unpin(&mut self, checksum: &Checksum) -> Result<(), VmError> {
+    pub fn unpin(&self, checksum: &Checksum) -> Result<(), VmError> {
         self.cache.unpin(checksum)
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn instantiate(
-        &mut self,
+        &self,
         checksum: &Checksum,
         env: &Env,
         info: &MessageInfo,
@@ -94,7 +106,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_instantiate(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally;
+        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
 
         // commit or abort the open WeakSubTx
         match &result {
@@ -113,7 +125,7 @@ impl VmCache {
 
     #[allow(clippy::too_many_arguments)]
     pub fn execute(
-        &mut self,
+        &self,
         checksum: &Checksum,
         env: &Env,
         info: &MessageInfo,
@@ -145,7 +157,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_execute(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally;
+        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
 
         // commit or abort the open WeakSubTx
         match &result {
@@ -164,7 +176,7 @@ impl VmCache {
 
     #[allow(clippy::too_many_arguments)]
     pub fn query(
-        &mut self,
+        &self,
         checksum: &Checksum,
         env: &Env,
         msg: &[u8],
@@ -194,7 +206,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_query(&mut instance, env, msg);
         let result = result.map(|x| x.into_result());
-        let gas_used = instance.create_gas_report().used_internally;
+        let gas_used = instance.create_gas_report().used_internally / SDK_TO_WASMER_GAS_FACTOR;
 
         // always abort scratch, as we don't want to commit anything
         scratch.abort();
@@ -215,25 +227,28 @@ mod tests {
     use pulsar_std::AccountId;
     use pulsar_storage::{MemoryStore, PersistentStorage};
 
+    use crate::AppConfig;
+
     use super::*;
 
     // v1.0.1
-    const CW20_BASE: &[u8] = include_bytes!("../fixtures/cw20_base.wasm");
+    const CW20_BASE: &[u8] = include_bytes!("../../../fixtures/cw20_base.wasm");
 
     #[test]
     fn can_instatiate() {
         let path = "/tmp/pulsar/test-can-instantiate";
+        let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
-        let mut vm = VmCache::init(path);
-        let checksum = vm.store_code(CW20_BASE).unwrap();
+        let vm = VmCache::init(path);
+        let (checksum, _) = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
         let env = mock_env();
         let sender = AccountId::unchecked("Sillyness");
         let info = mock_info(&sender.to_string(), &[coin(55_000, "upulse")]);
         let meter = GasMeter::infinite();
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
 
         let msg = cw20_base::msg::InstantiateMsg {
@@ -256,7 +271,7 @@ mod tests {
         assert_eq!(res.messages.len(), 0);
         assert_eq!(res.events.len(), 0);
         assert_eq!(res.attributes.len(), 0);
-        assert_eq!(gas_used, 8800200070);
+        assert_eq!(gas_used, 58);
 
         // query the state was written - token_info and total supply
         let num = writer
@@ -269,17 +284,18 @@ mod tests {
     #[test]
     fn happy_path_create_send_query() {
         let path = "/tmp/pulsar/test-happy-path-create-send-query";
+        let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
         let mut vm = VmCache::init(path);
-        let checksum = vm.store_code(CW20_BASE).unwrap();
+        let (checksum, _) = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
         let env = mock_env();
         let sender = AccountId::unchecked("Sillyness");
         let info = mock_info(&sender.to_string(), &[]);
         let meter = GasMeter::infinite();
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
 
@@ -357,11 +373,12 @@ mod tests {
 
     #[test]
     fn query_with_iterator() {
-        let path = "/tmp/pulsar/test-happy-path-create-send-query";
+        let path = "/tmp/pulsar/test-query-with-iterator";
+        let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
-        let mut vm = VmCache::init(path);
-        let checksum = vm.store_code(CW20_BASE).unwrap();
+        let vm = VmCache::init(path);
+        let (checksum, _) = vm.store_code(CW20_BASE).unwrap();
 
         // try to instantiate
         let env = mock_env();
@@ -370,7 +387,7 @@ mod tests {
         let three = AccountId::unchecked("Xyz");
         let info = mock_info(&one.to_string(), &[]);
         let meter = GasMeter::infinite();
-        let sm = StateMachine::new();
+        let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
 
