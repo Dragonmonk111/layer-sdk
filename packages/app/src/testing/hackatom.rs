@@ -128,12 +128,79 @@ fn check_message_loop() {
 
 #[test]
 fn check_cpu_loop() {
-    // install send funds, release funds
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-cpu-loop");
+
+    // other actors
+    let sender = signer.account_id();
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    let gas_limit = 831_000;
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender,
+            contract_addr: contract,
+            msg: to_binary(&msgs::ExecuteMsg::CpuLoop {}).unwrap(),
+            funds: vec![],
+        })
+        .with_fee(gas_limit, coin(1_000, DENOM))
+        .with_signer(&signer, 2);
+    let res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    assert!(res[0].result.is_err());
+    assert!(res[0].gas.gas_used >= gas_limit);
+    assert!(res[0].gas.gas_used < gas_limit + 10_000);
 }
 
+// Note: storage is priced about 5x cheaper than it should compared to cpu usage
+// (Free to read from cache is not correctly priced)
 #[test]
 fn check_storage_loop() {
-    // install send funds, release funds
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-storage-loop");
+
+    // other actors
+    let sender = signer.account_id();
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // execute storage loop with gas limit
+    let gas_limit = 376_000;
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender,
+            contract_addr: contract,
+            msg: to_binary(&msgs::ExecuteMsg::StorageLoop {}).unwrap(),
+            funds: vec![],
+        })
+        .with_fee(gas_limit, coin(1_000, DENOM))
+        .with_signer(&signer, 2);
+    let res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    assert!(res[0].result.is_err());
+    assert!(res[0].gas.gas_used >= gas_limit);
+    assert!(res[0].gas.gas_used < gas_limit + 10_000);
 }
 
 #[test]
