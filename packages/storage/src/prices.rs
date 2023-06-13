@@ -36,13 +36,14 @@ pub const DEFAULT_PERSISTED_PRICES: PriceList = PriceList {
 /// This should be set on the last level of cache, when performing the actual app-level logic.
 /// Expecially with wasmd, sub msg will have different cache levels, and we need to charge carefully to avoid double-charging.
 pub const DEFAULT_COMMIT_PRICES: PriceList = PriceList {
-    read_flat: 0,
-    read_per_byte_percent: 0,
+    // we need to charge something for reads, so we aren't so slow in a read loop
+    read_flat: 100,
+    read_per_byte_percent: 10,
     write_flat: 2000,
     write_per_byte_percent: 200,
     remove_flat: 2000,
     remove_per_byte_percent: 200,
-    range_flat: 0,
+    range_flat: 100,
 };
 
 /// For now we charge nothing for each cache level, but we could add some minor cost to prevent abuse of memory storage.

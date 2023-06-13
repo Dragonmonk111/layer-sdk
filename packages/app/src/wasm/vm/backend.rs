@@ -174,7 +174,24 @@ fn cosmwasm_query_to_pulsar(
             }
             x => unsupported_request(&x),
         },
-        QueryRequest::Wasm(_wasm) => todo!(),
+        QueryRequest::Wasm(wasm) => match wasm {
+            cosmwasm_std::WasmQuery::Smart { contract_addr, msg } => {
+                let contract_addr =
+                    AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
+                Ok(pulsar_std::WasmQuery::Smart { contract_addr, msg }.into())
+            }
+            cosmwasm_std::WasmQuery::Raw { contract_addr, key } => {
+                let contract_addr =
+                    AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
+                Ok(pulsar_std::WasmQuery::Raw { contract_addr, key }.into())
+            }
+            cosmwasm_std::WasmQuery::ContractInfo { contract_addr } => {
+                let contract_addr =
+                    AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
+                Ok(pulsar_std::WasmQuery::ContractInfo { contract_addr }.into())
+            }
+            x => unsupported_request(&x),
+        },
         x => unsupported_request(&x),
     }
 }
@@ -207,7 +224,20 @@ fn pulsar_response_to_cosmwasm(
             }
             x => unsupported_response(&x),
         },
-        // Wasm(wasm) => todo!(),
+        Wasm(wasm) => match wasm {
+            pulsar_std::response::WasmQueryResponse::Smart(data) => Ok(data),
+            pulsar_std::response::WasmQueryResponse::Raw(value) => Ok(value),
+            pulsar_std::response::WasmQueryResponse::ContractInfo(info) => {
+                let mut res = cosmwasm_std::ContractInfoResponse::default();
+                res.code_id = info.code_id;
+                res.creator = info.creator.to_string();
+                res.admin = info.admin.map(|a| a.to_string());
+                res.pinned = info.pinned;
+                res.ibc_port = info.ibc_port;
+                Ok(to_binary(&res).unwrap())
+            }
+            x => unsupported_response(&x),
+        },
         x => unsupported_response(&x),
     }
 }

@@ -205,12 +205,35 @@ fn check_storage_loop() {
 
 #[test]
 fn check_query_recursion() {
-    // install send funds, release funds
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-query-recursion");
+
+    // other actors
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // use internal dispatched query and compare to normal query
+    let query = &msgs::QueryMsg::Recurse {
+        depth: 10,
+        work: 100,
+    };
+    let rec: msgs::RecurseResponse = app.query_wasm(&contract, &query).unwrap();
+    assert_eq!(rec.hashed.len(), 32);
 }
 
 #[test]
 fn check_query_balance() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-storage-loop");
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-query-balance");
 
     // other actors
     let sender = signer.account_id();
