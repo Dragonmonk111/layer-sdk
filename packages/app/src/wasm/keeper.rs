@@ -122,7 +122,10 @@ impl Wasm {
         code_id: u64,
     ) -> Result<AccountId, PulsarError> {
         let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
-        let counter = CONTRACT_COUNTER.load(wasm_store.as_ref(), meter)? + 1;
+        let counter = CONTRACT_COUNTER
+            .may_load(wasm_store.as_ref(), meter)?
+            .unwrap_or_default()
+            + 1;
         CONTRACT_COUNTER.save(&mut wasm_store, meter, &counter)?;
         let mut prehash = Vec::with_capacity(sender.len() + 8 + 8);
         prehash.extend_from_slice(sender.as_slice());
@@ -161,7 +164,8 @@ impl Wasm {
                 };
                 let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
                 let id = self.next_id(&mut wasm_store, meter)?;
-                CODES.save(&mut wasm_store, meter, id, &info)?;
+
+                self.save_code(storage, meter, id, &info)?;
                 let event = store_code_event(id, analysis);
                 MsgResponse::events(vec![event])
             }

@@ -1,11 +1,12 @@
 use bytes::Bytes;
-use cosmwasm_std::{testing::mock_env, to_binary, Binary, Coin, Uint128};
+use cosmwasm_schema::serde::{de::DeserializeOwned, Serialize};
+use cosmwasm_std::{from_slice, testing::mock_env, to_binary, Binary, Coin, Uint128};
 use hex_literal::hex;
 use itertools::enumerate;
 use pulsar_std::{
     api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate},
-    response::{BankQueryResponse, QueryResponse},
-    AccountId, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx,
+    response::{BankQueryResponse, QueryResponse, WasmQueryResponse},
+    AccountId, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx, WasmQuery,
 };
 use pulsar_storage::MemoryStore;
 
@@ -15,6 +16,12 @@ const NANO_SECOND_PER_BLOCK: u64 = 2_400 * 1_000_000; // 2.4 seconds
 
 pub struct TestApp {
     pub app: App<MemoryStore>,
+}
+
+pub fn prepare_cache(path: &'_ str) -> &'_ str {
+    let _ = std::fs::remove_dir_all(path);
+    std::fs::create_dir_all(path).unwrap();
+    path
 }
 
 impl TestApp {
@@ -101,6 +108,22 @@ impl TestApp {
             _ => panic!("unexpected response"),
         }
     }
+
+    pub fn query_wasm<T: Serialize, U: DeserializeOwned>(
+        &self,
+        contract: &AccountId,
+        msg: &T,
+    ) -> Result<U, PulsarError> {
+        let query = WasmQuery::Smart {
+            contract_addr: contract.clone(),
+            msg: to_binary(msg).unwrap(),
+        };
+        let res = match self.query(query)? {
+            QueryResponse::Wasm(WasmQueryResponse::Smart(result)) => result,
+            e => panic!("Unexpected query result: {:?}", e),
+        };
+        Ok(from_slice(&res)?)
+    }
 }
 
 pub struct TxBuilder<'a> {
@@ -115,7 +138,10 @@ impl<'a> TxBuilder<'a> {
     pub fn new() -> Self {
         Self {
             msgs: vec![],
-            fee: FeeInfo::default(),
+            fee: FeeInfo {
+                gas_limit: 200_000,
+                fee: None,
+            },
             sender: None,
             signer: None,
             invalid_sig: false,
@@ -222,7 +248,10 @@ impl PrivateKey {
     }
 }
 
-pub fn assert_block_success(res: &[TxResult<PulsarError>]) {
+#[track_caller]
+pub fn assert_block_success(res: &[TxResult<PulsarError>], count: usize) {
+    assert_eq!(res.len(), count);
+
     for (idx, r) in enumerate(res.iter()) {
         match &r.result {
             Ok(_) => {}
@@ -426,8 +455,7 @@ mod test {
             .with_signer(&pk, 0);
 
         let res = app.block(&[tx]);
-        assert_eq!(res.len(), 1);
-        assert_block_success(&res);
+        assert_block_success(&res, 1);
 
         // height is 2
         assert_eq!(app.height(), 2);

@@ -32,6 +32,12 @@ impl From<BankQuery> for Query {
     }
 }
 
+impl From<WasmQuery> for Query {
+    fn from(value: WasmQuery) -> Self {
+        Query::Wasm(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankQuery {
     /// Return value is of type SupplyResponse.
@@ -85,6 +91,12 @@ impl<E: Err> From<AuthQueryResponse> for QueryResponse<E> {
 impl<E: Err> From<BankQueryResponse> for QueryResponse<E> {
     fn from(value: BankQueryResponse) -> Self {
         QueryResponse::Bank(value)
+    }
+}
+
+impl<E: Err> From<WasmQueryResponse> for QueryResponse<E> {
+    fn from(value: WasmQueryResponse) -> Self {
+        QueryResponse::Wasm(value)
     }
 }
 

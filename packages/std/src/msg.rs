@@ -20,6 +20,12 @@ impl From<BankMsg> for Msg {
     }
 }
 
+impl From<WasmMsg> for Msg {
+    fn from(value: WasmMsg) -> Self {
+        Msg::Wasm(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankMsg {
     Send {
