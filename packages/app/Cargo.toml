@@ -29,6 +29,5 @@ cosmwasm-vm = { version = "1.2.0", default-features = false, features = ["iterat
 hex-literal = { workspace = true }
 cw20-base = { version = "1.0.1" }
 cw20 = { version = "1.0.1" }
-# cosmrs = { workspace = true, features = ["bip32"] }
 k256 = { version = "0.13", features = ["ecdsa", "sha256"] }
 

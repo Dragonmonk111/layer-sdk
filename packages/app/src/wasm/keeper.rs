@@ -14,13 +14,14 @@ use pulsar_storage::{
     ReadonlyStorage, Storage,
 };
 
+use super::events::migrate_event;
 use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
 use crate::wasm::events::{
     build_contract_events, clear_admin_event, execute_event, instantiate_event, pin_code_event,
-    store_code_event, unpin_code_event, update_admin_event,
+    store_code_event, sudo_event, unpin_code_event, update_admin_event,
 };
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
@@ -267,7 +268,46 @@ impl Wasm {
                 // FIXME: handle messages
                 MsgResponse::new(events, result.data.unwrap_or_default().into())
             }
-            WasmMsg::Migrate { .. } => todo!(),
+            WasmMsg::Migrate {
+                sender,
+                contract_addr,
+                new_code_id,
+                msg,
+            } => {
+                // only admin can migrate
+                let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                match &contract.admin {
+                    Some(admin) if admin == &sender => Ok(()),
+                    _ => Err(WasmError::Unauthorized),
+                }?;
+                // update the code and get the new code info
+                let code = self.load_code(storage.as_ref(), meter, new_code_id)?;
+                contract.code_id = new_code_id;
+                self.save_contract(storage, meter, &contract_addr, &contract)?;
+
+                // call migrate on vm
+                let env = build_env(block, &contract_addr);
+                let (result, gas) = self.cache.migrate(
+                    &code.to_checksum(),
+                    &env,
+                    &msg,
+                    storage,
+                    &contract_addr,
+                    meter,
+                    sm,
+                );
+                meter.charge(gas)?;
+                let result = map_cache_result(result)?;
+
+                // Build events
+                let mut events =
+                    build_contract_events(&contract_addr, result.events, result.attributes)?;
+                let event = migrate_event(&contract_addr, new_code_id);
+                events.insert(0, event);
+
+                // FIXME: handle messages
+                MsgResponse::new(events, result.data.unwrap_or_default().into())
+            }
             WasmMsg::ClearAdmin {
                 sender,
                 contract_addr,
@@ -298,6 +338,42 @@ impl Wasm {
                 contract.admin = Some(admin);
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
                 MsgResponse::events(vec![event])
+            }
+            WasmMsg::Sudo {
+                sender,
+                contract_addr,
+                msg,
+            } => {
+                // only special sender can do this - stored as param
+                let WasmParams { gov_account } =
+                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
+                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+
+                let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
+
+                // call migrate on vm
+                let env = build_env(block, &contract_addr);
+                let (result, gas) = self.cache.sudo(
+                    &code.to_checksum(),
+                    &env,
+                    &msg,
+                    storage,
+                    &contract_addr,
+                    meter,
+                    sm,
+                );
+                meter.charge(gas)?;
+                let result = map_cache_result(result)?;
+
+                // Build events
+                let mut events =
+                    build_contract_events(&contract_addr, result.events, result.attributes)?;
+                let event = sudo_event(&contract_addr);
+                events.insert(0, event);
+
+                // FIXME: handle messages
+                MsgResponse::new(events, result.data.unwrap_or_default().into())
             }
             WasmMsg::Pin { sender, code_id } => {
                 // only special sender can do this - stored as param

@@ -3,6 +3,7 @@ use pulsar_std::{AccountId, GasError, WasmMsg};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
+use crate::wasm::WasmError;
 use crate::PulsarError;
 
 // v1.2.6
@@ -288,6 +289,77 @@ fn check_query_balance() {
     let sender_bal: cosmwasm_std::AllBalanceResponse = app.query_wasm(&contract, &query).unwrap();
     let expected = app.all_balances(&sender).unwrap();
     assert_eq!(sender_bal.amount, expected)
+}
+
+#[test]
+fn migrate_works() {
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/migrate-works");
+
+    // other actors
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+    let sender = signer.account_id();
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // verify it is set up properly
+    let r: msgs::VerifierResponse = app
+        .query_wasm(&contract, &msgs::QueryMsg::Verifier {})
+        .unwrap();
+    assert_eq!(r.verifier, verifier.to_string());
+
+    // verifier cannot migrate
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Migrate {
+            sender: verifier.clone(),
+            contract_addr: contract.clone(),
+            new_code_id: code_id,
+            msg: to_binary(&msgs::MigrateMsg {
+                verifier: beneficiary.to_string(),
+            })
+            .unwrap(),
+        })
+        .with_signer(&verify_key, 0);
+    let mut res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    let err = res.remove(0).result.unwrap_err();
+    assert_eq!(err, PulsarError::Wasm(WasmError::Unauthorized {}));
+
+    // nothing changed
+    let r: msgs::VerifierResponse = app
+        .query_wasm(&contract, &msgs::QueryMsg::Verifier {})
+        .unwrap();
+    assert_eq!(r.verifier, verifier.to_string());
+
+    // admin (sender) can migrate to set self as verifier
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Migrate {
+            sender: sender.clone(),
+            contract_addr: contract.clone(),
+            new_code_id: code_id,
+            msg: to_binary(&msgs::MigrateMsg {
+                verifier: sender.to_string(),
+            })
+            .unwrap(),
+        })
+        .with_signer(&signer, 2);
+    let res = app.block(&[tx]);
+    assert_block_success(&res, 1);
+
+    // it was updated
+    let r: msgs::VerifierResponse = app
+        .query_wasm(&contract, &msgs::QueryMsg::Verifier {})
+        .unwrap();
+    assert_eq!(r.verifier, sender.to_string());
 }
 
 /// This is copied from https://github.com/CosmWasm/cosmwasm/blob/v1.2.6/contracts/hackatom/src/msg.rs
