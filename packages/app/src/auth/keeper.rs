@@ -98,7 +98,7 @@ impl Auth {
                 if tx.signing_info.sequence != 0 {
                     return Err(TxError::InvalidSequence {
                         provided: tx.signing_info.sequence,
-                        expected: 1,
+                        expected: 0,
                     }
                     .into());
                 }

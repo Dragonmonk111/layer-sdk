@@ -114,13 +114,30 @@ fn basic_hackatom_usage() {
     // verify it is set up properly
     let hacks = app.balance(&contract, DENOM).unwrap();
     assert_eq!(hacks.u128(), 10_000_000);
+    let hacks = app.balance(&beneficiary, DENOM).unwrap();
+    assert_eq!(hacks.u128(), 0);
     let r: msgs::VerifierResponse = app
         .query_wasm(&contract, &msgs::QueryMsg::Verifier {})
         .unwrap();
     assert_eq!(r.verifier, verifier.to_string());
 
     // verifier can release tokens to the beneficiary
-    // TODO
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender: verifier.clone(),
+            contract_addr: contract.clone(),
+            msg: to_binary(&msgs::ExecuteMsg::Release {}).unwrap(),
+            funds: vec![],
+        })
+        .with_signer(&verify_key, 0);
+    let res = app.block(&[tx]);
+    assert_block_success(&res, 1);
+
+    // verify this was transfered properly
+    let hacks = app.balance(&contract, DENOM).unwrap();
+    assert_eq!(hacks.u128(), 0);
+    let hacks = app.balance(&beneficiary, DENOM).unwrap();
+    assert_eq!(hacks.u128(), 10_000_000);
 }
 
 #[test]
