@@ -7,4 +7,10 @@ pub enum WasmError {
 
     #[error("Used an invalid key in an event attribute: {0}")]
     InvalidAttributeKey(String),
+
+    #[error("VmError: {0}")]
+    Vm(String),
+
+    #[error("Contract Error: {0}")]
+    Contract(String),
 }

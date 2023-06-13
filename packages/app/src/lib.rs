@@ -4,7 +4,7 @@ mod bank;
 mod error;
 pub mod genesis;
 mod sm;
-mod testutils;
+pub(crate) mod testing;
 mod wasm;
 
 pub use app::{App, AppLoadError};

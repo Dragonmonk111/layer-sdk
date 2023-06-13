@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use bytes::Bytes;
 use cosmwasm_std::{testing::mock_env, to_binary, Binary, Coin, Uint128};
 use hex_literal::hex;

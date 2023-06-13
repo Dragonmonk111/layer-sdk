@@ -8,7 +8,7 @@ use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
     CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
 };
-use pulsar_std::{AccountId, GasMeter, WasmMsg, WasmQuery};
+use pulsar_std::{AccountId, GasError, GasMeter, WasmMsg, WasmQuery};
 use pulsar_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
@@ -477,13 +477,15 @@ fn build_info(sender: &AccountId, funds: Vec<Coin>) -> MessageInfo {
 }
 
 fn map_vm_error(err: VmError) -> PulsarError {
-    // TODO
-    panic!("{}", err);
+    match err {
+        VmError::GasDepletion { .. } => GasError::OutOfGas.into(),
+        // FIXME: make this deterministic
+        e => WasmError::Vm(e.to_string()).into(),
+    }
 }
 
 fn map_contract_error(err: String) -> PulsarError {
-    // TODO
-    panic!("{}", err);
+    WasmError::Contract(err).into()
 }
 
 fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, PulsarError> {
