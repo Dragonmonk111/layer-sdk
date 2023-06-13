@@ -198,15 +198,18 @@ impl Wasm {
                         .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
                 }
 
+                // TODO: BUG: we pass in the contract local storage here (for read/write)
+                // BUT we need the global storage for query to call into others.
+                // Need to review how we use storage here
                 // call instantiate on cache
-                let mut sub_store = self.contract_storage(storage, &contract_addr);
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.instantiate(
                     &code.to_checksum(),
                     &env,
                     &info,
                     &msg,
-                    &mut sub_store,
+                    storage,
+                    &contract_addr,
                     meter,
                     sm,
                 );
@@ -241,14 +244,14 @@ impl Wasm {
                 }
 
                 // call execute on cache
-                let mut sub_store = self.contract_storage(storage, &contract_addr);
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.execute(
                     &code.to_checksum(),
                     &env,
                     &info,
                     &msg,
-                    &mut sub_store,
+                    storage,
+                    &contract_addr,
                     meter,
                     sm,
                 );
@@ -354,17 +357,16 @@ impl Wasm {
                 let contract = self.load_contract(storage, meter, &contract_addr)?;
                 let code = self.load_code(storage, meter, contract.code_id)?;
                 let checksum = code.to_checksum();
-                let sub_store = self.read_contract_storage(storage, &contract_addr);
                 let env = build_env(block, &contract_addr);
-                let (result, gas) = self
-                    .cache
-                    .query(&checksum, &env, &msg, &sub_store, meter, sm);
+                let (result, gas) =
+                    self.cache
+                        .query(&checksum, &env, &msg, storage, &contract_addr, meter, sm);
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
                 WasmQueryResponse::Smart(result)
             }
             WasmQuery::Raw { contract_addr, key } => {
-                let sub_store = self.read_contract_storage(storage, &contract_addr);
+                let sub_store = read_contract_storage(storage, &contract_addr);
                 let data = sub_store.get(meter, &key)?.unwrap_or_default();
                 WasmQueryResponse::Raw(data.into())
             }
@@ -445,22 +447,17 @@ impl Wasm {
     ) -> Result<(), PlusError> {
         CODES.save(&mut prefixed(storage, NAMESPACE_WASM), meter, id, info)
     }
+}
 
-    fn contract_storage<'a>(
-        &self,
-        storage: &'a mut dyn Storage,
-        addr: &AccountId,
-    ) -> PrefixedStorage<'a> {
-        PrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
-    }
+pub fn contract_storage<'a>(storage: &'a mut dyn Storage, addr: &AccountId) -> PrefixedStorage<'a> {
+    PrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
+}
 
-    fn read_contract_storage<'a>(
-        &self,
-        storage: &'a dyn ReadonlyStorage,
-        addr: &AccountId,
-    ) -> ReadonlyPrefixedStorage<'a> {
-        ReadonlyPrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
-    }
+pub fn read_contract_storage<'a>(
+    storage: &'a dyn ReadonlyStorage,
+    addr: &AccountId,
+) -> ReadonlyPrefixedStorage<'a> {
+    ReadonlyPrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
 }
 
 fn build_env(block: &BlockInfo, contract: &AccountId) -> Env {

@@ -63,9 +63,9 @@ fn init_contract(
     beneficiary: &AccountId,
     funds: u128,
 ) -> AccountId {
-    // TODO: find the proper sequence
+    // find the proper sequence
     let sender = signer.account_id();
-    let sequence = 1;
+    let sequence = app.sequence(&sender).unwrap();
 
     let init_msg = msgs::InstantiateMsg {
         verifier: verifier.to_string(),
@@ -206,6 +206,43 @@ fn check_storage_loop() {
 #[test]
 fn check_query_recursion() {
     // install send funds, release funds
+}
+
+#[test]
+fn check_query_balance() {
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-storage-loop");
+
+    // other actors
+    let sender = signer.account_id();
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // use internal dispatched query and compare to normal query
+    let query = &msgs::QueryMsg::OtherBalance {
+        address: contract.to_string(),
+    };
+    let my_bal: cosmwasm_std::AllBalanceResponse = app.query_wasm(&contract, &query).unwrap();
+    let expected = app.all_balances(&contract).unwrap();
+    assert_eq!(my_bal.amount, expected);
+
+    // use internal dispatched query
+    let query = &msgs::QueryMsg::OtherBalance {
+        address: sender.to_string(),
+    };
+    let sender_bal: cosmwasm_std::AllBalanceResponse = app.query_wasm(&contract, &query).unwrap();
+    let expected = app.all_balances(&sender).unwrap();
+    assert_eq!(sender_bal.amount, expected)
 }
 
 /// This is copied from https://github.com/CosmWasm/cosmwasm/blob/v1.2.6/contracts/hackatom/src/msg.rs

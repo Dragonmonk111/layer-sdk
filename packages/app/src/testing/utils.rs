@@ -5,8 +5,11 @@ use hex_literal::hex;
 use itertools::enumerate;
 use pulsar_std::{
     api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate},
-    response::{BankQueryResponse, QueryResponse, WasmQueryResponse},
-    AccountId, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx, WasmQuery,
+    response::{
+        AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
+    },
+    AccountId, AuthQuery, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx,
+    WasmQuery,
 };
 use pulsar_storage::MemoryStore;
 
@@ -99,6 +102,20 @@ impl TestApp {
         })?;
         match res {
             QueryResponse::Bank(BankQueryResponse::Balance(bal)) => Ok(bal.amount.amount),
+            _ => panic!("unexpected response"),
+        }
+    }
+
+    pub fn sequence(&self, account: &AccountId) -> PulsarResult<u64> {
+        let res = self.query(AuthQuery::Account {
+            address: account.clone(),
+        })?;
+        match res {
+            QueryResponse::Auth(AuthQueryResponse::Account(acct)) => match acct {
+                AccountResponse::External { sequence, .. } => Ok(sequence),
+                AccountResponse::Internal { .. } => panic!("unexpected contract account"),
+                AccountResponse::Smart { .. } => panic!("unexpected smart account"),
+            },
             _ => panic!("unexpected response"),
         }
     }

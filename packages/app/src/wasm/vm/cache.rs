@@ -5,10 +5,10 @@ use cosmwasm_vm::{
     call_execute, call_instantiate, call_query, AnalysisReport, Cache, CacheOptions, Checksum,
     InstanceOptions, Size, VmError,
 };
-use pulsar_std::GasMeter;
+use pulsar_std::{AccountId, GasMeter};
 use pulsar_storage::{ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
-use crate::StateMachine;
+use crate::{wasm::keeper::contract_storage, StateMachine};
 
 use super::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
 
@@ -79,7 +79,8 @@ impl VmCache {
         env: &Env,
         info: &MessageInfo,
         msg: &[u8],
-        storage: &mut dyn Storage,
+        global_storage: &mut dyn Storage,
+        contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
@@ -90,8 +91,9 @@ impl VmCache {
         };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
-        let mut working = WeakSubTx::new(storage.as_ref());
-        let query = storage.as_ref();
+        let query = global_storage.as_ref();
+        let mut wrap = WeakSubTx::new(query);
+        let mut working = contract_storage(&mut wrap, contract);
 
         // This is where we fake all the lifetimes....
         let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
@@ -111,8 +113,8 @@ impl VmCache {
         // commit or abort the open WeakSubTx
         match &result {
             Ok(Ok(_)) => {
-                let ops = working.prepare();
-                if let Err(e) = ops.commit(storage, meter).map_err(out_of_gas) {
+                let ops = wrap.prepare();
+                if let Err(e) = ops.commit(global_storage, meter).map_err(out_of_gas) {
                     return (Err(e.into()), gas_used);
                 }
             }
@@ -130,7 +132,8 @@ impl VmCache {
         env: &Env,
         info: &MessageInfo,
         msg: &[u8],
-        storage: &mut dyn Storage,
+        global_storage: &mut dyn Storage,
+        contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
@@ -141,8 +144,9 @@ impl VmCache {
         };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
-        let mut working = WeakSubTx::new(storage.as_ref());
-        let query = storage.as_ref();
+        let query = global_storage.as_ref();
+        let mut wrap = WeakSubTx::new(query);
+        let mut working = contract_storage(&mut wrap, contract);
 
         // This is where we fake all the lifetimes....
         let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
@@ -162,8 +166,8 @@ impl VmCache {
         // commit or abort the open WeakSubTx
         match &result {
             Ok(Ok(_)) => {
-                let ops = working.prepare();
-                if let Err(e) = ops.commit(storage, meter).map_err(out_of_gas) {
+                let ops = wrap.prepare();
+                if let Err(e) = ops.commit(global_storage, meter).map_err(out_of_gas) {
                     return (Err(e.into()), gas_used);
                 }
             }
@@ -180,7 +184,8 @@ impl VmCache {
         checksum: &Checksum,
         env: &Env,
         msg: &[u8],
-        storage: &dyn ReadonlyStorage,
+        global_storage: &dyn ReadonlyStorage,
+        contract_addr: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Binary, String>, VmError>, u64) {
@@ -191,10 +196,12 @@ impl VmCache {
         };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
-        let mut scratch = ScratchTx::new(storage);
+        let mut scratch = ScratchTx::new(global_storage);
+        let mut contract = contract_storage(&mut scratch, contract_addr);
 
         // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut scratch, storage, meter, &env.block) };
+        let backend =
+            unsafe { danger_will_robinson(sm, &mut contract, global_storage, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -246,6 +253,7 @@ mod tests {
         // try to instantiate
         let env = mock_env();
         let sender = AccountId::unchecked("Sillyness");
+        let contract = AccountId::unchecked("My first cw20");
         let info = mock_info(&sender.to_string(), &[coin(55_000, "upulse")]);
         let meter = GasMeter::infinite();
         let sm = StateMachine::new(&AppConfig::new(path));
@@ -265,8 +273,16 @@ mod tests {
         let msg = to_vec(&msg).unwrap();
 
         let mut writer = store.writer();
-        let (res, gas_used) =
-            vm.instantiate(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let (res, gas_used) = vm.instantiate(
+            &checksum,
+            &env,
+            &info,
+            &msg,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
+        );
         let res = res.unwrap().unwrap();
         assert_eq!(res.messages.len(), 0);
         assert_eq!(res.events.len(), 0);
@@ -293,6 +309,7 @@ mod tests {
         // try to instantiate
         let env = mock_env();
         let sender = AccountId::unchecked("Sillyness");
+        let contract = AccountId::unchecked("My Token");
         let info = mock_info(&sender.to_string(), &[]);
         let meter = GasMeter::infinite();
         let sm = StateMachine::new(&AppConfig::new(path));
@@ -312,7 +329,16 @@ mod tests {
             marketing: None,
         };
         let msg = to_vec(&msg).unwrap();
-        let (res, _) = vm.instantiate(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let (res, _) = vm.instantiate(
+            &checksum,
+            &env,
+            &info,
+            &msg,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
+        );
         let _ = res.unwrap().unwrap();
 
         // query two addresses
@@ -323,6 +349,7 @@ mod tests {
             &env,
             &sender,
             writer.as_ref(),
+            &contract,
             &meter,
             &sm,
         );
@@ -333,6 +360,7 @@ mod tests {
             &env,
             &rcpt,
             writer.as_ref(),
+            &contract,
             &meter,
             &sm,
         );
@@ -344,7 +372,16 @@ mod tests {
             amount: Uint128::new(23456),
         };
         let msg = to_vec(&msg).unwrap();
-        let (res, _) = vm.execute(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let (res, _) = vm.execute(
+            &checksum,
+            &env,
+            &info,
+            &msg,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
+        );
         let _ = res.unwrap().unwrap();
 
         // query two addresses wirh new balances
@@ -355,6 +392,7 @@ mod tests {
             &env,
             &sender,
             writer.as_ref(),
+            &contract,
             &meter,
             &sm,
         );
@@ -365,6 +403,7 @@ mod tests {
             &env,
             &rcpt,
             writer.as_ref(),
+            &contract,
             &meter,
             &sm,
         );
@@ -385,6 +424,7 @@ mod tests {
         let one = AccountId::unchecked("One");
         let two = AccountId::unchecked("Two");
         let three = AccountId::unchecked("Xyz");
+        let contract = AccountId::unchecked("Another Token");
         let info = mock_info(&one.to_string(), &[]);
         let meter = GasMeter::infinite();
         let sm = StateMachine::new(&AppConfig::new(path));
@@ -414,7 +454,16 @@ mod tests {
             marketing: None,
         };
         let msg = to_vec(&msg).unwrap();
-        let (res, _) = vm.instantiate(&checksum, &env, &info, &msg, &mut writer, &meter, &sm);
+        let (res, _) = vm.instantiate(
+            &checksum,
+            &env,
+            &info,
+            &msg,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
+        );
         let _ = res.unwrap().unwrap();
 
         // now list all accounts
@@ -423,7 +472,15 @@ mod tests {
             limit: None,
         };
         let msg = to_vec(&msg).unwrap();
-        let (res, _) = vm.query(&checksum, &env, &msg, writer.as_ref(), &meter, &sm);
+        let (res, _) = vm.query(
+            &checksum,
+            &env,
+            &msg,
+            writer.as_ref(),
+            &contract,
+            &meter,
+            &sm,
+        );
         let res = res.unwrap().unwrap();
         let cw20::AllAccountsResponse { accounts } = from_slice(&res).unwrap();
         assert_eq!(
@@ -432,12 +489,14 @@ mod tests {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn query_balance(
         vm: &mut VmCache,
         checksum: &Checksum,
         env: &Env,
         account: &AccountId,
-        storage: &dyn ReadonlyStorage,
+        global_storage: &dyn ReadonlyStorage,
+        contract_addr: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> Uint128 {
@@ -445,7 +504,15 @@ mod tests {
             address: account.to_string(),
         };
         let msg = to_vec(&msg).unwrap();
-        let (res, _) = vm.query(checksum, env, &msg, storage, meter, sm);
+        let (res, _) = vm.query(
+            checksum,
+            env,
+            &msg,
+            global_storage,
+            contract_addr,
+            meter,
+            sm,
+        );
         let res = res.unwrap().unwrap();
         let balance: cw20::BalanceResponse = from_slice(&res).unwrap();
         balance.balance
