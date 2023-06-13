@@ -21,6 +21,7 @@ pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
 
 pub type CustomQuery = Empty;
+pub type CustomMsg = Empty;
 
 /// A bunch of unsafe lifetime games here...
 /// Only call it where you are sure all usage of this backend and instance is completed before the references

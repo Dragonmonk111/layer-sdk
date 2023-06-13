@@ -2,13 +2,15 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_vm::{Checksum, VmError};
 use sha2::{Digest, Sha256};
 
-use cosmwasm_std::{ensure_eq, Addr, Binary, BlockInfo, Coin, Empty, Env, MessageInfo};
+use cosmwasm_std::{
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, ReplyOn, SubMsg,
+};
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
     CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
 };
-use pulsar_std::{AccountId, GasError, GasMeter, WasmMsg, WasmQuery};
+use pulsar_std::{AccountId, GasError, GasMeter, Msg, WasmMsg, WasmQuery};
 use pulsar_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
@@ -223,8 +225,17 @@ impl Wasm {
                 let event = instantiate_event(&contract_addr, code_id);
                 events.insert(0, event);
 
-                // FIXME: handle messages
-                MsgResponse::new(events, result.data.unwrap_or_default().into())
+                // dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
             WasmMsg::Execute {
@@ -265,8 +276,17 @@ impl Wasm {
                 let event = execute_event(&contract_addr);
                 events.insert(0, event);
 
-                // FIXME: handle messages
-                MsgResponse::new(events, result.data.unwrap_or_default().into())
+                // Dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
             }
             WasmMsg::Migrate {
                 sender,
@@ -305,8 +325,17 @@ impl Wasm {
                 let event = migrate_event(&contract_addr, new_code_id);
                 events.insert(0, event);
 
-                // FIXME: handle messages
-                MsgResponse::new(events, result.data.unwrap_or_default().into())
+                // dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
             }
             WasmMsg::ClearAdmin {
                 sender,
@@ -372,8 +401,17 @@ impl Wasm {
                 let event = sudo_event(&contract_addr);
                 events.insert(0, event);
 
-                // FIXME: handle messages
-                MsgResponse::new(events, result.data.unwrap_or_default().into())
+                // dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
             }
             WasmMsg::Pin { sender, code_id } => {
                 // only special sender can do this - stored as param
@@ -418,6 +456,36 @@ impl Wasm {
             }
         };
         Ok(resp)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_response_messages(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        contract: &AccountId,
+        msgs: Vec<SubMsg<super::vm::CustomMsg>>,
+        // we append events to this (later maybe overwrite the data)
+        mut parent_response: MsgResponse,
+    ) -> PulsarResult<MsgResponse> {
+        for msg in msgs {
+            // TODO: handle reply_on (and id)
+            match msg.reply_on {
+                ReplyOn::Never => {}
+                _ => panic!("No support for reply yet"),
+            }
+            // TODO: handle gas limit
+
+            let pulsar_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
+            let msg_response = sm.process_msg(storage, meter, contract, block, pulsar_msg)?;
+
+            // append events to parent response (in reply maybe overwrite data)
+            parent_response.events.extend(msg_response.events);
+        }
+
+        Ok(parent_response)
     }
 
     pub fn query(
@@ -567,4 +635,83 @@ fn map_contract_error(err: String) -> PulsarError {
 
 fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, PulsarError> {
     result.map_err(map_vm_error)?.map_err(map_contract_error)
+}
+
+fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
+    let res = match msg {
+        CosmosMsg::Bank(bank) => match bank {
+            cosmwasm_std::BankMsg::Send { to_address, amount } => pulsar_std::BankMsg::Send {
+                sender: sender.clone(),
+                recipient: AccountId::parse_string(&to_address)?,
+                amount,
+            }
+            .into(),
+            cosmwasm_std::BankMsg::Burn { amount } => pulsar_std::BankMsg::Burn {
+                sender: sender.clone(),
+                amount,
+            }
+            .into(),
+            x => unimplemented!("bank msg {:?}", x),
+        },
+        CosmosMsg::Wasm(wasm) => match wasm {
+            cosmwasm_std::WasmMsg::Execute {
+                contract_addr,
+                msg,
+                funds,
+            } => pulsar_std::WasmMsg::Execute {
+                contract_addr: AccountId::parse_string(&contract_addr)?,
+                msg,
+                sender: sender.clone(),
+                funds,
+            }
+            .into(),
+            cosmwasm_std::WasmMsg::Instantiate {
+                admin,
+                code_id,
+                msg,
+                funds,
+                label,
+            } => pulsar_std::WasmMsg::Instantiate {
+                sender: sender.clone(),
+                admin: admin.map(|x| AccountId::parse_string(&x)).transpose()?,
+                code_id,
+                msg,
+                funds,
+                label,
+            }
+            .into(),
+            // TODO: enable feature flags and support this
+            // cosmwasm_std::WasmMsg::Instantiate2 { .. } => todo!(),
+            cosmwasm_std::WasmMsg::Migrate {
+                contract_addr,
+                msg,
+                new_code_id,
+            } => pulsar_std::WasmMsg::Migrate {
+                contract_addr: AccountId::parse_string(&contract_addr)?,
+                msg,
+                sender: sender.clone(),
+                new_code_id,
+            }
+            .into(),
+            cosmwasm_std::WasmMsg::UpdateAdmin {
+                contract_addr,
+                admin,
+            } => pulsar_std::WasmMsg::UpdateAdmin {
+                sender: sender.clone(),
+                contract_addr: AccountId::parse_string(&contract_addr)?,
+                admin: AccountId::parse_string(&admin)?,
+            }
+            .into(),
+            cosmwasm_std::WasmMsg::ClearAdmin { contract_addr } => {
+                pulsar_std::WasmMsg::ClearAdmin {
+                    sender: sender.clone(),
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                }
+                .into()
+            }
+            x => unimplemented!("wasm msg {:?}", x),
+        },
+        _ => todo!(),
+    };
+    Ok(res)
 }
