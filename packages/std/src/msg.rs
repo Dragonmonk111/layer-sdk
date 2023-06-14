@@ -105,9 +105,6 @@ pub enum WasmMsg {
     /// customize behavior.
     ///
     /// Only the contract admin (as defined in wasmd), if any, is able to make this call.
-    ///
-    /// This is translated to a [MsgMigrateContract](https://github.com/CosmWasm/wasmd/blob/v0.14.0/x/wasm/internal/types/tx.proto#L86-L96).
-    /// `sender` is automatically filled with the current contract's address.
     Migrate {
         sender: AccountId,
         contract_addr: AccountId,
@@ -130,6 +127,15 @@ pub enum WasmMsg {
         sender: AccountId,
         contract_addr: AccountId,
     },
+    /// Only the gov address can call sudo.
+    /// Once pulsar checks the permissions, it should be trusted as root by the contract.
+    Sudo {
+        sender: AccountId,
+        contract_addr: AccountId,
+        /// msg is the json-encoded SudoMsg struct that will be passed to the new code
+        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        msg: Binary,
+    },
     StoreCode {
         sender: AccountId,
         code: Binary,
@@ -151,6 +157,7 @@ impl Display for WasmMsg {
             WasmMsg::Instantiate { .. } => f.write_str("WasmMsg::Instantiate"),
             WasmMsg::Instantiate2 { .. } => f.write_str("WasmMsg::Instantiate2"),
             WasmMsg::Migrate { .. } => f.write_str("WasmMsg::Migrate"),
+            WasmMsg::Sudo { .. } => f.write_str("WasmMsg::Sudo"),
             WasmMsg::ClearAdmin { .. } => f.write_str("WasmMsg::ClearAdmin"),
             WasmMsg::UpdateAdmin { .. } => f.write_str("WasmMsg::UpdateAdmin"),
             WasmMsg::StoreCode { .. } => f.write_str("WasmMsg::StoreCode"),
@@ -196,6 +203,7 @@ impl Msg {
                 WasmMsg::Instantiate { sender, .. } => sender.clone(),
                 WasmMsg::Instantiate2 { sender, .. } => sender.clone(),
                 WasmMsg::Migrate { sender, .. } => sender.clone(),
+                WasmMsg::Sudo { sender, .. } => sender.clone(),
                 WasmMsg::UpdateAdmin { sender, .. } => sender.clone(),
                 WasmMsg::ClearAdmin { sender, .. } => sender.clone(),
                 WasmMsg::StoreCode { sender, .. } => sender.clone(),

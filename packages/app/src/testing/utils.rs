@@ -5,8 +5,11 @@ use hex_literal::hex;
 use itertools::enumerate;
 use pulsar_std::{
     api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate},
-    response::{BankQueryResponse, QueryResponse, WasmQueryResponse},
-    AccountId, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx, WasmQuery,
+    response::{
+        AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
+    },
+    AccountId, AuthQuery, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx,
+    WasmQuery,
 };
 use pulsar_storage::MemoryStore;
 
@@ -57,11 +60,15 @@ impl TestApp {
         self.app.check_tx(tx.build())
     }
 
-    pub fn block(&mut self, txs: &[TxBuilder]) -> Vec<TxResult<PulsarError>> {
+    /// Accepts either &[TxBuilder] or vec![&TxBuilder] in case you want to reuse the TxBuilder later (not Cloneable)
+    pub fn block<'a>(
+        &mut self,
+        txs: impl IntoIterator<Item = &'a TxBuilder<'a>> + 'a,
+    ) -> Vec<TxResult<PulsarError>> {
         let info = self.app.info().unwrap();
 
         let block = Block {
-            txs: txs.iter().map(|tx| tx.build()).collect(),
+            txs: txs.into_iter().map(|tx| tx.build()).collect(),
             height: info.height + 1,
             time: info.time.plus_nanos(NANO_SECOND_PER_BLOCK),
             proposer_address: vec![1u8; 32],
@@ -99,6 +106,20 @@ impl TestApp {
         })?;
         match res {
             QueryResponse::Bank(BankQueryResponse::Balance(bal)) => Ok(bal.amount.amount),
+            _ => panic!("unexpected response"),
+        }
+    }
+
+    pub fn sequence(&self, account: &AccountId) -> PulsarResult<u64> {
+        let res = self.query(AuthQuery::Account {
+            address: account.clone(),
+        })?;
+        match res {
+            QueryResponse::Auth(AuthQueryResponse::Account(acct)) => match acct {
+                AccountResponse::External { sequence, .. } => Ok(sequence),
+                AccountResponse::Internal { .. } => panic!("unexpected contract account"),
+                AccountResponse::Smart { .. } => panic!("unexpected smart account"),
+            },
             _ => panic!("unexpected response"),
         }
     }
@@ -254,6 +275,10 @@ impl PrivateKey {
         PubKey::secp256k1(Binary::from(pk.as_bytes()))
     }
 
+    pub fn account_id(&self) -> AccountId {
+        self.to_pubkey().account_id().unwrap()
+    }
+
     pub fn sign(&self, message: &[u8]) -> Binary {
         let digest = Sha256::new_with_prefix(message);
         let signature: Signature = self.0.sign_digest(digest);
@@ -301,7 +326,7 @@ mod test {
         let account = AccountId::unchecked("foobar");
         let genesis = sample_genesis(&account);
 
-        let wasm_dir = "can_init_and_query_chain";
+        let wasm_dir = "/tmp/pulsar/can_init_and_query_chain";
         let mut app = TestApp::new(wasm_dir);
         app.init(&genesis, "super-chain");
 
@@ -333,7 +358,7 @@ mod test {
         let account = AccountId::unchecked("foobar");
         let genesis = sample_genesis(&account);
 
-        let mut app = TestApp::new("run_empty_blocks");
+        let mut app = TestApp::new("/tmp/pulsar/run_empty_blocks");
         app.init(&genesis, "super-chain");
 
         app.block(&[]);
@@ -355,7 +380,7 @@ mod test {
         let acct = signer.account_id().unwrap();
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("can_check_tx");
+        let mut app = TestApp::new("/tmp/pulsar/can_check_tx");
         let genesis = sample_genesis(&acct);
         app.init(&genesis, "super-chain");
 
@@ -392,7 +417,7 @@ mod test {
         let acct = signer.account_id().unwrap();
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("can_check_tx");
+        let mut app = TestApp::new("/tmp/pulsar/check_tx_failures");
         let genesis = sample_genesis(&acct);
         app.init(&genesis, "super-chain");
 
@@ -424,7 +449,7 @@ mod test {
         let sender = AccountId::unchecked("no private key");
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("can_check_tx");
+        let mut app = TestApp::new("/tmp/pulsar/can_simulate_tx");
         let genesis = sample_genesis(&sender);
         app.init(&genesis, "super-chain");
 
@@ -448,7 +473,7 @@ mod test {
         let acct = signer.account_id().unwrap();
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("can_check_tx");
+        let mut app = TestApp::new("/tmp/pulsar/process_block_with_send");
         let genesis = sample_genesis(&acct);
         app.init(&genesis, "super-chain");
 

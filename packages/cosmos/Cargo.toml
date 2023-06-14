@@ -12,10 +12,10 @@ pulsar-app = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-bytes = { worksapce = true }
+bytes = { workspace = true }
 
-cosmrs = { worksapce = true }
-cosmos-sdk-proto = { worksapce = true }
+cosmrs = { workspace = true }
+cosmos-sdk-proto = { workspace = true }
 
 [dev_dependencies]
 hex-literal = {workspace = true }

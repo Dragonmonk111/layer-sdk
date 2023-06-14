@@ -2,28 +2,35 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_vm::{Checksum, VmError};
 use sha2::{Digest, Sha256};
 
-use cosmwasm_std::{ensure_eq, Addr, Binary, BlockInfo, Coin, Empty, Env, MessageInfo};
+use cosmwasm_std::{
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, ReplyOn, SubMsg,
+};
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
     CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
 };
-use pulsar_std::{AccountId, GasError, GasMeter, WasmMsg, WasmQuery};
+use pulsar_std::{AccountId, GasError, GasMeter, Msg, WasmMsg, WasmQuery};
 use pulsar_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
 };
 
+use super::events::migrate_event;
 use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
 use crate::wasm::events::{
     build_contract_events, clear_admin_event, execute_event, instantiate_event, pin_code_event,
-    store_code_event, unpin_code_event, update_admin_event,
+    store_code_event, sudo_event, unpin_code_event, update_admin_event,
 };
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
+
+// Numbers taken from wasmd, we should benchmark better
+pub(crate) const LOAD_WASM_GAS: u64 = 60_000;
+pub(crate) const LOAD_PINNED_WASM_GAS: u64 = 2_000;
 
 // Contract state is kept in Storage, separate from the contracts themselves
 const CONTRACTS: Map<&AccountId, ContractData> = Map::new("contracts");
@@ -31,7 +38,6 @@ const CODES: Map<u64, CodeInfo> = Map::new("codes");
 
 // list of all pinned code_ids, so you can range over them
 const PINNED: Map<u64, Empty> = Map::new("pinned");
-
 const CODE_ID: Item<u64> = Item::new("code_id");
 const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
 
@@ -70,7 +76,18 @@ pub struct CodeInfo {
 }
 
 impl CodeInfo {
-    fn to_checksum(&self) -> Checksum {
+    /// This gets a proper checksum to load a wasmer vm, and charges a gas price based on whether it is pinned or not
+    fn get_checksum_to_execute(&self, meter: &GasMeter) -> Result<Checksum, GasError> {
+        if self.pinned {
+            meter.charge(LOAD_PINNED_WASM_GAS)?;
+        } else {
+            meter.charge(LOAD_WASM_GAS)?;
+        }
+        Ok(self.get_checksum_not_executing())
+    }
+
+    /// Use this is you need Checksum to interact with the cache, but not run wasmer vm, like pin/unpin
+    fn get_checksum_not_executing(&self) -> Checksum {
         Checksum::try_from(self.checksum.as_slice()).unwrap()
     }
 }
@@ -198,15 +215,18 @@ impl Wasm {
                         .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
                 }
 
+                // TODO: BUG: we pass in the contract local storage here (for read/write)
+                // BUT we need the global storage for query to call into others.
+                // Need to review how we use storage here
                 // call instantiate on cache
-                let mut sub_store = self.contract_storage(storage, &contract_addr);
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.instantiate(
-                    &code.to_checksum(),
+                    &code.get_checksum_to_execute(meter)?,
                     &env,
                     &info,
                     &msg,
-                    &mut sub_store,
+                    storage,
+                    &contract_addr,
                     meter,
                     sm,
                 );
@@ -219,8 +239,17 @@ impl Wasm {
                 let event = instantiate_event(&contract_addr, code_id);
                 events.insert(0, event);
 
-                // FIXME: handle messages
-                MsgResponse::new(events, result.data.unwrap_or_default().into())
+                // dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
             WasmMsg::Execute {
@@ -241,14 +270,14 @@ impl Wasm {
                 }
 
                 // call execute on cache
-                let mut sub_store = self.contract_storage(storage, &contract_addr);
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.execute(
-                    &code.to_checksum(),
+                    &code.get_checksum_to_execute(meter)?,
                     &env,
                     &info,
                     &msg,
-                    &mut sub_store,
+                    storage,
+                    &contract_addr,
                     meter,
                     sm,
                 );
@@ -261,10 +290,67 @@ impl Wasm {
                 let event = execute_event(&contract_addr);
                 events.insert(0, event);
 
-                // FIXME: handle messages
-                MsgResponse::new(events, result.data.unwrap_or_default().into())
+                // Dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
             }
-            WasmMsg::Migrate { .. } => todo!(),
+            WasmMsg::Migrate {
+                sender,
+                contract_addr,
+                new_code_id,
+                msg,
+            } => {
+                // only admin can migrate
+                let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                match &contract.admin {
+                    Some(admin) if admin == &sender => Ok(()),
+                    _ => Err(WasmError::Unauthorized),
+                }?;
+                // update the code and get the new code info
+                let code = self.load_code(storage.as_ref(), meter, new_code_id)?;
+                contract.code_id = new_code_id;
+                self.save_contract(storage, meter, &contract_addr, &contract)?;
+
+                // call migrate on vm
+                let env = build_env(block, &contract_addr);
+                let (result, gas) = self.cache.migrate(
+                    &code.get_checksum_to_execute(meter)?,
+                    &env,
+                    &msg,
+                    storage,
+                    &contract_addr,
+                    meter,
+                    sm,
+                );
+                meter.charge(gas)?;
+                let result = map_cache_result(result)?;
+
+                // Build events
+                let mut events =
+                    build_contract_events(&contract_addr, result.events, result.attributes)?;
+                let event = migrate_event(&contract_addr, new_code_id);
+                events.insert(0, event);
+
+                // dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
+            }
             WasmMsg::ClearAdmin {
                 sender,
                 contract_addr,
@@ -296,6 +382,51 @@ impl Wasm {
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
                 MsgResponse::events(vec![event])
             }
+            WasmMsg::Sudo {
+                sender,
+                contract_addr,
+                msg,
+            } => {
+                // only special sender can do this - stored as param
+                let WasmParams { gov_account } =
+                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
+                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+
+                let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
+
+                // call migrate on vm
+                let env = build_env(block, &contract_addr);
+                let (result, gas) = self.cache.sudo(
+                    &code.get_checksum_to_execute(meter)?,
+                    &env,
+                    &msg,
+                    storage,
+                    &contract_addr,
+                    meter,
+                    sm,
+                );
+                meter.charge(gas)?;
+                let result = map_cache_result(result)?;
+
+                // Build events
+                let mut events =
+                    build_contract_events(&contract_addr, result.events, result.attributes)?;
+                let event = sudo_event(&contract_addr);
+                events.insert(0, event);
+
+                // dispatch messages
+                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                self.dispatch_response_messages(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    &contract_addr,
+                    result.messages,
+                    response,
+                )?
+            }
             WasmMsg::Pin { sender, code_id } => {
                 // only special sender can do this - stored as param
                 let WasmParams { gov_account } =
@@ -306,7 +437,9 @@ impl Wasm {
                 if !code.pinned {
                     code.pinned = true;
                     self.save_code(storage, meter, code_id, &code)?;
-                    self.cache.pin(&code.to_checksum()).map_err(map_vm_error)?;
+                    self.cache
+                        .pin(&code.get_checksum_not_executing())
+                        .map_err(map_vm_error)?;
                     PINNED.save(
                         &mut prefixed(storage, NAMESPACE_WASM),
                         meter,
@@ -329,7 +462,7 @@ impl Wasm {
                     code.pinned = false;
                     self.save_code(storage, meter, code_id, &code)?;
                     self.cache
-                        .unpin(&code.to_checksum())
+                        .unpin(&code.get_checksum_not_executing())
                         .map_err(map_vm_error)?;
                     PINNED.remove(&mut prefixed(storage, NAMESPACE_WASM), meter, code_id)?;
                 }
@@ -339,6 +472,36 @@ impl Wasm {
             }
         };
         Ok(resp)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_response_messages(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        contract: &AccountId,
+        msgs: Vec<SubMsg<super::vm::CustomMsg>>,
+        // we append events to this (later maybe overwrite the data)
+        mut parent_response: MsgResponse,
+    ) -> PulsarResult<MsgResponse> {
+        for msg in msgs {
+            // TODO: handle reply_on (and id)
+            match msg.reply_on {
+                ReplyOn::Never => {}
+                _ => panic!("No support for reply yet"),
+            }
+            // TODO: handle gas limit
+
+            let pulsar_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
+            let msg_response = sm.process_msg(storage, meter, contract, block, pulsar_msg)?;
+
+            // append events to parent response (in reply maybe overwrite data)
+            parent_response.events.extend(msg_response.events);
+        }
+
+        Ok(parent_response)
     }
 
     pub fn query(
@@ -353,18 +516,17 @@ impl Wasm {
             WasmQuery::Smart { contract_addr, msg } => {
                 let contract = self.load_contract(storage, meter, &contract_addr)?;
                 let code = self.load_code(storage, meter, contract.code_id)?;
-                let checksum = code.to_checksum();
-                let sub_store = self.read_contract_storage(storage, &contract_addr);
+                let checksum = code.get_checksum_to_execute(meter)?;
                 let env = build_env(block, &contract_addr);
-                let (result, gas) = self
-                    .cache
-                    .query(&checksum, &env, &msg, &sub_store, meter, sm);
+                let (result, gas) =
+                    self.cache
+                        .query(&checksum, &env, &msg, storage, &contract_addr, meter, sm);
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
                 WasmQueryResponse::Smart(result)
             }
             WasmQuery::Raw { contract_addr, key } => {
-                let sub_store = self.read_contract_storage(storage, &contract_addr);
+                let sub_store = read_contract_storage(storage, &contract_addr);
                 let data = sub_store.get(meter, &key)?.unwrap_or_default();
                 WasmQueryResponse::Raw(data.into())
             }
@@ -445,22 +607,17 @@ impl Wasm {
     ) -> Result<(), PlusError> {
         CODES.save(&mut prefixed(storage, NAMESPACE_WASM), meter, id, info)
     }
+}
 
-    fn contract_storage<'a>(
-        &self,
-        storage: &'a mut dyn Storage,
-        addr: &AccountId,
-    ) -> PrefixedStorage<'a> {
-        PrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
-    }
+pub fn contract_storage<'a>(storage: &'a mut dyn Storage, addr: &AccountId) -> PrefixedStorage<'a> {
+    PrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
+}
 
-    fn read_contract_storage<'a>(
-        &self,
-        storage: &'a dyn ReadonlyStorage,
-        addr: &AccountId,
-    ) -> ReadonlyPrefixedStorage<'a> {
-        ReadonlyPrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
-    }
+pub fn read_contract_storage<'a>(
+    storage: &'a dyn ReadonlyStorage,
+    addr: &AccountId,
+) -> ReadonlyPrefixedStorage<'a> {
+    ReadonlyPrefixedStorage::multilevel(storage, &[NAMESPACE_WASM, addr.as_slice()])
 }
 
 fn build_env(block: &BlockInfo, contract: &AccountId) -> Env {
@@ -494,4 +651,83 @@ fn map_contract_error(err: String) -> PulsarError {
 
 fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, PulsarError> {
     result.map_err(map_vm_error)?.map_err(map_contract_error)
+}
+
+fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
+    let res = match msg {
+        CosmosMsg::Bank(bank) => match bank {
+            cosmwasm_std::BankMsg::Send { to_address, amount } => pulsar_std::BankMsg::Send {
+                sender: sender.clone(),
+                recipient: AccountId::parse_string(&to_address)?,
+                amount,
+            }
+            .into(),
+            cosmwasm_std::BankMsg::Burn { amount } => pulsar_std::BankMsg::Burn {
+                sender: sender.clone(),
+                amount,
+            }
+            .into(),
+            x => unimplemented!("bank msg {:?}", x),
+        },
+        CosmosMsg::Wasm(wasm) => match wasm {
+            cosmwasm_std::WasmMsg::Execute {
+                contract_addr,
+                msg,
+                funds,
+            } => pulsar_std::WasmMsg::Execute {
+                contract_addr: AccountId::parse_string(&contract_addr)?,
+                msg,
+                sender: sender.clone(),
+                funds,
+            }
+            .into(),
+            cosmwasm_std::WasmMsg::Instantiate {
+                admin,
+                code_id,
+                msg,
+                funds,
+                label,
+            } => pulsar_std::WasmMsg::Instantiate {
+                sender: sender.clone(),
+                admin: admin.map(|x| AccountId::parse_string(&x)).transpose()?,
+                code_id,
+                msg,
+                funds,
+                label,
+            }
+            .into(),
+            // TODO: enable feature flags and support this
+            // cosmwasm_std::WasmMsg::Instantiate2 { .. } => todo!(),
+            cosmwasm_std::WasmMsg::Migrate {
+                contract_addr,
+                msg,
+                new_code_id,
+            } => pulsar_std::WasmMsg::Migrate {
+                contract_addr: AccountId::parse_string(&contract_addr)?,
+                msg,
+                sender: sender.clone(),
+                new_code_id,
+            }
+            .into(),
+            cosmwasm_std::WasmMsg::UpdateAdmin {
+                contract_addr,
+                admin,
+            } => pulsar_std::WasmMsg::UpdateAdmin {
+                sender: sender.clone(),
+                contract_addr: AccountId::parse_string(&contract_addr)?,
+                admin: AccountId::parse_string(&admin)?,
+            }
+            .into(),
+            cosmwasm_std::WasmMsg::ClearAdmin { contract_addr } => {
+                pulsar_std::WasmMsg::ClearAdmin {
+                    sender: sender.clone(),
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                }
+                .into()
+            }
+            x => unimplemented!("wasm msg {:?}", x),
+        },
+        _ => todo!(),
+    };
+    Ok(res)
 }

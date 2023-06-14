@@ -1,6 +1,6 @@
 mod error;
 mod events;
-mod keeper;
+pub(crate) mod keeper;
 mod vm;
 
 pub use error::WasmError;

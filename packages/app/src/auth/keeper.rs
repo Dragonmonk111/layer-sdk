@@ -71,7 +71,7 @@ impl Auth {
         let pubkey = match ACCOUNTS.may_load(&auth_store, meter, &tx.signer)? {
             Some(Account::External { pubkey, sequence }) => {
                 // ensure sequence matches
-                if sequence != tx.signing_info.sequence {
+                if validate_sig && sequence != tx.signing_info.sequence {
                     return Err(TxError::InvalidSequence {
                         provided: tx.signing_info.sequence,
                         expected: sequence,
@@ -95,10 +95,10 @@ impl Auth {
             }
             None => {
                 // if no account, ensure sequence is 0
-                if tx.signing_info.sequence != 0 {
+                if validate_sig && tx.signing_info.sequence != 0 {
                     return Err(TxError::InvalidSequence {
                         provided: tx.signing_info.sequence,
-                        expected: 1,
+                        expected: 0,
                     }
                     .into());
                 }

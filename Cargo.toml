@@ -53,3 +53,10 @@ cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
 lto              = false
 opt-level        = 3
 overflow-checks  = true
+
+# We have a lot of heavy dependencies like wasmer / cosmwasm-vm and tests lag if they
+# are not optimized. They should be cached the first time and not need expensive re-compiles,
+# so this shouldn't slow down dev loop much
+# (Note this doesn't apply to workspace, just dependencies)
+[profile.test.package."*"]
+opt-level        = 3
