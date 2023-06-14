@@ -10,27 +10,42 @@ use crate::PulsarError;
 const HACKATOM: &[u8] = include_bytes!("../../fixtures/hackatom.wasm");
 const DENOM: &str = "uhack";
 
-fn hackatom_genesis(account: &AccountId) -> GenesisState {
+fn hackatom_genesis(account: &AccountId, gov_key: &AccountId) -> GenesisState {
     GenesisState {
-        bank: vec![BankAccount {
-            address: account.to_string(),
-            balance: coins(100_000_000, DENOM),
-        }],
+        bank: vec![
+            BankAccount {
+                address: account.to_string(),
+                balance: coins(100_000_000, DENOM),
+            },
+            BankAccount {
+                address: gov_key.to_string(),
+                balance: coins(1_000_000, DENOM),
+            },
+        ],
         wasm: WasmParams {
-            gov_account: account.to_string(),
+            gov_account: gov_key.to_string(),
         },
     }
 }
 
+struct SetupData {
+    app: TestApp,
+    signer: PrivateKey,
+    gov_key: PrivateKey,
+    code_id: u64,
+}
+
 // create and init app
 // store the hackatom code
-fn setup(path: &str) -> (TestApp, PrivateKey, u64) {
+fn setup(path: &str) -> SetupData {
     let signer = PrivateKey::random();
     let sender = signer.account_id();
 
+    let gov_key = PrivateKey::random();
+
     let path = prepare_cache(path);
     let mut app = TestApp::new(path);
-    let genesis = hackatom_genesis(&sender);
+    let genesis = hackatom_genesis(&sender, &gov_key.account_id());
     app.init(&genesis, "hackatom");
 
     let msg = WasmMsg::StoreCode {
@@ -51,7 +66,12 @@ fn setup(path: &str) -> (TestApp, PrivateKey, u64) {
         .parse()
         .unwrap();
 
-    (app, signer, code_id)
+    SetupData {
+        app,
+        signer,
+        gov_key,
+        code_id,
+    }
 }
 
 // This will instantiate a new hackatom instance from the given code and given initial balance,
@@ -94,7 +114,12 @@ fn init_contract(
 
 #[test]
 fn basic_hackatom_usage() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/basic-hackatom-usage");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/basic-hackatom-usage");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -142,7 +167,12 @@ fn basic_hackatom_usage() {
 
 #[test]
 fn error_handling_from_api_call() {
-    let (app, signer, code_id) = setup("/tmp/pulsar/error-handling-from-api-call");
+    let SetupData {
+        app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/error-handling-from-api-call");
 
     // other actors
     let sender = signer.account_id();
@@ -178,7 +208,12 @@ fn error_handling_from_api_call() {
 
 #[test]
 fn check_message_loop() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-message-loop");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-message-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -216,7 +251,12 @@ fn check_message_loop() {
 
 #[test]
 fn check_cpu_loop() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-cpu-loop");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-cpu-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -255,7 +295,12 @@ fn check_cpu_loop() {
 // (Free to read from cache is not correctly priced)
 #[test]
 fn check_storage_loop() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-storage-loop");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-storage-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -293,7 +338,12 @@ fn check_storage_loop() {
 
 #[test]
 fn check_query_recursion() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-query-recursion");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-query-recursion");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -342,7 +392,12 @@ fn check_query_recursion() {
 
 #[test]
 fn check_query_balance() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-query-balance");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-query-balance");
 
     // other actors
     let sender = signer.account_id();
@@ -379,7 +434,12 @@ fn check_query_balance() {
 
 #[test]
 fn migrate_works() {
-    let (mut app, signer, code_id) = setup("/tmp/pulsar/migrate-works");
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/migrate-works");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -446,6 +506,75 @@ fn migrate_works() {
         .query_wasm(&contract, &msgs::QueryMsg::Verifier {})
         .unwrap();
     assert_eq!(r.verifier, sender.to_string());
+}
+
+#[test]
+fn sudo_works() {
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        gov_key,
+    } = setup("/tmp/pulsar/migrate-works");
+
+    // other actors
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+    let sender = signer.account_id();
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // verify it is set up properly
+    assert_eq!(app.balance(&contract, DENOM).unwrap().u128(), 10_000_000);
+    assert_eq!(app.balance(&verifier, DENOM).unwrap().u128(), 0);
+
+    // signer cannot do sudo
+    let sudo_msg = msgs::SudoMsg::StealFunds {
+        recipient: verifier.to_string(),
+        amount: coins(7_000_000, DENOM),
+    };
+    let sequence = app.sequence(&sender).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Sudo {
+            sender,
+            contract_addr: contract.clone(),
+            msg: to_binary(&sudo_msg).unwrap(),
+        })
+        .with_signer(&signer, sequence);
+    let mut res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    let err = res.remove(0).result.unwrap_err();
+    assert_eq!(err, PulsarError::Wasm(WasmError::Unauthorized {}));
+
+    // no tokens moved
+    assert_eq!(app.balance(&contract, DENOM).unwrap().u128(), 10_000_000);
+    assert_eq!(app.balance(&verifier, DENOM).unwrap().u128(), 0);
+
+    // gov_key can sudo to eg steal funds
+    let gov_acct = gov_key.account_id();
+    let sequence = app.sequence(&gov_acct).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Sudo {
+            sender: gov_acct,
+            contract_addr: contract.clone(),
+            msg: to_binary(&sudo_msg).unwrap(),
+        })
+        .with_signer(&gov_key, sequence);
+    let res = app.block(&[tx]);
+    assert_block_success(&res, 1);
+
+    // tokens were stolen
+    assert_eq!(app.balance(&contract, DENOM).unwrap().u128(), 3_000_000);
+    assert_eq!(app.balance(&verifier, DENOM).unwrap().u128(), 7_000_000);
 }
 
 /// This is copied from https://github.com/CosmWasm/cosmwasm/blob/v1.2.6/contracts/hackatom/src/msg.rs
