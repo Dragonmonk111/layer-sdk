@@ -141,6 +141,42 @@ fn basic_hackatom_usage() {
 }
 
 #[test]
+fn error_handling_from_api_call() {
+    let (app, signer, code_id) = setup("/tmp/pulsar/error-handling-from-api-call");
+
+    // other actors
+    let sender = signer.account_id();
+    let verifier = PrivateKey::random().account_id();
+
+    // prepre unsigned tx for simulate
+    let init_msg = msgs::InstantiateMsg {
+        verifier: verifier.to_string(),
+        beneficiary: "some1is3invalid".to_string(),
+    };
+    let msg = WasmMsg::Instantiate {
+        sender: sender.clone(),
+        admin: None,
+        code_id,
+        msg: to_binary(&init_msg).unwrap(),
+        funds: coins(1_000_000, DENOM),
+        label: "Hackatom Contract".into(),
+    };
+    let tx = TxBuilder::new().with_msg(msg).with_sender(&sender);
+    let err = app.simulate(&tx).unwrap().result.unwrap_err();
+
+    match err {
+        PulsarError::Wasm(WasmError::Contract(msg)) => {
+            assert!(
+                msg.starts_with("Generic error: addr_validate errored: Bech32:"),
+                "Unexpected error message: {}",
+                msg
+            );
+        }
+        x => panic!("Expected ContractError, got: {:?}", x),
+    }
+}
+
+#[test]
 fn check_message_loop() {
     // install send funds, release funds
 }
