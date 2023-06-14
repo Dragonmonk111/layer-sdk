@@ -231,22 +231,104 @@ fn check_message_loop() {
         10_000_000,
     );
 
-    // TODO: test issues if I make this 200_000
-    let gas_limit = 40_000;
+    let gas_limit = 400_000;
     let tx = TxBuilder::new()
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract,
-            msg: to_binary(&msgs::ExecuteMsg::MemoryLoop {}).unwrap(),
+            msg: to_binary(&msgs::ExecuteMsg::MessageLoop {}).unwrap(),
             funds: vec![],
         })
         .with_fee(gas_limit, coin(1_000, DENOM))
         .with_signer(&signer, 2);
-    let res = app.block(&[tx]);
+
+    let mut res = app.block(&[tx]);
     assert_eq!(res.len(), 1);
-    assert!(res[0].result.is_err());
-    assert!(res[0].gas.gas_used >= gas_limit);
-    assert!(res[0].gas.gas_used < gas_limit + 10_000);
+    let res = res.remove(0);
+    assert_eq!(res.gas.gas_wanted, gas_limit);
+    assert_eq!(res.result, Err(PulsarError::Gas(GasError::OutOfGas)));
+    let gas_used = res.gas.gas_used;
+    assert!(gas_used >= gas_limit, "gas_used: {}", gas_used);
+    assert!(
+        gas_used < gas_limit + crate::wasm::keeper::LOAD_WASM_GAS,
+        "gas_used: {}",
+        gas_used
+    );
+}
+
+#[test]
+fn check_memory_loop() {
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-memory-loop");
+
+    // other actors
+    let sender = signer.account_id();
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // smaller amounts hit out-of-gas (using memory)
+    let gas_limit = 100_000;
+    let msg = WasmMsg::Execute {
+        sender,
+        contract_addr: contract,
+        msg: to_binary(&msgs::ExecuteMsg::MemoryLoop {}).unwrap(),
+        funds: vec![],
+    };
+    let tx = TxBuilder::new()
+        .with_msg(msg.clone())
+        .with_fee(gas_limit, coin(1_000, DENOM))
+        .with_signer(&signer, 2);
+
+    let mut res = app.block(vec![&tx]);
+    assert_eq!(res.len(), 1);
+    let res = res.remove(0);
+    assert_eq!(res.gas.gas_wanted, gas_limit);
+    assert_eq!(res.result, Err(PulsarError::Gas(GasError::OutOfGas)));
+    let gas_used = res.gas.gas_used;
+    assert!(gas_used >= gas_limit, "gas_used: {}", gas_used);
+    assert!(
+        gas_used < gas_limit + crate::wasm::keeper::LOAD_WASM_GAS,
+        "gas_used: {}",
+        gas_used
+    );
+
+    // larger amounts hit a VM limit before they can use up gas
+    let gas_limit = 1_000_000;
+    let tx = TxBuilder::new()
+        .with_msg(msg)
+        .with_fee(gas_limit, coin(1_000, DENOM))
+        .with_signer(&signer, 3);
+    let mut res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    let res = res.remove(0);
+    assert_eq!(
+        res.result,
+        Err(PulsarError::Wasm(WasmError::Vm(
+            "Error executing Wasm: Wasmer runtime error: RuntimeError: unreachable".to_string()
+        )))
+    );
+    let gas_used = res.gas.gas_used;
+    assert!(
+        gas_used < gas_limit,
+        "gas_used: {} / {}",
+        gas_used,
+        gas_limit
+    );
 }
 
 #[test]
@@ -334,6 +416,48 @@ fn check_storage_loop() {
     assert!(res[0].result.is_err());
     assert!(res[0].gas.gas_used >= gas_limit);
     assert!(res[0].gas.gas_used < gas_limit + 10_000);
+}
+
+#[test]
+fn check_panic_handling() {
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/check-panic-handling");
+
+    // other actors
+    let sender = signer.account_id();
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender,
+            contract_addr: contract,
+            msg: to_binary(&msgs::ExecuteMsg::Panic {}).unwrap(),
+            funds: vec![],
+        })
+        .with_fee(200_000, coin(1_000, DENOM))
+        .with_signer(&signer, 2);
+    let mut res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    let r = res.remove(0).result;
+    assert_eq!(r, Err(PulsarError::Wasm(WasmError::Vm(
+        "Error executing Wasm: Wasmer runtime error: RuntimeError: Aborted: panicked at 'This page intentionally faulted', src/contract.rs:169:5".to_string()
+    ))));
 }
 
 #[test]
@@ -515,7 +639,7 @@ fn sudo_works() {
         signer,
         code_id,
         gov_key,
-    } = setup("/tmp/pulsar/migrate-works");
+    } = setup("/tmp/pulsar/sudo-works");
 
     // other actors
     let verify_key = PrivateKey::random();

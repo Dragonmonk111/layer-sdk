@@ -60,11 +60,15 @@ impl TestApp {
         self.app.check_tx(tx.build())
     }
 
-    pub fn block(&mut self, txs: &[TxBuilder]) -> Vec<TxResult<PulsarError>> {
+    /// Accepts either &[TxBuilder] or vec![&TxBuilder] in case you want to reuse the TxBuilder later (not Cloneable)
+    pub fn block<'a>(
+        &mut self,
+        txs: impl IntoIterator<Item = &'a TxBuilder<'a>> + 'a,
+    ) -> Vec<TxResult<PulsarError>> {
         let info = self.app.info().unwrap();
 
         let block = Block {
-            txs: txs.iter().map(|tx| tx.build()).collect(),
+            txs: txs.into_iter().map(|tx| tx.build()).collect(),
             height: info.height + 1,
             time: info.time.plus_nanos(NANO_SECOND_PER_BLOCK),
             proposer_address: vec![1u8; 32],
