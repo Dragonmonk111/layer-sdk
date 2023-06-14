@@ -24,11 +24,11 @@ pub fn query_response_to_proto(
     match response {
         Ok(response) => {
             // TODO: error not unwrap
-            let value = encode_cosmos_response(&response).unwrap();
-            let key = match response {
-                pulsar_std::response::QueryResponse::Raw { key, .. } => key,
+            let key = match &response {
+                pulsar_std::response::QueryResponse::Raw { key, .. } => key.clone(),
                 _ => Vec::new(),
             };
+            let value = encode_cosmos_response(response).unwrap();
             tendermint_proto::abci::ResponseQuery {
                 code: 0,
                 log: "".to_string(),

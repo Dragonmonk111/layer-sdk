@@ -1,9 +1,10 @@
 use bytes::Bytes;
-use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmwasm_std::Event;
 use pulsar_std::api::{GasInfo, TxResponse, TxResult};
-use pulsar_std::response::{AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse};
-use pulsar_std::{AccountId, AuthQuery, BankQuery, Query, QueryError};
+use pulsar_std::response::{
+    AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
+};
+use pulsar_std::{AccountId, AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 
 use cosmos_sdk_proto::cosmos::auth::v1beta1::{
     BaseAccount, QueryAccountRequest, QueryAccountResponse,
@@ -11,6 +12,12 @@ use cosmos_sdk_proto::cosmos::auth::v1beta1::{
 use cosmos_sdk_proto::cosmos::bank::v1beta1::{
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
     QuerySupplyOfRequest, QuerySupplyOfResponse,
+};
+use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
+use cosmos_sdk_proto::cosmwasm::wasm::v1::{
+    AbsoluteTxPosition, QueryCodeRequest, QueryCodeResponse, QueryContractInfoRequest,
+    QueryContractInfoResponse, QueryRawContractStateRequest, QueryRawContractStateResponse,
+    QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
 use cosmos_sdk_proto::prost::Message;
 use cosmos_sdk_proto::traits::{MessageExt, TypeUrl};
@@ -116,14 +123,37 @@ fn parse_cosmos_grpc_query(
             let tx = parse_cosmos_tx(req.tx_bytes.into(), chain_id)
                 .map_err(|e| QueryError::ParseError(e.to_string()))?;
             Ok(Some(Query::Simulate(tx)))
-
-            /*
-            TEST FIXTURE!
-
-                        Incoming request: Request { value: Some(Query(RequestQuery { data: b"\x12\x82\x02\n\xab\x01\n\x91\x01\n\x1c/cosmos.bank.v1beta1.MsgSend\x12q\n-pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l\x12-pulsar1xuqtjrgftcdq5a92yyahchfe42a5mhqd0wtfgc\x1a\x11\n\x06upulse\x12\x072000000\x12\x15Use your power wisely\x12P\nL\nF\n\x1f/cosmos.crypto.secp256k1.PubKey\x12#\n!\x03O\x04\x18\x1e\xeb\xa3S\x91\xb8Xc:v\\J\x0c\x18\x96\x97\xb4\r!cT\xd5\x08\x90\xd3P\xc7\x02\x90\x12\x02\n\0\x12\0\x1a\0", path: "/cosmos.tx.v1beta1.Service/Simulate", height: 0, prove: false })) }
-            2023-05-23T22:03:34.041426+02:00 DEBUG query: pulsariumd::app: abci query
-            thread '<unnamed>' panicked at 'called `Result::unwrap()` on an `Err` value: ParseError("Parse: failed to decode Protobuf message: SignerInfo.mode_info: AuthInfo.signer_infos: Tx.auth_info: invalid wire type value: 7")', app/pulsariumd/src/encode.rs:38:64
-            */
+        }
+        "/cosmwasm.wasm.v1.Query/ContractInfo" => {
+            let req = QueryContractInfoRequest::decode(data).map_err(CosmosError::from)?;
+            let contract_addr = AccountId::parse_string(&req.address)?;
+            let query = WasmQuery::ContractInfo { contract_addr };
+            Ok(Some(query.into()))
+        }
+        "/cosmwasm.wasm.v1.Query/RawContractState" => {
+            let req = QueryRawContractStateRequest::decode(data).map_err(CosmosError::from)?;
+            let contract_addr = AccountId::parse_string(&req.address)?;
+            let query = WasmQuery::Raw {
+                contract_addr,
+                key: req.query_data.into(),
+            };
+            Ok(Some(query.into()))
+        }
+        "/cosmwasm.wasm.v1.Query/SmartContractState" => {
+            let req = QuerySmartContractStateRequest::decode(data).map_err(CosmosError::from)?;
+            let contract_addr = AccountId::parse_string(&req.address)?;
+            let query = WasmQuery::Smart {
+                contract_addr,
+                msg: req.query_data.into(),
+            };
+            Ok(Some(query.into()))
+        }
+        "/cosmwasm.wasm.v1.Query/Code" => {
+            let req = QueryCodeRequest::decode(data).map_err(CosmosError::from)?;
+            let query = WasmQuery::CodeInfo {
+                code_id: req.code_id,
+            };
+            Ok(Some(query.into()))
         }
         // "/cosmos.auth.v1beta1.Query/Accounts" => {
         //     let _ = QueryAccountsRequest::decode(data).map_err(CosmosError::from)?;
@@ -138,18 +168,18 @@ fn parse_cosmos_grpc_query(
 }
 
 pub fn encode_cosmos_response<E: std::error::Error>(
-    res: &QueryResponse<E>,
+    res: QueryResponse<E>,
 ) -> Result<Vec<u8>, QueryError> {
     match res {
-        QueryResponse::Raw { key: _, value } => Ok(value.clone()),
+        QueryResponse::Raw { key: _, value } => Ok(value),
         QueryResponse::Auth(auth) => encode_auth_response(auth),
         QueryResponse::Bank(bank) => Ok(encode_bank_response(bank)),
         QueryResponse::Simulate(simulate) => encode_simulate_response(simulate),
-        QueryResponse::Wasm(_) => todo!(),
+        QueryResponse::Wasm(wasm) => Ok(encode_wasm_response(wasm)),
     }
 }
 
-pub fn encode_auth_response(res: &AuthQueryResponse) -> Result<Vec<u8>, QueryError> {
+pub fn encode_auth_response(res: AuthQueryResponse) -> Result<Vec<u8>, QueryError> {
     match res {
         AuthQueryResponse::Account(acc) => {
             let (address, pub_key, sequence) = match acc {
@@ -159,7 +189,7 @@ pub fn encode_auth_response(res: &AuthQueryResponse) -> Result<Vec<u8>, QueryErr
                     sequence,
                 } => {
                     let pub_key = pubkey.as_ref().map(encode_cosmos_pubkey).transpose()?;
-                    (address.to_string(), pub_key, *sequence)
+                    (address.to_string(), pub_key, sequence)
                 }
                 AccountResponse::Internal { address } => (address.to_string(), None, 0),
                 AccountResponse::Smart { address, .. } => (address.to_string(), None, 0),
@@ -179,7 +209,7 @@ pub fn encode_auth_response(res: &AuthQueryResponse) -> Result<Vec<u8>, QueryErr
     }
 }
 
-pub fn encode_bank_response(res: &BankQueryResponse) -> Vec<u8> {
+pub fn encode_bank_response(res: BankQueryResponse) -> Vec<u8> {
     match res {
         BankQueryResponse::Balance(r) => {
             let balance = Some(encode_sdk_coin(&r.amount));
@@ -198,7 +228,7 @@ pub fn encode_bank_response(res: &BankQueryResponse) -> Vec<u8> {
 }
 
 pub fn encode_simulate_response<E: std::error::Error>(
-    result: &TxResult<E>,
+    result: TxResult<E>,
 ) -> Result<Vec<u8>, QueryError> {
     let gas_info = encode_gas_info(&result.gas);
     // if the result was an error, we just return error to the query service, it gets encoded at rpc level
@@ -213,6 +243,45 @@ pub fn encode_simulate_response<E: std::error::Error>(
         result: Some(result),
     };
     Ok(sim.encode_to_vec())
+}
+
+pub fn encode_wasm_response(res: WasmQueryResponse) -> Vec<u8> {
+    match res {
+        WasmQueryResponse::Smart(data) => {
+            QuerySmartContractStateResponse { data: data.into() }.encode_to_vec()
+        }
+        WasmQueryResponse::Raw(data) => {
+            QueryRawContractStateResponse { data: data.into() }.encode_to_vec()
+        }
+        WasmQueryResponse::CodeInfo(code) => QueryCodeResponse {
+            data: vec![],
+            code_info: Some(cosmos_sdk_proto::cosmwasm::wasm::v1::CodeInfoResponse {
+                code_id: code.code_id,
+                creator: code.creator.to_string(),
+                data_hash: code.checksum.into(),
+                instantiate_permission: None,
+            }),
+        }
+        .encode_to_vec(),
+        WasmQueryResponse::ContractInfo(info) => {
+            QueryContractInfoResponse {
+                address: "".to_string(), // TODO: do we need the queried address? expose more info here
+                contract_info: Some(cosmos_sdk_proto::cosmwasm::wasm::v1::ContractInfo {
+                    code_id: info.code_id,
+                    creator: info.creator.to_string(),
+                    admin: info.admin.map(|s| s.to_string()).unwrap_or_default(),
+                    label: info.label,
+                    ibc_port_id: info.ibc_port.unwrap_or_default(),
+                    created: Some(AbsoluteTxPosition {
+                        block_height: info.created,
+                        tx_index: 0,
+                    }),
+                    extension: None,
+                }),
+            }
+            .encode_to_vec()
+        }
+    }
 }
 
 fn encode_gas_info(gas: &GasInfo) -> cosmos_sdk_proto::cosmos::base::abci::v1beta1::GasInfo {
