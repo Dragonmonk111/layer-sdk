@@ -178,7 +178,40 @@ fn error_handling_from_api_call() {
 
 #[test]
 fn check_message_loop() {
-    // install send funds, release funds
+    let (mut app, signer, code_id) = setup("/tmp/pulsar/check-message-loop");
+
+    // other actors
+    let sender = signer.account_id();
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.account_id();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+    );
+
+    // TODO: test issues if I make this 200_000
+    let gas_limit = 40_000;
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender,
+            contract_addr: contract,
+            msg: to_binary(&msgs::ExecuteMsg::MemoryLoop {}).unwrap(),
+            funds: vec![],
+        })
+        .with_fee(gas_limit, coin(1_000, DENOM))
+        .with_signer(&signer, 2);
+    let res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    assert!(res[0].result.is_err());
+    assert!(res[0].gas.gas_used >= gas_limit);
+    assert!(res[0].gas.gas_used < gas_limit + 10_000);
 }
 
 #[test]
