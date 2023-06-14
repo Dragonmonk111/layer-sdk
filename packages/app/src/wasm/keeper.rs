@@ -28,13 +28,16 @@ use crate::wasm::events::{
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
 
+// Numbers taken from wasmd, we should benchmark better
+pub(crate) const LOAD_WASM_GAS: u64 = 60_000;
+pub(crate) const LOAD_PINNED_WASM_GAS: u64 = 2_000;
+
 // Contract state is kept in Storage, separate from the contracts themselves
 const CONTRACTS: Map<&AccountId, ContractData> = Map::new("contracts");
 const CODES: Map<u64, CodeInfo> = Map::new("codes");
 
 // list of all pinned code_ids, so you can range over them
 const PINNED: Map<u64, Empty> = Map::new("pinned");
-
 const CODE_ID: Item<u64> = Item::new("code_id");
 const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
 
@@ -73,7 +76,18 @@ pub struct CodeInfo {
 }
 
 impl CodeInfo {
-    fn to_checksum(&self) -> Checksum {
+    /// This gets a proper checksum to load a wasmer vm, and charges a gas price based on whether it is pinned or not
+    fn get_checksum_to_execute(&self, meter: &GasMeter) -> Result<Checksum, GasError> {
+        if self.pinned {
+            meter.charge(LOAD_PINNED_WASM_GAS)?;
+        } else {
+            meter.charge(LOAD_WASM_GAS)?;
+        }
+        Ok(self.get_checksum_not_executing())
+    }
+
+    /// Use this is you need Checksum to interact with the cache, but not run wasmer vm, like pin/unpin
+    fn get_checksum_not_executing(&self) -> Checksum {
         Checksum::try_from(self.checksum.as_slice()).unwrap()
     }
 }
@@ -207,7 +221,7 @@ impl Wasm {
                 // call instantiate on cache
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.instantiate(
-                    &code.to_checksum(),
+                    &code.get_checksum_to_execute(meter)?,
                     &env,
                     &info,
                     &msg,
@@ -258,7 +272,7 @@ impl Wasm {
                 // call execute on cache
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.execute(
-                    &code.to_checksum(),
+                    &code.get_checksum_to_execute(meter)?,
                     &env,
                     &info,
                     &msg,
@@ -308,7 +322,7 @@ impl Wasm {
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.migrate(
-                    &code.to_checksum(),
+                    &code.get_checksum_to_execute(meter)?,
                     &env,
                     &msg,
                     storage,
@@ -384,7 +398,7 @@ impl Wasm {
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
                 let (result, gas) = self.cache.sudo(
-                    &code.to_checksum(),
+                    &code.get_checksum_to_execute(meter)?,
                     &env,
                     &msg,
                     storage,
@@ -423,7 +437,9 @@ impl Wasm {
                 if !code.pinned {
                     code.pinned = true;
                     self.save_code(storage, meter, code_id, &code)?;
-                    self.cache.pin(&code.to_checksum()).map_err(map_vm_error)?;
+                    self.cache
+                        .pin(&code.get_checksum_not_executing())
+                        .map_err(map_vm_error)?;
                     PINNED.save(
                         &mut prefixed(storage, NAMESPACE_WASM),
                         meter,
@@ -446,7 +462,7 @@ impl Wasm {
                     code.pinned = false;
                     self.save_code(storage, meter, code_id, &code)?;
                     self.cache
-                        .unpin(&code.to_checksum())
+                        .unpin(&code.get_checksum_not_executing())
                         .map_err(map_vm_error)?;
                     PINNED.remove(&mut prefixed(storage, NAMESPACE_WASM), meter, code_id)?;
                 }
@@ -500,7 +516,7 @@ impl Wasm {
             WasmQuery::Smart { contract_addr, msg } => {
                 let contract = self.load_contract(storage, meter, &contract_addr)?;
                 let code = self.load_code(storage, meter, contract.code_id)?;
-                let checksum = code.to_checksum();
+                let checksum = code.get_checksum_to_execute(meter)?;
                 let env = build_env(block, &contract_addr);
                 let (result, gas) =
                     self.cache
