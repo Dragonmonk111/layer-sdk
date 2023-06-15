@@ -1,3 +1,6 @@
+use std::env;
+use std::path::{Path, PathBuf};
+
 use clap::Parser;
 use figment::{
     providers::{Env, Format, Serialized, Toml},
@@ -21,13 +24,38 @@ use crate::app::Pulsarium;
 use crate::cli::Cli;
 use crate::config::RawConfig;
 
+/// We check fro pulsar home dir:
+/// * from --home flag
+/// * from PULSE_HOME env var
+/// * default to $HOME/.pulsar
+fn get_home() -> PathBuf {
+    let mut pargs = pico_args::Arguments::from_env();
+
+    // check for --home flag
+    if let Some(home) = pargs.opt_value_from_str::<_, String>("--home").unwrap() {
+        return PathBuf::from(home);
+    }
+
+    // check PULSE_HOME
+    if let Ok(pulse) = env::var("PULSE_HOME") {
+        return PathBuf::from(pulse);
+    }
+
+    // default to $HOME/.pulsar
+    Path::new(&env::var("HOME").unwrap()).join(".pulsar")
+}
+
 #[tokio::main]
 async fn main() {
+    let home = get_home();
+    let config_file = home.as_path().join("config/pulsarium.toml");
+    println!("Reading config file from {}", config_file.to_str().unwrap());
+
     // Parse all config info
     let args = Cli::parse();
     // Thanks to https://steezeburger.com/2023/03/rust-hierarchical-configuration/ for this tip
     let config: RawConfig = Figment::from(Serialized::defaults(RawConfig::default()))
-        .merge(Toml::file("config/pulsarium.toml"))
+        .merge(Toml::file(config_file))
         .merge(Env::prefixed("PULSE_"))
         .merge(Serialized::defaults(args))
         .extract()
@@ -41,6 +69,9 @@ async fn main() {
         opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
         let tracer = opentelemetry_jaeger::new_collector_pipeline()
             .with_endpoint("http://localhost:14268/api/traces")
+            //         // optionally set username and password as well.
+            //         // .with_username("username")
+            //         // .with_password("s3cr3t")
             .with_service_name("pulsariumd")
             .with_isahc()
             .with_timeout(std::time::Duration::from_secs(2))
@@ -55,13 +86,6 @@ async fn main() {
         tracing::subscriber::set_global_default(subscriber)
             .expect("setting default subscriber failed");
         info!("jaeger tracing enabled");
-
-    //     let tracer = opentelemetry_jaeger::new_collector_pipeline()
-    //         .with_endpoint("http://localhost:14268/api/traces")
-    //         // optionally set username and password as well.
-    //         // .with_username("username")
-    //         // .with_password("s3cr3t")
-    //         .install_batch().unwrap();
     } else {
         let fmt_subscriber = FmtSubscriber::builder()
             .with_env_filter(config.filter)
@@ -73,8 +97,10 @@ async fn main() {
             .expect("setting default subscriber failed");
     }
 
-    // TODO: put this in cli/config args
-    let app_config = AppConfig::new("/tmp/pulsar/TODO");
+    // autogenerate wasm_dir from home
+    let wasm_path = home.as_path().join("data");
+    let wasm_dir = wasm_path.to_str().unwrap();
+    let app_config = AppConfig::new(wasm_dir);
 
     // Create the app
     match config.lmdb {

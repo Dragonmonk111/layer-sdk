@@ -3,6 +3,12 @@ use serde::Serialize;
 
 #[derive(Debug, Parser, Serialize)]
 pub struct Cli {
+    // Ignored: This is parsed in a first step, but we include here so the parser doesn't error on unknown flag
+    /// Provide a home directory for the config files and data directory. Defaults to $HOME/.pulsar
+    #[arg(long)]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub home: Option<String>,
+
     /// URL of the data layer server.
     #[arg(long)]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]

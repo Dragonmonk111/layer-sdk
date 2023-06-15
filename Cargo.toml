@@ -19,7 +19,7 @@ thiserror    = "1.0.38"
 cosmwasm-std = "1.2.4"
 cosmwasm-schema = "1.2.4"
 cosmwasm-crypto = "1.2.4"
-cw-storage-plus = "1.0.1"
+cw-storage-plus = "1.1.0"
 cw-utils = "1.0.1"
 serde = { version = "1.0.160", features = ["derive"]}
 itertools = "0.10.5"
@@ -58,5 +58,7 @@ overflow-checks  = true
 # are not optimized. They should be cached the first time and not need expensive re-compiles,
 # so this shouldn't slow down dev loop much
 # (Note this doesn't apply to workspace, just dependencies)
-[profile.test.package."*"]
-opt-level        = 3
+
+# DEV: you can uncomment locally
+# [profile.test.package."*"]
+# opt-level        = 3
