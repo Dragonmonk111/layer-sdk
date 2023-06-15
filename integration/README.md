@@ -21,18 +21,17 @@ Copy over startup files
 ```shell
 rm -rf ~/.pulse-test
 cp -r ./etc ~/.pulse-test
-mkdir -p ~/.pulse-test/lmdb-1
+# mkdir -p ~/.pulse-test/lmdb-1
 ```
 
 Run in one terminal:
 
 ```shell
-pulsariumd start
+pulsariumd --home ~/.pulse-test
 
 # or dev mode
 cd ../app/pulsariumd
-PULSE_LOG=debug,tendermint_abci::application=error cargo run
-PULSE_LOG=info,tendermint_abci::application=error cargo run
+cargo run -- --home ~/.pulse-test
 ```
 
 Run in another terminal:

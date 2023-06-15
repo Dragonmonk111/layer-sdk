@@ -218,10 +218,15 @@ pub struct ContractInfoResponse {
     pub creator: AccountId,
     /// admin who can run migrations (if any)
     pub admin: Option<AccountId>,
+    /// human-readable label for this contract (optional)
+    pub label: String,
     /// if set, the contract is pinned to the cache, and thus uses less gas when called
     pub pinned: bool,
     /// set if this contract has bound an IBC port
     pub ibc_port: Option<String>,
+
+    /// blockchain height when contract was first created
+    pub created: u64,
 }
 
 /// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].

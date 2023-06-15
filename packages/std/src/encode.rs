@@ -1,5 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 
+// This is measured in bytes, twice as long in hex
+// point is to not dump entire wasm blobs...
+const MAX_DISPLAY_LENGTH: usize = 1000;
 pub struct HexEncode<'a>(&'a [u8]);
 
 impl<'a> HexEncode<'a> {
@@ -10,7 +13,11 @@ impl<'a> HexEncode<'a> {
 
 impl Display for HexEncode<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode_upper(self.0))
+        if self.0.len() > MAX_DISPLAY_LENGTH {
+            write!(f, "{}...", hex::encode_upper(&self.0[..MAX_DISPLAY_LENGTH]))
+        } else {
+            f.write_str(&hex::encode_upper(self.0))
+        }
     }
 }
 

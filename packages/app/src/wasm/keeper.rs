@@ -535,7 +535,8 @@ impl Wasm {
                     code_id,
                     creator,
                     admin,
-                    ..
+                    label,
+                    created,
                 } = self.load_contract(storage, meter, &contract_addr)?;
                 let CodeInfo { pinned, .. } = self.load_code(storage, meter, code_id)?;
                 let resp = ContractInfoResponse {
@@ -544,6 +545,8 @@ impl Wasm {
                     admin,
                     ibc_port: None,
                     pinned,
+                    label,
+                    created,
                 };
                 WasmQueryResponse::ContractInfo(resp)
             }

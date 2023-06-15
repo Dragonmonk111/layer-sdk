@@ -35,6 +35,8 @@ const MAX_VALIDATE_GAS: u64 = 200_000;
 const MAX_BEGIN_BLOCK_GAS: u64 = 10_000_000;
 const MAX_END_BLOCK_GAS: u64 = 10_000_000;
 
+pub const GAS_COST_TX_BYTE: u64 = 10;
+
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
 /// application. It *should* be able to run inside an ABCI app as well as an Avalanche Subnet.
 ///
@@ -183,9 +185,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
     pub fn info(&self) -> Option<&BlockInfo> {
-        let block = self.data.as_ref().map(|d| &d.block);
-        debug!(?block, "info");
-        block
+        self.data.as_ref().map(|d| &d.block)
     }
 
     pub fn app_hash(&self) -> Vec<u8> {
@@ -281,6 +281,8 @@ impl<T: PersistentStorage + 'static> App<T> {
         // validate the transaction. if this passes, we commit the auth info (sequence / fee)
         // even if messages fail and are reverted
         let val_meter = GasMeter::new(MAX_VALIDATE_GAS);
+        // we need to calculate this now before moving tx away
+        let tx_byte_gas = tx.tx_len() * GAS_COST_TX_BYTE;
         let val_res = atomic(storage, &val_meter, |store, m| {
             self.logic.validate_tx(store, m, block, tx)
         });
@@ -300,7 +302,8 @@ impl<T: PersistentStorage + 'static> App<T> {
         // prepare this tx-specific gas meter and charge for previous validation
         let gas_wanted = data.gas_wanted;
         let meter = GasMeter::new(gas_wanted);
-        if let Err(e) = meter.charge(val_meter.used()) {
+        // charge for validation gas an also tx bytes
+        if let Err(e) = meter.charge(val_meter.used() + tx_byte_gas) {
             // ignore this out of gas error, aborting anyway and future txs will fail
             let _ = block_meter.charge(val_meter.used());
             debug!(error = %e, "Tx auth error");

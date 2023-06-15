@@ -22,7 +22,6 @@ pub fn fee_collector_account() -> AccountId {
     AccountId::new(&[7u8; 20]).unwrap()
 }
 
-pub const GAS_COST_TX_BYTE: u64 = 10;
 pub const GAS_COST_SIG_VALIDATION: u64 = 1_000;
 
 #[cw_serde]
@@ -62,9 +61,6 @@ impl Auth {
 
         // later handle other types
         let Tx::Signed(tx) = tx;
-
-        // charge for the tx size
-        meter.charge(tx.tx_len() * GAS_COST_TX_BYTE)?;
 
         // load the signer account if any
         let mut auth_store = prefixed(storage, NAMESPACE_AUTH);

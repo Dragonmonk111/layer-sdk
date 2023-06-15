@@ -105,12 +105,16 @@ impl StateMachine {
         tx: Tx,
     ) -> PulsarResult<TxResponse> {
         let _span = debug_span!("sm.query_simulate").entered();
+        let tx_byte_gas = tx.tx_len() * crate::app::GAS_COST_TX_BYTE;
         let data =
             self.auth
                 .validate_tx(&mut AppMeter::new(store), meter, block, self, tx, false)?;
         // It's roughly 6000 gas to transfer fees, which is not done in simulate.
         // We charge here to make sure estimates are good.
         meter.charge(6000)?;
+
+        // we also need to charge for length gas here (like in execute_tx)
+        meter.charge(tx_byte_gas)?;
 
         let resps = data
             .msgs
@@ -123,6 +127,7 @@ impl StateMachine {
             .map(|r| r.data.clone().unwrap_or_default())
             .collect();
         let events = resps.into_iter().map(|r| r.events).collect();
+        tracing::debug!(gas = meter.used(), "simulated");
         Ok(TxResponse { data, events })
     }
 

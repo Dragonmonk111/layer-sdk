@@ -27,13 +27,13 @@ Since you want to see real-world numbers, let's compile release mode:
 # this will make runtime a bit faster if we don't want low-level tracing info
 cargo install --path . --features no-trace
 cargo install --path .
-PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger
+PULSE_LOG=debug pulsariumd --jaeger
 ```
 
 Or with lmdb:
 
 ```bash
-PULSE_LOG=debug,tendermint_abci::application=error pulsariumd --jaeger --lmdb ~/.pulse-test/lmdb-1
+PULSE_LOG=debug pulsariumd --jaeger --lmdb ~/.pulse-test/lmdb-1
 ```
 
 ## Test with integration tests

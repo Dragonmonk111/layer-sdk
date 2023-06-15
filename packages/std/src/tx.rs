@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use cosmwasm_std::{Binary, Coin};
+use derivative::Derivative;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -18,12 +19,27 @@ pub enum Tx {
     Signed(SignedTx),
 }
 
+impl Tx {
+    pub fn tx_len(&self) -> u64 {
+        match self {
+            Tx::Signed(s) => s.tx_len(),
+        }
+    }
+
+    pub fn tx_hash(&self) -> Vec<u8> {
+        match self {
+            Tx::Signed(s) => s.tx_hash(),
+        }
+    }
+}
+
 /// This is a struct to represent a parsed transaction.
 /// The encoding schemes are defined separately and there are many ways to transform
 /// raw bytes into a proper SignedTx instance.
 /// Once of which is the Cosmos SDK format (direct or legacy amino signing modes)
 /// There will be others more native to Pulsar in the future, or for compatibility with other chains.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Derivative, Clone, PartialEq, Eq)]
+#[derivative(Debug)]
 pub struct SignedTx {
     // The decoded messages inside this transaction
     pub msgs: Vec<Msg>,
@@ -41,6 +57,7 @@ pub struct SignedTx {
     pub timeout_height: Option<u64>,
 
     // The original transaction bytes (generally not needed, except to calculate the length for gas)
+    #[derivative(Debug = "ignore")]
     pub raw_tx: Bytes,
 }
 

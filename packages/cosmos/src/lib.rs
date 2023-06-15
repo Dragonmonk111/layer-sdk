@@ -3,6 +3,7 @@ mod msg;
 mod pubkey;
 mod query;
 mod tx;
+mod unzip;
 mod utils;
 
 pub use error::CosmosError;
