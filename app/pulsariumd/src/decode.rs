@@ -1,6 +1,7 @@
+use serde::Serialize;
 use tracing::trace_span;
 
-use cosmwasm_std::to_vec;
+use cosmwasm_std::{to_vec, Event};
 // Convert from pulsar types into abci types
 use pulsar_app::{PulsarError, PulsarResult};
 use pulsar_cosmos::{encode_cosmos_response, msg_data_to_proto};
@@ -123,6 +124,25 @@ fn tx_gas_to_proto(gas: pulsar_std::api::GasInfo) -> (i64, i64) {
     )
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub struct LoggedEvents<'a> {
+    pub events: &'a [Event],
+}
+
+// Yes, this is kind of ridiculous, but we need to encode this like the Cosmos SDK does to be compatible with CosmJS
+fn encode_logs(all_events: &[Vec<Event>]) -> String {
+    // This gives [ [event] ]
+    // String::from_utf8(to_vec(events).unwrap()).unwrap_or_else(|e| e.to_string())
+
+    // CosmJS expects [ { events: [event] } ]
+    let transform: Vec<_> = all_events
+        .iter()
+        .map(|events| LoggedEvents { events })
+        .collect();
+    let encoded = to_vec(&transform).unwrap();
+    String::from_utf8(encoded).unwrap_or_else(|e| e.to_string())
+}
+
 fn tx_result_to_proto(
     result: PulsarResult<pulsar_std::api::TxResponse>,
 ) -> (u32, Vec<u8>, Vec<tendermint_proto::abci::Event>, String) {
@@ -130,8 +150,7 @@ fn tx_result_to_proto(
     match result {
         Ok(resp) => {
             // FIXME: needed for compatibility but slow, review later
-            let log =
-                String::from_utf8(to_vec(&resp.events).unwrap()).unwrap_or_else(|e| e.to_string());
+            let log = encode_logs(&resp.events);
             let events = resp.events.into_iter().flat_map(events_to_proto).collect();
             let data = msg_data_to_proto(resp.data); // flatten
             (0, data, events, log)

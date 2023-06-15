@@ -15,7 +15,7 @@ import {
 
 describe("Cw20 Test Cases", () => {
   describe("happyPath", () => {
-    fit("works with direct signer", async () => {
+    it("works with direct signer", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
@@ -30,10 +30,8 @@ describe("Cw20 Test Cases", () => {
       const wasm = new Uint8Array(wasmBuf); // not sure if this is needed but something is odd here (always out of gas)
       console.info(`Wasm size: ${wasm.length} bytes`);
       const uploadFee = calculateFee(50_000_000, defaultGasPrice);
-      console.info(`Upload fee: ${JSON.stringify(uploadFee)}`);
 
       const uploadReceipt = await client.upload(signer, wasm, uploadFee);
-      console.info(`Upload succeeded. Receipt: ${JSON.stringify(uploadReceipt)}`);
       expect(uploadReceipt).toBeTruthy();
       const { codeId } = uploadReceipt;
       expect(codeId).toBeTruthy();
@@ -51,7 +49,7 @@ describe("Cw20 Test Cases", () => {
         ],
       };
 
-      const instantiateFee = calculateFee(500_000, defaultGasPrice);
+      const instantiateFee = calculateFee(300_000, defaultGasPrice);
       const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", instantiateFee, {
         memo: `Create a hackatom instance in deploy_hackatom.js`,
         admin: signer,
@@ -61,40 +59,85 @@ describe("Cw20 Test Cases", () => {
       // query balances
       const recipient = makeRandomAddress();
       const myBal = await client.queryContractSmart(contractAddress, { balance: { address: faucet.address0 } });
-      console.info(`My balance: ${JSON.stringify(myBal)}`);
       expect(myBal.balance).toEqual("50000000");
       const yourBal = await client.queryContractSmart(contractAddress, { balance: { address: recipient } });
-      console.info(`Your balance: ${JSON.stringify(yourBal)}`);
       expect(yourBal.balance).toEqual("0");
+
+      const executeFee = calculateFee(300_000, defaultGasPrice);
+      const execMsg = {
+        transfer: {
+          recipient: recipient,
+          amount: "42000000",
+        },
+      };
+      await client.execute(signer, contractAddress, execMsg, executeFee);
+
+      // query balances
+      const myBal2 = await client.queryContractSmart(contractAddress, { balance: { address: faucet.address0 } });
+      expect(myBal2.balance).toEqual("8000000");
+      const yourBal2 = await client.queryContractSmart(contractAddress, { balance: { address: recipient } });
+      expect(yourBal2.balance).toEqual("42000000");
     });
 
-    //   describe("simulate", () => {
-    //     it("works", async () => {
-    //       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-    //       const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
-    //       const client = await SigningStargateClient.createWithSigner(
-    //         tendermintClient,
-    //         wallet,
-    //         defaultSigningClientOptions
-    //       );
+    // this ensures the simulate calls work for all of the messages
+    it("works with gas price simulation", async () => {
+      const signer = faucet.address0;
+      const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
+      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const client = await SigningCosmWasmClient.createWithSigner(
+        tendermintClient,
+        wallet,
+        defaultSigningClientOptions
+      );
 
-    //       const msg = MsgSend.fromPartial({
-    //         fromAddress: faucet.address0,
-    //         toAddress: makeRandomAddress(),
-    //         amount: coins(2000000, DENOM),
-    //       });
-    //       const msgAny: MsgSendEncodeObject = {
-    //         typeUrl: "/cosmos.bank.v1beta1.MsgSend",
-    //         value: msg,
-    //       };
-    //       const memo = "Use your power wisely";
-    //       const gasUsed = await client.simulate(faucet.address0, [msgAny], memo);
-    //       // TODO: more realistic gas estimate (something not measured here)
-    //       expect(gasUsed).toBeGreaterThanOrEqual(3_000);
-    //       expect(gasUsed).toBeLessThanOrEqual(60_000);
+      // store code
+      const wasmBuf = fs.readFileSync(__dirname + "/../../packages/app/fixtures/cw20_base.wasm");
+      const wasm = new Uint8Array(wasmBuf); // not sure if this is needed but something is odd here (always out of gas)
 
-    //       client.disconnect();
-    //     });
-    //   });
+      const uploadReceipt = await client.upload(signer, wasm, "auto");
+      expect(uploadReceipt).toBeTruthy();
+      const { codeId } = uploadReceipt;
+      expect(codeId).toBeTruthy();
+
+      // instantiate contract
+      const initMsg = {
+        name: "pulsar",
+        symbol: "PULSE",
+        decimals: 6,
+        initial_balances: [
+          {
+            address: signer,
+            amount: "50000000", // 50 PULSE
+          },
+        ],
+      };
+
+      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", "auto", {
+        memo: `Create a hackatom instance in deploy_hackatom.js`,
+        admin: signer,
+      });
+      expect(contractAddress).toBeTruthy();
+
+      // query balances
+      const recipient = makeRandomAddress();
+      const myBal = await client.queryContractSmart(contractAddress, { balance: { address: faucet.address0 } });
+      expect(myBal.balance).toEqual("50000000");
+      const yourBal = await client.queryContractSmart(contractAddress, { balance: { address: recipient } });
+      expect(yourBal.balance).toEqual("0");
+
+      const execMsg = {
+        transfer: {
+          recipient: recipient,
+          amount: "42000000",
+        },
+      };
+      await client.execute(signer, contractAddress, execMsg, "auto");
+
+      // query balances
+      const myBal2 = await client.queryContractSmart(contractAddress, { balance: { address: faucet.address0 } });
+      expect(myBal2.balance).toEqual("8000000");
+      const yourBal2 = await client.queryContractSmart(contractAddress, { balance: { address: recipient } });
+      expect(yourBal2.balance).toEqual("42000000");
+    });
   });
 });

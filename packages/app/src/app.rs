@@ -185,9 +185,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
     pub fn info(&self) -> Option<&BlockInfo> {
-        let block = self.data.as_ref().map(|d| &d.block);
-        debug!(?block, "info");
-        block
+        self.data.as_ref().map(|d| &d.block)
     }
 
     pub fn app_hash(&self) -> Vec<u8> {
