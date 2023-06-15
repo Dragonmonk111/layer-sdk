@@ -89,6 +89,9 @@
           }
         ]
       }
-    ]
+    ],
+    "wasm": {
+      "gov_account": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"
+    }
   }
 }

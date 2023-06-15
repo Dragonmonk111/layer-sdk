@@ -152,23 +152,6 @@ impl KeyDeserialize for AccountId {
     }
 }
 
-impl<'a> PrimaryKey<'a> for &'a AccountId {
-    type Prefix = ();
-    type SubPrefix = ();
-    type Suffix = Self;
-    type SuperSuffix = Self;
-
-    fn key(&self) -> Vec<Key> {
-        vec![Key::Ref(self.deref())]
-    }
-}
-
-impl<'a> Prefixer<'a> for &'a AccountId {
-    fn prefix(&self) -> Vec<Key> {
-        vec![Key::Ref(self.deref())]
-    }
-}
-
 impl KeyDeserialize for &AccountId {
     type Output = AccountId;
 
