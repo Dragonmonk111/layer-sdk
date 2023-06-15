@@ -16,6 +16,7 @@ bytes = { workspace = true }
 
 cosmrs = { workspace = true }
 cosmos-sdk-proto = { workspace = true }
+flate2 = { version = "1.0.26" }
 
 [dev_dependencies]
 hex-literal = {workspace = true }

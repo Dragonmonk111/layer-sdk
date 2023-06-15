@@ -12,7 +12,10 @@ use tracing::trace_span;
 use pulsar_std::{AccountId, BankMsg, Msg, MsgError, WasmMsg};
 
 use crate::error::CosmosError;
+use crate::unzip::unzip_if_needed;
 use crate::utils::parse_sdk_coins;
+
+const MAX_WASM_SIZE: usize = 1024 * 1024 * 2; // 2 MB
 
 pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
     let _span = trace_span!("parse_cosmos_msg").entered();
@@ -55,11 +58,9 @@ pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
         }
         MsgStoreCode::TYPE_URL => {
             let parsed = MsgStoreCode::from_any(msg).map_err(CosmosError::from)?;
-            Ok(WasmMsg::StoreCode {
-                sender: AccountId::parse_string(&parsed.sender)?,
-                code: parsed.wasm_byte_code.into(),
-            }
-            .into())
+            let code = unzip_if_needed(parsed.wasm_byte_code, MAX_WASM_SIZE)?.into();
+            let sender = AccountId::parse_string(&parsed.sender)?;
+            Ok(WasmMsg::StoreCode { sender, code }.into())
         }
         MsgMigrateContract::TYPE_URL => {
             let parsed = MsgMigrateContract::from_any(msg).map_err(CosmosError::from)?;
