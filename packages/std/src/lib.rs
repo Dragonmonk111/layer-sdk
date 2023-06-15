@@ -34,3 +34,7 @@ pub fn binary_to_string(
         Err(_) => write!(fmt, "{:?}", data),
     }
 }
+
+pub fn wasm_summary(data: &Binary, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    write!(fmt, "WasmBytes({})", data.len())
+}

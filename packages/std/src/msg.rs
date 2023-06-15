@@ -48,7 +48,8 @@ impl Display for BankMsg {
     }
 }
 
-#[derive(Derivative, Debug, Clone, PartialEq, Eq)]
+#[derive(Derivative, Clone, PartialEq, Eq)]
+#[derivative(Debug)]
 pub enum WasmMsg {
     /// Dispatches a call to another contract at a known address (with known ABI).
     ///
@@ -58,7 +59,7 @@ pub enum WasmMsg {
         sender: AccountId,
         contract_addr: AccountId,
         /// msg is the json-encoded ExecuteMsg struct (as raw Binary)
-        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
         funds: Vec<Coin>,
     },
@@ -76,7 +77,7 @@ pub enum WasmMsg {
         admin: Option<AccountId>,
         code_id: u64,
         /// msg is the JSON-encoded InstantiateMsg struct (as raw Binary)
-        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
         funds: Vec<Coin>,
         /// A human-readbale label for the contract
@@ -96,7 +97,7 @@ pub enum WasmMsg {
         /// A human-readbale label for the contract
         label: String,
         /// msg is the JSON-encoded InstantiateMsg struct (as raw Binary)
-        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
         funds: Vec<Coin>,
         salt: Binary,
@@ -111,7 +112,7 @@ pub enum WasmMsg {
         /// the code_id of the new logic to place in the given contract
         new_code_id: u64,
         /// msg is the json-encoded MigrateMsg struct that will be passed to the new code
-        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
     },
     /// Sets a new admin (for migrate) on the given contract.
@@ -133,11 +134,12 @@ pub enum WasmMsg {
         sender: AccountId,
         contract_addr: AccountId,
         /// msg is the json-encoded SudoMsg struct that will be passed to the new code
-        #[derivative(Debug(format_with = "pulsar_std::binary_to_string"))]
+        #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
     },
     StoreCode {
         sender: AccountId,
+        #[derivative(Debug(format_with = "crate::wasm_summary"))]
         code: Binary,
     },
     Pin {
