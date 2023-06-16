@@ -235,6 +235,7 @@ pub enum MsgData {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum WasmMsgData {
+    Store { code_id: u64, checksum: Binary },
     Execute { data: Binary },
     Instantiate { contract: AccountId, data: Binary },
     Migrate { data: Binary },

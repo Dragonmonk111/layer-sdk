@@ -1,5 +1,5 @@
 use cosmwasm_std::{coin, coins, to_binary};
-use pulsar_std::{AccountId, GasError, WasmMsg};
+use pulsar_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
@@ -56,7 +56,7 @@ fn setup(path: &str) -> SetupData {
         .with_msg(msg)
         .with_signer(&signer, 0)
         .with_fee(1_000_000, coin(50_000, DENOM));
-    let res = app.block(&[tx]);
+    let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
 
     // parse code_id from first message of first tx
@@ -65,6 +65,12 @@ fn setup(path: &str) -> SetupData {
         .unwrap()
         .parse()
         .unwrap();
+
+    // ensure proper data response type
+    assert!(matches!(
+        res.remove(0).result.unwrap().data.remove(0),
+        MsgData::Wasm(WasmMsgData::Store { .. })
+    ));
 
     SetupData {
         app,
@@ -102,13 +108,24 @@ fn init_contract(
         label: "Hackatom Contract".into(),
     };
     let tx = TxBuilder::new().with_msg(msg).with_signer(signer, sequence);
-    let res = app.block(&[tx]);
+    let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
+
     // parse address from first message of first tx
     let events = msg_events(&res[0], 0);
     let contract =
         AccountId::parse_string(event_value(events, "instantiate", "_contract_address").unwrap())
             .unwrap();
+
+    // ensure it matches the data field
+    assert_eq!(
+        res.remove(0).result.unwrap().data.remove(0),
+        MsgData::Wasm(WasmMsgData::Instantiate {
+            contract: contract.clone(),
+            data: b"".into()
+        })
+    );
+
     contract
 }
 
@@ -155,8 +172,14 @@ fn basic_hackatom_usage() {
             funds: vec![],
         })
         .with_signer(&verify_key, 0);
-    let res = app.block(&[tx]);
+    let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
+
+    // ensure it matches the data field
+    assert!(matches!(
+        res.remove(0).result.unwrap().data.remove(0),
+        MsgData::Wasm(WasmMsgData::Execute { .. })
+    ));
 
     // verify this was transfered properly
     let hacks = app.balance(&contract, DENOM).unwrap();

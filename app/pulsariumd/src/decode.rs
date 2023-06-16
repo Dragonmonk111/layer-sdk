@@ -174,7 +174,7 @@ mod fixtures {
         response::{
             AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse, QueryResponse,
         },
-        PubKey, MsgData,
+        MsgData, PubKey,
     };
 
     #[test]

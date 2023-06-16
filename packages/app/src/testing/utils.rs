@@ -301,7 +301,7 @@ pub fn assert_block_success(res: &[TxResult<PulsarError>], count: usize) {
 #[cfg(test)]
 mod test {
     use cosmwasm_std::coin;
-    use pulsar_std::BankMsg;
+    use pulsar_std::{BankMsg, MsgData};
 
     use crate::genesis::{BankAccount, WasmParams};
 
@@ -492,8 +492,9 @@ mod test {
             .with_fee(100_000, coin(10_000, "upulsar"))
             .with_signer(&pk, 0);
 
-        let res = app.block(&[tx]);
+        let mut res = app.block(&[tx]);
         assert_block_success(&res, 1);
+        assert_eq!(res.remove(0).result.unwrap().data, vec![MsgData::Empty]);
 
         // height is 2
         assert_eq!(app.height(), 2);

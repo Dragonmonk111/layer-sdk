@@ -183,8 +183,12 @@ impl Wasm {
                 let id = self.next_id(&mut wasm_store, meter)?;
 
                 self.save_code(storage, meter, id, &info)?;
+                let data = WasmMsgData::Store {
+                    code_id: id,
+                    checksum: info.checksum,
+                };
                 let event = store_code_event(id, analysis);
-                MsgResponse::events(vec![event])
+                MsgResponse::new(vec![event], data.into())
             }
             WasmMsg::Instantiate {
                 sender,
@@ -758,6 +762,14 @@ pub fn encode_cosmwasm_response(data: pulsar_std::MsgData) -> (&'static str, Vec
             vec![],
         ),
         pulsar_std::MsgData::Wasm(wasm) => match wasm {
+            pulsar_std::WasmMsgData::Store { code_id, checksum } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCode::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCodeResponse {
+                    code_id,
+                    checksum: checksum.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
             pulsar_std::WasmMsgData::Execute { data } => (
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContract::TYPE_URL,
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContractResponse {

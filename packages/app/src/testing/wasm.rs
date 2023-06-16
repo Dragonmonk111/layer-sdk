@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_binary, to_vec, Uint128};
 use cw20::Cw20Coin;
-use pulsar_std::{AccountId, WasmMsg};
+use pulsar_std::{AccountId, MsgData, WasmMsg, WasmMsgData};
 
 use crate::{
     genesis::{BankAccount, GenesisState, WasmParams},
@@ -49,7 +49,7 @@ fn happy_path_cw20() {
         .with_msg(msg)
         .with_signer(&signer, 0)
         .with_fee(1_000_000, coin(50_000, "upulsar"));
-    let res = app.block(&[tx]);
+    let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
 
     // parse code_id from first message of first tx
@@ -58,6 +58,15 @@ fn happy_path_cw20() {
         .unwrap()
         .parse()
         .unwrap();
+
+    // verify it matches the data field
+    match res.remove(0).result.unwrap().data.remove(0) {
+        MsgData::Wasm(WasmMsgData::Store { code_id, checksum }) => {
+            assert_eq!(code_id, 1);
+            assert_eq!(checksum.len(), 32);
+        }
+        x => panic!("Unexpected result: {:?}", x),
+    }
 
     let msg = cw20_base::msg::InstantiateMsg {
         name: "pulsar".to_string(),
@@ -84,7 +93,7 @@ fn happy_path_cw20() {
         .with_signer(&signer, 1)
         .with_fee(100_000, coin(5_000, "upulsar"));
 
-    let res = app.block(&[tx]);
+    let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
 
     // parse address from first message of first tx
@@ -92,6 +101,15 @@ fn happy_path_cw20() {
     let contract =
         AccountId::parse_string(event_value(events, "instantiate", "_contract_address").unwrap())
             .unwrap();
+
+    // ensure it matches the data field
+    assert_eq!(
+        res.remove(0).result.unwrap().data.remove(0),
+        MsgData::Wasm(WasmMsgData::Instantiate {
+            contract: contract.clone(),
+            data: b"".into()
+        })
+    );
 
     // query balance
     let my_bal = query_cw20_balance(&app, &contract, &sender);
