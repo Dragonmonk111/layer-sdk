@@ -1,9 +1,9 @@
 use std::{collections::HashSet, fmt, path::PathBuf};
 
-use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Response};
+use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Reply, Response};
 use cosmwasm_vm::{
-    call_execute, call_instantiate, call_migrate, call_query, call_sudo, AnalysisReport, Cache,
-    CacheOptions, Checksum, InstanceOptions, Size, VmError,
+    call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
+    AnalysisReport, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
 };
 use pulsar_std::{AccountId, GasMeter};
 use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
@@ -272,6 +272,58 @@ impl VmCache {
         // execute the contract and get gas_used
         instance.set_storage_readonly(false);
         let result = call_sudo(&mut instance, env, msg);
+        let result = result.map(|x| x.into_result());
+        let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
+
+        // commit or abort the open WeakSubTx
+        match &result {
+            Ok(Ok(_)) => {
+                let ops = wrap.prepare();
+                if let Err(e) = ops.commit(global_storage, meter).map_err(out_of_gas) {
+                    return (Err(e.into()), gas_used);
+                }
+            }
+            _ => working.abort(),
+        };
+        instance.recycle();
+
+        (result, gas_used)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn reply(
+        &self,
+        checksum: &Checksum,
+        env: &Env,
+        reply: &Reply,
+        global_storage: &mut dyn Storage,
+        contract: &AccountId,
+        meter: &GasMeter,
+        sm: &StateMachine,
+    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+        let gas_limit = sdk_gas_to_wasmer(meter.remaining());
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
+
+        // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
+        let query = global_storage.as_ref();
+        let mut wrap = WeakSubTx::new(query);
+        let mut working = contract_storage(&mut wrap, contract);
+
+        // This is where we fake all the lifetimes....
+        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
+
+        let mut instance = match self.cache.get_instance(checksum, backend, options) {
+            Ok(i) => i,
+            // No gas used yet
+            Err(e) => return (Err(e), 0),
+        };
+
+        // execute the contract and get gas_used
+        instance.set_storage_readonly(false);
+        let result = call_reply(&mut instance, env, reply);
         let result = result.map(|x| x.into_result());
         let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
 
