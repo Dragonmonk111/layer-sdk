@@ -3,7 +3,8 @@ use cosmwasm_vm::{Checksum, VmError};
 use sha2::{Digest, Sha256};
 
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, ReplyOn, SubMsg,
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Reply, ReplyOn,
+    SubMsg, SubMsgResponse,
 };
 
 use pulsar_std::api::MsgResponse;
@@ -18,7 +19,7 @@ use pulsar_storage::{
     ReadonlyStorage, Storage,
 };
 
-use super::events::migrate_event;
+use super::events::{migrate_event, reply_event};
 use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
@@ -226,8 +227,9 @@ impl Wasm {
                 // Need to review how we use storage here
                 // call instantiate on cache
                 let env = build_env(block, &contract_addr);
+                let checksum = code.get_checksum_to_execute(meter)?;
                 let (result, gas) = self.cache.instantiate(
-                    &code.get_checksum_to_execute(meter)?,
+                    &checksum,
                     &env,
                     &info,
                     &msg,
@@ -257,6 +259,7 @@ impl Wasm {
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
                     response,
                 )?
@@ -281,8 +284,9 @@ impl Wasm {
 
                 // call execute on cache
                 let env = build_env(block, &contract_addr);
+                let checksum = code.get_checksum_to_execute(meter)?;
                 let (result, gas) = self.cache.execute(
-                    &code.get_checksum_to_execute(meter)?,
+                    &checksum,
                     &env,
                     &info,
                     &msg,
@@ -311,6 +315,7 @@ impl Wasm {
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
                     response,
                 )?
@@ -334,15 +339,10 @@ impl Wasm {
 
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
-                let (result, gas) = self.cache.migrate(
-                    &code.get_checksum_to_execute(meter)?,
-                    &env,
-                    &msg,
-                    storage,
-                    &contract_addr,
-                    meter,
-                    sm,
-                );
+                let checksum = code.get_checksum_to_execute(meter)?;
+                let (result, gas) =
+                    self.cache
+                        .migrate(&checksum, &env, &msg, storage, &contract_addr, meter, sm);
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
 
@@ -363,6 +363,7 @@ impl Wasm {
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
                     response,
                 )?
@@ -413,15 +414,10 @@ impl Wasm {
 
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
-                let (result, gas) = self.cache.sudo(
-                    &code.get_checksum_to_execute(meter)?,
-                    &env,
-                    &msg,
-                    storage,
-                    &contract_addr,
-                    meter,
-                    sm,
-                );
+                let checksum = code.get_checksum_to_execute(meter)?;
+                let (result, gas) =
+                    self.cache
+                        .sudo(&checksum, &env, &msg, storage, &contract_addr, meter, sm);
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
 
@@ -442,6 +438,7 @@ impl Wasm {
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
                     response,
                 )?
@@ -501,6 +498,7 @@ impl Wasm {
         block: &BlockInfo,
         sm: &StateMachine,
         contract: &AccountId,
+        checksum: &Checksum,
         msgs: Vec<SubMsg<super::vm::CustomMsg>>,
         // we append events to this (later maybe overwrite the data)
         mut parent_response: MsgResponse,
@@ -516,12 +514,6 @@ impl Wasm {
                 None => meter,
             };
 
-            // TODO: handle reply_on (and id)
-            match msg.reply_on {
-                ReplyOn::Never => {}
-                _ => panic!("No support for reply yet"),
-            }
-
             let pulsar_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
 
             // ensure we charge if there is a limit_meter, even on error
@@ -529,12 +521,69 @@ impl Wasm {
             if let Some(limit_meter) = limit_meter {
                 meter.charge(limit_meter.used())?;
             }
-            let msg_response = msg_result?;
 
-            // append events to parent response (in reply maybe overwrite data)
-            parent_response.events.extend(msg_response.events);
+            // append events to parent response (only on success)
+            if let Ok(res) = &msg_result {
+                parent_response.events.extend(res.events.clone());
+            }
+
+            // check if we want to call reply and call
+            let is_success = msg_result.is_ok(); // we use this variable later
+            let handle_reply = matches!(
+                (msg.reply_on, is_success),
+                (ReplyOn::Always, _) | (ReplyOn::Success, true) | (ReplyOn::Error, false)
+            );
+            if handle_reply {
+                let result = match msg_result {
+                    Ok(res) => {
+                        // send those events on the parent
+                        parent_response.events.extend(res.events.clone());
+                        // and prepare a response value to call the contract
+                        Ok(SubMsgResponse {
+                            events: res.events,
+                            data: maybe_binary(encode_cosmwasm_response(res.data).1),
+                        })
+                    }
+                    Err(err) => Err(err.to_string()),
+                };
+                let reply = Reply {
+                    id: msg.id,
+                    result: result.into(),
+                };
+
+                // call the reply entry point
+                let env = build_env(block, contract);
+                let (reply_result, gas) = self
+                    .cache
+                    .reply(checksum, &env, &reply, storage, contract, meter, sm);
+                meter.charge(gas)?;
+                let reply_result = map_cache_result(reply_result)?;
+
+                // Append reply events to the parent
+                parent_response
+                    .events
+                    .push(reply_event(contract, is_success));
+                let events =
+                    build_contract_events(contract, reply_result.events, reply_result.attributes)?;
+                parent_response.events.extend(events);
+
+                // TODO: how to handle messages dispatched from the reply block???
+                if !reply_result.messages.is_empty() {
+                    todo!();
+                }
+
+                // if data is set, then we override the parent data field
+                if let Some(data) = reply_result.data {
+                    // parent must be Execute, Instantiate(2), Migrate, or Sudo
+                    // update the data field but leave the type the same
+                    set_data_field(&mut parent_response.data, data);
+                }
+            } else {
+                // add events to parent (when we don't use reply)
+                let res = msg_result?;
+                parent_response.events.extend(res.events);
+            }
         }
-
         Ok(parent_response)
     }
 
@@ -841,4 +890,47 @@ fn unknown_cosmwasm_response() -> (&'static str, Vec<u8>) {
         cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
         cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse {}.encode_to_vec(),
     )
+}
+
+// convert vec to binary if non-empty, else None
+fn maybe_binary(data: Vec<u8>) -> Option<Binary> {
+    if data.is_empty() {
+        None
+    } else {
+        Some(data.into())
+    }
+}
+
+/// This modifies the data field on the parent one, but keep the type.
+/// If this MsgData doesn't have such a field, do nothing
+fn set_data_field(parent_data: &mut MsgData, new_data: Binary) {
+    if let MsgData::Wasm(wasm) = parent_data {
+        match wasm {
+            WasmMsgData::Execute { data } => *data = new_data,
+            WasmMsgData::Instantiate { data, .. } => *data = new_data,
+            WasmMsgData::Instantiate2 { data, .. } => *data = new_data,
+            WasmMsgData::Migrate { data } => *data = new_data,
+            WasmMsgData::Sudo { data } => *data = new_data,
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn properly_set_data_field() {
+        let mut parent = MsgData::Wasm(WasmMsgData::Execute {
+            data: b"initial".into(),
+        });
+        set_data_field(&mut parent, b"updated".into());
+        assert_eq!(
+            parent,
+            MsgData::Wasm(WasmMsgData::Execute {
+                data: b"updated".into()
+            })
+        );
+    }
 }
