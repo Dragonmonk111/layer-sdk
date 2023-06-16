@@ -4,4 +4,5 @@ pub(crate) mod keeper;
 mod vm;
 
 pub use error::WasmError;
+pub use keeper::encode_cosmwasm_response;
 pub use keeper::{Wasm, WasmConfig};

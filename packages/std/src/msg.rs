@@ -225,3 +225,24 @@ pub fn required_signer(msgs: &[Msg]) -> Result<AccountId, MsgError> {
     }
     signers.pop().ok_or(MsgError::NoMessages)
 }
+
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
+pub enum MsgData {
+    #[default]
+    Empty,
+    Wasm(WasmMsgData),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum WasmMsgData {
+    Execute { data: Binary },
+    Instantiate { contract: AccountId, data: Binary },
+    Migrate { data: Binary },
+    Sudo { data: Binary },
+}
+
+impl From<WasmMsgData> for MsgData {
+    fn from(value: WasmMsgData) -> Self {
+        MsgData::Wasm(value)
+    }
+}

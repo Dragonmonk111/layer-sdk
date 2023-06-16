@@ -174,7 +174,7 @@ mod fixtures {
         response::{
             AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse, QueryResponse,
         },
-        PubKey,
+        PubKey, MsgData,
     };
 
     #[test]
@@ -236,7 +236,7 @@ mod fixtures {
                 gas_wanted: 10000000,
             },
             result: Ok(TxResponse {
-                data: vec![vec![]],
+                data: vec![MsgData::Empty],
                 events: vec![vec![Event::new("transfer")
                     .add_attribute("recipient", "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2")
                     .add_attribute("sender", "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l")

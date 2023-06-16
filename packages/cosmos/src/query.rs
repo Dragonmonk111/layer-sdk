@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use cosmwasm_std::Event;
+use pulsar_app::encode_cosmwasm_response;
 use pulsar_std::api::{GasInfo, TxResponse, TxResult};
 use pulsar_std::response::{
     AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
@@ -20,7 +21,7 @@ use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
 use cosmos_sdk_proto::prost::Message;
-use cosmos_sdk_proto::traits::{MessageExt, TypeUrl};
+use cosmos_sdk_proto::traits::MessageExt;
 
 use crate::pubkey::encode_cosmos_pubkey;
 use crate::tx::FIXED_ACCOUNT_NUMBER;
@@ -308,18 +309,17 @@ pub fn encode_tx_result(
     }
 }
 
-pub fn msg_data_to_proto(data: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msg_data_to_proto(data: Vec<pulsar_std::MsgData>) -> Vec<u8> {
     let data = data
         .into_iter()
-        .map(|d| cosmos_sdk_proto::cosmos::base::abci::v1beta1::MsgData {
-            // TODO: what type?? do we need to pass this data everywhere in our MsgResult type?
-            // This type used as a placeholder for now, so we don't get parse failure if someone tries
-            // to decode this data (but data dropped)
-            msg_type: cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL.to_string(),
-            data: d,
+        .map(|m| {
+            let (msg_type, data) = encode_cosmwasm_response(m);
+            cosmos_sdk_proto::cosmos::base::abci::v1beta1::MsgData {
+                msg_type: msg_type.to_string(),
+                data,
+            }
         })
         .collect();
-
     cosmos_sdk_proto::cosmos::base::abci::v1beta1::TxMsgData { data }.encode_to_vec()
 }
 

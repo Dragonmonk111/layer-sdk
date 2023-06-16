@@ -10,7 +10,7 @@ use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
     CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
 };
-use pulsar_std::{AccountId, GasError, GasMeter, Msg, WasmMsg, WasmQuery};
+use pulsar_std::{AccountId, GasError, GasMeter, Msg, WasmMsg, WasmMsgData, WasmQuery};
 use pulsar_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
@@ -240,7 +240,11 @@ impl Wasm {
                 events.insert(0, event);
 
                 // dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Instantiate {
+                    contract: contract_addr.clone(),
+                    data: result.data.unwrap_or_default(),
+                };
+                let response = MsgResponse::new(events, data.into());
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -291,7 +295,10 @@ impl Wasm {
                 events.insert(0, event);
 
                 // Dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Execute {
+                    data: result.data.unwrap_or_default(),
+                };
+                let response = MsgResponse::new(events, data.into());
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -340,7 +347,10 @@ impl Wasm {
                 events.insert(0, event);
 
                 // dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Migrate {
+                    data: result.data.unwrap_or_default(),
+                };
+                let response = MsgResponse::new(events, data.into());
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -416,7 +426,10 @@ impl Wasm {
                 events.insert(0, event);
 
                 // dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Sudo {
+                    data: result.data.unwrap_or_default(),
+                };
+                let response = MsgResponse::new(events, data.into());
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -733,4 +746,44 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
         _ => todo!(),
     };
     Ok(res)
+}
+
+use cosmos_sdk_proto::traits::{Message, TypeUrl};
+
+pub fn encode_cosmwasm_response(data: pulsar_std::MsgData) -> (&'static str, Vec<u8>) {
+    match data {
+        // just use this one for now
+        pulsar_std::MsgData::Empty => (
+            cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+            vec![],
+        ),
+        pulsar_std::MsgData::Wasm(wasm) => match wasm {
+            pulsar_std::WasmMsgData::Execute { data } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContract::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContractResponse {
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            pulsar_std::WasmMsgData::Instantiate { contract, data } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContractResponse {
+                    address: contract.to_string(),
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            pulsar_std::WasmMsgData::Migrate { data } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContract::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContractResponse {
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            pulsar_std::WasmMsgData::Sudo { data: _ } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::SudoContractProposal::TYPE_URL,
+                vec![],
+            ),
+        },
+    }
 }

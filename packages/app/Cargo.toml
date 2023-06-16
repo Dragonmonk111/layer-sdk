@@ -24,6 +24,8 @@ bytes = {workspace = true}
 sha2 = {workspace = true}
 
 cosmwasm-vm = { version = "1.2.0", default-features = false, features = ["iterator"] }
+# needed just for the responses for the messages - proto-encoded, maybe we can pull this out to just a few structs
+cosmos-sdk-proto = { workspace = true }
 
 [dev-dependencies]
 hex-literal = { workspace = true }

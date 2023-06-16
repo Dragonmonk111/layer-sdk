@@ -10,4 +10,4 @@ mod wasm;
 pub use app::{App, AppLoadError};
 pub use error::{PulsarError, PulsarResult};
 pub use sm::{AppConfig, StateMachine};
-pub use wasm::WasmConfig;
+pub use wasm::{encode_cosmwasm_response, WasmConfig};
