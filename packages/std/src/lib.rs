@@ -12,7 +12,9 @@ pub use account_id::{must_id, AccountId, AccountIdError, DEFAULT_BECH32_PREFIX};
 use cosmwasm_std::Binary;
 pub use encode::{CoinEncode, HexEncode};
 pub use gas::{GasError, GasMeter, GasResult};
-pub use msg::{required_signer, BankMsg, Msg, MsgData, MsgError, WasmMsg, WasmMsgData};
+pub use msg::{
+    required_signer, BankMsg, BankMsgData, Msg, MsgData, MsgError, WasmMsg, WasmMsgData,
+};
 pub use pubkey::PubKey;
 pub use query::{AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 pub use time::{format_timestamp_rfc3339, Duration, Rfc3339, Timestamp};

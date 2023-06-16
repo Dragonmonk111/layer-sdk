@@ -494,7 +494,10 @@ mod test {
 
         let mut res = app.block(&[tx]);
         assert_block_success(&res, 1);
-        assert_eq!(res.remove(0).result.unwrap().data, vec![MsgData::Empty]);
+        assert_eq!(
+            res.remove(0).result.unwrap().data,
+            vec![MsgData::Bank(pulsar_std::BankMsgData::Send {})]
+        );
 
         // height is 2
         assert_eq!(app.height(), 2);

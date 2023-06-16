@@ -11,14 +11,10 @@ pub struct MsgResponse {
 }
 
 impl MsgResponse {
-    pub fn new(events: Vec<Event>, data: MsgData) -> Self {
-        MsgResponse { events, data }
-    }
-
-    pub fn events(events: Vec<Event>) -> Self {
+    pub fn new(events: Vec<Event>, data: impl Into<MsgData>) -> Self {
         MsgResponse {
             events,
-            data: MsgData::default(),
+            data: data.into(),
         }
     }
 }
