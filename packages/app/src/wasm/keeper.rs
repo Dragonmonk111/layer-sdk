@@ -506,15 +506,30 @@ impl Wasm {
         mut parent_response: MsgResponse,
     ) -> PulsarResult<MsgResponse> {
         for msg in msgs {
+            // if there is a limit, and it is less than what we have left, use a sub-meter
+            let limit_meter = match (msg.gas_limit, meter.remaining()) {
+                (Some(limit), left) if left < limit => Some(GasMeter::new(limit)),
+                _ => None,
+            };
+            let sub_meter = match limit_meter.as_ref() {
+                Some(m) => m,
+                None => meter,
+            };
+
             // TODO: handle reply_on (and id)
             match msg.reply_on {
                 ReplyOn::Never => {}
                 _ => panic!("No support for reply yet"),
             }
-            // TODO: handle gas limit
 
             let pulsar_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
-            let msg_response = sm.process_msg(storage, meter, contract, block, pulsar_msg)?;
+
+            // ensure we charge if there is a limit_meter, even on error
+            let msg_result = sm.process_msg(storage, sub_meter, contract, block, pulsar_msg);
+            if let Some(limit_meter) = limit_meter {
+                meter.charge(limit_meter.used())?;
+            }
+            let msg_response = msg_result?;
 
             // append events to parent response (in reply maybe overwrite data)
             parent_response.events.extend(msg_response.events);
