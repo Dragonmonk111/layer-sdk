@@ -1,6 +1,9 @@
 use cosmwasm_std::{coin, coins, to_binary, to_vec, Uint128};
 use cw20::Cw20Coin;
-use pulsar_std::{AccountId, MsgData, WasmMsg, WasmMsgData};
+use pulsar_std::{
+    response::{AccountResponse, AuthQueryResponse, QueryResponse},
+    AccountId, AuthQuery, MsgData, WasmMsg, WasmMsgData,
+};
 
 use crate::{
     genesis::{BankAccount, GenesisState, WasmParams},
@@ -109,6 +112,20 @@ fn happy_path_cw20() {
             contract: contract.clone(),
             data: b"".into()
         })
+    );
+
+    // ensure proper auth account made there
+    let auth = app
+        .query(AuthQuery::Account {
+            address: contract.clone(),
+        })
+        .unwrap();
+    let QueryResponse::Auth(AuthQueryResponse::Account (account )) = auth else { panic!("Unexpected return {:?}", auth); };
+    assert_eq!(
+        account,
+        AccountResponse::Internal {
+            address: contract.clone()
+        }
     );
 
     // query balance

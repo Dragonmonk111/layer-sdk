@@ -12,6 +12,8 @@ use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
 
+use super::AuthError;
+
 pub const NAMESPACE_AUTH: &[u8] = b"auth";
 const ACCOUNTS: Map<&AccountId, Account> = Map::new("accounts");
 
@@ -184,6 +186,27 @@ impl Auth {
                 Ok(res.into())
             }
         }
+    }
+
+    /// This is to be called from other modules (eg. wasm) to claim an address
+    /// for internal use only, like a contract, but also fee collector.
+    /// This ensures no pubkey can later take control of this address.
+    pub fn claim_internal_account(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        address: &AccountId,
+    ) -> PulsarResult<()> {
+        let mut auth_store = prefixed(storage, NAMESPACE_AUTH);
+        if ACCOUNTS
+            .may_load(auth_store.as_ref(), meter, address)?
+            .is_some()
+        {
+            return Err(AuthError::AccountExists(address.clone()).into());
+        }
+        let account = Account::Internal {};
+        ACCOUNTS.save(&mut auth_store, meter, address, &account)?;
+        Ok(())
     }
 }
 

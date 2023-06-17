@@ -204,6 +204,9 @@ impl Wasm {
                 ensure_eq!(signer, &sender, WasmError::Unauthorized);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = self.generate_address(storage, meter, &sender, code_id)?;
+                // TODO: reserve and auth account and ensure it is not already taken
+                sm.auth
+                    .claim_internal_account(storage, meter, &contract_addr)?;
 
                 // save contract
                 let contract = ContractData {
