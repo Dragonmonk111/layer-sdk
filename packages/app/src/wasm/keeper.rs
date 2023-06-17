@@ -252,7 +252,7 @@ impl Wasm {
                     contract: contract_addr.clone(),
                     data: result.data.unwrap_or_default(),
                 };
-                let response = MsgResponse::new(events, data);
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -261,8 +261,9 @@ impl Wasm {
                     &contract_addr,
                     &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
             WasmMsg::Execute {
@@ -308,7 +309,7 @@ impl Wasm {
                 let data = WasmMsgData::Execute {
                     data: result.data.unwrap_or_default(),
                 };
-                let response = MsgResponse::new(events, data);
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -317,8 +318,9 @@ impl Wasm {
                     &contract_addr,
                     &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::Migrate {
                 sender,
@@ -356,7 +358,7 @@ impl Wasm {
                 let data = WasmMsgData::Migrate {
                     data: result.data.unwrap_or_default(),
                 };
-                let response = MsgResponse::new(events, data);
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -365,8 +367,9 @@ impl Wasm {
                     &contract_addr,
                     &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::ClearAdmin {
                 sender,
@@ -431,7 +434,7 @@ impl Wasm {
                 let data = WasmMsgData::Sudo {
                     data: result.data.unwrap_or_default(),
                 };
-                let response = MsgResponse::new(events, data);
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
@@ -440,8 +443,9 @@ impl Wasm {
                     &contract_addr,
                     &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::Pin { sender, code_id } => {
                 // only special sender can do this - stored as param
@@ -490,6 +494,7 @@ impl Wasm {
         Ok(resp)
     }
 
+    /// This dispatches all returned messages and adds events to the parent event of the original call
     #[allow(clippy::too_many_arguments)]
     pub fn dispatch_response_messages(
         &self,
@@ -501,8 +506,8 @@ impl Wasm {
         checksum: &Checksum,
         msgs: Vec<SubMsg<super::vm::CustomMsg>>,
         // we append events to this (later maybe overwrite the data)
-        mut parent_response: MsgResponse,
-    ) -> PulsarResult<MsgResponse> {
+        parent_response: &mut MsgResponse,
+    ) -> PulsarResult<()> {
         for msg in msgs {
             // if there is a limit, and it is less than what we have left, use a sub-meter
             let limit_meter = match (msg.gas_limit, meter.remaining()) {
@@ -567,16 +572,25 @@ impl Wasm {
                     build_contract_events(contract, reply_result.events, reply_result.attributes)?;
                 parent_response.events.extend(events);
 
-                // TODO: how to handle messages dispatched from the reply block???
-                if !reply_result.messages.is_empty() {
-                    todo!();
-                }
-
                 // if data is set, then we override the parent data field
                 if let Some(data) = reply_result.data {
                     // parent must be Execute, Instantiate(2), Migrate, or Sudo
                     // update the data field but leave the type the same
                     set_data_field(&mut parent_response.data, data);
+                }
+
+                if !reply_result.messages.is_empty() {
+                    // we just run them all and add events to the parent...
+                    self.dispatch_response_messages(
+                        storage,
+                        meter,
+                        block,
+                        sm,
+                        contract,
+                        checksum,
+                        reply_result.messages,
+                        parent_response,
+                    )?;
                 }
             } else {
                 // add events to parent (when we don't use reply)
@@ -584,7 +598,7 @@ impl Wasm {
                 parent_response.events.extend(res.events);
             }
         }
-        Ok(parent_response)
+        Ok(())
     }
 
     pub fn query(
