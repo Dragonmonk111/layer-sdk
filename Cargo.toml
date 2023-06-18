@@ -35,6 +35,8 @@ pulsar-cosmos = { path = "./packages/cosmos" }
 pulsar-std = { path = "./packages/std" }
 pulsar-storage = { path = "./packages/storage" }
 
+tc-echo = { path = "./contracts/echo" }
+
 tendermint-abci = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
 tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
 
@@ -62,3 +64,13 @@ overflow-checks  = true
 # DEV: you can uncomment locally
 # [profile.test.package."*"]
 # opt-level        = 3
+
+[profile.release.package.tc-echo]
+debug = false
+debug-assertions = false
+codegen-units = 1
+incremental = false
+# TODO: enabling these seems to break cargo...
+# rpath = false
+# lto = true
+# panic = 'abort'
