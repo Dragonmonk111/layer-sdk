@@ -219,15 +219,17 @@ impl Wasm {
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
 
                 // send funds
-                let info = build_info(&sender, funds.clone());
                 if !funds.is_empty() {
-                    sm.bank
-                        .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
+                    sm.bank.transfer(
+                        storage,
+                        meter,
+                        sender.clone(),
+                        contract_addr.clone(),
+                        funds.clone(),
+                    )?;
                 }
+                let info = build_info(&sender, funds);
 
-                // TODO: BUG: we pass in the contract local storage here (for read/write)
-                // BUT we need the global storage for query to call into others.
-                // Need to review how we use storage here
                 // call instantiate on cache
                 let env = build_env(block, &contract_addr);
                 let checksum = code.get_checksum_to_execute(meter)?;
@@ -280,11 +282,16 @@ impl Wasm {
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
                 // send funds
-                let info = build_info(&sender, funds.clone());
                 if !funds.is_empty() {
-                    sm.bank
-                        .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
+                    sm.bank.transfer(
+                        storage,
+                        meter,
+                        sender.clone(),
+                        contract_addr.clone(),
+                        funds.clone(),
+                    )?;
                 }
+                let info = build_info(&sender, funds);
 
                 // call execute on cache
                 let env = build_env(block, &contract_addr);
