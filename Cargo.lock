@@ -3090,6 +3090,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd1ba337640d60c3e96bc6f0638a939b9c9a7f2c316a1598c279828b3d1dc8c5"
 
 [[package]]
+name = "tc-caller"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw-utils",
+ "serde",
+ "tc-echo",
+ "thiserror",
+]
+
+[[package]]
 name = "tc-echo"
 version = "0.1.0"
 dependencies = [

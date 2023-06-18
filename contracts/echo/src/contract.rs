@@ -1,8 +1,8 @@
 use cw_storage_plus::Item;
 
-use cosmwasm_std::{
-    entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError,
-};
+#[cfg(not(feature = "library"))]
+use cosmwasm_std::entry_point;
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError};
 
 use crate::msg::*;
 use std::fmt::Debug;
