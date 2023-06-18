@@ -32,4 +32,5 @@ hex-literal = { workspace = true }
 cw20-base = { version = "1.0.1" }
 cw20 = { version = "1.0.1" }
 k256 = { version = "0.13", features = ["ecdsa", "sha256"] }
-
+tc-echo = { workspace = true, features = ["library"]}
+tc-caller = { workspace = true, features = ["library"] }

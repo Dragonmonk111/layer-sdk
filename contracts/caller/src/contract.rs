@@ -1,8 +1,10 @@
 use cw_storage_plus::Item;
 
+#[cfg(not(feature = "library"))]
+use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply,
-    Response, StdError, SubMsg, WasmMsg,
+    to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, Response,
+    StdError, SubMsg, WasmMsg,
 };
 use cw_utils::{parse_execute_response_data, parse_instantiate_response_data, ParseReplyError};
 
