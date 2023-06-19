@@ -537,11 +537,6 @@ impl Wasm {
                 meter.charge(limit_meter.used())?;
             }
 
-            // append events to parent response (only on success)
-            if let Ok(res) = &msg_result {
-                parent_response.events.extend(res.events.clone());
-            }
-
             // check if we want to call reply and call
             let is_success = msg_result.is_ok(); // we use this variable later
             let handle_reply = matches!(
@@ -551,7 +546,7 @@ impl Wasm {
             if handle_reply {
                 let result = match msg_result {
                     Ok(res) => {
-                        // send those events on the parent
+                        // append events to parent response (only on success)
                         parent_response.events.extend(res.events.clone());
                         // and prepare a response value to call the contract
                         Ok(SubMsgResponse {

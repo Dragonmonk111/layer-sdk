@@ -81,6 +81,12 @@ fn setup(path: &str) -> SetupData {
     }
 }
 
+struct InitData {
+    contract: AccountId,
+    echo_contract: AccountId,
+    res: TxResponse,
+}
+
 // This will instantiate a new hackatom instance from the given code and given initial balance,
 // and return the contract address. Will panic on error
 #[track_caller]
@@ -89,7 +95,7 @@ fn init_contract(
     signer: &PrivateKey,
     caller_id: u64,
     init_msg: &tc_caller::InstantiateMsg,
-) -> (AccountId, TxResponse) {
+) -> InitData {
     // find the proper sequence
     let sender = signer.account_id();
     let sequence = app.sequence(&sender).unwrap();
@@ -113,22 +119,32 @@ fn init_contract(
         AccountId::parse_string(event_value(events, "instantiate", "_contract_address").unwrap())
             .unwrap();
 
-    (contract, res.result.unwrap())
+    // skip first two and from the remainder, we can find the echo instantiation
+    let echo_contract = AccountId::parse_string(
+        event_value(&events[2..], "instantiate", "_contract_address").unwrap(),
+    )
+    .unwrap();
+
+    InitData {
+        contract,
+        echo_contract,
+        res: res.result.unwrap(),
+    }
 }
 
 #[test]
-fn basic_init_and_execute() {
+fn basic_init_callback_and_catching_errors() {
     let SetupData {
         mut app,
         signer,
         caller_id,
         echo_id,
-    } = setup("/tmp/pulsar/basic_init_and_execute");
+    } = setup("/tmp/pulsar/basic_init_callback_and_catching_errors");
     let sender = signer.account_id();
 
     let subcall = tc_caller::CallInfo {
         reply_on: cosmwasm_std::ReplyOn::Always,
-        override_data: false,
+        override_data: true,
         gas_limit: None,
     };
 
@@ -144,9 +160,36 @@ fn basic_init_and_execute() {
     };
 
     // create contract instance with 10_000_000 tokens
-    let (contract, _res) = init_contract(&mut app, &signer, caller_id, &init_msg);
+    let InitData {
+        contract,
+        echo_contract,
+        res,
+    } = init_contract(&mut app, &signer, caller_id, &init_msg);
 
-    // TODO: lots of verification
+    // Let's check the data field overridden in the contract
+    let data = match &res.data[0] {
+        MsgData::Wasm(WasmMsgData::Instantiate { data, .. }) => data.as_slice(),
+        _ => panic!("unexpected message type"),
+    };
+    assert_eq!(data, b"from echo");
+
+    // Check the order of events
+    assert_eq!(res.events.len(), 1);
+    // instantiate and reply added by the framework. wasm-instantiate comes from caller, and wasm-test-one from echo
+    let names = res.events[0]
+        .iter()
+        .map(|e| e.ty.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        vec![
+            "instantiate",
+            "wasm-instantiate",
+            "instantiate",
+            "wasm-test-one",
+            "reply"
+        ]
+    );
 
     // catch a failure from the contract
     let exec_msg = tc_caller::ExecuteMsg {
@@ -159,18 +202,49 @@ fn basic_init_and_execute() {
     let tx = TxBuilder::new()
         .with_msg(WasmMsg::Execute {
             sender,
-            contract_addr: contract,
+            contract_addr: contract.clone(),
             msg: to_binary(&exec_msg).unwrap(),
             funds: vec![],
         })
         .with_signer(&signer, sequence);
     let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
-    let _res = res.remove(0);
+    let res = res.remove(0).result.unwrap();
 
-    // TODO: verify the data here
+    // Let's check the data field as not overridden by the contract
+    let data = match &res.data[0] {
+        MsgData::Wasm(WasmMsgData::Execute { data }) => data.as_slice(),
+        _ => panic!("unexpected message type"),
+    };
+    assert_eq!(data, b"exec");
 
-    // TODO: query the counts on caller
-    // TODO: query the echo contract address
-    // TODO: query the counts on echo
+    // Check the events - nothing emitted from the echo contract,
+    assert_eq!(res.events.len(), 1);
+    let events = &res.events[0];
+    let names = events.iter().map(|e| e.ty.as_str()).collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        vec!["execute", "wasm-execute", "reply", "wasm-reply"]
+    );
+    // but caller returns error in wasm-reply message
+    assert_eq!(events[3].attributes.len(), 2);
+    let contract_attr = &events[3].attributes[0];
+    assert_eq!(contract_attr.key.as_str(), "_contract_address");
+    assert_eq!(contract_attr.value.as_str(), &contract.to_string());
+    let error_attr = &events[3].attributes[1];
+    assert_eq!(error_attr.key.as_str(), "error");
+    assert_eq!(error_attr.value.as_str(), "Contract Error: Oh, no!");
+
+    // query counters on the contracts
+    let tc_caller::CounterResponse { calls, replies } = app
+        .query_wasm(&contract, &tc_caller::QueryMsg::Counter {})
+        .unwrap();
+    assert_eq!(calls, 2);
+    assert_eq!(replies, 2);
+
+    // query the counts on echo contract - state write on error should have been reverted, only one recorded
+    let tc_echo::CounterResponse { count } = app
+        .query_wasm(&echo_contract, &tc_echo::QueryMsg::Counter {})
+        .unwrap();
+    assert_eq!(count, 1);
 }

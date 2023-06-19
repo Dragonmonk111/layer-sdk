@@ -82,7 +82,10 @@ pub fn instantiate(
     };
     let sub = build_submsg(init, msg.subcall, true);
     let event = Event::new("instantiate").add_attribute("code_id", msg.code_id.to_string());
-    let res = Response::new().add_submessage(sub).add_event(event);
+    let res = Response::new()
+        .add_submessage(sub)
+        .add_event(event)
+        .set_data(b"init");
     Ok(res)
 }
 
@@ -102,7 +105,10 @@ pub fn execute(
     };
     let sub = build_submsg(exec, msg.subcall, false);
     let event = Event::new("execute").add_attribute("contract", echo_addr);
-    let res = Response::new().add_submessage(sub).add_event(event);
+    let res = Response::new()
+        .add_submessage(sub)
+        .add_event(event)
+        .set_data(b"exec");
     Ok(res)
 }
 
