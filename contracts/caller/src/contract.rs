@@ -142,12 +142,20 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
                 // empty reply, we just want to get the address
                 let init_data = parse_instantiate_response_data(&r.data.unwrap())?;
                 ECHO.save(deps.storage, &init_data.contract_address)?;
-                Response::new().set_data(init_data.data.unwrap())
+                if let Some(data) = init_data.data {
+                    Response::new().set_data(data)
+                } else {
+                    Response::new()
+                }
             }
             EXEC_SET_DATA => {
                 // empty reply, we just want to get the address
                 let exec_data = parse_execute_response_data(&r.data.unwrap())?;
-                Response::new().set_data(exec_data.data.unwrap())
+                if let Some(data) = exec_data.data {
+                    Response::new().set_data(data)
+                } else {
+                    Response::new()
+                }
             }
             EXEC_IGNORE_DATA => Response::new(),
             _ => panic!("unexpected reply id: {}", reply.id),

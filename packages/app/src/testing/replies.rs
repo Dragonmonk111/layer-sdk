@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_binary, Event};
 use pulsar_std::api::TxResponse;
-use pulsar_std::{AccountId, MsgData, WasmMsg, WasmMsgData};
+use pulsar_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
@@ -247,4 +247,150 @@ fn basic_init_callback_and_catching_errors() {
         .query_wasm(&echo_contract, &tc_echo::QueryMsg::Counter {})
         .unwrap();
     assert_eq!(count, 1);
+
+    // TODO: exec success with non-overriding data field to verify handling
+}
+
+// TODO: check gas handling (limit higher than the actual gas used, limit lower - catch error, limit lower - don't catch error)
+#[test]
+fn submsg_gas_limits() {
+    let SetupData {
+        mut app,
+        signer,
+        caller_id,
+        echo_id,
+    } = setup("/tmp/pulsar/submsg_gas_limits");
+    let sender = signer.account_id();
+
+    // simple init message with no problems
+    let init_msg = tc_caller::InstantiateMsg {
+        code_id: echo_id,
+        msg: tc_echo::InstantiateMsg::Echo(tc_echo::EchoMsg {
+            data: None,
+            attrs: vec![],
+            events: vec![],
+        }),
+        subcall: tc_caller::CallInfo {
+            reply_on: cosmwasm_std::ReplyOn::Always,
+            override_data: true,
+            gas_limit: None,
+        },
+    };
+
+    // create contract instance
+    let InitData {
+        contract,
+        echo_contract,
+        res: _,
+    } = init_contract(&mut app, &signer, caller_id, &init_msg);
+
+    let echo = tc_echo::ExecuteMsg::Echo(tc_echo::EchoMsg {
+        data: None,
+        attrs: vec![],
+        events: vec![Event::new("success")],
+    });
+
+    // Execute success with high gas limit
+    let exec_msg = tc_caller::ExecuteMsg {
+        msg: echo.clone(),
+        subcall: tc_caller::CallInfo {
+            reply_on: cosmwasm_std::ReplyOn::Never,
+            override_data: false,
+            gas_limit: Some(100_000),
+        },
+    };
+    let sequence = app.sequence(&sender).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender: sender.clone(),
+            contract_addr: contract.clone(),
+            msg: to_binary(&exec_msg).unwrap(),
+            funds: vec![],
+        })
+        .with_signer(&signer, sequence);
+    let mut res = app.block(&[tx]);
+    assert_block_success(&res, 1);
+
+    // make sure we got expected event
+    let res = res.remove(0).result.unwrap();
+    assert_eq!(res.events.len(), 1);
+    let names = res.events[0]
+        .iter()
+        .map(|e| e.ty.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        vec!["execute", "wasm-execute", "execute", "wasm-success"]
+    );
+
+    // Abort tx when low gas limit and no reply block
+    let exec_msg = tc_caller::ExecuteMsg {
+        msg: echo.clone(),
+        subcall: tc_caller::CallInfo {
+            reply_on: cosmwasm_std::ReplyOn::Never,
+            override_data: false,
+            gas_limit: Some(64_000),
+        },
+    };
+    let sequence = app.sequence(&sender).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender: sender.clone(),
+            contract_addr: contract.clone(),
+            msg: to_binary(&exec_msg).unwrap(),
+            funds: vec![],
+        })
+        .with_signer(&signer, sequence);
+    let mut res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    println!("Gas: {:?}", res[0].gas);
+    let err = res.remove(0).result.unwrap_err();
+    assert_eq!(err, GasError::OutOfGas.into());
+
+    // Catching reply when low gas limit
+    let exec_msg = tc_caller::ExecuteMsg {
+        msg: echo,
+        subcall: tc_caller::CallInfo {
+            reply_on: cosmwasm_std::ReplyOn::Error,
+            override_data: false,
+            gas_limit: Some(64_000), // 64k is big enough to be inside contract execution, not just setup
+        },
+    };
+    let sequence = app.sequence(&sender).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(WasmMsg::Execute {
+            sender,
+            contract_addr: contract.clone(),
+            msg: to_binary(&exec_msg).unwrap(),
+            funds: vec![],
+        })
+        .with_signer(&signer, sequence);
+    let mut res = app.block(&[tx]);
+    let res = res.remove(0).result.unwrap();
+    assert_eq!(res.events.len(), 1);
+    let names = res.events[0]
+        .iter()
+        .map(|e| e.ty.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        vec!["execute", "wasm-execute", "reply", "wasm-reply"]
+    );
+    // check the error message we get
+    let error_attr = &res.events[0][3].attributes[1];
+    assert_eq!(error_attr.key.as_str(), "error");
+    assert_eq!(error_attr.value.as_str(), "Out of gas");
+
+    // query counters on the contracts (init, success, caught error)
+    let tc_caller::CounterResponse { calls, replies } = app
+        .query_wasm(&contract, &tc_caller::QueryMsg::Counter {})
+        .unwrap();
+    assert_eq!(calls, 3);
+    assert_eq!(replies, 2);
+
+    // query the counts on echo contract - only init, success recorder
+    let tc_echo::CounterResponse { count } = app
+        .query_wasm(&echo_contract, &tc_echo::QueryMsg::Counter {})
+        .unwrap();
+    assert_eq!(count, 2);
 }

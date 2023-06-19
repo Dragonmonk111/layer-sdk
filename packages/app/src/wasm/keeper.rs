@@ -521,7 +521,7 @@ impl Wasm {
         for msg in msgs {
             // if there is a limit, and it is less than what we have left, use a sub-meter
             let limit_meter = match (msg.gas_limit, meter.remaining()) {
-                (Some(limit), left) if left < limit => Some(GasMeter::new(limit)),
+                (Some(limit), left) if limit < left => Some(GasMeter::new(limit)),
                 _ => None,
             };
             let sub_meter = match limit_meter.as_ref() {
