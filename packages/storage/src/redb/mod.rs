@@ -95,18 +95,15 @@ impl PersistentStorage for RedbStore {
 
 pub struct RedbReader<'a> {
     tx: ReadTransaction<'a>,
-    table: ReadOnlyTable<'a, &'static [u8], &'static [u8]>,
     db: &'a Database,
     price_list: PriceList,
 }
 
 impl<'a> RedbReader<'a> {
     pub fn new(tx: ReadTransaction<'a>, db: &'a Database) -> Self {
-        let table = tx.open_table(APP_DATA).unwrap();
         RedbReader {
             tx,
             db,
-            table,
             price_list: DEFAULT_PERSISTED_PRICES,
         }
     }
@@ -115,7 +112,8 @@ impl<'a> RedbReader<'a> {
 impl ReadonlyStorage for RedbReader<'_> {
     fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
         let _span = trace_span!("get", key = %HexEncode::new(&key)).entered();
-        let val = self.table.get(key).unwrap().map(|v| v.value().to_vec());
+        let table = self.tx.open_table(APP_DATA).unwrap();
+        let val = table.get(key).unwrap().map(|v| v.value().to_vec());
         self.price_list.charge_read(meter, key, val.as_deref())?;
         Ok(val)
     }
@@ -129,12 +127,13 @@ impl ReadonlyStorage for RedbReader<'_> {
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'a>> {
         let _span = trace_span!("range").entered();
         self.price_list.charge_range(meter)?;
+        let table = self.tx.open_table(APP_DATA).unwrap();
 
         let iter = match (start, end) {
-            (Some(s), Some(e)) => self.table.range(s..e),
-            (Some(s), None) => self.table.range(s..),
-            (None, Some(e)) => self.table.range(..e),
-            (None, None) => self.table.range::<&[u8]>(..),
+            (Some(s), Some(e)) => table.range(s..e),
+            (Some(s), None) => table.range(s..),
+            (None, Some(e)) => table.range(..e),
+            (None, None) => table.range::<&[u8]>(..),
         }
         .unwrap();
         let range = match order {
