@@ -6,7 +6,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [features]
-lmdb = ["pulsar-storage/lmdb"]
+redb = ["pulsar-storage/redb"]
 
 [dependencies]
 pulsar-std = { workspace = true }

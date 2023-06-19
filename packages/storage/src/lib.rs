@@ -10,10 +10,10 @@ mod wrap;
 
 pub use memory::MemoryStore;
 
-#[cfg(feature = "lmdb")]
-mod lmdb;
-#[cfg(feature = "lmdb")]
-pub use crate::lmdb::LmdbStore;
+#[cfg(feature = "redb")]
+mod redb;
+#[cfg(feature = "redb")]
+pub use crate::redb::RedbStore;
 
 pub use app_meter::AppMeter;
 pub use fast_hash::FastHasher;
