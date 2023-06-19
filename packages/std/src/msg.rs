@@ -225,3 +225,41 @@ pub fn required_signer(msgs: &[Msg]) -> Result<AccountId, MsgError> {
     }
     signers.pop().ok_or(MsgError::NoMessages)
 }
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum MsgData {
+    Wasm(WasmMsgData),
+    Bank(BankMsgData),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum WasmMsgData {
+    Store { code_id: u64, checksum: Binary },
+    Execute { data: Binary },
+    Instantiate { contract: AccountId, data: Binary },
+    Instantiate2 { contract: AccountId, data: Binary },
+    Migrate { data: Binary },
+    Sudo { data: Binary },
+    UpdateAdmin {},
+    ClearAdmin {},
+    PinCode {},
+    UnpinCode {},
+}
+
+impl From<WasmMsgData> for MsgData {
+    fn from(value: WasmMsgData) -> Self {
+        MsgData::Wasm(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BankMsgData {
+    Send {},
+    Burn {},
+}
+
+impl From<BankMsgData> for MsgData {
+    fn from(value: BankMsgData) -> Self {
+        MsgData::Bank(value)
+    }
+}

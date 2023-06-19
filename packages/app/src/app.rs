@@ -343,10 +343,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         let result = resps.map(|all| {
             // Two separate steps to combine data, then events.
             // Data is much cheaper to clone, so we do that first.
-            let data = all
-                .iter()
-                .map(|r| r.data.clone().unwrap_or_default())
-                .collect();
+            let data = all.iter().map(|r| r.data.clone()).collect();
             let events = all.into_iter().map(|r| r.events).collect();
             TxResponse { data, events }
         });

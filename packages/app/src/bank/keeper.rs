@@ -6,7 +6,7 @@ use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
-use pulsar_std::{AccountId, BankMsg, BankQuery, CoinEncode, GasMeter};
+use pulsar_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
 use pulsar_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
 };
@@ -256,7 +256,7 @@ impl Bank {
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
                 self.transfer(storage, meter, sender, recipient, amount)?;
-                Ok(MsgResponse::events(events))
+                Ok(MsgResponse::new(events, BankMsgData::Send {}))
             }
             BankMsg::Burn { sender, amount } => {
                 ensure_eq!(signer, &sender, BankError::Unauthorized);
@@ -264,7 +264,7 @@ impl Bank {
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
                 self.burn(storage, meter, sender, amount)?;
-                Ok(MsgResponse::events(events))
+                Ok(MsgResponse::new(events, BankMsgData::Burn {}))
             }
         }
     }

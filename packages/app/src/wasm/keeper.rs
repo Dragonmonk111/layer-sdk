@@ -3,20 +3,23 @@ use cosmwasm_vm::{Checksum, VmError};
 use sha2::{Digest, Sha256};
 
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, ReplyOn, SubMsg,
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Reply, ReplyOn,
+    SubMsg, SubMsgResponse,
 };
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
     CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
 };
-use pulsar_std::{AccountId, GasError, GasMeter, Msg, WasmMsg, WasmQuery};
+use pulsar_std::{
+    AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
+};
 use pulsar_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
 };
 
-use super::events::migrate_event;
+use super::events::{migrate_event, reply_event};
 use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
@@ -183,8 +186,12 @@ impl Wasm {
                 let id = self.next_id(&mut wasm_store, meter)?;
 
                 self.save_code(storage, meter, id, &info)?;
+                let data = WasmMsgData::Store {
+                    code_id: id,
+                    checksum: info.checksum,
+                };
                 let event = store_code_event(id, analysis);
-                MsgResponse::events(vec![event])
+                MsgResponse::new(vec![event], data)
             }
             WasmMsg::Instantiate {
                 sender,
@@ -197,6 +204,9 @@ impl Wasm {
                 ensure_eq!(signer, &sender, WasmError::Unauthorized);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = self.generate_address(storage, meter, &sender, code_id)?;
+                // TODO: reserve and auth account and ensure it is not already taken
+                sm.auth
+                    .claim_internal_account(storage, meter, &contract_addr)?;
 
                 // save contract
                 let contract = ContractData {
@@ -209,19 +219,22 @@ impl Wasm {
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
 
                 // send funds
-                let info = build_info(&sender, funds.clone());
                 if !funds.is_empty() {
-                    sm.bank
-                        .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
+                    sm.bank.transfer(
+                        storage,
+                        meter,
+                        sender.clone(),
+                        contract_addr.clone(),
+                        funds.clone(),
+                    )?;
                 }
+                let info = build_info(&sender, funds);
 
-                // TODO: BUG: we pass in the contract local storage here (for read/write)
-                // BUT we need the global storage for query to call into others.
-                // Need to review how we use storage here
                 // call instantiate on cache
                 let env = build_env(block, &contract_addr);
+                let checksum = code.get_checksum_to_execute(meter)?;
                 let (result, gas) = self.cache.instantiate(
-                    &code.get_checksum_to_execute(meter)?,
+                    &checksum,
                     &env,
                     &info,
                     &msg,
@@ -240,16 +253,22 @@ impl Wasm {
                 events.insert(0, event);
 
                 // dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Instantiate {
+                    contract: contract_addr.clone(),
+                    data: result.data.unwrap_or_default(),
+                };
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::Instantiate2 { .. } => todo!(),
             WasmMsg::Execute {
@@ -263,16 +282,22 @@ impl Wasm {
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
                 // send funds
-                let info = build_info(&sender, funds.clone());
                 if !funds.is_empty() {
-                    sm.bank
-                        .transfer(storage, meter, sender, contract_addr.clone(), funds)?;
+                    sm.bank.transfer(
+                        storage,
+                        meter,
+                        sender.clone(),
+                        contract_addr.clone(),
+                        funds.clone(),
+                    )?;
                 }
+                let info = build_info(&sender, funds);
 
                 // call execute on cache
                 let env = build_env(block, &contract_addr);
+                let checksum = code.get_checksum_to_execute(meter)?;
                 let (result, gas) = self.cache.execute(
-                    &code.get_checksum_to_execute(meter)?,
+                    &checksum,
                     &env,
                     &info,
                     &msg,
@@ -291,16 +316,21 @@ impl Wasm {
                 events.insert(0, event);
 
                 // Dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Execute {
+                    data: result.data.unwrap_or_default(),
+                };
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::Migrate {
                 sender,
@@ -321,15 +351,10 @@ impl Wasm {
 
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
-                let (result, gas) = self.cache.migrate(
-                    &code.get_checksum_to_execute(meter)?,
-                    &env,
-                    &msg,
-                    storage,
-                    &contract_addr,
-                    meter,
-                    sm,
-                );
+                let checksum = code.get_checksum_to_execute(meter)?;
+                let (result, gas) =
+                    self.cache
+                        .migrate(&checksum, &env, &msg, storage, &contract_addr, meter, sm);
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
 
@@ -340,16 +365,21 @@ impl Wasm {
                 events.insert(0, event);
 
                 // dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Migrate {
+                    data: result.data.unwrap_or_default(),
+                };
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::ClearAdmin {
                 sender,
@@ -364,7 +394,7 @@ impl Wasm {
                 contract.admin = None;
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
                 let event = clear_admin_event(&contract_addr);
-                MsgResponse::events(vec![event])
+                MsgResponse::new(vec![event], WasmMsgData::ClearAdmin {})
             }
             WasmMsg::UpdateAdmin {
                 sender,
@@ -380,7 +410,7 @@ impl Wasm {
                 let event = update_admin_event(&contract_addr, &admin);
                 contract.admin = Some(admin);
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
-                MsgResponse::events(vec![event])
+                MsgResponse::new(vec![event], WasmMsgData::UpdateAdmin {})
             }
             WasmMsg::Sudo {
                 sender,
@@ -397,15 +427,10 @@ impl Wasm {
 
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
-                let (result, gas) = self.cache.sudo(
-                    &code.get_checksum_to_execute(meter)?,
-                    &env,
-                    &msg,
-                    storage,
-                    &contract_addr,
-                    meter,
-                    sm,
-                );
+                let checksum = code.get_checksum_to_execute(meter)?;
+                let (result, gas) =
+                    self.cache
+                        .sudo(&checksum, &env, &msg, storage, &contract_addr, meter, sm);
                 meter.charge(gas)?;
                 let result = map_cache_result(result)?;
 
@@ -416,16 +441,21 @@ impl Wasm {
                 events.insert(0, event);
 
                 // dispatch messages
-                let response = MsgResponse::new(events, result.data.unwrap_or_default().into());
+                let data = WasmMsgData::Sudo {
+                    data: result.data.unwrap_or_default(),
+                };
+                let mut response = MsgResponse::new(events, data);
                 self.dispatch_response_messages(
                     storage,
                     meter,
                     block,
                     sm,
                     &contract_addr,
+                    &checksum,
                     result.messages,
-                    response,
-                )?
+                    &mut response,
+                )?;
+                response
             }
             WasmMsg::Pin { sender, code_id } => {
                 // only special sender can do this - stored as param
@@ -449,7 +479,7 @@ impl Wasm {
                 }
                 // add events
                 let event = pin_code_event(code_id);
-                MsgResponse::events(vec![event])
+                MsgResponse::new(vec![event], WasmMsgData::PinCode {})
             }
             WasmMsg::Unpin { sender, code_id } => {
                 // only special sender can do this - stored as param
@@ -468,12 +498,13 @@ impl Wasm {
                 }
                 // add events
                 let event = unpin_code_event(code_id);
-                MsgResponse::events(vec![event])
+                MsgResponse::new(vec![event], WasmMsgData::UnpinCode {})
             }
         };
         Ok(resp)
     }
 
+    /// This dispatches all returned messages and adds events to the parent event of the original call
     #[allow(clippy::too_many_arguments)]
     pub fn dispatch_response_messages(
         &self,
@@ -482,26 +513,97 @@ impl Wasm {
         block: &BlockInfo,
         sm: &StateMachine,
         contract: &AccountId,
+        checksum: &Checksum,
         msgs: Vec<SubMsg<super::vm::CustomMsg>>,
         // we append events to this (later maybe overwrite the data)
-        mut parent_response: MsgResponse,
-    ) -> PulsarResult<MsgResponse> {
+        parent_response: &mut MsgResponse,
+    ) -> PulsarResult<()> {
         for msg in msgs {
-            // TODO: handle reply_on (and id)
-            match msg.reply_on {
-                ReplyOn::Never => {}
-                _ => panic!("No support for reply yet"),
-            }
-            // TODO: handle gas limit
+            // if there is a limit, and it is less than what we have left, use a sub-meter
+            let limit_meter = match (msg.gas_limit, meter.remaining()) {
+                (Some(limit), left) if limit < left => Some(GasMeter::new(limit)),
+                _ => None,
+            };
+            let sub_meter = match limit_meter.as_ref() {
+                Some(m) => m,
+                None => meter,
+            };
 
             let pulsar_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
-            let msg_response = sm.process_msg(storage, meter, contract, block, pulsar_msg)?;
 
-            // append events to parent response (in reply maybe overwrite data)
-            parent_response.events.extend(msg_response.events);
+            // ensure we charge if there is a limit_meter, even on error
+            let msg_result = sm.process_msg(storage, sub_meter, contract, block, pulsar_msg);
+            if let Some(limit_meter) = limit_meter {
+                meter.charge(limit_meter.used())?;
+            }
+
+            // check if we want to call reply and call
+            let is_success = msg_result.is_ok(); // we use this variable later
+            let handle_reply = matches!(
+                (msg.reply_on, is_success),
+                (ReplyOn::Always, _) | (ReplyOn::Success, true) | (ReplyOn::Error, false)
+            );
+            if handle_reply {
+                let result = match msg_result {
+                    Ok(res) => {
+                        // append events to parent response (only on success)
+                        parent_response.events.extend(res.events.clone());
+                        // and prepare a response value to call the contract
+                        Ok(SubMsgResponse {
+                            events: res.events,
+                            data: maybe_binary(encode_cosmwasm_response(res.data).1),
+                        })
+                    }
+                    Err(err) => Err(err.to_string()),
+                };
+                let reply = Reply {
+                    id: msg.id,
+                    result: result.into(),
+                };
+
+                // call the reply entry point
+                let env = build_env(block, contract);
+                let (reply_result, gas) = self
+                    .cache
+                    .reply(checksum, &env, &reply, storage, contract, meter, sm);
+                meter.charge(gas)?;
+                let reply_result = map_cache_result(reply_result)?;
+
+                // Append reply events to the parent
+                parent_response
+                    .events
+                    .push(reply_event(contract, is_success));
+                let events =
+                    build_contract_events(contract, reply_result.events, reply_result.attributes)?;
+                parent_response.events.extend(events);
+
+                // if data is set, then we override the parent data field
+                if let Some(data) = reply_result.data {
+                    // parent must be Execute, Instantiate(2), Migrate, or Sudo
+                    // update the data field but leave the type the same
+                    set_data_field(&mut parent_response.data, data);
+                }
+
+                if !reply_result.messages.is_empty() {
+                    // we just run them all and add events to the parent...
+                    self.dispatch_response_messages(
+                        storage,
+                        meter,
+                        block,
+                        sm,
+                        contract,
+                        checksum,
+                        reply_result.messages,
+                        parent_response,
+                    )?;
+                }
+            } else {
+                // add events to parent (when we don't use reply)
+                let res = msg_result?;
+                parent_response.events.extend(res.events);
+            }
         }
-
-        Ok(parent_response)
+        Ok(())
     }
 
     pub fn query(
@@ -733,4 +835,121 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
         _ => todo!(),
     };
     Ok(res)
+}
+
+use cosmos_sdk_proto::traits::{Message, TypeUrl};
+
+pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
+    match data {
+        MsgData::Bank(bank) => match bank {
+            BankMsgData::Send {} => (
+                cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+                cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse {}.encode_to_vec(),
+            ),
+            BankMsgData::Burn {} => unknown_cosmwasm_response(),
+        },
+        MsgData::Wasm(wasm) => match wasm {
+            WasmMsgData::Store { code_id, checksum } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCode::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCodeResponse {
+                    code_id,
+                    checksum: checksum.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            WasmMsgData::Execute { data } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContract::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContractResponse {
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            WasmMsgData::Instantiate { contract, data } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContractResponse {
+                    address: contract.to_string(),
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            WasmMsgData::Instantiate2 { contract, data } => (
+                "/cosmwasm.wasm.v1.MsgInstantiateContract2", // missing in cosmos-sdk-proto
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract2Response {
+                    address: contract.to_string(),
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            WasmMsgData::Migrate { data } => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContract::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContractResponse {
+                    data: data.to_vec(),
+                }
+                .encode_to_vec(),
+            ),
+            WasmMsgData::UpdateAdmin {} => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgUpdateAdmin::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgUpdateAdminResponse {}.encode_to_vec(),
+            ),
+            WasmMsgData::ClearAdmin {} => (
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgClearAdmin::TYPE_URL,
+                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgClearAdminResponse {}.encode_to_vec(),
+            ),
+            WasmMsgData::Sudo { data: _ } => unknown_cosmwasm_response(),
+            WasmMsgData::PinCode {} => unknown_cosmwasm_response(),
+            WasmMsgData::UnpinCode {} => unknown_cosmwasm_response(),
+        },
+    }
+}
+
+/// This is a helper response for encode_cosmwasm_response for those who have no
+/// Cosmos SDK message corresponding to them
+fn unknown_cosmwasm_response() -> (&'static str, Vec<u8>) {
+    (
+        cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+        cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse {}.encode_to_vec(),
+    )
+}
+
+// convert vec to binary if non-empty, else None
+fn maybe_binary(data: Vec<u8>) -> Option<Binary> {
+    if data.is_empty() {
+        None
+    } else {
+        Some(data.into())
+    }
+}
+
+/// This modifies the data field on the parent one, but keep the type.
+/// If this MsgData doesn't have such a field, do nothing
+fn set_data_field(parent_data: &mut MsgData, new_data: Binary) {
+    if let MsgData::Wasm(wasm) = parent_data {
+        match wasm {
+            WasmMsgData::Execute { data } => *data = new_data,
+            WasmMsgData::Instantiate { data, .. } => *data = new_data,
+            WasmMsgData::Instantiate2 { data, .. } => *data = new_data,
+            WasmMsgData::Migrate { data } => *data = new_data,
+            WasmMsgData::Sudo { data } => *data = new_data,
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn properly_set_data_field() {
+        let mut parent = MsgData::Wasm(WasmMsgData::Execute {
+            data: b"initial".into(),
+        });
+        set_data_field(&mut parent, b"updated".into());
+        assert_eq!(
+            parent,
+            MsgData::Wasm(WasmMsgData::Execute {
+                data: b"updated".into()
+            })
+        );
+    }
 }

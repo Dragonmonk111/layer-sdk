@@ -1,24 +1,21 @@
 use cosmwasm_std::Event;
 
 use crate::GasMeter;
+use crate::MsgData;
 
 /// Response from one message, to be combined for TxResponse
 #[derive(Debug)]
 pub struct MsgResponse {
-    pub data: Option<Vec<u8>>,
+    pub data: MsgData,
     pub events: Vec<Event>,
 }
 
 impl MsgResponse {
-    pub fn new(events: Vec<Event>, data: Vec<u8>) -> Self {
+    pub fn new(events: Vec<Event>, data: impl Into<MsgData>) -> Self {
         MsgResponse {
             events,
-            data: Some(data),
+            data: data.into(),
         }
-    }
-
-    pub fn events(events: Vec<Event>) -> Self {
-        MsgResponse { events, data: None }
     }
 }
 
@@ -28,12 +25,12 @@ impl MsgResponse {
 // One entry in data and events per message
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxResponse {
-    pub data: Vec<Vec<u8>>,
+    pub data: Vec<MsgData>,
     pub events: Vec<Vec<Event>>,
 }
 
 impl TxResponse {
-    pub fn new(data: Vec<Vec<u8>>, events: Vec<Vec<Event>>) -> Self {
+    pub fn new(data: Vec<MsgData>, events: Vec<Vec<Event>>) -> Self {
         TxResponse { data, events }
     }
 

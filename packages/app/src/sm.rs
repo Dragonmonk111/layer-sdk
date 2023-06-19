@@ -122,10 +122,7 @@ impl StateMachine {
             .map(|msg| self.process_msg(store, meter, &data.signer, block, msg))
             .collect::<PulsarResult<Vec<_>>>()?;
         // Question: pull this out to a function? (copied from execute_tx)
-        let data = resps
-            .iter()
-            .map(|r| r.data.clone().unwrap_or_default())
-            .collect();
+        let data = resps.iter().map(|r| r.data.clone()).collect();
         let events = resps.into_iter().map(|r| r.events).collect();
         tracing::debug!(gas = meter.used(), "simulated");
         Ok(TxResponse { data, events })

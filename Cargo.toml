@@ -1,5 +1,5 @@
 [workspace]
-members = ["app/*", "packages/*"]
+members = ["app/*", "contracts/*", "packages/*"]
 # remove this temporarily as it has huge build dependencies (around 330 for lcd, 230 for cosmos, 110 for others)
 exclude = ["app/lcd"]
 
@@ -16,9 +16,9 @@ exclude = [
 
 [workspace.dependencies]
 thiserror    = "1.0.38"
-cosmwasm-std = "1.2.4"
-cosmwasm-schema = "1.2.4"
-cosmwasm-crypto = "1.2.4"
+cosmwasm-std = "1.2.6"
+cosmwasm-schema = "1.2.6"
+cosmwasm-crypto = "1.2.6"
 cw-storage-plus = "1.1.0"
 cw-utils = "1.0.1"
 serde = { version = "1.0.160", features = ["derive"]}
@@ -34,6 +34,9 @@ pulsar-app = { path = "./packages/app" }
 pulsar-cosmos = { path = "./packages/cosmos" }
 pulsar-std = { path = "./packages/std" }
 pulsar-storage = { path = "./packages/storage" }
+
+tc-echo = { path = "./contracts/echo" }
+tc-caller = { path = "./contracts/caller" }
 
 tendermint-abci = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
 tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
@@ -62,3 +65,13 @@ overflow-checks  = true
 # DEV: you can uncomment locally
 # [profile.test.package."*"]
 # opt-level        = 3
+
+[profile.release.package.tc-echo]
+debug = false
+debug-assertions = false
+codegen-units = 1
+incremental = false
+# TODO: enabling these seems to break cargo...
+# rpath = false
+# lto = true
+# panic = 'abort'
