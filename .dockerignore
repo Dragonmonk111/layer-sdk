@@ -1,0 +1,10 @@
+target/
+.git/
+.vscode/
+.idea/
+artifacts/
+internal/
+
+# These files should not be commited
+*.log
+
