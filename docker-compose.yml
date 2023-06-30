@@ -7,11 +7,11 @@ services:
       - "26658:26658"
   cometbft:
     image: "cometbft/cometbft:v0.38.0-rc2"
+    # image: "cometbft/cometbft:v0.38.0-alpha.2"
     ports:
       - "26656:26656"
       - "26657:26657"
-    environment:
-      - TM_PROXY_APP=tcp://pulsariumd:26658
+    command: ["start", "--proxy_app", "tcp://pulsariumd:26658"]
     # TODO: better mount config / data
     volumes:
-      - ./integration/etc:/root/.tendermint
+      - ./integration/etc:/cometbft
