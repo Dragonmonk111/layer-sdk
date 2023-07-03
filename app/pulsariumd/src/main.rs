@@ -129,10 +129,10 @@ async fn main() {
     let _query = server.query_dispatcher();
     // async task for this
     let grpc_server = Server::builder()
-        // .add_service(auth_service)
+        .add_service(grpc::auth_service())
         .add_service(grpc::bank_service());
     let grpc_result = tokio::task::spawn(async move {
-        grpc_server.serve("0.0.0.0:9000".parse().unwrap())
+        grpc_server.serve("0.0.0.0:9000".parse().unwrap()).await
         // .serve(format!("{}:{}", opt.host, opt.grpc_port).parse().unwrap());
     });
 
