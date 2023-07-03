@@ -126,14 +126,13 @@ async fn main() {
         }
     };
 
-    let _query = server.query_dispatcher();
-    // async task for this
+    let query = server.query_dispatcher();
     let grpc_server = Server::builder()
-        .add_service(grpc::auth_service())
-        .add_service(grpc::bank_service());
+        .add_service(grpc::auth_service(query.clone()))
+        .add_service(grpc::bank_service(query));
     let grpc_result = tokio::task::spawn(async move {
+        // TODO: use a config for (host)/port here
         grpc_server.serve("0.0.0.0:9000".parse().unwrap()).await
-        // .serve(format!("{}:{}", opt.host, opt.grpc_port).parse().unwrap());
     });
 
     // we run as long as the abci server is up.

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ibc_proto::cosmos::bank::v1beta1::{
     query_server::{Query, QueryServer},
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
@@ -7,18 +9,23 @@ use ibc_proto::cosmos::bank::v1beta1::{
     QuerySpendableBalancesResponse, QuerySupplyOfRequest, QuerySupplyOfResponse,
     QueryTotalSupplyRequest, QueryTotalSupplyResponse,
 };
+use pulsar_abci::MultiThreadedDispatcher;
 // use ibc_proto::cosmos::base::v1beta1::Coin as RawCoin;
 use tonic::{Request, Response, Status};
 
-pub fn bank_service() -> QueryServer<BankService> {
-    QueryServer::new(BankService::new())
+use super::{abci_response_to_grpc, grpc_request_to_abci};
+
+pub fn bank_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<BankService> {
+    QueryServer::new(BankService::new(dispatcher))
 }
 
-pub struct BankService {}
+pub struct BankService {
+    dispatcher: Arc<MultiThreadedDispatcher>,
+}
 
 impl BankService {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(dispatcher: Arc<MultiThreadedDispatcher>) -> Self {
+        Self { dispatcher }
     }
 }
 
@@ -26,16 +33,21 @@ impl BankService {
 impl Query for BankService {
     async fn balance(
         &self,
-        _request: Request<QueryBalanceRequest>,
+        request: Request<QueryBalanceRequest>,
     ) -> Result<Response<QueryBalanceResponse>, Status> {
-        unimplemented!();
+        let query = grpc_request_to_abci("/cosmos.bank.v1beta1.Query/Balance", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(Response::new)
     }
 
     async fn all_balances(
         &self,
-        _request: Request<QueryAllBalancesRequest>,
+        request: Request<QueryAllBalancesRequest>,
     ) -> Result<Response<QueryAllBalancesResponse>, Status> {
-        unimplemented!()
+        let query =
+            grpc_request_to_abci("/cosmos.bank.v1beta1.Query/AllBalances", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(Response::new)
     }
 
     async fn spendable_balances(
@@ -47,9 +59,11 @@ impl Query for BankService {
 
     async fn total_supply(
         &self,
-        _request: Request<QueryTotalSupplyRequest>,
+        request: Request<QueryTotalSupplyRequest>,
     ) -> Result<Response<QueryTotalSupplyResponse>, Status> {
-        unimplemented!()
+        let query = grpc_request_to_abci("/cosmos.bank.v1beta1.Query/SupplyOf", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(Response::new)
     }
 
     async fn supply_of(

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ibc_proto::cosmos::auth::v1beta1::{
     query_server::{Query, QueryServer},
     AddressBytesToStringRequest, AddressBytesToStringResponse, AddressStringToBytesRequest,
@@ -8,17 +10,22 @@ use ibc_proto::cosmos::auth::v1beta1::{
     QueryModuleAccountsResponse, QueryParamsRequest, QueryParamsResponse,
 };
 
+use pulsar_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
-pub fn auth_service() -> QueryServer<AuthService> {
-    QueryServer::new(AuthService::new())
+use super::{abci_response_to_grpc, grpc_request_to_abci};
+
+pub fn auth_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<AuthService> {
+    QueryServer::new(AuthService::new(dispatcher))
 }
 
-pub struct AuthService {}
+pub struct AuthService {
+    dispatcher: Arc<MultiThreadedDispatcher>,
+}
 
 impl AuthService {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(dispatcher: Arc<MultiThreadedDispatcher>) -> Self {
+        Self { dispatcher }
     }
 }
 
@@ -33,9 +40,11 @@ impl Query for AuthService {
 
     async fn account(
         &self,
-        _request: Request<QueryAccountRequest>,
+        request: Request<QueryAccountRequest>,
     ) -> Result<Response<QueryAccountResponse>, Status> {
-        unimplemented!()
+        let query = grpc_request_to_abci("/cosmos.auth.v1beta1.Query/Account", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc::<QueryAccountResponse>(response).map(Response::new)
     }
 
     async fn params(
