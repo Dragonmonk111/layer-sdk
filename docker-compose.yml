@@ -9,10 +9,11 @@ volumes:
 services:
   pulsariumd:
     image: "pulsar/pulsariumd:latest"
-    ports:
-      - "26658:26658"
+    expose:
+      - "26658"
     volumes:
       - pulsar_data:/root/.pulsar
+    command: ["pulsariumd"]
   cometbft:
     image: "cometbft/cometbft:v0.38.0-rc2"
     ports:
@@ -21,3 +22,11 @@ services:
     command: ["start", "--proxy_app", "tcp://pulsariumd:26658"]
     volumes:
       - comet_data:/cometbft
+  jaeger:
+    image: jaegertracing/all-in-one:1.46
+    expose:
+      - "6831/udp" 
+      - "6832/udp" 
+      - "14268"
+    ports: 
+      - "8080:16686"

@@ -1,9 +1,9 @@
 # docker build . -f docker/Dockerfile.pulsariumd -t pulsar/pulsariumd:latest
-# docker run --rm -it pulsar/pulsariumd:demo /bin/bash
+# docker run --rm -it pulsar/pulsariumd:latest /bin/bash
 
-# TODO: use bookworm if working
-# docker pull rust:1.70-bullseye
-FROM rust:1.70-bullseye as builder
+### BUILDING
+
+FROM rust:1.70-bookworm as builder
 WORKDIR /myapp
 
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
@@ -34,16 +34,13 @@ RUN rm -rf target/release/.fingerprint/pulsar*
 COPY . .
 RUN cargo build --release --bin pulsariumd
 
-# TODO: use bookworm if working
-FROM debian:bullseye-slim
+### PRODUCTION
+
+# Now, pack up that binary in a nice small image
+FROM debian:bookworm-slim
 RUN apt-get update && apt-get upgrade
 RUN apt install -y libcurl4
-COPY docker/config/pulsarium.toml /root/.pulsar/config/pulsarium.toml
 COPY --from=builder /myapp/target/release/pulsariumd /usr/local/bin/pulsariumd
 EXPOSE 26658
 CMD ["pulsariumd"]
 
-# TODO: copy some config file / dir there?
-# docker run --rm -p 26658:26658 pulsar/pulsariumd:latest 
-# docker run --rm -it pulsar/pulsariumd:latest /bin/bash
-# docker run --rm pulsar/pulsariumd:latest pulsariumd --host 0.0.0.0
