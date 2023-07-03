@@ -1,7 +1,8 @@
 # docker build . -f docker/Dockerfile.pulsariumd -t pulsar/pulsariumd:latest
 # docker run --rm -it pulsar/pulsariumd:demo /bin/bash
 
-# docker pull cometbft/cometbft:0.38.0-rc2
+# TODO: use bookworm if working
+# docker pull rust:1.70-bullseye
 FROM rust:1.70-bullseye as builder
 WORKDIR /myapp
 
@@ -43,6 +44,6 @@ EXPOSE 26658
 CMD ["pulsariumd"]
 
 # TODO: copy some config file / dir there?
-# docker run --rm -p 26658:26658 pulsar/pulsariumd:latest pulsariumd
+# docker run --rm -p 26658:26658 pulsar/pulsariumd:latest 
 # docker run --rm -it pulsar/pulsariumd:latest /bin/bash
 # docker run --rm pulsar/pulsariumd:latest pulsariumd --host 0.0.0.0
