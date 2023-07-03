@@ -6,13 +6,14 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
-use pulsar_abci::ServerConfig;
-use pulsar_app::AppConfig;
-// use tonic::server;
+use tonic::transport::Server;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::FmtSubscriber;
+
+use pulsar_abci::ServerConfig;
+use pulsar_app::AppConfig;
 
 mod app;
 mod cli;
@@ -20,6 +21,7 @@ mod config;
 mod convert;
 mod decode;
 mod encode;
+mod grpc;
 
 use crate::app::Pulsarium;
 use crate::cli::Cli;
@@ -125,9 +127,20 @@ async fn main() {
     };
 
     let _query = server.query_dispatcher();
+    // async task for this
+    let grpc_server = Server::builder()
+        // .add_service(auth_service)
+        .add_service(grpc::bank_service());
+    let grpc_result = tokio::task::spawn(async move {
+        grpc_server.serve("0.0.0.0:9000".parse().unwrap())
+        // .serve(format!("{}:{}", opt.host, opt.grpc_port).parse().unwrap());
+    });
+
+    // we run as long as the abci server is up.
     server.listen().await.unwrap();
 
-    // proper shutdown
+    // kill async tasks (grpc server, jaeger agent) when main task is done
+    grpc_result.abort();
     if config.jaeger.is_some() {
         opentelemetry::global::shutdown_tracer_provider();
     }

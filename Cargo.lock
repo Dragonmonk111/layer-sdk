@@ -1540,6 +1540,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ibc-proto"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f844ebc1ddf70f2ad7cd5981a2feba261fff55e1ad6482c27551ee3c6cec7df4"
+dependencies = [
+ "base64 0.21.0",
+ "bytes",
+ "flex-error",
+ "prost",
+ "serde",
+ "subtle-encoding",
+ "tendermint-proto 0.31.1",
+ "tonic",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2478,6 +2494,7 @@ dependencies = [
  "cosmwasm-std",
  "figment",
  "hex-literal",
+ "ibc-proto",
  "opentelemetry",
  "opentelemetry-jaeger",
  "parking_lot",
