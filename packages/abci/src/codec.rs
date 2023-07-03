@@ -61,8 +61,8 @@ where
             // Try to decode an incoming message from our buffer first
             match decode_length_delimited::<I>(&mut self.read_buf) {
                 Ok(Some(incoming)) => return Some(Ok(incoming)),
+                Ok(None) => (), // not enough data to decode a message, let's continue.
                 Err(e) => return Some(Err(e)),
-                _ => (), // not enough data to decode a message, let's continue.
             }
 
             // If we don't have enough data to decode a message, try to read
@@ -70,7 +70,7 @@ where
             match self.stream.read_buf(&mut self.read_buf).await {
                 Ok(0) => return None,
                 Err(e) => return Some(Err(AbciError::Io(e))),
-                _ => continue,
+                Ok(_) => {}
             }
         }
     }

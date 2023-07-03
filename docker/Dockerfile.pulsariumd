@@ -1,0 +1,49 @@
+# docker build . -f docker/Dockerfile.pulsariumd -t pulsar/pulsariumd:latest
+# docker run --rm -it pulsar/pulsariumd:demo /bin/bash
+
+# TODO: use bookworm if working
+# docker pull rust:1.70-bullseye
+FROM rust:1.70-bullseye as builder
+WORKDIR /myapp
+
+# This whole pile will pre-build and cache the dependencies, so we just recompile local code below
+COPY Cargo.lock Cargo.toml /myapp/
+COPY app/pulsariumd/Cargo.toml /myapp/app/pulsariumd/Cargo.toml
+COPY dummy.rs /myapp/app/pulsariumd/src/main.rs
+COPY contracts/caller/Cargo.toml /myapp/contracts/caller/Cargo.toml
+COPY dummy.rs /myapp/contracts/caller/src/lib.rs
+COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
+COPY dummy.rs /myapp/contracts/echo/src/lib.rs
+COPY packages/abci/Cargo.toml /myapp/packages/abci/Cargo.toml
+COPY dummy.rs /myapp/packages/abci/src/lib.rs
+COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
+COPY dummy.rs /myapp/packages/app/src/lib.rs
+COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
+COPY dummy.rs /myapp/packages/cosmos/src/lib.rs
+COPY packages/std/Cargo.toml /myapp/packages/std/Cargo.toml
+COPY dummy.rs /myapp/packages/std/src/lib.rs
+COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml
+COPY dummy.rs /myapp/packages/storage/src/lib.rs
+RUN cargo build --release --bin pulsariumd
+
+# clean up these fake local deps so we compile for real later
+RUN rm /myapp/*/*/src/*.rs
+RUN rm -rf target/release/.fingerprint/pulsar*
+
+# This build step should just compile the local code and be faster
+COPY . .
+RUN cargo build --release --bin pulsariumd
+
+# TODO: use bookworm if working
+FROM debian:bullseye-slim
+RUN apt-get update && apt-get upgrade
+RUN apt install -y libcurl4
+COPY docker/config/pulsarium.toml /root/.pulsar/config/pulsarium.toml
+COPY --from=builder /myapp/target/release/pulsariumd /usr/local/bin/pulsariumd
+EXPOSE 26658
+CMD ["pulsariumd"]
+
+# TODO: copy some config file / dir there?
+# docker run --rm -p 26658:26658 pulsar/pulsariumd:latest 
+# docker run --rm -it pulsar/pulsariumd:latest /bin/bash
+# docker run --rm pulsar/pulsariumd:latest pulsariumd --host 0.0.0.0

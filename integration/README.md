@@ -38,7 +38,7 @@ Run in another terminal:
 
 
 ```shell
-cometbft start --home ~/.pulse-test
+cometbft start --home ~/.pulse-test --proxy_app tcp://192.168.1.37:26658
 ```
 
 You should see blocks being produced. Now you are ready to run the tests

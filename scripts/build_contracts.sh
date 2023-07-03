@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -eu
+set -x
+
 ARCH=""
 case $(uname -m) in
     x86_64) ARCH="" ;;

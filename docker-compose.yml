@@ -1,0 +1,23 @@
+version: '3'
+
+volumes:
+  pulsar_data:
+    external: true
+  comet_data:
+    external: true
+
+services:
+  pulsariumd:
+    image: "pulsar/pulsariumd:latest"
+    ports:
+      - "26658:26658"
+    volumes:
+      - pulsar_data:/root/.pulsar
+  cometbft:
+    image: "cometbft/cometbft:v0.38.0-rc2"
+    ports:
+      - "26656:26656"
+      - "26657:26657"
+    command: ["start", "--proxy_app", "tcp://pulsariumd:26658"]
+    volumes:
+      - comet_data:/cometbft
