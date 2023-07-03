@@ -4,7 +4,10 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use tendermint_proto::v0_38::abci::{request::Value, Request, Response};
+use tendermint_proto::v0_38::abci::{
+    request::Value, response::Value as ResponseValue, Request, RequestQuery, Response,
+    ResponseQuery,
+};
 
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::select;
@@ -129,7 +132,21 @@ impl<A: Application> MultiThreadedDispatcher<A> {
         pool.install(move || tokio_rayon::spawn_fifo(move || call_app.handle(request)))
     }
 
-    // TODO: allow grpc to dispatch queries
+    // publicly exposed, but only allows dispatching queries on the query pool
+    // designed for grpc server
+    pub fn dispatch_query(&self, request: RequestQuery) -> AsyncRayonHandle<ResponseQuery> {
+        let request = Request {
+            value: Some(Value::Query(request)),
+        };
+        let call_app = self.app.clone();
+        self.query
+            .install(move || tokio_rayon::spawn_fifo(move || {
+                let response = call_app.handle(request);
+                let value = response.value.unwrap();
+                let ResponseValue::Query(qres) = value else { panic!("Query got non-query response: {:?}", value); };
+                qres
+            }))
+    }
 }
 
 pub struct Server<A: Application> {
@@ -161,6 +178,13 @@ impl<A: Application + Send + Sync> Server<A> {
             dispatcher,
             config,
         })
+    }
+
+    /// Returns the dispatcher, so another process (eg gRPC server) can also use it.
+    /// The only publicly exposed method is dispatch_query to ensure they don't make
+    /// any state-modifying requests.
+    pub fn query_dispatcher(&self) -> Arc<MultiThreadedDispatcher<A>> {
+        self.dispatcher.clone()
     }
 
     /// Listen for incoming connections, and route their requests to the
