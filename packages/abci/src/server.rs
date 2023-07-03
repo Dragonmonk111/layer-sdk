@@ -55,7 +55,7 @@ impl ServerConfig {
         self
     }
 
-    pub async fn bind<Addr, App>(self, addr: Addr, app: App) -> Result<Server<App>, AbciError>
+    pub async fn bind<Addr, App>(self, addr: Addr, app: App) -> Result<Server, AbciError>
     where
         Addr: ToSocketAddrs,
         App: Application + Send + Sync,
@@ -74,16 +74,16 @@ impl Default for ServerConfig {
     }
 }
 
-pub struct MultiThreadedDispatcher<A: Application> {
+pub struct MultiThreadedDispatcher {
     query: ThreadPool,
     check: ThreadPool,
     process: ThreadPool,
     snapshot: ThreadPool,
-    app: A,
+    app: Arc<dyn RequestDispatcher + Send + Sync>,
 }
 
-impl<A: Application> MultiThreadedDispatcher<A> {
-    fn build(app: A, config: &ServerConfig) -> Self {
+impl MultiThreadedDispatcher {
+    fn build<A: Application + Send + Sync>(app: A, config: &ServerConfig) -> Self {
         let n = config.query_threads;
         info!("Starting query pool with {n} threads");
         let query = ThreadPoolBuilder::new().num_threads(n).build().unwrap();
@@ -99,7 +99,7 @@ impl<A: Application> MultiThreadedDispatcher<A> {
             check,
             process,
             snapshot,
-            app,
+            app: Arc::new(app),
         }
     }
 
@@ -149,13 +149,13 @@ impl<A: Application> MultiThreadedDispatcher<A> {
     }
 }
 
-pub struct Server<A: Application> {
+pub struct Server {
     listener: TcpListener,
     config: ServerConfig,
-    dispatcher: Arc<MultiThreadedDispatcher<A>>,
+    dispatcher: Arc<MultiThreadedDispatcher>,
 }
 
-impl<A: Application + Send + Sync> Server<A> {
+impl Server {
     /// Constructor for an ABCI server.
     ///
     /// Binds the server to the given address. You must subsequently call the
@@ -164,10 +164,11 @@ impl<A: Application + Send + Sync> Server<A> {
     pub async fn bind<Addr, App>(
         config: ServerConfig,
         addr: Addr,
-        app: A,
+        app: App,
     ) -> Result<Self, AbciError>
     where
         Addr: ToSocketAddrs,
+        App: Application + Send + Sync,
     {
         let listener = TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?.to_string();
@@ -183,7 +184,7 @@ impl<A: Application + Send + Sync> Server<A> {
     /// Returns the dispatcher, so another process (eg gRPC server) can also use it.
     /// The only publicly exposed method is dispatch_query to ensure they don't make
     /// any state-modifying requests.
-    pub fn query_dispatcher(&self) -> Arc<MultiThreadedDispatcher<A>> {
+    pub fn query_dispatcher(&self) -> Arc<MultiThreadedDispatcher> {
         self.dispatcher.clone()
     }
 
@@ -210,14 +211,11 @@ impl<A: Application + Send + Sync> Server<A> {
         Ok(())
     }
 
-    async fn handle_connection<App>(
+    async fn handle_connection(
         stream: TcpStream,
-        dispatcher: Arc<MultiThreadedDispatcher<App>>,
+        dispatcher: Arc<MultiThreadedDispatcher>,
         config: ServerConfig,
-    ) -> Result<(), AbciError>
-    where
-        App: Application,
-    {
+    ) -> Result<(), AbciError> {
         let mut codec = ServerCodec::new(stream, config.read_buf_size);
         let mut pending = VecDeque::<AsyncRayonHandle<Response>>::with_capacity(32);
 

@@ -8,6 +8,7 @@ use figment::{
 };
 use pulsar_abci::ServerConfig;
 use pulsar_app::AppConfig;
+// use tonic::server;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
@@ -104,34 +105,27 @@ async fn main() {
     let app_config = AppConfig::new(wasm_dir);
 
     // Create the app
-    match config.lmdb {
+    let server_config = ServerConfig::new().with_read_buf(config.read_buf_size as usize);
+    let server_port = format!("{}:{}", config.host, config.port);
+
+    // Create ABCI server
+    let server = match config.lmdb {
         Some(path) => {
             info!("using lmdb database at {}", path);
             let storage = pulsar_storage::LmdbStore::new(&path, None);
             let app = Pulsarium::new(storage, app_config);
-
-            // Start ABCI server
-            let server = ServerConfig::new()
-                .with_read_buf(config.read_buf_size as usize)
-                .bind(format!("{}:{}", config.host, config.port), app)
-                .await
-                .unwrap();
-            server.listen().await.unwrap();
+            server_config.bind(server_port, app).await.unwrap()
         }
         None => {
             info!("using in-memory database");
             let storage = pulsar_storage::MemoryStore::new();
             let app = Pulsarium::new(storage, app_config);
-
-            // Start ABCI server
-            let server = ServerConfig::new()
-                .with_read_buf(config.read_buf_size as usize)
-                .bind(format!("{}:{}", config.host, config.port), app)
-                .await
-                .unwrap();
-            server.listen().await.unwrap();
+            server_config.bind(server_port, app).await.unwrap()
         }
-    }
+    };
+
+    let _query = server.query_dispatcher();
+    server.listen().await.unwrap();
 
     // proper shutdown
     if config.jaeger.is_some() {
