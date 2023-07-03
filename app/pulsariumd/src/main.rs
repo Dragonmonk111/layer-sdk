@@ -65,10 +65,11 @@ async fn main() {
     let config = config.validate().unwrap();
 
     // add open telemetry
-    if config.jaeger {
+    if let Some(collector) = config.jaeger.as_ref() {
+        let endpoint = format!("{}/api/traces", collector);
         opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
         let tracer = opentelemetry_jaeger::new_collector_pipeline()
-            .with_endpoint("http://localhost:14268/api/traces")
+            .with_endpoint(endpoint)
             //         // optionally set username and password as well.
             //         // .with_username("username")
             //         // .with_password("s3cr3t")
@@ -133,7 +134,7 @@ async fn main() {
     }
 
     // proper shutdown
-    if config.jaeger {
+    if config.jaeger.is_some() {
         opentelemetry::global::shutdown_tracer_provider();
     }
 }

@@ -29,10 +29,6 @@ pub struct Cli {
     pub lmdb: Option<String>,
 
     #[arg(long)]
-    #[serde(skip_serializing_if = "is_false")]
-    pub jaeger: bool,
-}
-
-fn is_false(b: &bool) -> bool {
-    !b
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub jaeger: Option<String>,
 }

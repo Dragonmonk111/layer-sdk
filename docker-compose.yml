@@ -13,6 +13,7 @@ services:
       - "26658"
     volumes:
       - pulsar_data:/root/.pulsar
+    command: ["pulsariumd"]
   cometbft:
     image: "cometbft/cometbft:v0.38.0-rc2"
     ports:

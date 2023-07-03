@@ -17,8 +17,8 @@ pub struct RawConfig {
 
     pub read_buf_size: u32,
 
-    // whether to add jaeger tracing
-    pub jaeger: bool,
+    // jeager collector to send trace data, if defined
+    pub jaeger: Option<String>,
 
     // A directory to store the LMDB database (if missing use memory db)
     pub lmdb: Option<String>,
@@ -33,7 +33,7 @@ impl Default for RawConfig {
             port: 26658,
             log: "info".to_string(),
             read_buf_size: 4 * 1024 * 1024,
-            jaeger: false,
+            jaeger: None,
             lmdb: None,
         }
     }
@@ -82,7 +82,7 @@ pub struct Config {
 
     pub read_buf_size: u32,
 
-    pub jaeger: bool,
+    pub jaeger: Option<String>,
 
     // A directory to store the LMDB database (if missing use memory db)
     pub lmdb: Option<String>,
