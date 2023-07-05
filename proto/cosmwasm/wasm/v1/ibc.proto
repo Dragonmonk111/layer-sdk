@@ -1,0 +1,24 @@
+syntax = "proto3";
+package cosmwasm.wasm.v1;
+
+// MsgIBCSend
+message MsgIBCSend {
+  // the channel by which the packet will be sent
+  string channel = 2;
+
+  // Timeout height relative to the current block height.
+  // The timeout is disabled when set to 0.
+  uint64 timeout_height = 4;
+  // Timeout timestamp (in nanoseconds) relative to the current block timestamp.
+  // The timeout is disabled when set to 0.
+  uint64 timeout_timestamp = 5;
+
+  // Data is the payload to transfer. We must not make assumption what format or
+  // content is in here.
+  bytes data = 6;
+}
+
+// MsgIBCCloseChannel port and channel need to be owned by the contract
+message MsgIBCCloseChannel {
+  string channel = 2;
+}

@@ -10,7 +10,11 @@ services:
   pulsariumd:
     image: "pulsar/pulsariumd:latest"
     expose:
+      # abci server only for cometbft
       - "26658"
+    ports:
+      # open grpc server
+      - "9000:9000"
     volumes:
       - pulsar_data:/root/.pulsar
     command: ["pulsariumd"]

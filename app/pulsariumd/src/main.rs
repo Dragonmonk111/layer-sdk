@@ -6,12 +6,14 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
-use pulsar_abci::ServerConfig;
-use pulsar_app::AppConfig;
+use tonic::transport::Server;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::FmtSubscriber;
+
+use pulsar_abci::ServerConfig;
+use pulsar_app::AppConfig;
 
 mod app;
 mod cli;
@@ -19,6 +21,7 @@ mod config;
 mod convert;
 mod decode;
 mod encode;
+mod grpc;
 
 use crate::app::Pulsarium;
 use crate::cli::Cli;
@@ -104,36 +107,39 @@ async fn main() {
     let app_config = AppConfig::new(wasm_dir);
 
     // Create the app
-    match config.lmdb {
+    let server_config = ServerConfig::new().with_read_buf(config.read_buf_size as usize);
+    let server_port = format!("{}:{}", config.host, config.port);
+
+    // Create ABCI server
+    let server = match config.lmdb {
         Some(path) => {
             info!("using lmdb database at {}", path);
             let storage = pulsar_storage::LmdbStore::new(&path, None);
             let app = Pulsarium::new(storage, app_config);
-
-            // Start ABCI server
-            let server = ServerConfig::new()
-                .with_read_buf(config.read_buf_size as usize)
-                .bind(format!("{}:{}", config.host, config.port), app)
-                .await
-                .unwrap();
-            server.listen().await.unwrap();
+            server_config.bind(server_port, app).await.unwrap()
         }
         None => {
             info!("using in-memory database");
             let storage = pulsar_storage::MemoryStore::new();
             let app = Pulsarium::new(storage, app_config);
-
-            // Start ABCI server
-            let server = ServerConfig::new()
-                .with_read_buf(config.read_buf_size as usize)
-                .bind(format!("{}:{}", config.host, config.port), app)
-                .await
-                .unwrap();
-            server.listen().await.unwrap();
+            server_config.bind(server_port, app).await.unwrap()
         }
-    }
+    };
 
-    // proper shutdown
+    let query = server.query_dispatcher();
+    let grpc_server = Server::builder()
+        .add_service(grpc::auth_service(query.clone()))
+        .add_service(grpc::bank_service(query));
+    let grpc_result = tokio::task::spawn(async move {
+        // TODO: use a config for (host)/port here
+        grpc_server.serve("0.0.0.0:9000".parse().unwrap()).await
+    });
+
+    // we run as long as the abci server is up.
+    server.listen().await.unwrap();
+
+    // kill async tasks (grpc server, jaeger agent) when main task is done
+    grpc_result.abort();
     if config.jaeger.is_some() {
         opentelemetry::global::shutdown_tracer_provider();
     }
