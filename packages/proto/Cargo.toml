@@ -9,3 +9,4 @@ edition = { workspace = true }
 
 [dependencies]
 prost = { workspace = true }
+prost-types = { workspace = true }

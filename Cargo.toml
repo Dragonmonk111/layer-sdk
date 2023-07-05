@@ -27,6 +27,8 @@ ripemd = "0.1.3"
 parking_lot = "0.12.1"
 hex-literal = "0.4.1"
 bytes = { version = "1.4.0", default_features = false, features = ["serde"] }
+prost = { version = "0.11" }
+prost-types = { version = "0.11" }
 
 pulsar-abci = { path = "./packages/abci" }
 pulsar-app = { path = "./packages/app" }

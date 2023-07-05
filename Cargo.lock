@@ -2469,20 +2469,8 @@ dependencies = [
 name = "pulsar-proto"
 version = "0.2.0"
 dependencies = [
- "bech32",
- "bytes",
- "chrono",
- "cosmwasm-crypto",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus",
- "derivative",
- "hex",
- "itertools 0.11.0",
- "ripemd",
- "sha2 0.10.7",
- "thiserror",
- "tracing",
+ "prost",
+ "prost-types",
 ]
 
 [[package]]
