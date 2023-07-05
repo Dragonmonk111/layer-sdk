@@ -19,6 +19,7 @@ pulsar-abci = { workspace = true }
 pulsar-app = { workspace = true }
 pulsar-std = { workspace = true }
 pulsar-cosmos = { workspace = true }
+pulsar-proto = { workspace = true, features = ["server"] }
 pulsar-storage = { workspace = true, features = ["lmdb"] }
 cosmwasm-std = { workspace = true }
 
@@ -46,9 +47,6 @@ tokio = { version = "1.28.0", features = ["full"] }
 bytes = {workspace = true}
 prost = { workspace = true }
 tonic = { workspace = true }
-
-ibc-proto = { version = "=0.30.0", default-features = false, features = ["server"] }
-#cosmos-sdk-proto = { workspace = true, features = ["grpc"] }
 
 [dev-dependencies]
 hex-literal = {workspace = true }

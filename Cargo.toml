@@ -34,6 +34,7 @@ tonic = { version = "0.9.2", default_features = false, features = ["codegen", "t
 pulsar-abci = { path = "./packages/abci" }
 pulsar-app = { path = "./packages/app" }
 pulsar-cosmos = { path = "./packages/cosmos" }
+pulsar-proto = { path = "./packages/proto" }
 pulsar-std = { path = "./packages/std" }
 pulsar-storage = { path = "./packages/storage" }
 
