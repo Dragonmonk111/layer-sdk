@@ -39,7 +39,9 @@ impl Query for CosmWasmService {
     ) -> Result<Response<QueryContractInfoResponse>, Status> {
         let query = grpc_request_to_abci("/cosmwasm.wasm.v1.Query/ContractInfo", request.get_ref());
         let response = self.dispatcher.dispatch_query(query).await;
-        abci_response_to_grpc(response).map(Response::new)
+        let mut res: QueryContractInfoResponse = abci_response_to_grpc(response)?;
+        res.address = request.get_ref().address.clone();
+        Ok(Response::new(res))
     }
 
     /// ContractHistory gets the contract code history
