@@ -14,7 +14,7 @@ services:
       - "26658"
     ports:
       # open grpc server
-      - "9000:9000"
+      - "9090:9090"
     volumes:
       - pulsar_data:/root/.pulsar
     command: ["pulsariumd"]
@@ -34,3 +34,10 @@ services:
       - "14268"
     ports: 
       - "8080:16686"
+  gateway:
+    image: "pulsar/gateway:latest"
+    ports:
+      # rest port
+      - "1317:1317"
+    # connect to the grpc endpoint on pulsariumd
+    command: ["/app", "-grpc-server-endpoint", "pulsariumd:9090"]
