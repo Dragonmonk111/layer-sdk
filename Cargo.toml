@@ -1,5 +1,6 @@
 [workspace]
 members = ["app/*", "contracts/*", "packages/*"]
+exclude = ["tools/proto-compiler"]
 
 [workspace.package]
 edition       = "2021"
