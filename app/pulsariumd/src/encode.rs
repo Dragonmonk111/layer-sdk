@@ -1,6 +1,7 @@
 // Convert from abci types into pulsar types
 
 use pulsar_cosmos::{parse_cosmos_query, parse_cosmos_tx};
+use pulsar_std::{QueryError, TxError};
 
 use crate::convert::{
     consensus_params_from_proto, timestamp_from_proto, validator_updates_from_proto,
@@ -25,24 +26,24 @@ pub fn query_request_from_proto(
     request: tendermint_proto::abci::RequestQuery,
     // we need to pass in out-of-bound info for simulate
     chain_id: &str,
-) -> pulsar_std::Query {
-    // TODO: no panic
-    if request.prove {
-        panic!("Proofs not supported");
-    }
+) -> Result<pulsar_std::Query, tendermint_proto::abci::ResponseQuery> {
     if request.height > 0 {
-        panic!("Height not supported");
+        let err = QueryError::ParseError("Cannot query at historical height".into());
+        return Err(crate::decode::query_error(err, 0));
     }
-    // TODO: error not unwrap
-    parse_cosmos_query(&request.path, request.data, chain_id).unwrap()
+    if request.prove {
+        let err = QueryError::ParseError("Cannot prove queries".into());
+        return Err(crate::decode::query_error(err, 0));
+    }
+    parse_cosmos_query(&request.path, request.data, chain_id)
+        .map_err(|err| crate::decode::query_error(err, 0))
 }
 
 pub fn check_request_from_proto(
     request: tendermint_proto::abci::RequestCheckTx,
     chain_id: &str,
-) -> pulsar_std::Tx {
-    // TODO: error not unwrap
-    parse_cosmos_tx(request.tx, chain_id).unwrap()
+) -> Result<pulsar_std::Tx, TxError> {
+    parse_cosmos_tx(request.tx, chain_id)
 }
 
 pub fn finalize_request_from_proto(
@@ -52,6 +53,8 @@ pub fn finalize_request_from_proto(
     let txs = request
         .txs
         .into_iter()
+        // TODO: how to handle failures here... we need responses for them.
+        // maybe a re-architecture between splitting the request and response sides
         .map(|tx| parse_cosmos_tx(tx, chain_id).unwrap())
         .collect();
     let last_votes = match request.decided_last_commit {
@@ -106,7 +109,7 @@ mod fixtures {
         });
         let query = query_request_from_proto(request, CHAIN_ID);
 
-        assert_eq!(query, expected);
+        assert_eq!(query, Ok(expected));
 
         // // response
         // let value = hex!("0A9F010A202F636F736D6F732E617574682E763162657461312E426173654163636F756E74127B0A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C12460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029018112003");
@@ -129,7 +132,7 @@ mod fixtures {
         });
         let query = query_request_from_proto(request, CHAIN_ID);
 
-        assert_eq!(query, expected);
+        assert_eq!(query, Ok(expected));
 
         // // response
         // let value = hex!("0A0B0A067570756C7365120130");
@@ -182,7 +185,7 @@ mod fixtures {
             raw_tx: raw_tx.to_vec().into(),
         }));
         let query = query_request_from_proto(request, CHAIN_ID);
-        assert_eq!(query, expected);
+        assert_eq!(query, Ok(expected));
 
         // // response
         // let value = hex!("0A080880ADE20410E52C12C3010A200A1E0A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E641A9E010A087472616E73666572123C0A09726563697069656E74122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E32180112390A0673656E646572122D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C180112190A06616D6F756E74120D323030303030307570756C73651801");

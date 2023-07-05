@@ -24,12 +24,16 @@ pub fn query_response_to_proto(
 ) -> tendermint_proto::abci::ResponseQuery {
     match response {
         Ok(response) => {
-            // TODO: error not unwrap
             let key = match &response {
                 pulsar_std::response::QueryResponse::Raw { key, .. } => key.clone(),
                 _ => Vec::new(),
             };
-            let value = encode_cosmos_response(response).unwrap();
+            let value = match encode_cosmos_response(response) {
+                Ok(v) => v,
+                Err(e) => {
+                    return query_error(e, height);
+                }
+            };
             tendermint_proto::abci::ResponseQuery {
                 code: 0,
                 log: "".to_string(),
@@ -42,17 +46,24 @@ pub fn query_response_to_proto(
                 codespace: "".to_string(),
             }
         }
-        Err(err) => tendermint_proto::abci::ResponseQuery {
-            code: 1,
-            log: err.to_string(),
-            info: "".to_string(),
-            index: 0,
-            key: Vec::new().into(),
-            value: Vec::new().into(),
-            proof_ops: None,
-            height: height.try_into().unwrap(),
-            codespace: "".to_string(),
-        },
+        Err(err) => query_error(err, height),
+    }
+}
+
+pub(crate) fn query_error(
+    err: impl std::error::Error,
+    height: u64,
+) -> tendermint_proto::abci::ResponseQuery {
+    tendermint_proto::abci::ResponseQuery {
+        code: 1,
+        log: err.to_string(),
+        info: "".to_string(),
+        index: 0,
+        key: Vec::new().into(),
+        value: Vec::new().into(),
+        proof_ops: None,
+        height: height.try_into().unwrap(),
+        codespace: "".to_string(),
     }
 }
 
@@ -131,9 +142,6 @@ pub struct LoggedEvents<'a> {
 
 // Yes, this is kind of ridiculous, but we need to encode this like the Cosmos SDK does to be compatible with CosmJS
 fn encode_logs(all_events: &[Vec<Event>]) -> String {
-    // This gives [ [event] ]
-    // String::from_utf8(to_vec(events).unwrap()).unwrap_or_else(|e| e.to_string())
-
     // CosmJS expects [ { events: [event] } ]
     let transform: Vec<_> = all_events
         .iter()
