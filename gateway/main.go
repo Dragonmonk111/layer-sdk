@@ -13,6 +13,7 @@ import (
 
 	auth "github.com/pulsar/pulsariumd/gateway/cosmos/auth/v1beta1"
 	bank "github.com/pulsar/pulsariumd/gateway/cosmos/bank/v1beta1"
+	cosmwasm "github.com/pulsar/pulsariumd/gateway/cosmwasm/wasm/v1"
 
 	// to register pubkey any types
 	_ "github.com/pulsar/pulsariumd/gateway/cosmos/crypto/ed25519"
@@ -61,6 +62,10 @@ func run() error {
 		return err
 	}
 	err = bank.RegisterQueryHandler(ctx, mux, conn)
+	if err != nil {
+		return err
+	}
+	err = cosmwasm.RegisterQueryHandler(ctx, mux, conn)
 	if err != nil {
 		return err
 	}

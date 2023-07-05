@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
-use ibc_proto::cosmos::bank::v1beta1::{
+use pulsar_abci::MultiThreadedDispatcher;
+use pulsar_proto::cosmos::bank::v1beta1::{
     query_server::{Query, QueryServer},
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
-    QueryDenomMetadataRequest, QueryDenomMetadataResponse, QueryDenomOwnersRequest,
-    QueryDenomOwnersResponse, QueryDenomsMetadataRequest, QueryDenomsMetadataResponse,
-    QueryParamsRequest, QueryParamsResponse, QuerySpendableBalancesRequest,
-    QuerySpendableBalancesResponse, QuerySupplyOfRequest, QuerySupplyOfResponse,
-    QueryTotalSupplyRequest, QueryTotalSupplyResponse,
+    QueryDenomMetadataRequest, QueryDenomMetadataResponse, QueryDenomsMetadataRequest,
+    QueryDenomsMetadataResponse, QueryParamsRequest, QueryParamsResponse,
+    QuerySpendableBalancesRequest, QuerySpendableBalancesResponse, QuerySupplyOfRequest,
+    QuerySupplyOfResponse, QueryTotalSupplyRequest, QueryTotalSupplyResponse,
 };
-use pulsar_abci::MultiThreadedDispatcher;
 // use ibc_proto::cosmos::base::v1beta1::Coin as RawCoin;
 use tonic::{Request, Response, Status};
 
@@ -91,13 +90,6 @@ impl Query for BankService {
         &self,
         _request: Request<QueryDenomsMetadataRequest>,
     ) -> Result<Response<QueryDenomsMetadataResponse>, Status> {
-        unimplemented!()
-    }
-
-    async fn denom_owners(
-        &self,
-        _request: Request<QueryDenomOwnersRequest>,
-    ) -> Result<Response<QueryDenomOwnersResponse>, Status> {
         unimplemented!()
     }
 }
