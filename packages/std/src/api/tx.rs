@@ -78,4 +78,11 @@ impl<E: std::error::Error> TxResult<E> {
     pub fn is_err(&self) -> bool {
         self.result.is_err()
     }
+
+    pub fn failure(err: E) -> Self {
+        TxResult {
+            gas: GasInfo::zero(),
+            result: Err(err),
+        }
+    }
 }

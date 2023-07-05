@@ -21,7 +21,7 @@ use tendermint_proto::abci::{
 };
 
 use pulsar_app::{App, AppConfig, AppLoadError, StateMachine};
-use pulsar_std::HexEncode;
+use pulsar_std::{api::TxResult, HexEncode};
 use pulsar_storage::PersistentStorage;
 
 use crate::{
@@ -133,8 +133,13 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         let chain_id = app.chain_id();
         let height = app.info().map(|i| i.height).unwrap_or(0);
         let request = query_request_from_proto(request, chain_id);
-        let res = app.query(request);
-        let out = query_response_to_proto(res, height);
+        let out = match request {
+            Ok(r) => {
+                let res = app.query(r);
+                query_response_to_proto(res, height)
+            }
+            Err(e) => e,
+        };
 
         //Add response into to the same span
         span.record("raw_response.code", out.code);
@@ -163,7 +168,12 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         let app = self.app.read();
         let chain_id = app.chain_id();
         let tx = request.tx.clone();
-        let to_check = check_request_from_proto(request, chain_id);
+        let to_check = match check_request_from_proto(request, chain_id) {
+            Ok(tx) => tx,
+            Err(e) => {
+                return check_response_to_proto(TxResult::failure(e.into()));
+            }
+        };
         let res = app.check_tx(to_check);
         // Really no easier way to release the app lock??
         parking_lot::lock_api::RwLockReadGuard::unlock_fair(app);
