@@ -2410,7 +2410,7 @@ dependencies = [
 
 [[package]]
 name = "pulsar-abci"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "prost",
@@ -2424,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "pulsar-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "cosmos-sdk-proto",
@@ -2450,7 +2450,7 @@ dependencies = [
 
 [[package]]
 name = "pulsar-cosmos"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "cosmos-sdk-proto",
@@ -2467,7 +2467,7 @@ dependencies = [
 
 [[package]]
 name = "pulsar-std"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bech32",
  "bytes",
@@ -2487,7 +2487,7 @@ dependencies = [
 
 [[package]]
 name = "pulsar-storage"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cosmwasm-std",
  "cw-storage-plus",
@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "pulsariumd"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "clap",
@@ -3163,7 +3163,7 @@ checksum = "1b1c7f239eb94671427157bd93b3694320f3668d4e1eff08c7285366fd777fac"
 
 [[package]]
 name = "tc-caller"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -3176,7 +3176,7 @@ dependencies = [
 
 [[package]]
 name = "tc-echo"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
