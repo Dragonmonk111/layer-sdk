@@ -130,10 +130,8 @@ async fn main() {
     let grpc_server = Server::builder()
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query));
-    let grpc_result = tokio::task::spawn(async move {
-        // TODO: use a config for (host)/port here
-        grpc_server.serve("0.0.0.0:9090".parse().unwrap()).await
-    });
+    let grpc_result =
+        tokio::task::spawn(async move { grpc_server.serve(config.grpc.parse().unwrap()).await });
 
     // we run as long as the abci server is up.
     server.listen().await.unwrap();

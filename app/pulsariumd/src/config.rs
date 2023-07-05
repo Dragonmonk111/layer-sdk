@@ -22,6 +22,8 @@ pub struct RawConfig {
 
     // A directory to store the LMDB database (if missing use memory db)
     pub lmdb: Option<String>,
+
+    pub grpc: String,
     // /// The directory we read all files from (default $HOME/.pulsarium)
     // pub basedir: String,
 }
@@ -35,6 +37,7 @@ impl Default for RawConfig {
             read_buf_size: 4 * 1024 * 1024,
             jaeger: None,
             lmdb: None,
+            grpc: "0.0.0.0:9090".to_string(),
         }
     }
 }
@@ -64,6 +67,7 @@ impl RawConfig {
             read_buf_size: self.read_buf_size,
             jaeger: self.jaeger,
             lmdb: self.lmdb,
+            grpc: self.grpc,
         })
     }
 }
@@ -86,6 +90,8 @@ pub struct Config {
 
     // A directory to store the LMDB database (if missing use memory db)
     pub lmdb: Option<String>,
+
+    pub grpc: String,
     // /// The directory we read all files from (default $HOME/.pulsarium)
     // pub basedir: String,
 }

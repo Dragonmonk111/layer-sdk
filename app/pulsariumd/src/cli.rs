@@ -31,4 +31,8 @@ pub struct Cli {
     #[arg(long)]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub jaeger: Option<String>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub grpc: Option<String>,
 }
