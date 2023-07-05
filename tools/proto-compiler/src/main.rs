@@ -22,6 +22,8 @@ fn main() {
         .client_mod_attribute(".", r#"#[cfg(feature = "client")]"#)
         .build_server(true)
         .server_mod_attribute(".", r#"#[cfg(feature = "server")]"#)
+        .disable_comments("../../proto/google/protobuf/any.proto")
+        .disable_comments("../../proto/google/api/http.proto")
         .out_dir(out_dir)
         .compile(&protos, &[includes]).unwrap();
 }
