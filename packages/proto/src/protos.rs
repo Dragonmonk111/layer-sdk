@@ -46,4 +46,8 @@ pub mod google {
     pub mod api {
         include!("protos/google.api.rs");
     }
+
+    pub mod protobuf {
+        include!("protos/google.protobuf.rs");
+    }
 }

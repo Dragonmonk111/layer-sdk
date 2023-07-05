@@ -2469,8 +2469,10 @@ dependencies = [
 name = "pulsar-proto"
 version = "0.2.0"
 dependencies = [
+ "bytes",
  "prost",
  "prost-types",
+ "tonic",
 ]
 
 [[package]]
