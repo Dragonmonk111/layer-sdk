@@ -155,8 +155,8 @@ describe("SigningStargateClient", () => {
       value: msg,
     };
     // TODO: clairfy simulate gas for lmdb
-    // const result = await client.signAndBroadcast(faucet.address0, [msgAny], "auto");
-    const result = await client.signAndBroadcast(faucet.address0, [msgAny], 3);
+    const result = await client.signAndBroadcast(faucet.address0, [msgAny], "auto");
+    // const result = await client.signAndBroadcast(faucet.address0, [msgAny], 3);
     assertIsDeliverTxSuccess(result);
   });
 });

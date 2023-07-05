@@ -53,6 +53,7 @@ pub struct SignedTx {
     /// this is info on the fee (amount and gas wanted)
     pub fee: FeeInfo,
 
+    // TODO: implement this
     /// if set and the chain height is greater than this, abort the tx in all cases
     pub timeout_height: Option<u64>,
 

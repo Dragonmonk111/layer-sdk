@@ -1,0 +1,35 @@
+syntax = "proto3";
+package cosmwasm.wasm.v1;
+
+import "cosmwasm/wasm/v1/types.proto";
+import "cosmwasm/wasm/v1/tx.proto";
+
+// GenesisState - genesis state of x/wasm
+message GenesisState {
+  Params params = 1;
+  repeated Code codes = 2;
+  repeated Contract contracts = 3;
+  repeated Sequence sequences = 4;
+}
+
+// Code struct encompasses CodeInfo and CodeBytes
+message Code {
+  uint64 code_id = 1;
+  CodeInfo code_info = 2;
+  bytes code_bytes = 3;
+  // Pinned to wasmvm cache
+  bool pinned = 4;
+}
+
+// Contract struct encompasses ContractAddress, ContractInfo, and ContractState
+message Contract {
+  string contract_address = 1;
+  ContractInfo contract_info = 2;
+  repeated Model contract_state = 3;
+}
+
+// Sequence key and value of an id generation counter
+message Sequence {
+  bytes id_key = 1;
+  uint64 value = 2;
+}
