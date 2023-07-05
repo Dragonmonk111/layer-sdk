@@ -1,0 +1,16 @@
+# docker build . -f docker/Dockerfile.gateway -t pulsar/gateway:latest
+# docker run --rm -it pulsar/gateway:latest /bin/bash
+
+FROM golang:1.20 AS build-env
+
+COPY ./gateway /src/gateway
+ENV CGO_ENABLED=0
+RUN cd /src/gateway && go build -o /app
+
+# Production stage
+# FROM scratch
+FROM debian:bullseye-slim
+COPY --from=build-env /app /
+
+# ENTRYPOINT ["/app"]
+CMD ["/app"]
