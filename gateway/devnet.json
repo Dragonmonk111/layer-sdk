@@ -1,0 +1,45 @@
+{
+  "rpc": "http://localhost:26657",
+  "rest": "http://localhost:1317",
+  "chainId": "pulsar-dev-1",
+  "chainName": "Pulsarium DevNet",
+  "stakeCurrency": {
+    "coinDenom": "PULSE",
+    "coinMinimalDenom": "upulse",
+    "coinDecimals": 6
+  },
+  "bech32Config": {
+    "bech32PrefixAccAddr": "pulsar",
+    "bech32PrefixAccPub": "pulsarpub",
+    "bech32PrefixValAddr": "pulsarvaloper",
+    "bech32PrefixValPub": "pulsarvaloperpub",
+    "bech32PrefixConsAddr": "pulsarvalcons",
+    "bech32PrefixConsPub": "pulsarvalconspub"
+  },
+  "bip44": {
+    "coinType": 118
+  },
+  "currencies": [
+    {
+      "coinDenom": "PULSE",
+      "coinMinimalDenom": "upulse",
+      "coinDecimals": 6
+    }
+  ],
+  "feeCurrencies": [
+    {
+      "coinDenom": "PULSE",
+      "coinMinimalDenom": "upulse",
+      "coinDecimals": 6
+    }
+  ],
+  "gasPriceStep": {
+    "low": 0.05,
+    "average": 0.125,
+    "high": 0.2
+  },
+  "features": [
+    "stargate",
+    "no-legacy-stdTx"
+  ]
+}
