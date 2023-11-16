@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt, mem::transmute};
 use thiserror::Error;
 
 use cosmwasm_std::{
-    from_slice, to_binary, Binary, BlockInfo, ContractResult, Empty, Order, QueryRequest,
+    from_json, to_json_binary, Binary, BlockInfo, ContractResult, Empty, Order, QueryRequest,
     SystemError, SystemResult,
 };
 use cosmwasm_vm::{
@@ -157,7 +157,7 @@ fn encode_error(
 impl VmQuerier {
     fn do_query_raw(&self, request: &[u8], meter: &GasMeter) -> Result<Binary, QueryError> {
         let cosmos: QueryRequest<CustomQuery> =
-            from_slice(request).map_err(|e| SystemError::InvalidRequest {
+            from_json(request).map_err(|e| SystemError::InvalidRequest {
                 error: e.to_string(),
                 request: Binary::from(request),
             })?;
@@ -224,13 +224,13 @@ fn pulsar_response_to_cosmwasm(
                 let res = cosmwasm_std::AllBalanceResponse {
                     amount: balances.amount,
                 };
-                Ok(to_binary(&res).unwrap())
+                Ok(to_json_binary(&res).unwrap())
             }
             BankQueryResponse::Balance(balance) => {
                 let res = cosmwasm_std::BalanceResponse {
                     amount: balance.amount,
                 };
-                Ok(to_binary(&res).unwrap())
+                Ok(to_json_binary(&res).unwrap())
             }
             x => unsupported_response(&x),
         },
@@ -244,7 +244,7 @@ fn pulsar_response_to_cosmwasm(
                 res.admin = info.admin.map(|a| a.to_string());
                 res.pinned = info.pinned;
                 res.ibc_port = info.ibc_port;
-                Ok(to_binary(&res).unwrap())
+                Ok(to_json_binary(&res).unwrap())
             }
             x => unsupported_response(&x),
         },

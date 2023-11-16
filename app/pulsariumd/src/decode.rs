@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tracing::trace_span;
 
-use cosmwasm_std::{to_vec, Event};
+use cosmwasm_std::{to_json_vec, Event};
 // Convert from pulsar types into abci types
 use pulsar_app::{PulsarError, PulsarResult};
 use pulsar_cosmos::{encode_cosmos_response, msg_data_to_proto};
@@ -147,7 +147,7 @@ fn encode_logs(all_events: &[Vec<Event>]) -> String {
         .iter()
         .map(|events| LoggedEvents { events })
         .collect();
-    let encoded = to_vec(&transform).unwrap();
+    let encoded = to_json_vec(&transform).unwrap();
     String::from_utf8(encoded).unwrap_or_else(|e| e.to_string())
 }
 

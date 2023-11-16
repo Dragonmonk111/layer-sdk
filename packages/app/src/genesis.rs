@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{from_slice, Coin};
+use cosmwasm_std::{from_json, Coin};
 
 use crate::error::PulsarError;
 
@@ -22,6 +22,6 @@ pub struct WasmParams {
 
 impl GenesisState {
     pub fn parse(data: &[u8]) -> Result<Self, PulsarError> {
-        from_slice(data).map_err(Into::into)
+        from_json(data).map_err(Into::into)
     }
 }

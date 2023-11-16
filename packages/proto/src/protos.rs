@@ -74,5 +74,4 @@ pub mod tendermint {
     pub mod version {
         include!("protos/tendermint.version.rs");
     }
-
 }

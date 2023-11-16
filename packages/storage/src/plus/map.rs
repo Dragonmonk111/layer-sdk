@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 
-use cosmwasm_std::{from_slice, Addr, CustomQuery, QuerierWrapper, Record, StdResult};
+use cosmwasm_std::{from_json, Addr, CustomQuery, QuerierWrapper, Record, StdResult};
 
 use pulsar_std::{GasMeter, GasResult};
 
@@ -119,7 +119,7 @@ where
         if result.is_empty() {
             Ok(None)
         } else {
-            from_slice(&result).map(Some)
+            from_json(&result).map(Some)
         }
     }
 
