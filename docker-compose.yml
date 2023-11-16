@@ -25,7 +25,7 @@ services:
       - pulsar_data:/root/.pulsar
     command: ["pulsariumd"]
   cometbft:
-    image: "cometbft/cometbft:v0.38.0-rc2"
+    image: "cometbft/cometbft:v0.38.0"
     ports:
       - "26656:26656"
       - "26657:26657"
