@@ -4,7 +4,6 @@ managed:
   go_package_prefix:
     default: github.com/pulsar/pulsariumd/gateway
     except:
-      - buf.build/googleapis/googleapis
       - buf.build/grpc-ecosystem/grpc-gateway
 plugins:
   - plugin: buf.build/protocolbuffers/go:v1.30.0

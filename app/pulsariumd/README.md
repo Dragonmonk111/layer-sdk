@@ -148,3 +148,5 @@ go run main.go -grpc-server-endpoint localhost:9090
 ```bash
 docker run --network host pulsar/gateway:latest /app -grpc-server-endpoint localhost:9090
 ```
+
+/cosmos.base.tendermint.v1beta1.Service/GetNodeInfo
