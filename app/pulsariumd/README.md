@@ -150,3 +150,5 @@ docker run --network host pulsar/gateway:latest /app -grpc-server-endpoint local
 ```
 
 /cosmos.base.tendermint.v1beta1.Service/GetNodeInfo
+
+/cosmos.tx.v1beta1.Service/Simulate (Broadcast)

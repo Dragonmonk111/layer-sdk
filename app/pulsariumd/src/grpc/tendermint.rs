@@ -127,7 +127,9 @@ impl Service for TendermintService {
                 evidence_hash: opt_hash_to_vec(h.evidence_hash),
                 proposer_address: h.proposer_address.into(),
             }),
-            data: None,
+            data: Some(pulsar_proto::tendermint::types::Data {
+                txs: block.block.data.clone(),
+            }),
             evidence: None,
             last_commit: block.block.last_commit.as_ref().map(|c| {
                 pulsar_proto::tendermint::types::Commit {

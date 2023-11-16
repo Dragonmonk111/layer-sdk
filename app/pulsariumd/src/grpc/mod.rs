@@ -2,6 +2,7 @@ mod auth;
 mod bank;
 mod cosmwasm;
 mod tendermint;
+mod tx;
 
 pub use auth::{auth_service, AuthService};
 pub use bank::{bank_service, BankService};

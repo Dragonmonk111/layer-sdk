@@ -16,6 +16,12 @@ pub mod cosmos {
             include!("protos/cosmos.base.v1beta1.rs");
         }
 
+        pub mod abci {
+            pub mod v1beta1 {
+                include!("protos/cosmos.base.abci.v1beta1.rs");
+            }
+        }
+
         pub mod query {
             pub mod v1beta1 {
                 include!("protos/cosmos.base.query.v1beta1.rs");
@@ -38,6 +44,19 @@ pub mod cosmos {
             include!("protos/cosmos.crypto.ed25519.rs");
         }
     }
+
+    pub mod tx {
+        pub mod v1beta1 {
+            include!("protos/cosmos.tx.v1beta1.rs");
+        }
+
+        pub mod signing {
+            pub mod v1beta1 {
+                include!("protos/cosmos.tx.signing.v1beta1.rs");
+            }    
+        }
+    }
+
 }
 
 pub mod cosmwasm {
@@ -59,6 +78,10 @@ pub mod google {
 }
 
 pub mod tendermint {
+    pub mod abci {
+        include!("protos/tendermint.abci.rs");
+    }
+
     pub mod crypto {
         include!("protos/tendermint.crypto.rs");
     }
