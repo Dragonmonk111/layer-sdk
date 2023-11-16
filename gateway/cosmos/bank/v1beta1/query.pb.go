@@ -9,7 +9,7 @@ package bankv1beta1
 import (
 	v1beta11 "github.com/pulsar/pulsariumd/gateway/cosmos/base/query/v1beta1"
 	v1beta1 "github.com/pulsar/pulsariumd/gateway/cosmos/base/v1beta1"
-	_ "google.golang.org/genproto/googleapis/api/annotations"
+	_ "github.com/pulsar/pulsariumd/gateway/google/api"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
