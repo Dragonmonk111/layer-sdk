@@ -41,13 +41,10 @@ pulsar-storage = { path = "./packages/storage" }
 tc-echo = { path = "./contracts/echo" }
 tc-caller = { path = "./contracts/caller" }
 
-# tendermint-abci = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
-# tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs.git", rev = "bdef9884221a850323f98b3fa2b9b7471f5e8437"}
-
-# weird compile trait errors when updating... investigate later
+tendermint = "0.34.0"
 tendermint-abci = "0.34.0"
 tendermint-proto = "0.34.0"
-
+tendermint-rpc = "0.34.0"
 
 tracing = "0.1.37"
 opentelemetry = "0.19.0"
