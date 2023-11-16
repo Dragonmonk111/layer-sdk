@@ -369,7 +369,9 @@ pub mod msg_server {
                             request: tonic::Request<super::MsgSend>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).send(request).await };
+                            let fut = async move {
+                                <T as Msg>::send(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -411,7 +413,9 @@ pub mod msg_server {
                             request: tonic::Request<super::MsgMultiSend>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).multi_send(request).await };
+                            let fut = async move {
+                                <T as Msg>::multi_send(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1121,7 +1125,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryBalanceRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).balance(request).await };
+                            let fut = async move {
+                                <T as Query>::balance(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1166,7 +1172,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).all_balances(request).await
+                                <T as Query>::all_balances(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1212,7 +1218,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).spendable_balances(request).await
+                                <T as Query>::spendable_balances(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1258,7 +1264,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).total_supply(request).await
+                                <T as Query>::total_supply(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1303,7 +1309,9 @@ pub mod query_server {
                             request: tonic::Request<super::QuerySupplyOfRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).supply_of(request).await };
+                            let fut = async move {
+                                <T as Query>::supply_of(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1345,7 +1353,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryParamsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).params(request).await };
+                            let fut = async move {
+                                <T as Query>::params(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1390,7 +1400,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).denom_metadata(request).await
+                                <T as Query>::denom_metadata(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1436,7 +1446,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).denoms_metadata(request).await
+                                <T as Query>::denoms_metadata(&inner, request).await
                             };
                             Box::pin(fut)
                         }
