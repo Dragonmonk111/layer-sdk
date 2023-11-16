@@ -226,7 +226,9 @@ mod test {
 
         // basic signature checks
         assert_eq!(tx.signing_info.signature.len(), 64);
-        let Some(PubKey::Secp256k1(pk)) = &tx.signing_info.pubkey else { panic!("Wrong pubkey type") };
+        let Some(PubKey::Secp256k1(pk)) = &tx.signing_info.pubkey else {
+            panic!("Wrong pubkey type")
+        };
         assert_eq!(pk.len(), 33);
 
         // validate

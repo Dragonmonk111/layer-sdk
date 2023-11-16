@@ -120,7 +120,9 @@ fn happy_path_cw20() {
             address: contract.clone(),
         })
         .unwrap();
-    let QueryResponse::Auth(AuthQueryResponse::Account (account )) = auth else { panic!("Unexpected return {:?}", auth); };
+    let QueryResponse::Auth(AuthQueryResponse::Account(account)) = auth else {
+        panic!("Unexpected return {:?}", auth);
+    };
     assert_eq!(
         account,
         AccountResponse::Internal {

@@ -51,9 +51,14 @@ impl Query for BankService {
 
     async fn spendable_balances(
         &self,
-        _request: Request<QuerySpendableBalancesRequest>,
+        request: Request<QuerySpendableBalancesRequest>,
     ) -> Result<Response<QuerySpendableBalancesResponse>, Status> {
-        unimplemented!()
+        let query = grpc_request_to_abci(
+            "/cosmos.bank.v1beta1.Query/SpendableBalances",
+            request.get_ref(),
+        );
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(Response::new)
     }
 
     async fn total_supply(
