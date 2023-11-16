@@ -75,17 +75,22 @@ cometbft init --home ~/.pulsarium
 Add the following to `~/.pulsarium/config/genesis.json`:
 
 ```json
-"app_state": {
+  "app_state": {
     "bank": [
-        {
-            "address": "pulsar1eaulhtty6er8e3huz8c4wktz82vf8krnptv9dx",
-            "balance": [{
-                "amount": "123456000000",
-                "denom": "upulse"
-            }]
-        }
-    ]
-}
+      {
+        "address": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l",
+        "balance": [
+          {
+            "amount": "4000000000",
+            "denom": "upulse"
+          }
+        ]
+      }
+    ],
+    "wasm": {
+      "gov_account": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"
+    }
+  }
 ```
 
 ### First execution
@@ -130,3 +135,16 @@ cometbft start --home ~/.pulsarium
 
 
 Then just keep restarting the `cometbft` and `pulsariumd` process on crash
+
+Update: you also need to run the gateway
+
+```bash
+cd ./gateway
+go run main.go -grpc-server-endpoint localhost:9090
+```
+
+(Maybe with docker?)
+
+```bash
+docker run --network host pulsar/gateway:latest /app -grpc-server-endpoint localhost:9090
+```

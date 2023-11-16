@@ -52,7 +52,8 @@ fn setup(path: &str) -> SetupData {
     // parse code_id from response data
     let MsgData::Wasm(WasmMsgData::Store {
         code_id: echo_id, ..
-    }) = res.remove(0).result.unwrap().data.remove(0) else {
+    }) = res.remove(0).result.unwrap().data.remove(0)
+    else {
         panic!("unexpected response data");
     };
 
@@ -69,7 +70,8 @@ fn setup(path: &str) -> SetupData {
     // parse code_id from response data
     let MsgData::Wasm(WasmMsgData::Store {
         code_id: caller_id, ..
-    }) = res.remove(0).result.unwrap().data.remove(0) else {
+    }) = res.remove(0).result.unwrap().data.remove(0)
+    else {
         panic!("unexpected response data");
     };
 

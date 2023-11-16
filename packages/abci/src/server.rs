@@ -139,13 +139,16 @@ impl MultiThreadedDispatcher {
             value: Some(Value::Query(request)),
         };
         let call_app = self.app.clone();
-        self.query
-            .install(move || tokio_rayon::spawn_fifo(move || {
+        self.query.install(move || {
+            tokio_rayon::spawn_fifo(move || {
                 let response = call_app.handle(request);
                 let value = response.value.unwrap();
-                let ResponseValue::Query(qres) = value else { panic!("Query got non-query response: {:?}", value); };
+                let ResponseValue::Query(qres) = value else {
+                    panic!("Query got non-query response: {:?}", value);
+                };
                 qres
-            }))
+            })
+        })
     }
 }
 

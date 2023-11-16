@@ -47,6 +47,7 @@ tokio = { version = "1.28.0", features = ["full"] }
 bytes = {workspace = true}
 prost = { workspace = true }
 tonic = { workspace = true }
+tower = "0.4.13"
 
 [dev-dependencies]
 hex-literal = {workspace = true }

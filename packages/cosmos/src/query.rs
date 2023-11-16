@@ -12,7 +12,7 @@ use cosmos_sdk_proto::cosmos::auth::v1beta1::{
 };
 use cosmos_sdk_proto::cosmos::bank::v1beta1::{
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
-    QuerySupplyOfRequest, QuerySupplyOfResponse,
+    QuerySpendableBalancesRequest, QuerySupplyOfRequest, QuerySupplyOfResponse,
 };
 use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
@@ -103,6 +103,12 @@ fn parse_cosmos_grpc_query(
         }
         "/cosmos.bank.v1beta1.Query/AllBalances" => {
             let req = QueryAllBalancesRequest::decode(data).map_err(CosmosError::from)?;
+            let address = AccountId::parse_string(&req.address)?;
+            let query = BankQuery::AllBalances { address };
+            Ok(Some(query.into()))
+        }
+        "/cosmos.bank.v1beta1.Query/SpendableBalances" => {
+            let req = QuerySpendableBalancesRequest::decode(data).map_err(CosmosError::from)?;
             let address = AccountId::parse_string(&req.address)?;
             let query = BankQuery::AllBalances { address };
             Ok(Some(query.into()))
