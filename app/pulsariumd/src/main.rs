@@ -132,7 +132,9 @@ async fn main() {
         .layer(LogLayer { target: "grpc" })
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
-        .add_service(grpc::cosmwasm_service(query));
+        .add_service(grpc::cosmwasm_service(query))
+        .add_service(grpc::tendermint_service());
+
     let grpc_result =
         tokio::task::spawn(async move { grpc_server.serve(config.grpc.parse().unwrap()).await });
 

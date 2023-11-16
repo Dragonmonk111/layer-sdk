@@ -21,6 +21,12 @@ pub mod cosmos {
                 include!("protos/cosmos.base.query.v1beta1.rs");
             }
         }
+
+        pub mod tendermint {
+            pub mod v1beta1 {
+                include!("protos/cosmos.base.tendermint.v1beta1.rs");
+            }
+        }
     }
 
     pub mod crypto {
@@ -50,4 +56,23 @@ pub mod google {
     pub mod protobuf {
         include!("protos/google.protobuf.rs");
     }
+}
+
+pub mod tendermint {
+    pub mod crypto {
+        include!("protos/tendermint.crypto.rs");
+    }
+
+    pub mod p2p {
+        include!("protos/tendermint.p2p.rs");
+    }
+
+    pub mod types {
+        include!("protos/tendermint.types.rs");
+    }
+
+    pub mod version {
+        include!("protos/tendermint.version.rs");
+    }
+
 }

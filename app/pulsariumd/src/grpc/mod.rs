@@ -1,10 +1,12 @@
 mod auth;
 mod bank;
 mod cosmwasm;
+mod tendermint;
 
 pub use auth::{auth_service, AuthService};
 pub use bank::{bank_service, BankService};
 pub use cosmwasm::{cosmwasm_service, CosmWasmService};
+pub use tendermint::{tendermint_service, TendermintService};
 
 use tendermint_proto::abci::RequestQuery;
 use tendermint_proto::v0_38::abci::ResponseQuery;
