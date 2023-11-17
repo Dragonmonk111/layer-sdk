@@ -53,10 +53,9 @@ pub mod cosmos {
         pub mod signing {
             pub mod v1beta1 {
                 include!("protos/cosmos.tx.signing.v1beta1.rs");
-            }    
+            }
         }
     }
-
 }
 
 pub mod cosmwasm {

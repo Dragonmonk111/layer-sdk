@@ -452,7 +452,7 @@ mod tests {
 
     use bytes::Bytes;
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{coin, coins, to_binary, Binary, Timestamp};
+    use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
     use hex_literal::hex;
 
     use pulsar_std::api::{TmPubKey, ValidatorUpdate};
@@ -469,7 +469,7 @@ mod tests {
     use crate::sm::AppConfig;
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
-        let app_state = to_binary(genesis).unwrap();
+        let app_state = to_json_binary(genesis).unwrap();
         let env = mock_env();
         InitChainRequest {
             time: env.block.time,

@@ -39,7 +39,8 @@ pub struct TendermintService {
 impl TendermintService {
     pub fn new() -> Self {
         // TODO: take as arg
-        let target = "http://localhost:26657";
+        // let target = "http://localhost:26657";
+        let target = "http://cometbft:26657";
         Self {
             client: HttpClient::new(target).unwrap(),
         }
@@ -103,7 +104,7 @@ impl Service for TendermintService {
     ) -> std::result::Result<tonic::Response<GetLatestBlockResponse>, tonic::Status> {
         let block = self.client.latest_block().await.unwrap();
         let h = &block.block.header;
-        let block_time: tendermint_proto::google::protobuf::Timestamp = h.time.clone().into();
+        let block_time: tendermint_proto::google::protobuf::Timestamp = h.time.into();
         let block_data = Block {
             header: Some(Header {
                 version: Some(pulsar_proto::tendermint::version::Consensus {

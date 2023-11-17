@@ -33,32 +33,35 @@ impl Service for TxService {
     /// Simulate simulates executing a transaction for estimating gas usage.
     async fn simulate(
         &self,
-        request: tonic::Request<SimulateRequest>,
-    ) -> std::result::Result<tonic::Response<SimulateResponse>, tonic::Status> {
-        unimplemented!();
+        request: Request<SimulateRequest>,
+    ) -> std::result::Result<tonic::Response<SimulateResponse>, Status> {
+        println!("*** Got it!");
+        let query = grpc_request_to_abci("/cosmos.tx.v1beta1.Service/Simulate", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(Response::new)
     }
 
     /// GetTx fetches a tx by hash.
     async fn get_tx(
         &self,
-        request: tonic::Request<GetTxRequest>,
-    ) -> std::result::Result<tonic::Response<GetTxResponse>, tonic::Status> {
+        _request: Request<GetTxRequest>,
+    ) -> std::result::Result<tonic::Response<GetTxResponse>, Status> {
         unimplemented!();
     }
 
     /// BroadcastTx broadcast transaction.
     async fn broadcast_tx(
         &self,
-        request: tonic::Request<BroadcastTxRequest>,
-    ) -> std::result::Result<tonic::Response<BroadcastTxResponse>, tonic::Status> {
+        _request: Request<BroadcastTxRequest>,
+    ) -> std::result::Result<tonic::Response<BroadcastTxResponse>, Status> {
         unimplemented!();
     }
 
     /// GetTxsEvent fetches txs by event.
     async fn get_txs_event(
         &self,
-        request: tonic::Request<GetTxsEventRequest>,
-    ) -> std::result::Result<tonic::Response<GetTxsEventResponse>, tonic::Status> {
+        _request: Request<GetTxsEventRequest>,
+    ) -> std::result::Result<tonic::Response<GetTxsEventResponse>, Status> {
         unimplemented!();
     }
 
@@ -67,8 +70,8 @@ impl Service for TxService {
     /// Since: cosmos-sdk 0.45.2
     async fn get_block_with_txs(
         &self,
-        request: tonic::Request<GetBlockWithTxsRequest>,
-    ) -> std::result::Result<tonic::Response<GetBlockWithTxsResponse>, tonic::Status> {
+        _request: Request<GetBlockWithTxsRequest>,
+    ) -> std::result::Result<tonic::Response<GetBlockWithTxsResponse>, Status> {
         unimplemented!();
     }
 
@@ -77,8 +80,8 @@ impl Service for TxService {
     /// Since: cosmos-sdk 0.47
     async fn tx_decode(
         &self,
-        request: tonic::Request<TxDecodeRequest>,
-    ) -> std::result::Result<tonic::Response<TxDecodeResponse>, tonic::Status> {
+        _request: Request<TxDecodeRequest>,
+    ) -> std::result::Result<tonic::Response<TxDecodeResponse>, Status> {
         unimplemented!();
     }
 
@@ -87,8 +90,8 @@ impl Service for TxService {
     /// Since: cosmos-sdk 0.47
     async fn tx_encode(
         &self,
-        request: tonic::Request<TxEncodeRequest>,
-    ) -> std::result::Result<tonic::Response<TxEncodeResponse>, tonic::Status> {
+        _request: Request<TxEncodeRequest>,
+    ) -> std::result::Result<tonic::Response<TxEncodeResponse>, Status> {
         unimplemented!();
     }
 
@@ -97,8 +100,8 @@ impl Service for TxService {
     /// Since: cosmos-sdk 0.47
     async fn tx_encode_amino(
         &self,
-        request: tonic::Request<TxEncodeAminoRequest>,
-    ) -> std::result::Result<tonic::Response<TxEncodeAminoResponse>, tonic::Status> {
+        _request: Request<TxEncodeAminoRequest>,
+    ) -> std::result::Result<tonic::Response<TxEncodeAminoResponse>, Status> {
         unimplemented!();
     }
 
@@ -107,8 +110,8 @@ impl Service for TxService {
     /// Since: cosmos-sdk 0.47
     async fn tx_decode_amino(
         &self,
-        request: tonic::Request<TxDecodeAminoRequest>,
-    ) -> std::result::Result<tonic::Response<TxDecodeAminoResponse>, tonic::Status> {
+        _request: Request<TxDecodeAminoRequest>,
+    ) -> std::result::Result<tonic::Response<TxDecodeAminoResponse>, Status> {
         unimplemented!();
     }
 }

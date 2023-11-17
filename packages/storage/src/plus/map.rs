@@ -332,7 +332,7 @@ mod test {
     use serde::{Deserialize, Serialize};
     use std::ops::Deref;
 
-    use cosmwasm_std::{to_binary, Order, StdError};
+    use cosmwasm_std::{to_json_binary, Order, StdError};
 
     use crate::plus::{Bounder, IntKey};
     use crate::{MemoryStore, PersistentStorage, Storage};
@@ -695,7 +695,7 @@ mod test {
                     b"\xddim",
                 ]
                 .concat(),
-                &to_binary(&data2).unwrap(),
+                &to_json_binary(&data2).unwrap(),
             )
             .unwrap();
 

@@ -3,7 +3,7 @@ use cw_storage_plus::Item;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, Response,
+    to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, Response,
     StdError, SubMsg, WasmMsg,
 };
 use cw_utils::{parse_execute_response_data, parse_instantiate_response_data, ParseReplyError};
@@ -76,7 +76,7 @@ pub fn instantiate(
     let init = WasmMsg::Instantiate {
         admin: Some(env.contract.address.into()),
         code_id: msg.code_id,
-        msg: to_binary(&msg.msg)?,
+        msg: to_json_binary(&msg.msg)?,
         funds: vec![],
         label: "My best friend".to_string(),
     };
@@ -99,7 +99,7 @@ pub fn execute(
     incr_calls(deps.branch())?;
     let echo_addr = ECHO.load(deps.storage)?;
     let exec = WasmMsg::Execute {
-        msg: to_binary(&msg.msg)?,
+        msg: to_json_binary(&msg.msg)?,
         funds: vec![],
         contract_addr: echo_addr.clone(),
     };
@@ -118,7 +118,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
         QueryMsg::Counter {} => {
             let calls = CALLS.load(deps.storage)?;
             let replies = REPLIES.load(deps.storage)?;
-            to_binary(&CounterResponse { calls, replies })
+            to_json_binary(&CounterResponse { calls, replies })
         }
     }
 }

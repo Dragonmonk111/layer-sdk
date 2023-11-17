@@ -1,4 +1,4 @@
-use cosmwasm_std::{coin, coins, to_binary, Event};
+use cosmwasm_std::{coin, coins, to_json_binary, Event};
 use pulsar_std::api::TxResponse;
 use pulsar_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
@@ -106,7 +106,7 @@ fn init_contract(
         sender: sender.clone(),
         admin: Some(sender),
         code_id: caller_id,
-        msg: to_binary(init_msg).unwrap(),
+        msg: to_json_binary(init_msg).unwrap(),
         funds: vec![],
         label: "Caller Contract".into(),
     };
@@ -205,7 +205,7 @@ fn basic_init_callback_and_catching_errors() {
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract.clone(),
-            msg: to_binary(&exec_msg).unwrap(),
+            msg: to_json_binary(&exec_msg).unwrap(),
             funds: vec![],
         })
         .with_signer(&signer, sequence);
@@ -306,7 +306,7 @@ fn submsg_gas_limits() {
         .with_msg(WasmMsg::Execute {
             sender: sender.clone(),
             contract_addr: contract.clone(),
-            msg: to_binary(&exec_msg).unwrap(),
+            msg: to_json_binary(&exec_msg).unwrap(),
             funds: vec![],
         })
         .with_signer(&signer, sequence);
@@ -339,7 +339,7 @@ fn submsg_gas_limits() {
         .with_msg(WasmMsg::Execute {
             sender: sender.clone(),
             contract_addr: contract.clone(),
-            msg: to_binary(&exec_msg).unwrap(),
+            msg: to_json_binary(&exec_msg).unwrap(),
             funds: vec![],
         })
         .with_signer(&signer, sequence);
@@ -363,7 +363,7 @@ fn submsg_gas_limits() {
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract.clone(),
-            msg: to_binary(&exec_msg).unwrap(),
+            msg: to_json_binary(&exec_msg).unwrap(),
             funds: vec![],
         })
         .with_signer(&signer, sequence);

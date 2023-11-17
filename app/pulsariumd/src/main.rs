@@ -132,7 +132,8 @@ async fn main() {
         .layer(LogLayer { target: "grpc" })
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
-        .add_service(grpc::cosmwasm_service(query))
+        .add_service(grpc::cosmwasm_service(query.clone()))
+        .add_service(grpc::tx_service(query))
         .add_service(grpc::tendermint_service());
 
     let grpc_result =
