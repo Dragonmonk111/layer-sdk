@@ -528,15 +528,14 @@ fn check_query_recursion() {
     // This should run out of gas around 20 depth, instead it stack overflows at 100.
     // (Relies on proper gas accounting in `impl BackendQuerier for VmQuerier`::query_raw
 
-    // TODO: uncomment
-    // let query = &msgs::QueryMsg::Recurse {
-    //     depth: 100,
-    //     work: 5000,
-    // };
-    // let err = app
-    //     .query_wasm::<_, msgs::RecurseResponse>(&contract, &query)
-    //     .unwrap_err();
-    // assert_eq!(err, PulsarError::Gas(GasError::OutOfGas));
+    let query = &msgs::QueryMsg::Recurse {
+        depth: 100,
+        work: 5000,
+    };
+    let err = app
+        .query_wasm::<_, msgs::RecurseResponse>(&contract, &query)
+        .unwrap_err();
+    assert_eq!(err, PulsarError::Gas(GasError::OutOfGas));
 }
 
 #[test]

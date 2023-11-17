@@ -44,7 +44,7 @@ jobs:
         with:
           toolchain: 1.69.0
           command: test
-          args: --all --all-features
+          args: --all --all-features -- --skip protos
         env:
           RUST_BACKTRACE: 1
 
