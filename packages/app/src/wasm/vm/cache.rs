@@ -128,7 +128,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -181,7 +181,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -233,7 +233,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -285,7 +285,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -337,7 +337,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -382,7 +382,7 @@ impl VmCache {
 
         // always abort scratch, as we don't want to commit anything
         scratch.abort();
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }

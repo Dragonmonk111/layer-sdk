@@ -517,13 +517,6 @@ fn check_query_recursion() {
     let rec: msgs::RecurseResponse = app.query_wasm(&contract, &query).unwrap();
     assert_eq!(rec.hashed.len(), 32);
 
-    // TODO: this crashes the node - stack overflow
-    // Note: I safely did 50, 80 fails... let's make a limit like 10
-    // let query = &msgs::QueryMsg::Recurse {
-    //     depth: 100,
-    //     work: 500,
-    // };
-
     // too much gas will eventually panic (50_000 - 100_000 cycles triggers out of gas)
     // This should run out of gas around 20 depth, instead it stack overflows at 100.
     // (Relies on proper gas accounting in `impl BackendQuerier for VmQuerier`::query_raw
