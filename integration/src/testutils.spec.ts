@@ -34,10 +34,13 @@ export function fromOneElementArray<T>(elements: ArrayLike<T>): T {
 export const defaultGasPrice = GasPrice.fromString("0.025" + DENOM);
 export const defaultSendFee = calculateFee(100_000, defaultGasPrice);
 
+export const hostName = "localhost";
+// export const hostName = "65.21.105.220";
+
 export const pulsarium = {
-  tendermintUrl: "http://localhost:26657",
-  tendermintUrlWs: "ws://localhost:26657",
-  tendermintUrlHttp: "http://localhost:26657",
+  tendermintUrl: `http://${hostName}:26657`,
+  tendermintUrlWs: `ws://${hostName}:26657`,
+  tendermintUrlHttp: `http://${hostName}:26657`,
   chainId: "pulsar-dev-1",
   denomStaking: DENOM,
   denomFee: DENOM,
