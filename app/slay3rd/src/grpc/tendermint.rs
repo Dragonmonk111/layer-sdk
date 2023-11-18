@@ -1,8 +1,8 @@
 // use std::sync::Arc;
 
-use pulsar_proto::tendermint::p2p::{DefaultNodeInfo, DefaultNodeInfoOther, ProtocolVersion};
-use pulsar_proto::tendermint::types::{BlockId, Header, PartSetHeader};
-use pulsar_proto::{
+use slay3r_proto::tendermint::p2p::{DefaultNodeInfo, DefaultNodeInfoOther, ProtocolVersion};
+use slay3r_proto::tendermint::types::{BlockId, Header, PartSetHeader};
+use slay3r_proto::{
     cosmos::base::tendermint::v1beta1::{
         service_server::{Service, ServiceServer},
         AbciQueryRequest, AbciQueryResponse, GetBlockByHeightRequest, GetBlockByHeightResponse,
@@ -23,7 +23,7 @@ use tendermint_rpc::{Client, HttpClient, Paging};
 //     QueryParamsResponse,
 // };
 
-// use pulsar_abci::MultiThreadedDispatcher;
+// use slay3r_abci::MultiThreadedDispatcher;
 // use tonic::{Request, Response, Status};
 
 // use {abci_response_to_grpc, grpc_request_to_abci};
@@ -107,13 +107,13 @@ impl Service for TendermintService {
         let block_time: tendermint_proto::google::protobuf::Timestamp = h.time.into();
         let block_data = Block {
             header: Some(Header {
-                version: Some(pulsar_proto::tendermint::version::Consensus {
+                version: Some(slay3r_proto::tendermint::version::Consensus {
                     block: h.version.block,
                     app: h.version.app,
                 }),
                 chain_id: h.chain_id.to_string(),
                 height: u64::from(h.height) as i64,
-                time: Some(pulsar_proto::google::protobuf::Timestamp {
+                time: Some(slay3r_proto::google::protobuf::Timestamp {
                     seconds: block_time.seconds,
                     nanos: block_time.nanos,
                 }),
@@ -128,12 +128,12 @@ impl Service for TendermintService {
                 evidence_hash: opt_hash_to_vec(h.evidence_hash),
                 proposer_address: h.proposer_address.into(),
             }),
-            data: Some(pulsar_proto::tendermint::types::Data {
+            data: Some(slay3r_proto::tendermint::types::Data {
                 txs: block.block.data.clone(),
             }),
             evidence: None,
             last_commit: block.block.last_commit.as_ref().map(|c| {
-                pulsar_proto::tendermint::types::Commit {
+                slay3r_proto::tendermint::types::Commit {
                     height: u64::from(c.height) as i64,
                     round: c.round.into(),
                     block_id: Some(BlockId {

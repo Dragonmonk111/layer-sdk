@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pulsar_proto::cosmos::tx::v1beta1::{
+use slay3r_proto::cosmos::tx::v1beta1::{
     service_server::{Service, ServiceServer},
     BroadcastTxRequest, BroadcastTxResponse, GetBlockWithTxsRequest, GetBlockWithTxsResponse,
     GetTxRequest, GetTxResponse, GetTxsEventRequest, GetTxsEventResponse, SimulateRequest,
@@ -9,7 +9,7 @@ use pulsar_proto::cosmos::tx::v1beta1::{
     TxEncodeResponse,
 };
 
-use pulsar_abci::MultiThreadedDispatcher;
+use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
 use super::{abci_response_to_grpc, grpc_request_to_abci};
