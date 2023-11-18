@@ -7,7 +7,6 @@ use figment::{
     Figment,
 };
 use tonic::transport::Server;
-use tower::Service;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
@@ -129,10 +128,11 @@ async fn main() {
 
     let query = server.query_dispatcher();
     let grpc_server = Server::builder()
-        .layer(LogLayer { target: "grpc" })
+        .layer(grpc::LogLayer::new("grpc"))
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
         .add_service(grpc::cosmwasm_service(query));
+
     let grpc_result =
         tokio::task::spawn(async move { grpc_server.serve(config.grpc.parse().unwrap()).await });
 
@@ -143,55 +143,5 @@ async fn main() {
     grpc_result.abort();
     if config.jaeger.is_some() {
         opentelemetry::global::shutdown_tracer_provider();
-    }
-}
-
-/* The below is all a bit hacky to get some grpc debugging, but we should fix later */
-
-use tower::layer::Layer;
-
-#[derive(Clone, Debug)]
-pub struct LogLayer {
-    target: &'static str,
-}
-
-impl<S> Layer<S> for LogLayer {
-    type Service = LogService<S>;
-
-    fn layer(&self, service: S) -> Self::Service {
-        LogService {
-            target: self.target,
-            service,
-        }
-    }
-}
-
-// This service implements the Log behavior
-#[derive(Clone, Debug)]
-pub struct LogService<S> {
-    target: &'static str,
-    service: S,
-}
-
-impl<S, Request> Service<Request> for LogService<S>
-where
-    S: Service<Request>,
-    Request: std::fmt::Debug,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Request) -> Self::Future {
-        // Insert log statement here or other functionality
-        println!("request = {:?}, target = {:?}", request, self.target);
-        self.service.call(request)
     }
 }

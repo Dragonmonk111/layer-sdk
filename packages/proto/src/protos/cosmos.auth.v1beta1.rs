@@ -445,7 +445,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryAccountsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).accounts(request).await };
+                            let fut = async move {
+                                <T as Query>::accounts(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -489,7 +491,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryAccountRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).account(request).await };
+                            let fut = async move {
+                                <T as Query>::account(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -531,7 +535,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryParamsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).params(request).await };
+                            let fut = async move {
+                                <T as Query>::params(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -578,7 +584,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).module_account_by_name(request).await
+                                <T as Query>::module_account_by_name(&inner, request).await
                             };
                             Box::pin(fut)
                         }

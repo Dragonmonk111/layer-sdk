@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use cosmwasm_schema::serde::{de::DeserializeOwned, Serialize};
-use cosmwasm_std::{from_slice, testing::mock_env, to_binary, Binary, Coin, Event, Uint128};
+use cosmwasm_std::{from_json, testing::mock_env, to_json_binary, Binary, Coin, Event, Uint128};
 use hex_literal::hex;
 use itertools::enumerate;
 use pulsar_std::{
@@ -34,7 +34,7 @@ impl TestApp {
 
     // TODO: use builder pattern for config
     pub fn init(&mut self, genesis: &GenesisState, chain_id: &str) {
-        let app_state = to_binary(genesis).unwrap();
+        let app_state = to_json_binary(genesis).unwrap();
         let env = mock_env();
         let request = InitChainRequest {
             time: env.block.time,
@@ -131,13 +131,13 @@ impl TestApp {
     ) -> Result<U, PulsarError> {
         let query = WasmQuery::Smart {
             contract_addr: contract.clone(),
-            msg: to_binary(msg).unwrap(),
+            msg: to_json_binary(msg).unwrap(),
         };
         let res = match self.query(query)? {
             QueryResponse::Wasm(WasmQueryResponse::Smart(result)) => result,
             e => panic!("Unexpected query result: {:?}", e),
         };
-        Ok(from_slice(&res)?)
+        Ok(from_json(res)?)
     }
 }
 

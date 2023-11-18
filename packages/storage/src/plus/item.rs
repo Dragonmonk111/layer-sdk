@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 
-use cosmwasm_std::{to_vec, Addr, CustomQuery, QuerierWrapper, StdResult, WasmQuery};
+use cosmwasm_std::{to_json_vec, Addr, CustomQuery, QuerierWrapper, StdResult, WasmQuery};
 
 use crate::{PlusError, PlusResult, ReadonlyStorage, Storage};
 use pulsar_std::{GasMeter, GasResult};
@@ -39,7 +39,7 @@ where
 
     /// save will serialize the model and store, returns an error on serialization issues
     pub fn save(&self, store: &mut dyn Storage, meter: &GasMeter, data: &T) -> PlusResult<()> {
-        store.set(meter, self.storage_key, &to_vec(data)?)?;
+        store.set(meter, self.storage_key, &to_json_vec(data)?)?;
         Ok(())
     }
 
@@ -289,7 +289,7 @@ mod test {
                 return Err(StdError::generic_err("broken stuff").into()); // Uses Into to convert StdError to MyError
             }
             if c.max_tokens > 10 {
-                to_vec(&c)?; // Uses From to convert StdError to MyError
+                to_json_vec(&c)?; // Uses From to convert StdError to MyError
             }
             c.max_tokens += 20;
             Ok(c)

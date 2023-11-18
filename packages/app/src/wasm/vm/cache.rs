@@ -128,7 +128,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -181,7 +181,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -233,7 +233,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -285,7 +285,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -337,7 +337,7 @@ impl VmCache {
             }
             _ => working.abort(),
         };
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -382,7 +382,7 @@ impl VmCache {
 
         // always abort scratch, as we don't want to commit anything
         scratch.abort();
-        instance.recycle();
+        let _ = instance.recycle();
 
         (result, gas_used)
     }
@@ -391,9 +391,9 @@ impl VmCache {
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::{
-        coin, from_slice,
+        coin, from_json,
         testing::{mock_env, mock_info},
-        to_vec, Order, Uint128,
+        to_json_vec, Order, Uint128,
     };
     use cw20::Cw20Coin;
     use pulsar_std::AccountId;
@@ -435,7 +435,7 @@ mod tests {
             mint: None,
             marketing: None,
         };
-        let msg = to_vec(&msg).unwrap();
+        let msg = to_json_vec(&msg).unwrap();
 
         let mut writer = store.writer();
         let (res, gas_used) = vm.instantiate(
@@ -493,7 +493,7 @@ mod tests {
             mint: None,
             marketing: None,
         };
-        let msg = to_vec(&msg).unwrap();
+        let msg = to_json_vec(&msg).unwrap();
         let (res, _) = vm.instantiate(
             &checksum,
             &env,
@@ -536,7 +536,7 @@ mod tests {
             recipient: rcpt.to_string(),
             amount: Uint128::new(23456),
         };
-        let msg = to_vec(&msg).unwrap();
+        let msg = to_json_vec(&msg).unwrap();
         let (res, _) = vm.execute(
             &checksum,
             &env,
@@ -618,7 +618,7 @@ mod tests {
             mint: None,
             marketing: None,
         };
-        let msg = to_vec(&msg).unwrap();
+        let msg = to_json_vec(&msg).unwrap();
         let (res, _) = vm.instantiate(
             &checksum,
             &env,
@@ -636,7 +636,7 @@ mod tests {
             start_after: None,
             limit: None,
         };
-        let msg = to_vec(&msg).unwrap();
+        let msg = to_json_vec(&msg).unwrap();
         let (res, _) = vm.query(
             &checksum,
             &env,
@@ -647,7 +647,7 @@ mod tests {
             &sm,
         );
         let res = res.unwrap().unwrap();
-        let cw20::AllAccountsResponse { accounts } = from_slice(&res).unwrap();
+        let cw20::AllAccountsResponse { accounts } = from_json(res).unwrap();
         assert_eq!(
             accounts,
             vec![two.to_string(), one.to_string(), three.to_string()]
@@ -668,7 +668,7 @@ mod tests {
         let msg = cw20_base::msg::QueryMsg::Balance {
             address: account.to_string(),
         };
-        let msg = to_vec(&msg).unwrap();
+        let msg = to_json_vec(&msg).unwrap();
         let (res, _) = vm.query(
             checksum,
             env,
@@ -679,7 +679,7 @@ mod tests {
             sm,
         );
         let res = res.unwrap().unwrap();
-        let balance: cw20::BalanceResponse = from_slice(&res).unwrap();
+        let balance: cw20::BalanceResponse = from_json(res).unwrap();
         balance.balance
     }
 }

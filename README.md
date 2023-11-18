@@ -36,3 +36,7 @@ These integration tests also upload some standard contracts used by Vectis TODO 
 ### Integrations
 
 A quick way to test code is not to run the full docker setup, but rather just run cometBFT in docker and locally compile and run pulsariumd to update quicker. Follow the instructions in [`app/pulsariumd/README.md`](./app/pulsariumd/README.md#setup-configuration)
+
+## MSRV
+
+This requires Rust 1.73 or higher. We use the latest stable version of Rust.

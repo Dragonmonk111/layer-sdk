@@ -2,7 +2,7 @@ use cw_storage_plus::Item;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError};
+use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError};
 
 use crate::msg::*;
 use std::fmt::Debug;
@@ -81,7 +81,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
     match msg {
         QueryMsg::Counter {} => {
             let count = COUNTER.load(deps.storage)?;
-            to_binary(&CounterResponse { count })
+            to_json_binary(&CounterResponse { count })
         }
     }
 }

@@ -1,4 +1,4 @@
-use cosmwasm_std::{coin, coins, to_binary, to_vec, Uint128};
+use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Uint128};
 use cw20::Cw20Coin;
 use pulsar_std::{
     response::{AccountResponse, AuthQueryResponse, QueryResponse},
@@ -82,7 +82,7 @@ fn happy_path_cw20() {
         mint: None,
         marketing: None,
     };
-    let cw20_msg = to_vec(&msg).unwrap();
+    let cw20_msg = to_json_vec(&msg).unwrap();
     let msg = WasmMsg::Instantiate {
         sender: sender.clone(),
         admin: None,
@@ -141,7 +141,7 @@ fn happy_path_cw20() {
         .with_msg(WasmMsg::Execute {
             sender: sender.clone(),
             contract_addr: contract.clone(),
-            msg: to_binary(&cw20::Cw20ExecuteMsg::Transfer {
+            msg: to_json_binary(&cw20::Cw20ExecuteMsg::Transfer {
                 recipient: rcpt.to_string(),
                 amount: Uint128::new(10_000_000),
             })

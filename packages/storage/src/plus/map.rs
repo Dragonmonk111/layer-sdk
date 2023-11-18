@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 
-use cosmwasm_std::{from_slice, Addr, CustomQuery, QuerierWrapper, Record, StdResult};
+use cosmwasm_std::{from_json, Addr, CustomQuery, QuerierWrapper, Record, StdResult};
 
 use pulsar_std::{GasMeter, GasResult};
 
@@ -119,7 +119,7 @@ where
         if result.is_empty() {
             Ok(None)
         } else {
-            from_slice(&result).map(Some)
+            from_json(&result).map(Some)
         }
     }
 
@@ -332,7 +332,7 @@ mod test {
     use serde::{Deserialize, Serialize};
     use std::ops::Deref;
 
-    use cosmwasm_std::{to_binary, Order, StdError};
+    use cosmwasm_std::{to_json_binary, Order, StdError};
 
     use crate::plus::{Bounder, IntKey};
     use crate::{MemoryStore, PersistentStorage, Storage};
@@ -695,7 +695,7 @@ mod test {
                     b"\xddim",
                 ]
                 .concat(),
-                &to_binary(&data2).unwrap(),
+                &to_json_binary(&data2).unwrap(),
             )
             .unwrap();
 

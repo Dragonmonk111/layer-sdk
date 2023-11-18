@@ -1,5 +1,4 @@
 version: v1
 name: buf.build/pulsar/pulsariumd
 deps:
-  - buf.build/googleapis/googleapis
   - buf.build/grpc-ecosystem/grpc-gateway

@@ -749,7 +749,9 @@ pub mod msg_server {
                             request: tonic::Request<super::MsgStoreCode>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).store_code(request).await };
+                            let fut = async move {
+                                <T as Msg>::store_code(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -794,7 +796,7 @@ pub mod msg_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).instantiate_contract(request).await
+                                <T as Msg>::instantiate_contract(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -840,7 +842,7 @@ pub mod msg_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).instantiate_contract2(request).await
+                                <T as Msg>::instantiate_contract2(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -884,7 +886,7 @@ pub mod msg_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).execute_contract(request).await
+                                <T as Msg>::execute_contract(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -928,7 +930,7 @@ pub mod msg_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).migrate_contract(request).await
+                                <T as Msg>::migrate_contract(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -972,7 +974,7 @@ pub mod msg_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).update_admin(request).await
+                                <T as Msg>::update_admin(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1015,7 +1017,9 @@ pub mod msg_server {
                             request: tonic::Request<super::MsgClearAdmin>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).clear_admin(request).await };
+                            let fut = async move {
+                                <T as Msg>::clear_admin(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1848,7 +1852,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).contract_info(request).await
+                                <T as Query>::contract_info(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1894,7 +1898,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).contract_history(request).await
+                                <T as Query>::contract_history(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1940,7 +1944,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).contracts_by_code(request).await
+                                <T as Query>::contracts_by_code(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1986,7 +1990,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).all_contract_state(request).await
+                                <T as Query>::all_contract_state(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2032,7 +2036,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).raw_contract_state(request).await
+                                <T as Query>::raw_contract_state(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2080,7 +2084,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).smart_contract_state(request).await
+                                <T as Query>::smart_contract_state(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2123,7 +2127,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryCodeRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).code(request).await };
+                            let fut = async move {
+                                <T as Query>::code(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -2165,7 +2171,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryCodesRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).codes(request).await };
+                            let fut = async move {
+                                <T as Query>::codes(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -2210,7 +2218,7 @@ pub mod query_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).pinned_codes(request).await
+                                <T as Query>::pinned_codes(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2253,7 +2261,9 @@ pub mod query_server {
                             request: tonic::Request<super::QueryParamsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).params(request).await };
+                            let fut = async move {
+                                <T as Query>::params(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }

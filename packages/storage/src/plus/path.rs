@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 
-use cosmwasm_std::to_vec;
+use cosmwasm_std::to_json_vec;
 use std::ops::Deref;
 
 use pulsar_std::{GasMeter, GasResult};
@@ -56,7 +56,7 @@ where
 
     /// save will serialize the model and store, returns an error on serialization issues
     pub fn save(&self, store: &mut dyn Storage, meter: &GasMeter, data: &T) -> PlusResult<()> {
-        store.set(meter, &self.storage_key, &to_vec(data)?)?;
+        store.set(meter, &self.storage_key, &to_json_vec(data)?)?;
         Ok(())
     }
 

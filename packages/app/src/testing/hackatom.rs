@@ -1,4 +1,4 @@
-use cosmwasm_std::{coin, coins, to_binary};
+use cosmwasm_std::{coin, coins, to_json_binary};
 use pulsar_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
@@ -103,7 +103,7 @@ fn init_contract(
         sender: sender.clone(),
         admin: Some(sender),
         code_id,
-        msg: to_binary(&init_msg).unwrap(),
+        msg: to_json_binary(&init_msg).unwrap(),
         funds: coins(funds, DENOM),
         label: "Hackatom Contract".into(),
     };
@@ -168,7 +168,7 @@ fn basic_hackatom_usage() {
         .with_msg(WasmMsg::Execute {
             sender: verifier.clone(),
             contract_addr: contract.clone(),
-            msg: to_binary(&msgs::ExecuteMsg::Release {}).unwrap(),
+            msg: to_json_binary(&msgs::ExecuteMsg::Release {}).unwrap(),
             funds: vec![],
         })
         .with_signer(&verify_key, 0);
@@ -210,7 +210,7 @@ fn error_handling_from_api_call() {
         sender: sender.clone(),
         admin: None,
         code_id,
-        msg: to_binary(&init_msg).unwrap(),
+        msg: to_json_binary(&init_msg).unwrap(),
         funds: coins(1_000_000, DENOM),
         label: "Hackatom Contract".into(),
     };
@@ -259,7 +259,7 @@ fn check_message_loop() {
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract,
-            msg: to_binary(&msgs::ExecuteMsg::MessageLoop {}).unwrap(),
+            msg: to_json_binary(&msgs::ExecuteMsg::MessageLoop {}).unwrap(),
             funds: vec![],
         })
         .with_fee(gas_limit, coin(1_000, DENOM))
@@ -309,7 +309,7 @@ fn check_memory_loop() {
     let msg = WasmMsg::Execute {
         sender,
         contract_addr: contract,
-        msg: to_binary(&msgs::ExecuteMsg::MemoryLoop {}).unwrap(),
+        msg: to_json_binary(&msgs::ExecuteMsg::MemoryLoop {}).unwrap(),
         funds: vec![],
     };
     let tx = TxBuilder::new()
@@ -384,7 +384,7 @@ fn check_cpu_loop() {
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract,
-            msg: to_binary(&msgs::ExecuteMsg::CpuLoop {}).unwrap(),
+            msg: to_json_binary(&msgs::ExecuteMsg::CpuLoop {}).unwrap(),
             funds: vec![],
         })
         .with_fee(gas_limit, coin(1_000, DENOM))
@@ -429,7 +429,7 @@ fn check_storage_loop() {
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract,
-            msg: to_binary(&msgs::ExecuteMsg::StorageLoop {}).unwrap(),
+            msg: to_json_binary(&msgs::ExecuteMsg::StorageLoop {}).unwrap(),
             funds: vec![],
         })
         .with_fee(gas_limit, coin(1_000, DENOM))
@@ -470,7 +470,7 @@ fn check_panic_handling() {
         .with_msg(WasmMsg::Execute {
             sender,
             contract_addr: contract,
-            msg: to_binary(&msgs::ExecuteMsg::Panic {}).unwrap(),
+            msg: to_json_binary(&msgs::ExecuteMsg::Panic {}).unwrap(),
             funds: vec![],
         })
         .with_fee(200_000, coin(1_000, DENOM))
@@ -517,16 +517,10 @@ fn check_query_recursion() {
     let rec: msgs::RecurseResponse = app.query_wasm(&contract, &query).unwrap();
     assert_eq!(rec.hashed.len(), 32);
 
-    // TODO: this crashes the node - stack overflow
-    // Note: I safely did 50, 80 fails... let's make a limit like 10
-    // let query = &msgs::QueryMsg::Recurse {
-    //     depth: 100,
-    //     work: 500,
-    // };
-
     // too much gas will eventually panic (50_000 - 100_000 cycles triggers out of gas)
     // This should run out of gas around 20 depth, instead it stack overflows at 100.
     // (Relies on proper gas accounting in `impl BackendQuerier for VmQuerier`::query_raw
+
     let query = &msgs::QueryMsg::Recurse {
         depth: 100,
         work: 5000,
@@ -616,7 +610,7 @@ fn migrate_works() {
             sender: verifier.clone(),
             contract_addr: contract.clone(),
             new_code_id: code_id,
-            msg: to_binary(&msgs::MigrateMsg {
+            msg: to_json_binary(&msgs::MigrateMsg {
                 verifier: beneficiary.to_string(),
             })
             .unwrap(),
@@ -639,7 +633,7 @@ fn migrate_works() {
             sender: sender.clone(),
             contract_addr: contract.clone(),
             new_code_id: code_id,
-            msg: to_binary(&msgs::MigrateMsg {
+            msg: to_json_binary(&msgs::MigrateMsg {
                 verifier: sender.to_string(),
             })
             .unwrap(),
@@ -694,7 +688,7 @@ fn sudo_works() {
         .with_msg(WasmMsg::Sudo {
             sender,
             contract_addr: contract.clone(),
-            msg: to_binary(&sudo_msg).unwrap(),
+            msg: to_json_binary(&sudo_msg).unwrap(),
         })
         .with_signer(&signer, sequence);
     let mut res = app.block(&[tx]);
@@ -713,7 +707,7 @@ fn sudo_works() {
         .with_msg(WasmMsg::Sudo {
             sender: gov_acct,
             contract_addr: contract.clone(),
-            msg: to_binary(&sudo_msg).unwrap(),
+            msg: to_json_binary(&sudo_msg).unwrap(),
         })
         .with_signer(&gov_key, sequence);
     let res = app.block(&[tx]);
