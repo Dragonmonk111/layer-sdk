@@ -32,7 +32,6 @@ pub mod cosmos {
             include!("protos/cosmos.crypto.ed25519.rs");
         }
     }
-
 }
 
 pub mod cosmwasm {
