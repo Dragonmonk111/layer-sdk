@@ -129,6 +129,56 @@ fn init_contract(
     contract
 }
 
+/// Just like init_contract, but uses instantiate2 and takes a salt
+#[track_caller]
+fn init_contract2(
+    app: &mut TestApp,
+    code_id: u64,
+    signer: &PrivateKey,
+    verifier: &AccountId,
+    beneficiary: &AccountId,
+    funds: u128,
+    salt: &[u8],
+) -> AccountId {
+    // find the proper sequence
+    let sender = signer.account_id();
+    let sequence = app.sequence(&sender).unwrap();
+
+    let init_msg = msgs::InstantiateMsg {
+        verifier: verifier.to_string(),
+        beneficiary: beneficiary.to_string(),
+    };
+    let msg = WasmMsg::Instantiate2 {
+        sender: sender.clone(),
+        admin: Some(sender),
+        code_id,
+        msg: to_json_binary(&init_msg).unwrap(),
+        funds: coins(funds, DENOM),
+        label: "Hackatom Contract".into(),
+        salt: salt.into(),
+    };
+    let tx = TxBuilder::new().with_msg(msg).with_signer(signer, sequence);
+    let mut res = app.block(&[tx]);
+    assert_block_success(&res, 1);
+
+    // parse address from first message of first tx
+    let events = msg_events(&res[0], 0);
+    let contract =
+        AccountId::parse_string(event_value(events, "instantiate", "_contract_address").unwrap())
+            .unwrap();
+
+    // ensure it matches the data field
+    assert_eq!(
+        res.remove(0).result.unwrap().data.remove(0),
+        MsgData::Wasm(WasmMsgData::Instantiate {
+            contract: contract.clone(),
+            data: b"".into()
+        })
+    );
+
+    contract
+}
+
 #[test]
 fn basic_hackatom_usage() {
     let SetupData {
@@ -186,6 +236,42 @@ fn basic_hackatom_usage() {
     assert_eq!(hacks.u128(), 0);
     let hacks = app.balance(&beneficiary, DENOM).unwrap();
     assert_eq!(hacks.u128(), 10_000_000);
+}
+
+#[test]
+fn hackatom_with_instantiate_2() {
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        ..
+    } = setup("/tmp/pulsar/hackatom-with-instantiate-2");
+
+    // other actors
+    let verify_key = PrivateKey::random();
+    let verifier = verify_key.to_pubkey().account_id().unwrap();
+    let beneficiary = AccountId::unchecked("beneficiary");
+
+    // create contract instance with 10_000_000 tokens
+    let contract = init_contract2(
+        &mut app,
+        code_id,
+        &signer,
+        &verifier,
+        &beneficiary,
+        10_000_000,
+        b"my-salt",
+    );
+
+    // verify it is set up properly
+    let hacks = app.balance(&contract, DENOM).unwrap();
+    assert_eq!(hacks.u128(), 10_000_000);
+    let hacks = app.balance(&beneficiary, DENOM).unwrap();
+    assert_eq!(hacks.u128(), 0);
+    let r: msgs::VerifierResponse = app
+        .query_wasm(&contract, &msgs::QueryMsg::Verifier {})
+        .unwrap();
+    assert_eq!(r.verifier, verifier.to_string());
 }
 
 #[test]

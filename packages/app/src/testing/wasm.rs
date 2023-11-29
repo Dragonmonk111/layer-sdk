@@ -1,8 +1,8 @@
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Uint128};
 use cw20::Cw20Coin;
 use pulsar_std::{
-    response::{AccountResponse, AuthQueryResponse, QueryResponse},
-    AccountId, AuthQuery, MsgData, WasmMsg, WasmMsgData,
+    response::{AccountResponse, AuthQueryResponse, QueryResponse, WasmQueryResponse},
+    AccountId, AuthQuery, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };
 
 use crate::{
@@ -129,6 +129,26 @@ fn happy_path_cw20() {
             address: contract.clone()
         }
     );
+
+    // ensure the contract info makes sense
+    let c_info = app
+        .query(WasmQuery::ContractInfo {
+            contract_addr: contract.clone(),
+        })
+        .unwrap();
+    let QueryResponse::Wasm(WasmQueryResponse::ContractInfo(c)) = c_info else {
+        panic!("Unexpected return {:?}", c_info);
+    };
+    assert_eq!(c.code_id, code_id);
+    assert_eq!(c.admin, None);
+    assert_eq!(c.creator, sender);
+
+    // ensure the contract can be found by code
+    let by_code = app.query(WasmQuery::ContractsByCode { code_id }).unwrap();
+    let QueryResponse::Wasm(WasmQueryResponse::ContractsByCode(by)) = by_code else {
+        panic!("Unexpected return {:?}", by_code);
+    };
+    assert_eq!(by.contracts, vec![contract.clone()]);
 
     // query balance
     let my_bal = query_cw20_balance(&app, &contract, &sender);

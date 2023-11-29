@@ -1,3 +1,5 @@
+use super::utils::Instantiate2AddressError;
+
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -13,4 +15,7 @@ pub enum WasmError {
 
     #[error("Contract Error: {0}")]
     Contract(String),
+
+    #[error("Instantiate2: {0}")]
+    Instantiate2Error(#[from] Instantiate2AddressError),
 }

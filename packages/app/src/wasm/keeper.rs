@@ -1,15 +1,15 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_vm::{Checksum, VmError};
-use sha2::{Digest, Sha256};
 
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Reply, ReplyOn,
-    SubMsg, SubMsgResponse,
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Order, Reply,
+    ReplyOn, SubMsg, SubMsgResponse,
 };
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
-    CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
+    CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, QueryResponse,
+    WasmQueryResponse,
 };
 use pulsar_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
@@ -20,6 +20,7 @@ use pulsar_storage::{
 };
 
 use super::events::{migrate_event, reply_event};
+use super::utils::build_instantiate_address;
 use super::vm::VmCache;
 use super::WasmError;
 use crate::error::{PulsarError, PulsarResult};
@@ -28,6 +29,7 @@ use crate::wasm::events::{
     build_contract_events, clear_admin_event, execute_event, instantiate_event, pin_code_event,
     store_code_event, sudo_event, unpin_code_event, update_admin_event,
 };
+use crate::wasm::utils::build_instantiate_2_address;
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
 
@@ -147,12 +149,7 @@ impl Wasm {
             .unwrap_or_default()
             + 1;
         CONTRACT_COUNTER.save(&mut wasm_store, meter, &counter)?;
-        let mut prehash = Vec::with_capacity(sender.len() + 8 + 8);
-        prehash.extend_from_slice(sender.as_slice());
-        prehash.extend(code_id.to_be_bytes());
-        prehash.extend(counter.to_be_bytes());
-        let raw = Sha256::digest(prehash);
-        Ok(AccountId::new(&raw)?)
+        build_instantiate_address(sender, code_id, counter)
     }
 
     fn next_id(&self, wasm_store: &mut dyn Storage, meter: &GasMeter) -> Result<u64, PulsarError> {
@@ -204,73 +201,53 @@ impl Wasm {
                 ensure_eq!(signer, &sender, WasmError::Unauthorized);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = self.generate_address(storage, meter, &sender, code_id)?;
-                // TODO: reserve and auth account and ensure it is not already taken
-                sm.auth
-                    .claim_internal_account(storage, meter, &contract_addr)?;
-
-                // save contract
-                let contract = ContractData {
-                    code_id,
-                    creator: sender.clone(),
-                    admin,
-                    label,
-                    created: block.time.seconds(),
-                };
-                self.save_contract(storage, meter, &contract_addr, &contract)?;
-
-                // send funds
-                if !funds.is_empty() {
-                    sm.bank.transfer(
-                        storage,
-                        meter,
-                        sender.clone(),
-                        contract_addr.clone(),
-                        funds.clone(),
-                    )?;
-                }
-                let info = build_info(&sender, funds);
-
-                // call instantiate on cache
-                let env = build_env(block, &contract_addr);
-                let checksum = code.get_checksum_to_execute(meter)?;
-                let (result, gas) = self.cache.instantiate(
-                    &checksum,
-                    &env,
-                    &info,
-                    &msg,
-                    storage,
-                    &contract_addr,
-                    meter,
-                    sm,
-                );
-                meter.charge(gas)?;
-                let result = map_cache_result(result)?;
-
-                // Build events
-                let mut events =
-                    build_contract_events(&contract_addr, result.events, result.attributes)?;
-                let event = instantiate_event(&contract_addr, code_id);
-                events.insert(0, event);
-
-                // dispatch messages
-                let data = WasmMsgData::Instantiate {
-                    contract: contract_addr.clone(),
-                    data: result.data.unwrap_or_default(),
-                };
-                let mut response = MsgResponse::new(events, data);
-                self.dispatch_response_messages(
+                return self.do_instantiate(
                     storage,
                     meter,
                     block,
                     sm,
-                    &contract_addr,
-                    &checksum,
-                    result.messages,
-                    &mut response,
-                )?;
-                response
+                    signer,
+                    contract_addr,
+                    code_id,
+                    code,
+                    admin,
+                    msg,
+                    funds,
+                    label,
+                );
             }
-            WasmMsg::Instantiate2 { .. } => todo!(),
+            WasmMsg::Instantiate2 {
+                sender,
+                admin,
+                code_id,
+                label,
+                msg,
+                funds,
+                salt,
+            } => {
+                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                let code = self.load_code(storage.as_ref(), meter, code_id)?;
+                let contract_addr = build_instantiate_2_address(
+                    &code.checksum,
+                    &sender,
+                    &salt,
+                    &[], // we consider fix_msg to always be false, this was cosmwasm-std decision
+                )?;
+                return self.do_instantiate(
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    signer,
+                    contract_addr,
+                    code_id,
+                    code,
+                    admin,
+                    msg,
+                    funds,
+                    label,
+                );
+            }
             WasmMsg::Execute {
                 sender,
                 contract_addr,
@@ -504,6 +481,93 @@ impl Wasm {
         Ok(resp)
     }
 
+    /// Internal function only, combining instantiate and instantiate2 common path.
+    /// I know there are way too many args, but no one should use this besides two cases
+    /// right above it....
+    #[allow(clippy::too_many_arguments)]
+    fn do_instantiate(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        signer: &AccountId,
+        contract_addr: AccountId,
+        code_id: u64,
+        code: CodeInfo,
+        admin: Option<AccountId>,
+        msg: Binary,
+        funds: Vec<Coin>,
+        label: String,
+    ) -> PulsarResult<MsgResponse> {
+        let sender = signer;
+
+        // reserve and auth account and ensure it is not already taken
+        sm.auth
+            .claim_internal_account(storage, meter, &contract_addr)?;
+
+        // save contract
+        let contract = ContractData {
+            code_id,
+            creator: sender.clone(),
+            admin,
+            label,
+            created: block.time.seconds(),
+        };
+        self.save_contract(storage, meter, &contract_addr, &contract)?;
+
+        // send funds
+        if !funds.is_empty() {
+            sm.bank.transfer(
+                storage,
+                meter,
+                sender.clone(),
+                contract_addr.clone(),
+                funds.clone(),
+            )?;
+        }
+        let info = build_info(sender, funds);
+
+        // call instantiate on cache
+        let env = build_env(block, &contract_addr);
+        let checksum = code.get_checksum_to_execute(meter)?;
+        let (result, gas) = self.cache.instantiate(
+            &checksum,
+            &env,
+            &info,
+            &msg,
+            storage,
+            &contract_addr,
+            meter,
+            sm,
+        );
+        meter.charge(gas)?;
+        let result = map_cache_result(result)?;
+
+        // Build events
+        let mut events = build_contract_events(&contract_addr, result.events, result.attributes)?;
+        let event = instantiate_event(&contract_addr, code_id);
+        events.insert(0, event);
+
+        // dispatch messages
+        let data = WasmMsgData::Instantiate {
+            contract: contract_addr.clone(),
+            data: result.data.unwrap_or_default(),
+        };
+        let mut response = MsgResponse::new(events, data);
+        self.dispatch_response_messages(
+            storage,
+            meter,
+            block,
+            sm,
+            &contract_addr,
+            &checksum,
+            result.messages,
+            &mut response,
+        )?;
+        Ok(response)
+    }
+
     /// This dispatches all returned messages and adds events to the parent event of the original call
     #[allow(clippy::too_many_arguments)]
     pub fn dispatch_response_messages(
@@ -665,6 +729,27 @@ impl Wasm {
                     pinned,
                 };
                 WasmQueryResponse::CodeInfo(resp)
+            }
+            WasmQuery::ContractsByCode { code_id } => {
+                // TODO: new data structure to make this efficient
+                // Currently loops through all contracts and filters. Really needs secondary index
+                let wasm_store = prefixed_read(storage, NAMESPACE_WASM);
+                let contracts = CONTRACTS
+                    .range(&wasm_store, meter, None, None, Order::Ascending)?
+                    .filter_map(|r| match r {
+                        Err(e) => Some(Err(e)),
+                        Ok((k, v)) => {
+                            if v.code_id == code_id {
+                                Some(Ok(k))
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let resp = ContractsByCodeResponse { contracts };
+                WasmQueryResponse::ContractsByCode(resp)
             }
         };
         Ok(QueryResponse::Wasm(resp))
