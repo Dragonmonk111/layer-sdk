@@ -202,6 +202,8 @@ pub enum WasmQuery {
     ContractInfo { contract_addr: AccountId },
     /// Returns a [`CodeInfoResponse`] with metadata of the code
     CodeInfo { code_id: u64 },
+    /// Returns a [`ContractsByCodeResponse`] with list of addresses using this code_id
+    ContractsByCode { code_id: u64 },
 }
 
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
@@ -210,6 +212,7 @@ pub enum WasmQueryResponse {
     Raw(#[derivative(Debug(format_with = "pulsar_std::binary_to_string"))] Binary),
     ContractInfo(ContractInfoResponse),
     CodeInfo(CodeInfoResponse),
+    ContractsByCode(ContractsByCodeResponse),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractInfoResponse {
@@ -245,6 +248,19 @@ pub struct CodeInfoResponse {
     pub checksum: Binary,
     /// If this code is pinned to the cache
     pub pinned: bool,
+}
+
+/// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].
+///
+/// `code_hash`/`data_hash` was renamed to `checksum` to follow the CosmWasm
+/// convention and naming in `instantiate2_address`.
+///
+/// [CodeInfo]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/types.proto#L62-L72
+/// [CodeInfoResponse]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/query.proto#L184-L199
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContractsByCodeResponse {
+    /// All contract addresses currently using this code_id
+    pub contracts: Vec<AccountId>,
 }
 
 #[derive(Error, Debug, PartialEq)]

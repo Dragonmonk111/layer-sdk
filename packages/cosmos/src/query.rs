@@ -17,8 +17,9 @@ use cosmos_sdk_proto::cosmos::bank::v1beta1::{
 use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     AbsoluteTxPosition, QueryCodeRequest, QueryCodeResponse, QueryContractInfoRequest,
-    QueryContractInfoResponse, QueryRawContractStateRequest, QueryRawContractStateResponse,
-    QuerySmartContractStateRequest, QuerySmartContractStateResponse,
+    QueryContractInfoResponse, QueryContractsByCodeRequest, QueryContractsByCodeResponse,
+    QueryRawContractStateRequest, QueryRawContractStateResponse, QuerySmartContractStateRequest,
+    QuerySmartContractStateResponse,
 };
 use cosmos_sdk_proto::prost::Message;
 use cosmos_sdk_proto::traits::MessageExt;
@@ -135,6 +136,13 @@ fn parse_cosmos_grpc_query(
             let req = QueryContractInfoRequest::decode(data).map_err(CosmosError::from)?;
             let contract_addr = AccountId::parse_string(&req.address)?;
             let query = WasmQuery::ContractInfo { contract_addr };
+            Ok(Some(query.into()))
+        }
+        "/cosmwasm.wasm.v1.Query/ContractsByCode" => {
+            let req = QueryContractsByCodeRequest::decode(data).map_err(CosmosError::from)?;
+            // TODO: care about pagination
+            let code_id = req.code_id;
+            let query = WasmQuery::ContractsByCode { code_id };
             Ok(Some(query.into()))
         }
         "/cosmwasm.wasm.v1.Query/RawContractState" => {
@@ -270,24 +278,27 @@ pub fn encode_wasm_response(res: WasmQueryResponse) -> Vec<u8> {
             }),
         }
         .encode_to_vec(),
-        WasmQueryResponse::ContractInfo(info) => {
-            QueryContractInfoResponse {
-                address: "".to_string(), // TODO: do we need the queried address? expose more info here
-                contract_info: Some(cosmos_sdk_proto::cosmwasm::wasm::v1::ContractInfo {
-                    code_id: info.code_id,
-                    creator: info.creator.to_string(),
-                    admin: info.admin.map(|s| s.to_string()).unwrap_or_default(),
-                    label: info.label,
-                    ibc_port_id: info.ibc_port.unwrap_or_default(),
-                    created: Some(AbsoluteTxPosition {
-                        block_height: info.created,
-                        tx_index: 0,
-                    }),
-                    extension: None,
+        WasmQueryResponse::ContractInfo(info) => QueryContractInfoResponse {
+            address: "".to_string(), // TODO: do we need the queried address? expose more info here
+            contract_info: Some(cosmos_sdk_proto::cosmwasm::wasm::v1::ContractInfo {
+                code_id: info.code_id,
+                creator: info.creator.to_string(),
+                admin: info.admin.map(|s| s.to_string()).unwrap_or_default(),
+                label: info.label,
+                ibc_port_id: info.ibc_port.unwrap_or_default(),
+                created: Some(AbsoluteTxPosition {
+                    block_height: info.created,
+                    tx_index: 0,
                 }),
-            }
-            .encode_to_vec()
+                extension: None,
+            }),
         }
+        .encode_to_vec(),
+        WasmQueryResponse::ContractsByCode(c) => QueryContractsByCodeResponse {
+            contracts: c.contracts.iter().map(|x| x.to_string()).collect(),
+            pagination: None, // TODO
+        }
+        .encode_to_vec(),
     }
 }
 

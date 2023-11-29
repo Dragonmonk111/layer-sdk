@@ -3,13 +3,14 @@ use cosmwasm_vm::{Checksum, VmError};
 use sha2::{Digest, Sha256};
 
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Reply, ReplyOn,
-    SubMsg, SubMsgResponse,
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Order, Reply,
+    ReplyOn, SubMsg, SubMsgResponse,
 };
 
 use pulsar_std::api::MsgResponse;
 use pulsar_std::response::{
-    CodeInfoResponse, ContractInfoResponse, QueryResponse, WasmQueryResponse,
+    CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, QueryResponse,
+    WasmQueryResponse,
 };
 use pulsar_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
@@ -665,6 +666,26 @@ impl Wasm {
                     pinned,
                 };
                 WasmQueryResponse::CodeInfo(resp)
+            }
+            WasmQuery::ContractsByCode { code_id } => {
+                // TODO: new data structure to make this efficient
+                // Currently loops through all contracts and filters. Really needs secondary index
+                let contracts = CONTRACTS
+                    .range(storage, meter, None, None, Order::Ascending)?
+                    .filter_map(|r| match r {
+                        Err(e) => Some(Err(e)),
+                        Ok((k, v)) => {
+                            if v.code_id == code_id {
+                                Some(Ok(k))
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let resp = ContractsByCodeResponse { contracts };
+                WasmQueryResponse::ContractsByCode(resp)
             }
         };
         Ok(QueryResponse::Wasm(resp))
