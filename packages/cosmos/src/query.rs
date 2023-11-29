@@ -58,7 +58,7 @@ pub fn parse_cosmos_query(path: &str, data: Bytes, chain_id: &str) -> Result<Que
             parse_app_query(fragments[2], data, chain_id)
         }
         QUERY_PATH_STORE => parse_store_query(&fragments[2..], data),
-        p => Err(QueryError::UnsupportedPath(p.to_string())),
+        _ => Err(QueryError::UnsupportedPath(path.to_string())),
     }
 }
 
