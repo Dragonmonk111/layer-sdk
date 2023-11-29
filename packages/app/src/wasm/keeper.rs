@@ -670,8 +670,9 @@ impl Wasm {
             WasmQuery::ContractsByCode { code_id } => {
                 // TODO: new data structure to make this efficient
                 // Currently loops through all contracts and filters. Really needs secondary index
+                let wasm_store = prefixed_read(storage, NAMESPACE_WASM);
                 let contracts = CONTRACTS
-                    .range(storage, meter, None, None, Order::Ascending)?
+                    .range(&wasm_store, meter, None, None, Order::Ascending)?
                     .filter_map(|r| match r {
                         Err(e) => Some(Err(e)),
                         Ok((k, v)) => {
