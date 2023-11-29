@@ -149,7 +149,7 @@ impl Wasm {
             .unwrap_or_default()
             + 1;
         CONTRACT_COUNTER.save(&mut wasm_store, meter, &counter)?;
-        build_instantiate_address(&sender, code_id, counter)
+        build_instantiate_address(sender, code_id, counter)
     }
 
     fn next_id(&self, wasm_store: &mut dyn Storage, meter: &GasMeter) -> Result<u64, PulsarError> {
@@ -481,6 +481,10 @@ impl Wasm {
         Ok(resp)
     }
 
+    /// Internal function only, combining instantiate and instantiate2 common path.
+    /// I know there are way too many args, but no one should use this besides two cases
+    /// right above it....
+    #[allow(clippy::too_many_arguments)]
     fn do_instantiate(
         &self,
         storage: &mut dyn Storage,
@@ -498,7 +502,7 @@ impl Wasm {
     ) -> PulsarResult<MsgResponse> {
         let sender = signer;
 
-        // TODO: reserve and auth account and ensure it is not already taken
+        // reserve and auth account and ensure it is not already taken
         sm.auth
             .claim_internal_account(storage, meter, &contract_addr)?;
 
@@ -522,7 +526,7 @@ impl Wasm {
                 funds.clone(),
             )?;
         }
-        let info = build_info(&sender, funds);
+        let info = build_info(sender, funds);
 
         // call instantiate on cache
         let env = build_env(block, &contract_addr);

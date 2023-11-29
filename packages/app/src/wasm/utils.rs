@@ -86,3 +86,101 @@ impl From<Instantiate2AddressError> for PulsarError {
         PulsarError::Wasm(WasmError::Instantiate2Error(value))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use hex_literal::hex;
+
+    // test vectors from cosmwasm-std
+    #[test]
+    fn build_instantiate_2_address_works() {
+        let checksum1 = hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5");
+        let creator1 = AccountId::new(&hex!("9999999999aaaaaaaaaabbbbbbbbbbcccccccccc")).unwrap();
+        let salt1 = hex!("61");
+        let salt2 = hex!("aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbbbcc221100acadae");
+        let msg1: &[u8] = b"";
+        let msg2: &[u8] = b"{}";
+        let msg3: &[u8] = b"{\"some\":123,\"structure\":{\"nested\":[\"ok\",true]}}";
+
+        // No msg
+        let expected = AccountId::new(&hex!(
+            "5e865d3e45ad3e961f77fd77d46543417ced44d924dc3e079b5415ff6775f847"
+        ))
+        .unwrap();
+        assert_eq!(
+            build_instantiate_2_address(&checksum1, &creator1, &salt1, msg1).unwrap(),
+            expected
+        );
+
+        // With msg
+        let expected = AccountId::new(&hex!(
+            "0995499608947a5281e2c7ebd71bdb26a1ad981946dad57f6c4d3ee35de77835"
+        ))
+        .unwrap();
+        assert_eq!(
+            build_instantiate_2_address(&checksum1, &creator1, &salt1, msg2).unwrap(),
+            expected
+        );
+
+        // Long msg
+        let expected = AccountId::new(&hex!(
+            "83326e554723b15bac664ceabc8a5887e27003abe9fbd992af8c7bcea4745167"
+        ))
+        .unwrap();
+        assert_eq!(
+            build_instantiate_2_address(&checksum1, &creator1, &salt1, msg3).unwrap(),
+            expected
+        );
+
+        // Long salt
+        let expected = AccountId::new(&hex!(
+            "9384c6248c0bb171e306fd7da0993ec1e20eba006452a3a9e078883eb3594564"
+        ))
+        .unwrap();
+        assert_eq!(
+            build_instantiate_2_address(&checksum1, &creator1, &salt2, b"").unwrap(),
+            expected
+        );
+
+        // Salt too short or too long
+        let empty = Vec::<u8>::new();
+        assert!(matches!(
+            build_instantiate_2_address(&checksum1, &creator1, &empty, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidSaltLength
+            ))
+        ));
+        let too_long = vec![0x11; 65];
+        assert!(matches!(
+            build_instantiate_2_address(&checksum1, &creator1, &too_long, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidSaltLength
+            ))
+        ));
+
+        // invalid checksum length
+        let broken_cs = hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2");
+        assert!(matches!(
+            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidChecksumLength
+            ))
+        ));
+        let broken_cs = hex!("");
+        assert!(matches!(
+            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidChecksumLength
+            ))
+        ));
+        let broken_cs = hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa");
+        assert!(matches!(
+            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidChecksumLength
+            ))
+        ));
+    }
+}
