@@ -40,15 +40,3 @@ A quick way to test code is not to run the full docker setup, but rather just ru
 ## MSRV
 
 This requires Rust 1.73 or higher. We use the latest stable version of Rust.
-
-## How much is this worth?
-
-Interesting estimate of the cost of developing this project. This is based on the following command:
-
-`scc --exclude-dir proto,packages/proto,gateway`
-
-```
-Estimated Cost to Develop (organic) $473,361
-Estimated Schedule Effort (organic) 10.35 months
-Estimated People Required (organic) 4.06
-```
