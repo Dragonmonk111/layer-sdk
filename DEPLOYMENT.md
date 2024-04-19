@@ -102,7 +102,7 @@ TODO: also with certbot for ssl certificates
 
 ```
 cd integration
-npm install
+npm ci
 # change hostName variable in testutils.spec.ts to the IP of the server
 npm run test
 ```

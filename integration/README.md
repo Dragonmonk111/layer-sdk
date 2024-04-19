@@ -50,6 +50,6 @@ If you have any surprising failures, wipe out `~/.pulse-test` and repeat the abo
 steps to get a fresh node to test against.
 
 ```shell
-npm install
+npm ci
 npm run test
 ```
