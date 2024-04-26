@@ -1,20 +1,21 @@
 # Usage:
+# ./scripts/build_docker.sh
 # ./scripts/reset_volumes.sh
 # docker compose up
 # cd integration && npm ci &&  npm run test
 # open http://localhost:8000
 
-version: "3"
+# version: '3.8'
 
 volumes:
-  pulsar_data:
+  lay3r_data:
     external: true
   comet_data:
     external: true
 
 services:
-  pulsariumd:
-    image: "pulsar/pulsariumd:latest"
+  lay3r:
+    image: "ghcr.io/lay3rlabs/lay3rd:latest"
     expose:
       # abci server only for cometbft
       - "26658"
@@ -22,8 +23,10 @@ services:
       # open grpc server
       - "9090:9090"
     volumes:
-      - pulsar_data:/root/.pulsar
+      - lay3r_data:/root/.pulsar
     command: ["pulsariumd"]
+    depends_on:
+      - jaeger
   cometbft:
     image: "cometbft/cometbft:v0.38.0"
     expose:
@@ -32,9 +35,11 @@ services:
     ports:
       - "26656:26656"
       - "26657:26657"
-    command: ["start", "--proxy_app", "tcp://pulsariumd:26658"]
+    command: ["start", "--proxy_app", "tcp://lay3r:26658"]
     volumes:
       - comet_data:/cometbft
+    depends_on:
+      - lay3r
   jaeger:
     image: jaegertracing/all-in-one:1.46
     expose:
@@ -44,12 +49,14 @@ services:
     ports:
       - "8080:16686"
   gateway:
-    image: "pulsar/gateway:latest"
+    image: "ghcr.io/lay3rlabs/gateway:latest"
     ports:
       # rest port
       - "1317:1317"
-    # connect to the grpc endpoint on pulsariumd
-    command: ["/app", "-grpc-server-endpoint", "pulsariumd:9090"]
+    # connect to the grpc endpoint on lay3r
+    command: ["/app", "-grpc-server-endpoint", "lay3r:9090"]
+    depends_on:
+      - lay3r
   # vectis:
   #   image: "pulsar/vectis-todo:latest"
   #   ports:
