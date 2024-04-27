@@ -4,7 +4,7 @@ set -eux
 
 ALPINE="alpine:latest"
 
-ABCI_VOL=pulsar_data
+ABCI_VOL=lay3r_data
 docker volume rm -f "$ABCI_VOL"
 docker volume create "$ABCI_VOL"
 
