@@ -1,49 +1,27 @@
 # Build:
 #   docker build -t ghcr.io/lay3rlabs/faucet:latest -f Dockerfile.faucet .
 # Run:
-#   docker run --rm confio/faucet:manual version
+#   docker run --rm ghcr.io/lay3rlabs/faucet:latest version
 #
 # During the build step the working directory must be the repo root such that the
 # app has access to all installed dependencies.
 
-# update to node 20?
-FROM debian:bullseye as build-env
+FROM node:20-slim as build-env
 
-ADD . /app
+RUN apt-get update && apt-get install -y libusb-1.0-0-dev git
+RUN git clone -b v0.32.3 --depth 1 https://github.com/cosmos/cosmjs.git /app
+
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y libusb-1.0-0-dev git curl
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-# RUN ln -sf python3 /usr/bin/python
-RUN export NVM_DIR="$HOME/.nvm"
-RUN [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-RUN nvm install v20
-RUN npm install -g yarn
-
-RUN git clone -b v0.32.3 --depth 1 https://github.com/cosmos/cosmjs.git
-WORKDIR /app/cosmjs
-# RUN rm yarn.lock && yarn install && yarn run build
-# RUN yarn install --immutable --immutable-cache --check-cache
 RUN yarn cache clean && yarn install
 RUN yarn run build
 RUN (cd packages/faucet && SKIP_BUILD=1 yarn pack-node)
 
-# Use Alpine and install Node.js which is 50% smaller than the -alpine version of the node
-# image (53 MB including the faucet app).
-FROM debian:bookworm-slim
-# Installs node 18.19
-RUN apt update && apt -y install nodejs
+## REAL BUILD ##
+# Using debian not alpine so the install works cleaner (it is 200MB not 50MB though...)
+FROM node:20-slim
 
 COPY --from=build-env /app/packages/faucet /app/packages/faucet
 WORKDIR /app
 
 EXPOSE 8000
 ENTRYPOINT ["/app/packages/faucet/bin/cosmos-faucet-dist"]
-
-
-# $ git checkout v0.32.3
-# $ node --version
-# v20.10.0
-# $ yarn --version
-# 3.8.0
-# $ yarn install
