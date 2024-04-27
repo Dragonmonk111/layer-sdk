@@ -7,3 +7,4 @@ set -eux
 
 docker push ghcr.io/lay3rlabs/gateway:latest
 docker push ghcr.io/lay3rlabs/lay3rd:latest
+docker push ghcr.io/lay3rlabs/faucet:latest

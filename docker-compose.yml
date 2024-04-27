@@ -3,7 +3,7 @@
 # ./scripts/reset_volumes.sh
 # docker compose up
 # cd integration && npm ci &&  npm run test
-# open http://localhost:8000
+# open http://localhost:8080
 
 # version: '3.8'
 
@@ -57,6 +57,23 @@ services:
     command: ["/app", "-grpc-server-endpoint", "lay3r:9090"]
     depends_on:
       - lay3r
+  faucet:
+    image: "ghcr.io/lay3rlabs/faucet:latest"
+    # Setup based on https://github.com/cosmos/cosmjs/tree/main/packages/faucet#working-with-docker
+    env_file:
+      - ./faucet.env
+    environment:
+      - FAUCET_CONCURRENCY=3
+      - FAUCET_ADDRESS_PREFIX=pulsar
+      - FAUCET_TOKENS=upulse
+      - FAUCET_GAS_PRICE=0.025upulse
+    ports:
+      - "8000:8000"
+    command: ["start", "http://cometbft:26657"]
+    depends_on:
+      - cometbft
+    restart: unless-stopped
+
   # vectis:
   #   image: "pulsar/vectis-todo:latest"
   #   ports:

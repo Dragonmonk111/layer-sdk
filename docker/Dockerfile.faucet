@@ -1,0 +1,27 @@
+# Build:
+#   docker build -t ghcr.io/lay3rlabs/faucet:latest -f Dockerfile.faucet .
+# Run:
+#   docker run --rm ghcr.io/lay3rlabs/faucet:latest version
+#
+# During the build step the working directory must be the repo root such that the
+# app has access to all installed dependencies.
+
+FROM node:20-slim as build-env
+
+RUN apt-get update && apt-get install -y libusb-1.0-0-dev git
+RUN git clone -b v0.32.3 --depth 1 https://github.com/cosmos/cosmjs.git /app
+
+WORKDIR /app
+RUN yarn cache clean && yarn install
+RUN yarn run build
+RUN (cd packages/faucet && SKIP_BUILD=1 yarn pack-node)
+
+## REAL BUILD ##
+# Using debian not alpine so the install works cleaner (it is 200MB not 50MB though...)
+FROM node:20-slim
+
+COPY --from=build-env /app/packages/faucet /app/packages/faucet
+WORKDIR /app
+
+EXPOSE 8000
+ENTRYPOINT ["/app/packages/faucet/bin/cosmos-faucet-dist"]
