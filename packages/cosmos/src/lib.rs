@@ -1,4 +1,5 @@
 mod error;
+mod legacy;
 mod msg;
 mod pubkey;
 mod query;

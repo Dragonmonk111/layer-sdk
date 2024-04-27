@@ -8,9 +8,10 @@ use cosmwasm_std::{coin, Binary, Coin};
 use sha2::{Digest, Sha256};
 use tracing::trace_span;
 
-use pulsar_std::required_signer;
+use pulsar_std::{required_signer, Msg};
 use pulsar_std::{FeeInfo, SignedTx, SigningInfo, TxError};
 
+use crate::legacy::StdSignDoc;
 use crate::{parse_cosmos_msg, parse_cosmos_pubkey, CosmosError};
 
 pub const FIXED_ACCOUNT_NUMBER: u64 = 17;
@@ -28,7 +29,7 @@ pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<pulsar_std::Tx, T
 
     // other needed info
     let fee = get_fee(&tx)?;
-    let signing_info = get_signing_info(&tx, hashable)?;
+    let signing_info = get_signing_info(&tx, hashable, &msgs, &fee, &tx.body.memo)?;
     let timeout_height = match tx.body.timeout_height.value() {
         0 => None,
         v => Some(v),
@@ -51,7 +52,7 @@ pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<pulsar_std::Tx, T
 }
 
 struct HashableMessage {
-    doc: SignDoc
+    doc: SignDoc,
 }
 
 impl HashableMessage {
@@ -61,12 +62,22 @@ impl HashableMessage {
         Ok(message_hash.into())
     }
 
-    fn hash_legacy_mode(self) -> Result<Binary, CosmosError> {
-        todo!()
+    fn hash_legacy_mode(
+        self,
+        msgs: &[Msg],
+        fee: &FeeInfo,
+        sequence: u64,
+        memo: &str,
+    ) -> Result<Binary, CosmosError> {
+        let doc = StdSignDoc::build(self.doc, msgs, fee, sequence, memo);
+        Ok(doc.to_bytes()?.into())
     }
 }
 
-fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, HashableMessage), CosmosError> {
+fn parse_raw_tx(
+    bytes: &[u8],
+    chain_id: &str,
+) -> Result<(cosmrs::Tx, HashableMessage), CosmosError> {
     // get raw format for accurate signing info (to validate sig)
     let raw = TxRaw::decode(bytes)?;
     // FIXME: add tx hash here as well from TxRaw?
@@ -77,7 +88,7 @@ fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, HashableMes
         chain_id: chain_id.to_string(),
         account_number: FIXED_ACCOUNT_NUMBER,
     };
-    let hashable = HashableMessage{doc};
+    let hashable = HashableMessage { doc };
 
     // parse into cosmrs::Tx so we can understand what we have
     let span = trace_span!("cosmrs::Tx::from_bytes").entered();
@@ -87,8 +98,13 @@ fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, HashableMes
     Ok((tx, hashable))
 }
 
-
-fn get_signing_info(tx: &cosmrs::Tx, hashable: HashableMessage) -> Result<SigningInfo, TxError> {
+fn get_signing_info(
+    tx: &cosmrs::Tx,
+    hashable: HashableMessage,
+    msgs: &[Msg],
+    fee: &FeeInfo,
+    memo: &str,
+) -> Result<SigningInfo, TxError> {
     let sigs = &tx.signatures;
     let signature = match sigs.len() {
         0 => Err(TxError::NoSigner),
@@ -116,7 +132,7 @@ fn get_signing_info(tx: &cosmrs::Tx, hashable: HashableMessage) -> Result<Signin
             // FIXME: some better way of handling this?? SIGN_MODE_UNSPECIFIED should only be used for simulate
             // For now, we treat it like direct
             SignMode::Direct | SignMode::Unspecified => Ok(hashable.hash_direct_mode()?),
-            SignMode::LegacyAminoJson => Ok(hashable.hash_legacy_mode()?),
+            SignMode::LegacyAminoJson => Ok(hashable.hash_legacy_mode(msgs, fee, sequence, memo)?),
             m => Err(TxError::UnsupportedSigningMode(m.as_str_name())),
         },
         _ => Err(TxError::UnsupportedSigningMode("multi")),
