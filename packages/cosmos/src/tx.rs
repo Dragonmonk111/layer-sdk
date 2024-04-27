@@ -15,34 +15,12 @@ use crate::{parse_cosmos_msg, parse_cosmos_pubkey, CosmosError};
 
 pub const FIXED_ACCOUNT_NUMBER: u64 = 17;
 
-fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, Vec<u8>), CosmosError> {
-    // get raw format for accurate signing info (to validate sig)
-    let raw = TxRaw::decode(bytes)?;
-    // FIXME: add tx hash here as well from TxRaw?
-    // FIXME: we need to do this in some match statement - only works for direct mode
-    let doc = SignDoc {
-        body_bytes: raw.body_bytes,
-        auth_info_bytes: raw.auth_info_bytes,
-        chain_id: chain_id.to_string(),
-        account_number: FIXED_ACCOUNT_NUMBER,
-    };
-    let sign_bytes = doc.into_bytes()?;
-    let message_hash = Sha256::digest(sign_bytes).to_vec();
-
-    // parse into cosmrs::Tx so we can understand what we have
-    let span = trace_span!("cosmrs::Tx::from_bytes").entered();
-    let tx = cosmrs::Tx::from_bytes(bytes)?;
-    span.exit();
-
-    Ok((tx, message_hash))
-}
-
 // This is parsed from cosmrs::Raw and cosmrs::Tx
 /// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
 /// Extracts all useful info from the Tx in a simpler format for us
 pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<pulsar_std::Tx, TxError> {
     let _span = trace_span!("parse_cosmos_tx").entered();
-    let (tx, message_hash) = parse_raw_tx(&bytes, chain_id)?;
+    let (tx, hashable) = parse_raw_tx(&bytes, chain_id)?;
 
     let msgs: Result<Vec<_>, _> = tx.body.messages.iter().map(parse_cosmos_msg).collect();
     let msgs = msgs?;
@@ -50,7 +28,7 @@ pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<pulsar_std::Tx, T
 
     // other needed info
     let fee = get_fee(&tx)?;
-    let signing_info = get_signing_info(&tx, message_hash.into())?;
+    let signing_info = get_signing_info(&tx, hashable)?;
     let timeout_height = match tx.body.timeout_height.value() {
         0 => None,
         v => Some(v),
@@ -72,7 +50,45 @@ pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<pulsar_std::Tx, T
     Ok(pulsar_std::Tx::Signed(tx))
 }
 
-pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Binary) -> Result<SigningInfo, TxError> {
+struct HashableMessage {
+    doc: SignDoc
+}
+
+impl HashableMessage {
+    fn hash_direct_mode(self) -> Result<Binary, CosmosError> {
+        let sign_bytes = self.doc.into_bytes()?;
+        let message_hash = Sha256::digest(sign_bytes).to_vec();
+        Ok(message_hash.into())
+    }
+
+    fn hash_legacy_mode(self) -> Result<Binary, CosmosError> {
+        todo!()
+    }
+}
+
+fn parse_raw_tx(bytes: &[u8], chain_id: &str) -> Result<(cosmrs::Tx, HashableMessage), CosmosError> {
+    // get raw format for accurate signing info (to validate sig)
+    let raw = TxRaw::decode(bytes)?;
+    // FIXME: add tx hash here as well from TxRaw?
+    // FIXME: we need to do this in some match statement - only works for direct mode
+    let doc = SignDoc {
+        body_bytes: raw.body_bytes,
+        auth_info_bytes: raw.auth_info_bytes,
+        chain_id: chain_id.to_string(),
+        account_number: FIXED_ACCOUNT_NUMBER,
+    };
+    let hashable = HashableMessage{doc};
+
+    // parse into cosmrs::Tx so we can understand what we have
+    let span = trace_span!("cosmrs::Tx::from_bytes").entered();
+    let tx = cosmrs::Tx::from_bytes(bytes)?;
+    span.exit();
+
+    Ok((tx, hashable))
+}
+
+
+fn get_signing_info(tx: &cosmrs::Tx, hashable: HashableMessage) -> Result<SigningInfo, TxError> {
     let sigs = &tx.signatures;
     let signature = match sigs.len() {
         0 => Err(TxError::NoSigner),
@@ -95,12 +111,12 @@ pub fn get_signing_info(tx: &cosmrs::Tx, message_hash: Binary) -> Result<Signing
         .transpose()?;
 
     // assert we have sign-mode-direct (need to add legacy amino support later)
-    match info.mode_info {
+    let message_hash = match info.mode_info {
         cosmrs::tx::mode_info::ModeInfo::Single(s) => match s.mode {
             // FIXME: some better way of handling this?? SIGN_MODE_UNSPECIFIED should only be used for simulate
             // For now, we treat it like direct
-            SignMode::Direct | SignMode::Unspecified => Ok(()),
-            SignMode::LegacyAminoJson => Err(TxError::UnsupportedSigningMode("legacy_amino")),
+            SignMode::Direct | SignMode::Unspecified => Ok(hashable.hash_direct_mode()?),
+            SignMode::LegacyAminoJson => Ok(hashable.hash_legacy_mode()?),
             m => Err(TxError::UnsupportedSigningMode(m.as_str_name())),
         },
         _ => Err(TxError::UnsupportedSigningMode("multi")),
@@ -233,5 +249,11 @@ mod test {
 
         // validate
         tx.signing_info.validate_signature().unwrap();
+    }
+
+    #[test]
+    fn happy_legacy_tx_signing() {
+        // TODO: find some test vectors
+        assert_eq!(1, 1)
     }
 }
