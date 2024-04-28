@@ -69,8 +69,9 @@ impl HashableMessage {
         sequence: u64,
         memo: &str,
     ) -> Result<Binary, CosmosError> {
-        let doc = StdSignDoc::build(self.doc, msgs, fee, sequence, memo);
-        Ok(doc.to_bytes()?.into())
+        let sign_bytes = StdSignDoc::build(self.doc, msgs, fee, sequence, memo).to_bytes()?;
+        let message_hash = Sha256::digest(sign_bytes).to_vec();
+        Ok(message_hash.into())
     }
 }
 
