@@ -179,8 +179,8 @@ pub struct AminoMsgSend {
 
 #[derive(Serialize, Debug)]
 pub struct AminoMsgExecute {
-    pub funds: Vec<Coin>,
     pub contract: String,
+    pub funds: Vec<Coin>,
     pub msg: Box<RawValue>,
     pub sender: String,
 }
@@ -228,15 +228,19 @@ mod tests {
             age: 32,
             height: Some(187),
         };
+        let sender = AccountId::unchecked("funkychicken");
+        let contract_addr = AccountId::unchecked("blackholeson");
         let exec_msg = Msg::Wasm(WasmMsg::Execute { 
-            sender: AccountId::unchecked("slay3r1funkychicken"), 
-            contract_addr: AccountId::unchecked("slay3r1blackholeson"), 
+            sender: sender.clone(),
+            contract_addr: contract_addr.clone(),
             msg: serde_json::to_vec(&orig_msg).unwrap().into(), 
             funds: vec![],
         });
+        
         let amino_msg = AminoMsg::build(&exec_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        assert_eq!(output.as_str(), r#"{"age":32,"height":187,"name":"John Smith"}"#);
+        let expected = format!(r#"{{"type":"wasm/MsgExecuteContract","value":{{"contract":"{}","funds":[],"msg":{{"age":32,"height":187,"name":"John Smith"}},"sender":"{}"}}}}"#, contract_addr, sender);
+        assert_eq!(output, expected);
     }
 
 }
