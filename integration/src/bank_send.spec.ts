@@ -1,5 +1,5 @@
-import { coins, DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { Secp256k1HdWallet } from "@cosmjs/amino";
+import { coins, DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import {
   assertIsDeliverTxFailure,
   assertIsDeliverTxSuccess,
