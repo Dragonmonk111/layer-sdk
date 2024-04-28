@@ -1,4 +1,5 @@
 import { coins, DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
+import { Secp256k1HdWallet } from "@cosmjs/amino";
 import {
   assertIsDeliverTxFailure,
   assertIsDeliverTxSuccess,
@@ -51,7 +52,9 @@ describe("SigningStargateClient", () => {
 
   describe("sendTokens", () => {
     it("works with direct signer", async () => {
-      const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
+      const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
+      const addr = (await wallet.getAccounts())[0];
+      expect(addr.address).toEqual(faucet.address0);
       const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
         tendermintClient,
@@ -80,7 +83,7 @@ describe("SigningStargateClient", () => {
       expect(after).toEqual(amount[0]);
     });
 
-    xit("works with legacy Amino signer", async () => {
+    it("works with legacy Amino signer", async () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(

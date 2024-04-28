@@ -269,7 +269,7 @@ mod test {
 
     #[test]
     fn happy_legacy_tx_signing() {
-        // TODO: find some test vectors
+        // TODO: find some test vectors (or generate them from cosmjs)
         assert_eq!(1, 1)
     }
 }
