@@ -1,6 +1,6 @@
 use cosmwasm_std::{Binary, StdError};
 use serde::Serialize;
-use serde_json::value::RawValue;
+use serde_json::value::Value;
 
 use pulsar_std::{BankMsg, FeeInfo, Msg, WasmMsg};
 
@@ -166,9 +166,8 @@ impl AminoMsg {
 
 // TODO: test this
 // This must be recursively sorted JSON object!!!
-fn convert_message(msg: &Binary) -> Box<RawValue> {
-    let val: &RawValue = serde_json::from_slice(msg).unwrap();
-    val.to_owned()
+fn convert_message(msg: &Binary) -> Value {
+    serde_json::from_slice(msg).unwrap()
 }
 
 #[derive(Serialize, Debug)]
@@ -182,7 +181,7 @@ pub struct AminoMsgSend {
 pub struct AminoMsgExecute {
     pub contract: String,
     pub funds: Vec<Coin>,
-    pub msg: Box<RawValue>,
+    pub msg: Value,
     pub sender: String,
 }
 
@@ -193,33 +192,69 @@ pub struct AminoMsgInstantiate {
     pub code_id: String,
     pub funds: Vec<Coin>,
     pub label: String,
-    pub msg: Box<RawValue>,
+    pub msg: Value,
     pub sender: String,
 }
 
 #[cfg(test)]
 mod tests {
+    use serde::Deserialize;
     use pulsar_std::AccountId;
 
     use super::*;
 
     #[derive(Serialize)]
     pub struct DemoMsg {
+        pub name: String,
         pub age: u32,
         pub height: Option<u32>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    pub struct EmbeddedMessage {
         pub name: String,
+        pub age: u32,
+        pub items: Vec<SomeItem>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    pub struct SomeItem {
+        pub zeta: u32,
+        pub alpha: u32,
+    }
+
+    #[test]
+    fn try_manual_sorting() {
+        let orig_msg = EmbeddedMessage {
+            name: "John Smith".into(),
+            age: 32,
+            items: vec![SomeItem{ zeta: 25, alpha: 3}, SomeItem{ zeta: 10, alpha: 1}],
+        };
+        let msg = serde_json::to_vec(&orig_msg).unwrap();
+        let val: Value = serde_json::from_slice(&msg).unwrap();
+        let reserialized = serde_json::to_string(&val).unwrap();
+        println!("{:?}", reserialized);
+        // make sure this is properly sorted
+        let expected = r#"{"age":32,"items":[{"alpha":3,"zeta":25},{"alpha":1,"zeta":10}],"name":"John Smith"}"#;
+        assert_eq!(reserialized.as_str(), expected);
+
+        // ensure it parses back to the original array
+        let parsed: EmbeddedMessage = serde_json::from_str(&reserialized).unwrap();
+        assert_eq!(orig_msg, parsed);
     }
 
     #[test]
     fn check_convert_message() {
-        let orig_msg = DemoMsg {
+        let orig_msg = EmbeddedMessage {
             name: "John Smith".into(),
             age: 32,
-            height: Some(187),
+            items: vec![SomeItem{ zeta: 25, alpha: 3}, SomeItem{ zeta: 10, alpha: 1}],
         };
         let msg: Binary = serde_json::to_vec(&orig_msg).unwrap().into();
         let raw = convert_message(&msg);
-        assert_eq!(raw.get(), r#"{"age":32,"height":187,"name":"John Smith"}"#);
+        let reserialized = serde_json::to_string(&raw).unwrap();
+        let expected = r#"{"age":32,"items":[{"alpha":3,"zeta":25},{"alpha":1,"zeta":10}],"name":"John Smith"}"#;
+        assert_eq!(reserialized.as_str(), expected);
     }
 
     /*
@@ -264,7 +299,6 @@ mod tests {
         let expected = format!(r#"{{"type":"wasm/MsgExecuteContract","value":{{"contract":"{}","funds":[],"msg":{{"age":32,"height":187,"name":"John Smith"}},"sender":"{}"}}}}"#, contract_addr, sender);
         println!("{}", output);
         assert_eq!(output, expected);
-        assert_eq!(1, 2);
     }
 
     /*

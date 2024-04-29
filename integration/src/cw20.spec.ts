@@ -195,6 +195,8 @@ describe("Cw20 Test Cases", () => {
 
       // instantiate contract
       const initMsg = {
+        name: "pulsar",
+        symbol: "PULSE",
         decimals: 6,
         initial_balances: [
           {
@@ -202,23 +204,8 @@ describe("Cw20 Test Cases", () => {
             amount: "50000000", // 50 PULSE
           },
         ],
-        name: "pulsar",
-        symbol: "PULSE",
       };
 
-      // const initMsg = {
-      //   name: "pulsar",
-      //   symbol: "PULSE",
-      //   decimals: 6,
-      //   initial_balances: [
-      //     {
-      //       address: signer,
-      //       amount: "50000000", // 50 PULSE
-      //     },
-      //   ],
-      // };
-
-      // TODO: failure here
       const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", "auto", {
         memo: `Create a hackatom instance in deploy_hackatom.js`,
         admin: signer,
@@ -234,17 +221,10 @@ describe("Cw20 Test Cases", () => {
 
       const execMsg = {
         transfer: {
-          amount: "42000000",
           recipient: recipient,
+          amount: "42000000",
         },
       };
-      // const execMsg = {
-      //   transfer: {
-      //     recipient: recipient,
-      //     amount: "42000000",
-      //   },
-      // };
-      // TODO: failure here
       await client.execute(signer, contractAddress, execMsg, "auto");
 
       // query balances
@@ -253,6 +233,5 @@ describe("Cw20 Test Cases", () => {
       const yourBal2 = await client.queryContractSmart(contractAddress, { balance: { address: recipient } });
       expect(yourBal2.balance).toEqual("42000000");
     });
-
   });
 });
