@@ -214,7 +214,7 @@ mod fixtures {
     fn encode_balance_response_empty() {
         let request =
             QueryResponse::<PulsarError>::Bank(BankQueryResponse::Balance(BalanceResponse {
-                amount: coin(0, "upulse"),
+                amount: coin(0, "uslay"),
             }));
         let height = 46;
         let value = hex!("0A0B0A067570756C7365120130");
@@ -227,7 +227,7 @@ mod fixtures {
     fn encode_balance_response_full() {
         let request =
             QueryResponse::<PulsarError>::Bank(BankQueryResponse::Balance(BalanceResponse {
-                amount: coin(7890, "upulse"),
+                amount: coin(7890, "uslay"),
             }));
         let height = 47;
         let value = hex!("0A0E0A067570756C7365120437383930");
@@ -248,7 +248,7 @@ mod fixtures {
                 events: vec![vec![Event::new("transfer")
                     .add_attribute("recipient", "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2")
                     .add_attribute("sender", "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l")
-                    .add_attribute("amount", "2000000upulse")]],
+                    .add_attribute("amount", "2000000uslay")]],
             }),
         });
         let height = 46;
@@ -259,10 +259,10 @@ mod fixtures {
 
         // // response
         // let value = hex!("0A0B0A067570756C7365120130");
-        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "upulse", amount: Uint128(0) } }))
+        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "uslay", amount: Uint128(0) } }))
 
         // let value = hex!("0A0E0A067570756C7365120437383930");
-        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "upulse", amount: Uint128(7890) } }))
+        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "uslay", amount: Uint128(7890) } }))
     }
 
     fn build_query_success(value: &[u8], height: u64) -> tendermint_proto::abci::ResponseQuery {

@@ -24,7 +24,6 @@ pub struct RawConfig {
     pub lmdb: Option<String>,
 
     pub grpc: String,
-
     // /// The directory we read all files from (default $HOME/.slay3r)
     // pub basedir: String,
 }

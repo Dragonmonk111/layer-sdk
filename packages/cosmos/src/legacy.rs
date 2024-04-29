@@ -302,12 +302,12 @@ mod tests {
             code_id: 12345,
             label: "sticky".into(),
             msg: serde_json::to_vec(&orig_msg).unwrap().into(),
-            funds: vec![Coin::new(1234, "ucosm")],
+            funds: vec![Coin::new(1234, "uslay")],
         });
 
         let amino_msg = AminoMsg::build(&init_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","code_id":"12345","funds":[{"amount":"1234","denom":"ucosm"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","code_id":"12345","funds":[{"amount":"1234","denom":"uslay"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
         assert_eq!(output, expected);
     }
 

@@ -427,7 +427,7 @@ mod tests {
         let env = mock_env();
         let sender = AccountId::unchecked("Sillyness");
         let contract = AccountId::unchecked("My first cw20");
-        let info = mock_info(&sender.to_string(), &[coin(55_000, "upulse")]);
+        let info = mock_info(&sender.to_string(), &[coin(55_000, "uslay")]);
         let meter = GasMeter::infinite();
         let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();

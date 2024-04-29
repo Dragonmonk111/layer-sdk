@@ -128,7 +128,7 @@ mod fixtures {
 
         let expected = Query::Bank(BankQuery::Balance {
             address: must_id("pulsar1hyrlqyyd9yj79c4u75hyc6uhczehmj43x4pwhk"),
-            denom: "upulse".into(),
+            denom: "uslay".into(),
         });
         let query = query_request_from_proto(request, CHAIN_ID);
 
@@ -136,10 +136,10 @@ mod fixtures {
 
         // // response
         // let value = hex!("0A0B0A067570756C7365120130");
-        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "upulse", amount: Uint128(0) } }))
+        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "uslay", amount: Uint128(0) } }))
 
         // let value = hex!("0A0E0A067570756C7365120437383930");
-        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "upulse", amount: Uint128(7890) } }))
+        // let expected = Bank(Balance(BalanceResponse { amount: Coin { denom: "uslay", amount: Uint128(7890) } }))
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod fixtures {
                 sender: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
                 recipient: must_id("pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2"),
                 amount: vec![Coin {
-                    denom: "upulse".to_string(),
+                    denom: "uslay".to_string(),
                     amount: Uint128::new(2000000),
                 }],
             })],
@@ -189,7 +189,7 @@ mod fixtures {
 
         // // response
         // let value = hex!("0A080880ADE20410E52C12C3010A200A1E0A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E641A9E010A087472616E73666572123C0A09726563697069656E74122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E32180112390A0673656E646572122D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C180112190A06616D6F756E74120D323030303030307570756C73651801");
-        // let expected = Simulate(TxResult { gas: GasInfo { gas_used: 5733, gas_wanted: 10000000 }, result: Ok(TxResponse { data: [[]], events: [[Event { ty: "transfer", attributes: [Attribute { key: "recipient", value: "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2" }, Attribute { key: "sender", value: "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l" }, Attribute { key: "amount", value: "2000000upulse" }] }]] }) })
+        // let expected = Simulate(TxResult { gas: GasInfo { gas_used: 5733, gas_wanted: 10000000 }, result: Ok(TxResponse { data: [[]], events: [[Event { ty: "transfer", attributes: [Attribute { key: "recipient", value: "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2" }, Attribute { key: "sender", value: "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l" }, Attribute { key: "amount", value: "2000000uslay" }] }]] }) })
     }
 
     /*
@@ -213,7 +213,7 @@ mod fixtures {
                 sender: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
                 recipient: must_id("pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2"),
                 amount: vec![Coin {
-                    denom: "upulse".to_string(),
+                    denom: "uslay".to_string(),
                     amount: Uint128::new(2000000),
                 }],
             })],
@@ -242,7 +242,7 @@ mod fixtures {
 
         // // response
         // let value = hex!("0A080880ADE20410E52C12C3010A200A1E0A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E641A9E010A087472616E73666572123C0A09726563697069656E74122D70756C73617231386A6C6D7234637461356563677739366B7834306367766E7061713479737475346E33686E32180112390A0673656E646572122D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C180112190A06616D6F756E74120D323030303030307570756C73651801");
-        // let expected = Simulate(TxResult { gas: GasInfo { gas_used: 5733, gas_wanted: 10000000 }, result: Ok(TxResponse { data: [[]], events: [[Event { ty: "transfer", attributes: [Attribute { key: "recipient", value: "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2" }, Attribute { key: "sender", value: "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l" }, Attribute { key: "amount", value: "2000000upulse" }] }]] }) })
+        // let expected = Simulate(TxResult { gas: GasInfo { gas_used: 5733, gas_wanted: 10000000 }, result: Ok(TxResponse { data: [[]], events: [[Event { ty: "transfer", attributes: [Attribute { key: "recipient", value: "pulsar18jlmr4cta5ecgw96kx40cgvnpaq4ystu4n3hn2" }, Attribute { key: "sender", value: "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l" }, Attribute { key: "amount", value: "2000000uslay" }] }]] }) })
     }
     */
 

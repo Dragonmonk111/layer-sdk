@@ -5,7 +5,7 @@
   "chainName": "Pulsarium DevNet",
   "stakeCurrency": {
     "coinDenom": "PULSE",
-    "coinMinimalDenom": "upulse",
+    "coinMinimalDenom": "uslay",
     "coinDecimals": 6
   },
   "bech32Config": {
@@ -22,14 +22,14 @@
   "currencies": [
     {
       "coinDenom": "PULSE",
-      "coinMinimalDenom": "upulse",
+      "coinMinimalDenom": "uslay",
       "coinDecimals": 6
     }
   ],
   "feeCurrencies": [
     {
       "coinDenom": "PULSE",
-      "coinMinimalDenom": "upulse",
+      "coinMinimalDenom": "uslay",
       "coinDecimals": 6
     }
   ],

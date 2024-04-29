@@ -65,8 +65,8 @@ services:
     environment:
       - FAUCET_CONCURRENCY=3
       - FAUCET_ADDRESS_PREFIX=pulsar
-      - FAUCET_TOKENS=upulse
-      - FAUCET_GAS_PRICE=0.025upulse
+      - FAUCET_TOKENS=uslay
+      - FAUCET_GAS_PRICE=0.025uslay
     ports:
       - "8000:8000"
     command: ["start", "http://cometbft:26657"]

@@ -40,7 +40,7 @@
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       },
@@ -49,7 +49,7 @@
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       },
@@ -58,7 +58,7 @@
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       },
@@ -67,7 +67,7 @@
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       },
@@ -76,7 +76,7 @@
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       },
@@ -85,7 +85,7 @@
         "balance": [
           {
             "amount": "1000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       }

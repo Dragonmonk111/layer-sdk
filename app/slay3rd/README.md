@@ -82,7 +82,7 @@ Add the following to `~/.pulsarium/config/genesis.json`:
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       }

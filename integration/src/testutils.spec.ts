@@ -15,7 +15,7 @@ import { AuthInfo, SignDoc, TxBody } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 
 export const PREFIX = "pulsar";
 
-export const DENOM = "upulse";
+export const DENOM = "uslay";
 
 export function makeRandomAddressBytes(): Uint8Array {
   return Random.getBytes(20);
@@ -45,7 +45,7 @@ export const pulsarium = {
   denomStaking: DENOM,
   denomFee: DENOM,
   blockTime: 1_000, // ms
-  totalSupply: 21000000000, // upulse
+  totalSupply: 21000000000, // uslay
 };
 
 /** Setting to speed up testing */

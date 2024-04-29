@@ -512,7 +512,7 @@ mod tests {
     fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
         let sender = must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l");
         let recipient = must_id("pulsar1y5hl7x8hxl72dc9gu920eaz6l7vhl0lu264u06");
-        let denom: &str = "upulse";
+        let denom: &str = "uslay";
 
         let expected_gas = 16_000u64;
 
@@ -611,7 +611,7 @@ mod tests {
 
         // create proper tx (from cosmjs)
         tx.fee = FeeInfo {
-            fee: Some(coin(2500, "upulse")),
+            fee: Some(coin(2500, "uslay")),
             gas_limit: 100000,
         };
         tx.signing_info.signature = Binary::from(hex!("e5367dc058d8942bddc453eb1b61119bf71186693d8fd0f1683ff7a1b4666e3b67d32f3ddf52360e365099f72b2417a9d6034883032ad1ac97b48f73e754351c").as_slice());
