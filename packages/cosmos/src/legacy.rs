@@ -2,7 +2,7 @@ use cosmwasm_std::{Binary, StdError};
 use serde::Serialize;
 use serde_json::value::Value;
 
-use pulsar_std::{BankMsg, FeeInfo, Msg, WasmMsg};
+use slay3r_std::{BankMsg, FeeInfo, Msg, WasmMsg};
 
 // We must sort the keys alphabetically to get the "amino serialization"
 #[derive(Serialize, Debug)]
@@ -64,8 +64,8 @@ pub struct StdFee {
     // pub payer: Option<String>,
 }
 
-impl From<&pulsar_std::FeeInfo> for StdFee {
-    fn from(value: &pulsar_std::FeeInfo) -> Self {
+impl From<&slay3r_std::FeeInfo> for StdFee {
+    fn from(value: &slay3r_std::FeeInfo) -> Self {
         Self {
             amount: value.fee.iter().map(Into::into).collect(),
             gas: value.gas_limit.to_string(),
@@ -199,8 +199,8 @@ pub struct AminoMsgInstantiate {
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::Coin;
-    use pulsar_std::AccountId;
     use serde::Deserialize;
+    use slay3r_std::AccountId;
 
     use super::*;
 

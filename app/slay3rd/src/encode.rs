@@ -1,7 +1,7 @@
 // Convert from abci types into pulsar types
 
-use pulsar_cosmos::{parse_cosmos_query, parse_cosmos_tx};
-use pulsar_std::{QueryError, TxError};
+use slay3r_cosmos::{parse_cosmos_query, parse_cosmos_tx};
+use slay3r_std::{QueryError, TxError};
 
 use crate::convert::{
     consensus_params_from_proto, timestamp_from_proto, validator_updates_from_proto,
@@ -9,8 +9,8 @@ use crate::convert::{
 
 pub fn init_request_from_proto(
     request: tendermint_proto::abci::RequestInitChain,
-) -> pulsar_std::api::InitChainRequest {
-    pulsar_std::api::InitChainRequest {
+) -> slay3r_std::api::InitChainRequest {
+    slay3r_std::api::InitChainRequest {
         time: timestamp_from_proto(request.time.unwrap()),
         chain_id: request.chain_id,
         consensus_params: consensus_params_from_proto(request.consensus_params.unwrap()),
@@ -26,7 +26,7 @@ pub fn query_request_from_proto(
     request: tendermint_proto::abci::RequestQuery,
     // we need to pass in out-of-bound info for simulate
     chain_id: &str,
-) -> Result<pulsar_std::Query, tendermint_proto::abci::ResponseQuery> {
+) -> Result<slay3r_std::Query, tendermint_proto::abci::ResponseQuery> {
     if request.height > 0 {
         let err = QueryError::ParseError("Cannot query at historical height".into());
         return Err(crate::decode::query_error(err, 0));
@@ -42,14 +42,14 @@ pub fn query_request_from_proto(
 pub fn check_request_from_proto(
     request: tendermint_proto::abci::RequestCheckTx,
     chain_id: &str,
-) -> Result<pulsar_std::Tx, TxError> {
+) -> Result<slay3r_std::Tx, TxError> {
     parse_cosmos_tx(request.tx, chain_id)
 }
 
 pub fn finalize_request_from_proto(
     request: tendermint_proto::abci::RequestFinalizeBlock,
     chain_id: &str,
-) -> pulsar_std::api::Block {
+) -> slay3r_std::api::Block {
     let txs = request
         .txs
         .into_iter()
@@ -63,14 +63,14 @@ pub fn finalize_request_from_proto(
             .votes
             .into_iter()
             .filter_map(|vote| {
-                vote.validator.map(|v| pulsar_std::api::Validator {
+                vote.validator.map(|v| slay3r_std::api::Validator {
                     address: v.address.into(),
                     power: v.power.try_into().unwrap(),
                 })
             })
             .collect(),
     };
-    pulsar_std::api::Block {
+    slay3r_std::api::Block {
         txs,
         height: request.height.try_into().unwrap(),
         time: timestamp_from_proto(request.time.unwrap()),
@@ -87,12 +87,12 @@ mod fixtures {
 
     use cosmwasm_std::{Binary, Coin, Uint128};
     use hex_literal::hex;
-    use pulsar_std::{
+    use slay3r_std::{
         must_id, AuthQuery, BankMsg, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo,
         Tx,
     };
 
-    const CHAIN_ID: &str = "pulsar-dev-1";
+    const CHAIN_ID: &str = "sla-dev-1";
 
     #[test]
     fn parse_account_query() {
@@ -167,7 +167,7 @@ mod fixtures {
             signer: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
             signing_info: SigningInfo {
                 message_hash: Binary::from(
-                    hex!("c228ea379884d11980364c72afe2f670b5bc3968f3c3d7f111b260bf94a8900e")
+                    hex!("c6e7ddca8af91d1bedeaeee6ec3e4ed0e4a52544d4573f2e6381393f2f7b1d7d")
                         .as_slice(),
                 ),
                 sequence: 3,

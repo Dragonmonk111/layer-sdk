@@ -5,8 +5,8 @@ use cosmwasm_vm::{
     call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
     AnalysisReport, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
 };
-use pulsar_std::{AccountId, GasMeter};
-use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
+use slay3r_std::{AccountId, GasMeter};
+use slay3r_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
 use crate::{wasm::keeper::contract_storage, StateMachine};
 
@@ -404,8 +404,8 @@ mod tests {
         to_json_vec, Order, Uint128,
     };
     use cw20::Cw20Coin;
-    use pulsar_std::AccountId;
-    use pulsar_storage::{MemoryStore, PersistentStorage};
+    use slay3r_std::AccountId;
+    use slay3r_storage::{MemoryStore, PersistentStorage};
 
     use crate::AppConfig;
 

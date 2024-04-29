@@ -10,8 +10,8 @@ use cosmwasm_vm::{
     Storage as BackendStorage,
 };
 
-use pulsar_std::{AccountId, AccountIdError, GasError, GasMeter};
-use pulsar_storage::{ReadonlyStorage, Storage};
+use slay3r_std::{AccountId, AccountIdError, GasError, GasMeter};
+use slay3r_storage::{ReadonlyStorage, Storage};
 
 use crate::{PulsarError, StateMachine};
 
@@ -163,27 +163,27 @@ impl VmQuerier {
             })?;
         let query = cosmwasm_query_to_pulsar(cosmos)?;
         let response = self.sm.query(self.storage, meter, &self.block, query)?;
-        pulsar_response_to_cosmwasm(response)
+        slay3r_response_to_cosmwasm(response)
     }
 }
 
 fn cosmwasm_query_to_pulsar(
     query: QueryRequest<CustomQuery>,
-) -> Result<pulsar_std::Query, QueryError> {
+) -> Result<slay3r_std::Query, QueryError> {
     match query {
         QueryRequest::Bank(bank) => match bank {
             cosmwasm_std::BankQuery::Balance { address, denom } => {
                 let address =
                     AccountId::parse_string(&address).map_err(account_error_to_backend)?;
-                Ok(pulsar_std::BankQuery::Balance { address, denom }.into())
+                Ok(slay3r_std::BankQuery::Balance { address, denom }.into())
             }
             cosmwasm_std::BankQuery::AllBalances { address } => {
                 let address =
                     AccountId::parse_string(&address).map_err(account_error_to_backend)?;
-                Ok(pulsar_std::BankQuery::AllBalances { address }.into())
+                Ok(slay3r_std::BankQuery::AllBalances { address }.into())
             }
             cosmwasm_std::BankQuery::Supply { denom } => {
-                Ok(pulsar_std::BankQuery::Supply { denom }.into())
+                Ok(slay3r_std::BankQuery::Supply { denom }.into())
             }
             // TODO: BankQuery::DenomMetadata, AllDenomMetadata
             x => unsupported_request(&x),
@@ -192,17 +192,17 @@ fn cosmwasm_query_to_pulsar(
             cosmwasm_std::WasmQuery::Smart { contract_addr, msg } => {
                 let contract_addr =
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
-                Ok(pulsar_std::WasmQuery::Smart { contract_addr, msg }.into())
+                Ok(slay3r_std::WasmQuery::Smart { contract_addr, msg }.into())
             }
             cosmwasm_std::WasmQuery::Raw { contract_addr, key } => {
                 let contract_addr =
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
-                Ok(pulsar_std::WasmQuery::Raw { contract_addr, key }.into())
+                Ok(slay3r_std::WasmQuery::Raw { contract_addr, key }.into())
             }
             cosmwasm_std::WasmQuery::ContractInfo { contract_addr } => {
                 let contract_addr =
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
-                Ok(pulsar_std::WasmQuery::ContractInfo { contract_addr }.into())
+                Ok(slay3r_std::WasmQuery::ContractInfo { contract_addr }.into())
             }
             x => unsupported_request(&x),
         },
@@ -217,11 +217,11 @@ fn unsupported_request<T, U: fmt::Debug>(kind: &U) -> Result<T, QueryError> {
     .into())
 }
 
-fn pulsar_response_to_cosmwasm(
-    response: pulsar_std::response::QueryResponse<PulsarError>,
+fn slay3r_response_to_cosmwasm(
+    response: slay3r_std::response::QueryResponse<PulsarError>,
 ) -> Result<Binary, QueryError> {
-    use pulsar_std::response::BankQueryResponse;
-    use pulsar_std::response::QueryResponse::*;
+    use slay3r_std::response::BankQueryResponse;
+    use slay3r_std::response::QueryResponse::*;
     match response {
         Bank(bank) => match bank {
             BankQueryResponse::AllBalances(balances) => {
@@ -242,9 +242,9 @@ fn pulsar_response_to_cosmwasm(
             } // x => unsupported_response(&x),
         },
         Wasm(wasm) => match wasm {
-            pulsar_std::response::WasmQueryResponse::Smart(data) => Ok(data),
-            pulsar_std::response::WasmQueryResponse::Raw(value) => Ok(value),
-            pulsar_std::response::WasmQueryResponse::ContractInfo(info) => {
+            slay3r_std::response::WasmQueryResponse::Smart(data) => Ok(data),
+            slay3r_std::response::WasmQueryResponse::Raw(value) => Ok(value),
+            slay3r_std::response::WasmQueryResponse::ContractInfo(info) => {
                 let mut res = cosmwasm_std::ContractInfoResponse::default();
                 res.code_id = info.code_id;
                 res.creator = info.creator.to_string();

@@ -3,11 +3,11 @@ use tracing::debug_span;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
-use pulsar_std::{
+use slay3r_std::{
     response::{AccountResponse, QueryResponse},
     AccountId, AuthQuery, GasMeter, Msg, PubKey, Tx, TxError,
 };
-use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
+use slay3r_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;

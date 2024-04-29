@@ -3,7 +3,7 @@ use cosmwasm_schema::serde::{de::DeserializeOwned, Serialize};
 use cosmwasm_std::{from_json, testing::mock_env, to_json_binary, Binary, Coin, Event, Uint128};
 use hex_literal::hex;
 use itertools::enumerate;
-use pulsar_std::{
+use slay3r_std::{
     api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate},
     response::{
         AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
@@ -11,7 +11,7 @@ use pulsar_std::{
     AccountId, AuthQuery, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx,
     WasmQuery,
 };
-use pulsar_storage::MemoryStore;
+use slay3r_storage::MemoryStore;
 
 use crate::{app::App, genesis::GenesisState, AppConfig, PulsarError, PulsarResult, StateMachine};
 
@@ -301,7 +301,7 @@ pub fn assert_block_success(res: &[TxResult<PulsarError>], count: usize) {
 #[cfg(test)]
 mod test {
     use cosmwasm_std::coin;
-    use pulsar_std::{BankMsg, MsgData};
+    use slay3r_std::{BankMsg, MsgData};
 
     use crate::genesis::{BankAccount, WasmParams};
 
@@ -496,7 +496,7 @@ mod test {
         assert_block_success(&res, 1);
         assert_eq!(
             res.remove(0).result.unwrap().data,
-            vec![MsgData::Bank(pulsar_std::BankMsgData::Send {})]
+            vec![MsgData::Bank(slay3r_std::BankMsgData::Send {})]
         );
 
         // height is 2

@@ -1,11 +1,11 @@
 use bytes::Bytes;
 use cosmwasm_std::Event;
-use pulsar_app::encode_cosmwasm_response;
-use pulsar_std::api::{GasInfo, TxResponse, TxResult};
-use pulsar_std::response::{
+use slay3r_app::encode_cosmwasm_response;
+use slay3r_std::api::{GasInfo, TxResponse, TxResult};
+use slay3r_std::response::{
     AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
 };
-use pulsar_std::{AccountId, AuthQuery, BankQuery, Query, QueryError, WasmQuery};
+use slay3r_std::{AccountId, AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 
 use cosmos_sdk_proto::cosmos::auth::v1beta1::{
     BaseAccount, QueryAccountRequest, QueryAccountResponse,
@@ -326,7 +326,7 @@ pub fn encode_tx_result(
     }
 }
 
-pub fn msg_data_to_proto(data: Vec<pulsar_std::MsgData>) -> Vec<u8> {
+pub fn msg_data_to_proto(data: Vec<slay3r_std::MsgData>) -> Vec<u8> {
     let data = data
         .into_iter()
         .map(|m| {
@@ -366,7 +366,7 @@ mod tests {
     fn parse_simulate() {
         let path = "/cosmos.tx.v1beta1.Service/Simulate";
         let data = hex!("1282020AAB010A91010A1C2F636F736D6F732E62616E6B2E763162657461312E4D736753656E6412710A2D70756C73617231706B707472653766646B6C366766727A6C65736A6A766878686C63337234676D366B3570336C122D70756C73617231757A3479303579387366736D75657A61616B70706D68326470636667797A72716D39786463731A110A067570756C7365120732303030303030121555736520796F757220706F77657220776973656C7912500A4C0A460A1F2F636F736D6F732E63727970746F2E736563703235366B312E5075624B657912230A21034F04181EEBA35391B858633A765C4A0C189697B40D216354D50890D350C7029012020A0012001A00");
-        let chain_id = "pulsar-dev-1";
+        let chain_id = "slay3r-dev-1";
 
         let tx = parse_cosmos_query(path, Bytes::from(data.to_vec()), chain_id).unwrap();
         assert!(matches!(tx, Query::Simulate(_)));

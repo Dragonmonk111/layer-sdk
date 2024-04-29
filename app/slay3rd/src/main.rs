@@ -12,8 +12,8 @@ use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::FmtSubscriber;
 
-use pulsar_abci::ServerConfig;
-use pulsar_app::AppConfig;
+use slay3r_abci::ServerConfig;
+use slay3r_app::AppConfig;
 
 mod app;
 mod cli;
@@ -114,13 +114,13 @@ async fn main() {
     let server = match config.lmdb {
         Some(path) => {
             info!("using lmdb database at {}", path);
-            let storage = pulsar_storage::LmdbStore::new(&path, None);
+            let storage = slay3r_storage::LmdbStore::new(&path, None);
             let app = Pulsarium::new(storage, app_config);
             server_config.bind(server_port, app).await.unwrap()
         }
         None => {
             info!("using in-memory database");
-            let storage = pulsar_storage::MemoryStore::new();
+            let storage = slay3r_storage::MemoryStore::new();
             let app = Pulsarium::new(storage, app_config);
             server_config.bind(server_port, app).await.unwrap()
         }

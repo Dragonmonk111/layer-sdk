@@ -1,6 +1,6 @@
 use crate::{PriceList, ReadonlyStorage, Storage, DEFAULT_CACHE_PRICES};
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult};
 use tracing::trace_span;
 
 use super::{Op, ReaderWrapper};

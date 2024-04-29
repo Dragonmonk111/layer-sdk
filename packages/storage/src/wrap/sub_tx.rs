@@ -1,7 +1,7 @@
 use tracing::trace_span;
 
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasError, GasMeter, GasResult};
+use slay3r_std::{GasError, GasMeter, GasResult};
 
 use super::{Delta, ReaderWrapper};
 use crate::{

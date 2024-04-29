@@ -4,7 +4,7 @@ use sha2::{
 };
 use thiserror::Error;
 
-use pulsar_std::AccountId;
+use slay3r_std::AccountId;
 
 use crate::PulsarError;
 

@@ -6,15 +6,15 @@ use cosmwasm_std::{
     ReplyOn, SubMsg, SubMsgResponse,
 };
 
-use pulsar_std::api::MsgResponse;
-use pulsar_std::response::{
+use slay3r_std::api::MsgResponse;
+use slay3r_std::response::{
     CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, QueryResponse,
     WasmQueryResponse,
 };
-use pulsar_std::{
+use slay3r_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };
-use pulsar_storage::{
+use slay3r_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
 };
@@ -593,10 +593,10 @@ impl Wasm {
                 None => meter,
             };
 
-            let pulsar_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
+            let slay3r_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
 
             // ensure we charge if there is a limit_meter, even on error
-            let msg_result = sm.process_msg(storage, sub_meter, contract, block, pulsar_msg);
+            let msg_result = sm.process_msg(storage, sub_meter, contract, block, slay3r_msg);
             if let Some(limit_meter) = limit_meter {
                 meter.charge(limit_meter.used())?;
             }
@@ -846,13 +846,13 @@ fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, 
 fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
     let res = match msg {
         CosmosMsg::Bank(bank) => match bank {
-            cosmwasm_std::BankMsg::Send { to_address, amount } => pulsar_std::BankMsg::Send {
+            cosmwasm_std::BankMsg::Send { to_address, amount } => slay3r_std::BankMsg::Send {
                 sender: sender.clone(),
                 recipient: AccountId::parse_string(&to_address)?,
                 amount,
             }
             .into(),
-            cosmwasm_std::BankMsg::Burn { amount } => pulsar_std::BankMsg::Burn {
+            cosmwasm_std::BankMsg::Burn { amount } => slay3r_std::BankMsg::Burn {
                 sender: sender.clone(),
                 amount,
             }
@@ -864,7 +864,7 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
                 contract_addr,
                 msg,
                 funds,
-            } => pulsar_std::WasmMsg::Execute {
+            } => slay3r_std::WasmMsg::Execute {
                 contract_addr: AccountId::parse_string(&contract_addr)?,
                 msg,
                 sender: sender.clone(),
@@ -877,7 +877,7 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
                 msg,
                 funds,
                 label,
-            } => pulsar_std::WasmMsg::Instantiate {
+            } => slay3r_std::WasmMsg::Instantiate {
                 sender: sender.clone(),
                 admin: admin.map(|x| AccountId::parse_string(&x)).transpose()?,
                 code_id,
@@ -892,7 +892,7 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
                 contract_addr,
                 msg,
                 new_code_id,
-            } => pulsar_std::WasmMsg::Migrate {
+            } => slay3r_std::WasmMsg::Migrate {
                 contract_addr: AccountId::parse_string(&contract_addr)?,
                 msg,
                 sender: sender.clone(),
@@ -902,14 +902,14 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
             cosmwasm_std::WasmMsg::UpdateAdmin {
                 contract_addr,
                 admin,
-            } => pulsar_std::WasmMsg::UpdateAdmin {
+            } => slay3r_std::WasmMsg::UpdateAdmin {
                 sender: sender.clone(),
                 contract_addr: AccountId::parse_string(&contract_addr)?,
                 admin: AccountId::parse_string(&admin)?,
             }
             .into(),
             cosmwasm_std::WasmMsg::ClearAdmin { contract_addr } => {
-                pulsar_std::WasmMsg::ClearAdmin {
+                slay3r_std::WasmMsg::ClearAdmin {
                     sender: sender.clone(),
                     contract_addr: AccountId::parse_string(&contract_addr)?,
                 }

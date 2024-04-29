@@ -6,7 +6,7 @@ use cosmwasm_std::StdResult;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
-pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("PULSAR_BECH32");
+pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("slay3r_BECH32");
 pub const DEFAULT_BECH32_PREFIX: &str = "pulsar";
 
 /// Valid lengths of decoded addresses

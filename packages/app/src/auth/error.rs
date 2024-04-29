@@ -1,4 +1,4 @@
-use pulsar_std::AccountId;
+use slay3r_std::AccountId;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]

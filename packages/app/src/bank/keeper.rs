@@ -4,10 +4,10 @@ use tracing::debug_span;
 
 use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
 
-use pulsar_std::api::MsgResponse;
-use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
-use pulsar_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
-use pulsar_storage::{
+use slay3r_std::api::MsgResponse;
+use slay3r_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
+use slay3r_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
+use slay3r_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
 };
 
@@ -361,8 +361,8 @@ mod test {
     use crate::AppConfig;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, coins, StdError};
-    use pulsar_std::response::BankQueryResponse;
-    use pulsar_storage::{MemoryStore, PersistentStorage, Storage};
+    use slay3r_std::response::BankQueryResponse;
+    use slay3r_storage::{MemoryStore, PersistentStorage, Storage};
 
     fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &AccountId) -> Vec<Coin> {
         let req = BankQuery::AllBalances {

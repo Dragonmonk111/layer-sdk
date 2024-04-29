@@ -14,13 +14,13 @@ use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
 };
-use pulsar_std::api::{
+use slay3r_std::api::{
     Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
     TxResponse, TxResult,
 };
-use pulsar_std::response::QueryResponse;
-use pulsar_std::{GasMeter, Query, Rfc3339, Tx};
-use pulsar_storage::{
+use slay3r_std::response::QueryResponse;
+use slay3r_std::{GasMeter, Query, Rfc3339, Tx};
+use slay3r_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
     Transaction,
 };
@@ -441,8 +441,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     #[cfg(test)]
-    pub fn copy_storage_to_memory(&self) -> pulsar_storage::MemoryStore {
-        pulsar_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
+    pub fn copy_storage_to_memory(&self) -> slay3r_storage::MemoryStore {
+        slay3r_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
     }
 }
 
@@ -455,15 +455,15 @@ mod tests {
     use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
     use hex_literal::hex;
 
-    use pulsar_std::api::{TmPubKey, ValidatorUpdate};
-    use pulsar_std::response::{
+    use slay3r_std::api::{TmPubKey, ValidatorUpdate};
+    use slay3r_std::response::{
         AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
     };
-    use pulsar_std::{
+    use slay3r_std::{
         must_id, AccountId, AuthQuery, BankMsg, BankQuery, FeeInfo, Msg, PubKey, SignedTx,
         SigningInfo,
     };
-    use pulsar_storage::MemoryStore;
+    use slay3r_storage::MemoryStore;
 
     use crate::genesis::{BankAccount, WasmParams};
     use crate::sm::AppConfig;
@@ -494,12 +494,12 @@ mod tests {
     #[test]
     fn transaction_workflow_lmdb() {
         // always delete, ignore "does not exist" error
-        let path = "/tmp/pulsar-test-lmdb";
+        let path = "/tmp/slay3r-test-lmdb";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
         // create lmdb store and run same tests
-        let storage = pulsar_storage::LmdbStore::new(path, None);
+        let storage = slay3r_storage::LmdbStore::new(path, None);
         transaction_workflow(storage);
     }
 
@@ -599,7 +599,7 @@ mod tests {
                     },
                 ..
             }) => {
-                assert_eq!(gas_wanted, pulsar_std::api::DEFAULT_BLOCK_GAS);
+                assert_eq!(gas_wanted, slay3r_std::api::DEFAULT_BLOCK_GAS);
                 gas_used
             }
             x => panic!("Expected SimulateResponse, got {:?}", x),

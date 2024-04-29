@@ -1,5 +1,5 @@
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult};
 
 /// This is the lowest level of the storage, which can be implemented by MemoryStorage
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,

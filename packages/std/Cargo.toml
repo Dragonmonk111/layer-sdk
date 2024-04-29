@@ -1,5 +1,5 @@
 [package]
-name = "pulsar-std"
+name = "slay3r-std"
 description = "Standard types for Pulsarium"
 version = { workspace = true }
 license = { workspace = true }

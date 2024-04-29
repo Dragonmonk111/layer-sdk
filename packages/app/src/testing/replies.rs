@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_json_binary, Event};
-use pulsar_std::api::TxResponse;
-use pulsar_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
+use slay3r_std::api::TxResponse;
+use slay3r_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;

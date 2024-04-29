@@ -186,7 +186,7 @@ mod test {
         let parsed = must_deserialize::<Person>(&None);
         match parsed.unwrap_err() {
             StdError::NotFound { kind, .. } => {
-                assert_eq!(kind, "pulsar_storage::plus::helpers::test::Person")
+                assert_eq!(kind, "slay3r_storage::plus::helpers::test::Person")
             }
             e => panic!("Unexpected error {}", e),
         }

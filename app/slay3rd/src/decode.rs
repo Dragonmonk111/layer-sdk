@@ -3,13 +3,13 @@ use tracing::trace_span;
 
 use cosmwasm_std::{to_json_vec, Event};
 // Convert from pulsar types into abci types
-use pulsar_app::{PulsarError, PulsarResult};
-use pulsar_cosmos::{encode_cosmos_response, msg_data_to_proto};
+use slay3r_app::{PulsarError, PulsarResult};
+use slay3r_cosmos::{encode_cosmos_response, msg_data_to_proto};
 
 use crate::convert::{consensus_params_to_proto, events_to_proto, validator_updates_to_proto};
 
 pub fn init_response_to_proto(
-    response: pulsar_std::api::InitChainResponse,
+    response: slay3r_std::api::InitChainResponse,
 ) -> tendermint_proto::abci::ResponseInitChain {
     tendermint_proto::abci::ResponseInitChain {
         consensus_params: Some(consensus_params_to_proto(response.consensus_params)),
@@ -19,13 +19,13 @@ pub fn init_response_to_proto(
 }
 
 pub fn query_response_to_proto(
-    response: PulsarResult<pulsar_std::response::QueryResponse<PulsarError>>,
+    response: PulsarResult<slay3r_std::response::QueryResponse<PulsarError>>,
     height: u64,
 ) -> tendermint_proto::abci::ResponseQuery {
     match response {
         Ok(response) => {
             let key = match &response {
-                pulsar_std::response::QueryResponse::Raw { key, .. } => key.clone(),
+                slay3r_std::response::QueryResponse::Raw { key, .. } => key.clone(),
                 _ => Vec::new(),
             };
             let value = match encode_cosmos_response(response) {
@@ -68,7 +68,7 @@ pub(crate) fn query_error(
 }
 
 pub fn check_response_to_proto(
-    response: pulsar_std::api::TxResult<PulsarError>,
+    response: slay3r_std::api::TxResult<PulsarError>,
 ) -> tendermint_proto::abci::ResponseCheckTx {
     let _span = trace_span!("check_response_to_proto").entered();
     let (gas_wanted, gas_used) = tx_gas_to_proto(response.gas);
@@ -89,7 +89,7 @@ pub fn check_response_to_proto(
 // This has the same fields as tendermint_proto::abci::ResponseCheckTx but different name,
 // so we make helper functions to do the same logic.
 pub fn tx_result_to_exec_tx_proto(
-    response: pulsar_std::api::TxResult<PulsarError>,
+    response: slay3r_std::api::TxResult<PulsarError>,
 ) -> tendermint_proto::abci::ExecTxResult {
     let _span: tracing::span::EnteredSpan = trace_span!("tx_result_to_exec_tx_proto").entered();
     let (gas_wanted, gas_used) = tx_gas_to_proto(response.gas);
@@ -108,7 +108,7 @@ pub fn tx_result_to_exec_tx_proto(
 }
 
 pub fn finalize_response_to_proto(
-    response: pulsar_std::api::FinalizeBlockResponse<PulsarError>,
+    response: slay3r_std::api::FinalizeBlockResponse<PulsarError>,
 ) -> tendermint_proto::abci::ResponseFinalizeBlock {
     let _span: tracing::span::EnteredSpan = trace_span!("finalize_response_to_proto").entered();
     let tx_results = response
@@ -128,7 +128,7 @@ pub fn finalize_response_to_proto(
     }
 }
 
-fn tx_gas_to_proto(gas: pulsar_std::api::GasInfo) -> (i64, i64) {
+fn tx_gas_to_proto(gas: slay3r_std::api::GasInfo) -> (i64, i64) {
     (
         gas.gas_wanted.try_into().unwrap(),
         gas.gas_used.try_into().unwrap(),
@@ -152,7 +152,7 @@ fn encode_logs(all_events: &[Vec<Event>]) -> String {
 }
 
 fn tx_result_to_proto(
-    result: PulsarResult<pulsar_std::api::TxResponse>,
+    result: PulsarResult<slay3r_std::api::TxResponse>,
 ) -> (u32, Vec<u8>, Vec<tendermint_proto::abci::Event>, String) {
     let _span: tracing::span::EnteredSpan = trace_span!("tx_result_to_proto").entered();
     match result {
@@ -175,8 +175,8 @@ mod fixtures {
 
     use cosmwasm_std::{coin, Binary, Event};
     use hex_literal::hex;
-    use pulsar_app::PulsarError;
-    use pulsar_std::{
+    use slay3r_app::PulsarError;
+    use slay3r_std::{
         api::{GasInfo, TxResponse, TxResult},
         must_id,
         response::{

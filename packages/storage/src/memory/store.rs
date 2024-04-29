@@ -1,5 +1,5 @@
 use parking_lot::{RwLock, RwLockReadGuard};
-use pulsar_std::HexEncode;
+use slay3r_std::HexEncode;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
@@ -7,7 +7,7 @@ use std::ops::{Bound, RangeBounds};
 use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult};
 
 use crate::prices::PriceList;
 use crate::traits::Transaction;
