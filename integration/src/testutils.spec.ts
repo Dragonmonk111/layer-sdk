@@ -37,6 +37,8 @@ export const defaultSendFee = calculateFee(100_000, defaultGasPrice);
 export const hostName = "localhost";
 // export const hostName = "65.21.105.220";
 
+export const faucetUrl = "http://localhost:8000/";
+
 export const localNet = {
   tendermintUrl: `http://${hostName}:26657`,
   tendermintUrlWs: `ws://${hostName}:26657`,

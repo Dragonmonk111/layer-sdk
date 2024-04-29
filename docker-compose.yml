@@ -14,7 +14,7 @@ volumes:
     external: true
 
 services:
-  lay3r:
+  slay3r:
     image: "ghcr.io/lay3rlabs/slay3rd:latest"
     expose:
       # abci server only for cometbft
@@ -35,11 +35,11 @@ services:
     ports:
       - "26656:26656"
       - "26657:26657"
-    command: ["start", "--proxy_app", "tcp://lay3r:26658"]
+    command: ["start", "--proxy_app", "tcp://slay3r:26658"]
     volumes:
       - comet_data:/cometbft
     depends_on:
-      - lay3r
+      - slay3r
   jaeger:
     image: jaegertracing/all-in-one:1.46
     expose:
@@ -54,9 +54,9 @@ services:
       # rest port
       - "1317:1317"
     # connect to the grpc endpoint on lay3r
-    command: ["/app", "-grpc-server-endpoint", "lay3r:9090"]
+    command: ["/app", "-grpc-server-endpoint", "slay3r:9090"]
     depends_on:
-      - lay3r
+      - slay3r
   faucet:
     image: "ghcr.io/lay3rlabs/faucet:latest"
     # Setup based on https://github.com/cosmos/cosmjs/tree/main/packages/faucet#working-with-docker
@@ -64,7 +64,7 @@ services:
       - ./faucet.env
     environment:
       - FAUCET_CONCURRENCY=3
-      - FAUCET_ADDRESS_PREFIX=pulsar
+      - FAUCET_ADDRESS_PREFIX=slay3r
       - FAUCET_TOKENS=uslay
       - FAUCET_GAS_PRICE=0.025uslay
     ports:
