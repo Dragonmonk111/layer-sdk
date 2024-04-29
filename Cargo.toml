@@ -17,9 +17,9 @@ exclude = [
 [workspace.dependencies]
 thiserror    = "1.0.38"
 
-cosmwasm-std = "1.5.0"
-cosmwasm-schema = "1.5.0"
-cosmwasm-crypto = "1.5.0"
+cosmwasm-std = { version = "1.5.4", features = ["cosmwasm_1_4"] }
+cosmwasm-schema = "1.5.4"
+cosmwasm-crypto = "1.5.4"
 cosmwasm-vm = { version = "1.5.0", default-features = false, features = ["iterator"] }
 
 cw-storage-plus = "1.2.0"

@@ -182,6 +182,10 @@ fn cosmwasm_query_to_pulsar(
                     AccountId::parse_string(&address).map_err(account_error_to_backend)?;
                 Ok(pulsar_std::BankQuery::AllBalances { address }.into())
             }
+            cosmwasm_std::BankQuery::Supply { denom } => {
+                Ok(pulsar_std::BankQuery::Supply { denom }.into())
+            }
+            // TODO: BankQuery::DenomMetadata, AllDenomMetadata
             x => unsupported_request(&x),
         },
         QueryRequest::Wasm(wasm) => match wasm {
@@ -232,7 +236,10 @@ fn pulsar_response_to_cosmwasm(
                 };
                 Ok(to_json_binary(&res).unwrap())
             }
-            x => unsupported_response(&x),
+            BankQueryResponse::Supply(supply) => {
+                let res = cosmwasm_std::SupplyResponse::new(supply.amount);
+                Ok(to_json_binary(&res).unwrap())
+            } // x => unsupported_response(&x),
         },
         Wasm(wasm) => match wasm {
             pulsar_std::response::WasmQueryResponse::Smart(data) => Ok(data),
