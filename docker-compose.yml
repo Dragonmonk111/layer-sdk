@@ -1,7 +1,7 @@
 # Usage:
-# ./scripts/build_docker.sh
-# ./scripts/reset_volumes.sh
-# docker compose up
+# sudo ./scripts/build_docker.sh
+# sudo ./scripts/reset_volumes.sh
+# sudo docker compose up
 # cd integration && npm ci &&  npm run test
 # open http://localhost:8080
 
