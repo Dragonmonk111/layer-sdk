@@ -179,7 +179,7 @@ export class ModifyingDirectSecp256k1HdWallet extends DirectSecp256k1HdWallet {
     return new ModifyingDirectSecp256k1HdWallet(mnemonicChecked, { ...options, seed: seed });
   }
 
-  public override async signDirect(address: string, signDoc: SignDoc): Promise<DirectSignResponse> {
+  public override async signDirect(signerAddress: string, signDoc: SignDoc): Promise<DirectSignResponse> {
     const txBody = TxBody.decode(signDoc.bodyBytes);
     const modifiedTxBody = TxBody.fromPartial({
       ...txBody,
@@ -188,7 +188,7 @@ export class ModifyingDirectSecp256k1HdWallet extends DirectSecp256k1HdWallet {
     const authInfo = AuthInfo.decode(signDoc.authInfoBytes);
     const signers = authInfo.signerInfos.map((signerInfo) => ({
       pubkey: signerInfo.publicKey!,
-      sequence: signerInfo.sequence.toNumber(),
+      sequence: signerInfo.sequence,
     }));
     const modifiedFeeAmount = coins(3000, DENOM);
     const modifiedGasLimit = 333333;
@@ -206,6 +206,6 @@ export class ModifyingDirectSecp256k1HdWallet extends DirectSecp256k1HdWallet {
         SignMode.SIGN_MODE_DIRECT
       ),
     };
-    return super.signDirect(address, modifiedSignDoc);
+    return super.signDirect(signerAddress, modifiedSignDoc);
   }
 }
