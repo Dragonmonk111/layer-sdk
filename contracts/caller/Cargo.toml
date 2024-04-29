@@ -18,7 +18,7 @@ library = []
 tc-echo = { workspace = true, features = ["library"] }
 
 cosmwasm-schema = { workspace = true }
-cosmwasm-std = { workspace = true }
+cosmwasm-std = { workspace = true, features = ["cosmwasm_1_4"]}
 cw-storage-plus = { workspace = true }
 cw-utils = { workspace = true }
 thiserror = { workspace = true }
