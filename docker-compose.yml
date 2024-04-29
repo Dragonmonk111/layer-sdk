@@ -15,7 +15,7 @@ volumes:
 
 services:
   lay3r:
-    image: "ghcr.io/lay3rlabs/lay3rd:latest"
+    image: "ghcr.io/lay3rlabs/slay3rd:latest"
     expose:
       # abci server only for cometbft
       - "26658"
@@ -23,14 +23,14 @@ services:
       # open grpc server
       - "9090:9090"
     volumes:
-      - lay3r_data:/root/.pulsar
-    command: ["pulsariumd"]
+      - lay3r_data:/root/.slay3r
+    command: ["slay3rd"]
     depends_on:
       - jaeger
   cometbft:
     image: "cometbft/cometbft:v0.38.0"
     expose:
-      # for pulsariumd grpc callbacks
+      # for slay3r grpc callbacks
       - "26657"
     ports:
       - "26656:26656"

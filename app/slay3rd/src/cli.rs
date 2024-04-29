@@ -4,7 +4,7 @@ use serde::Serialize;
 #[derive(Debug, Parser, Serialize)]
 pub struct Cli {
     // Ignored: This is parsed in a first step, but we include here so the parser doesn't error on unknown flag
-    /// Provide a home directory for the config files and data directory. Defaults to $HOME/.pulsar
+    /// Provide a home directory for the config files and data directory. Defaults to $HOME/.slay3r
     #[arg(long)]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub home: Option<String>,

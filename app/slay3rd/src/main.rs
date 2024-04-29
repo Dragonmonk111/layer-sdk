@@ -29,8 +29,8 @@ use crate::config::RawConfig;
 
 /// We check fro pulsar home dir:
 /// * from --home flag
-/// * from PULSE_HOME env var
-/// * default to $HOME/.pulsar
+/// * from SLAY_HOME env var
+/// * default to $HOME/.slay3r
 fn get_home() -> PathBuf {
     let mut pargs = pico_args::Arguments::from_env();
 
@@ -39,19 +39,19 @@ fn get_home() -> PathBuf {
         return PathBuf::from(home);
     }
 
-    // check PULSE_HOME
-    if let Ok(pulse) = env::var("PULSE_HOME") {
+    // check SLAY_HOME
+    if let Ok(pulse) = env::var("SLAY_HOME") {
         return PathBuf::from(pulse);
     }
 
-    // default to $HOME/.pulsar
-    Path::new(&env::var("HOME").unwrap()).join(".pulsar")
+    // default to $HOME/.slay3r
+    Path::new(&env::var("HOME").unwrap()).join(".slay3r")
 }
 
 #[tokio::main]
 async fn main() {
     let home = get_home();
-    let config_file = home.as_path().join("config/pulsarium.toml");
+    let config_file = home.as_path().join("config/slay3r.toml");
     println!("Reading config file from {}", config_file.to_str().unwrap());
 
     // Parse all config info
@@ -59,7 +59,7 @@ async fn main() {
     // Thanks to https://steezeburger.com/2023/03/rust-hierarchical-configuration/ for this tip
     let config: RawConfig = Figment::from(Serialized::defaults(RawConfig::default()))
         .merge(Toml::file(config_file))
-        .merge(Env::prefixed("PULSE_"))
+        .merge(Env::prefixed("SLAY_"))
         .merge(Serialized::defaults(args))
         .extract()
         .unwrap();
@@ -76,7 +76,7 @@ async fn main() {
             //         // optionally set username and password as well.
             //         // .with_username("username")
             //         // .with_password("s3cr3t")
-            .with_service_name("pulsariumd")
+            .with_service_name("slay3rd")
             .with_isahc()
             .with_timeout(std::time::Duration::from_secs(2))
             .install_batch(opentelemetry::runtime::Tokio)

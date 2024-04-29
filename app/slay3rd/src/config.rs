@@ -24,7 +24,8 @@ pub struct RawConfig {
     pub lmdb: Option<String>,
 
     pub grpc: String,
-    // /// The directory we read all files from (default $HOME/.pulsarium)
+
+    // /// The directory we read all files from (default $HOME/.slay3r)
     // pub basedir: String,
 }
 
@@ -92,6 +93,6 @@ pub struct Config {
     pub lmdb: Option<String>,
 
     pub grpc: String,
-    // /// The directory we read all files from (default $HOME/.pulsarium)
+    // /// The directory we read all files from (default $HOME/.slay3r)
     // pub basedir: String,
 }
