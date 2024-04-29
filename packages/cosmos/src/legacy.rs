@@ -43,11 +43,11 @@ impl StdSignDoc {
             serde_json::to_string(self).map_err(|e| StdError::serialize_err("StdSignDoc", e))?;
         // Escape special characters as per amino implementation
         let escaped = raw
-            .replace("&", "\\u0026")
-            .replace("<", "\\u003c")
-            .replace(">", "\\u003e");
+            .replace('&', "\\u0026")
+            .replace('<', "\\u003c")
+            .replace('>', "\\u003e");
         // Turn into bytes
-        return Ok(escaped.into_bytes());
+        Ok(escaped.into_bytes())
     }
 }
 
