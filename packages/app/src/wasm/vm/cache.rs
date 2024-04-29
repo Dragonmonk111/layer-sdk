@@ -14,8 +14,16 @@ use super::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
-// const CAPABILITIES: &[&str] = &["iterator"];
-const CAPABILITIES: &[&str] = &["iterator", "staking", "stargate"];
+// const CAPABILITIES: &[&str] = &["iterator", "staking"];
+const CAPABILITIES: &[&str] = &[
+    "iterator",
+    "staking",
+    "stargate",
+    "cosmwasm_1_1",
+    "cosmwasm_1_2",
+    "cosmwasm_1_3",
+    "cosmwasm_1_4",
+];
 const PRINT_DEBUG: bool = false;
 // TODO: what is this really?
 const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000_000;
