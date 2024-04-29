@@ -11,7 +11,7 @@ import {
   defaultWalletOptions,
   faucet,
   makeRandomAddress,
-  pulsarium,
+  localNet,
 } from "./testutils.spec";
 
 describe("Upload Todo List", () => {
@@ -19,7 +19,7 @@ describe("Upload Todo List", () => {
     it("uploads", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
         tendermintClient,
         wallet,
@@ -44,7 +44,7 @@ describe("Cw20 Test Cases", () => {
     it("works with direct signer", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
         tendermintClient,
         wallet,
@@ -64,20 +64,20 @@ describe("Cw20 Test Cases", () => {
 
       // instantiate contract
       const initMsg = {
-        name: "pulsar",
-        symbol: "PULSE",
+        name: "Metalheads Unite",
+        symbol: "METAL",
         decimals: 6,
         initial_balances: [
           {
             address: signer,
-            amount: "50000000", // 50 PULSE
+            amount: "50000000", // 50 METAL
           },
         ],
       };
 
       const instantiateFee = calculateFee(300_000, defaultGasPrice);
-      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", instantiateFee, {
-        memo: `Create a hackatom instance in deploy_hackatom.js`,
+      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "METAL Token", instantiateFee, {
+        memo: `Create a cw20 instance`,
         admin: signer,
       });
       expect(contractAddress).toBeTruthy();
@@ -109,7 +109,7 @@ describe("Cw20 Test Cases", () => {
     it("works with gas price simulation", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
         tendermintClient,
         wallet,
@@ -127,19 +127,19 @@ describe("Cw20 Test Cases", () => {
 
       // instantiate contract
       const initMsg = {
-        name: "pulsar",
-        symbol: "PULSE",
+        name: "Metalheads Unite",
+        symbol: "METAL",
         decimals: 6,
         initial_balances: [
           {
             address: signer,
-            amount: "50000000", // 50 PULSE
+            amount: "50000000", // 50 METAL
           },
         ],
       };
 
-      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", "auto", {
-        memo: `Create a hackatom instance in deploy_hackatom.js`,
+      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "METAL Token", "auto", {
+        memo: `Create a cw20 instance`,
         admin: signer,
       });
       expect(contractAddress).toBeTruthy();
@@ -171,7 +171,7 @@ describe("Cw20 Test Cases", () => {
       const signer = faucet.address0;
       const directWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const directClient = await SigningCosmWasmClient.createWithSigner(
-        await Tendermint37Client.connect(pulsarium.tendermintUrl),
+        await Tendermint37Client.connect(localNet.tendermintUrl),
         directWallet,
         defaultSigningClientOptions
       );
@@ -179,7 +179,7 @@ describe("Cw20 Test Cases", () => {
       // ensure this works for instantiate and execute
       const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const client = await SigningCosmWasmClient.createWithSigner(
-        await Tendermint37Client.connect(pulsarium.tendermintUrl),
+        await Tendermint37Client.connect(localNet.tendermintUrl),
         wallet,
         defaultSigningClientOptions
       );
@@ -195,19 +195,19 @@ describe("Cw20 Test Cases", () => {
 
       // instantiate contract
       const initMsg = {
-        name: "pulsar",
-        symbol: "PULSE",
+        name: "Metalheads Unite",
+        symbol: "METAL",
         decimals: 6,
         initial_balances: [
           {
             address: signer,
-            amount: "50000000", // 50 PULSE
+            amount: "50000000", // 50 METAL
           },
         ],
       };
 
-      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", "auto", {
-        memo: `Create a hackatom instance in deploy_hackatom.js`,
+      const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "METAL Token", "auto", {
+        memo: `Create a cw20 instance`,
         admin: signer,
       });
       expect(contractAddress).toBeTruthy();

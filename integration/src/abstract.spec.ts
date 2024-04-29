@@ -3,14 +3,14 @@ import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { Tendermint37Client } from "@cosmjs/tendermint-rpc";
 import fs from "fs";
 
-import { defaultSigningClientOptions, defaultWalletOptions, faucet, pulsarium } from "./testutils.spec";
+import { defaultSigningClientOptions, defaultWalletOptions, faucet, localNet } from "./testutils.spec";
 
 describe("Upload Abstract Manager", () => {
   describe("big wasm file", () => {
     it("uploads", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
         tendermintClient,
         wallet,

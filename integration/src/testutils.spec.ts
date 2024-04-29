@@ -13,7 +13,7 @@ import { calculateFee, GasPrice, SigningStargateClientOptions } from "@cosmjs/st
 import { SignMode } from "cosmjs-types/cosmos/tx/signing/v1beta1/signing";
 import { AuthInfo, SignDoc, TxBody } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 
-export const PREFIX = "pulsar";
+export const PREFIX = "slay3r";
 
 export const DENOM = "uslay";
 
@@ -37,11 +37,11 @@ export const defaultSendFee = calculateFee(100_000, defaultGasPrice);
 export const hostName = "localhost";
 // export const hostName = "65.21.105.220";
 
-export const pulsarium = {
+export const localNet = {
   tendermintUrl: `http://${hostName}:26657`,
   tendermintUrlWs: `ws://${hostName}:26657`,
   tendermintUrlHttp: `http://${hostName}:26657`,
-  chainId: "pulsar-dev-1",
+  chainId: "slay3r-dev",
   denomStaking: DENOM,
   denomFee: DENOM,
   blockTime: 1_000, // ms
@@ -82,11 +82,11 @@ export const faucet = {
     type: "tendermint/PubKeySecp256k1",
     value: "Aum2063ub/ErUnIUB36sK55LktGUStgcbSiaAnL1wadu",
   },
-  address0: "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l",
-  address1: "pulsar10dyr9899g6t0pelew4nvf4j5c3jcgv0rl3n2u3",
-  address2: "pulsar1xy4yqngt0nlkdcenxymg8tenrghmek4n6qggxn",
-  address3: "pulsar142u9fgcjdlycfcez3lw8x6x5h7rfjlnfkpag7r",
-  address4: "pulsar1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rwdtsdr",
+  address0: "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j",
+  address1: "slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu",
+  address2: "slay3r1xy4yqngt0nlkdcenxymg8tenrghmek4nvqd2x7",
+  address3: "slay3r142u9fgcjdlycfcez3lw8x6x5h7rfjlnfqpc27w",
+  address4: "slay3r1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rcdwjdw",
 };
 
 /** Unused account */
@@ -95,7 +95,7 @@ export const unused = {
     type: "tendermint/PubKeySecp256k1",
     value: "ArkCaFUJ/IH+vKBmNRCdUVl3mCAhbopk9jjW4Ko4OfRQ",
   },
-  address: "pulsar1cjsxept9rkggzxztslae9ndgpdyt24087k5kwe",
+  address: "slay3r1cjsxept9rkggzxztslae9ndgpdyt2408gk35w5",
   accountNumber: 0,
   sequence: 0,
   balanceFee: "1000000000", // 1000 PULSE
@@ -133,7 +133,7 @@ export const validator = {
   sequence: 1,
 };
 
-export const nonExistentAddress = "pulsar1p79apjaufyphcmsn4g07cynqf0wyjuezpu5hkg";
+export const nonExistentAddress = "slay3r1p79apjaufyphcmsn4g07cynqf0wyjuezhu34k9";
 
 export const nonNegativeIntegerMatcher = /^[0-9]+$/;
 export const tendermintIdMatcher = /^[0-9A-F]{64}$/;

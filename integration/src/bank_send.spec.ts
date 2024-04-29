@@ -17,14 +17,14 @@ import {
   DENOM,
   faucet,
   makeRandomAddress,
-  pulsarium,
+  localNet,
 } from "./testutils.spec";
 
 describe("SigningStargateClient", () => {
   describe("simulate", () => {
     it("works", async () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
         tendermintClient,
         wallet,
@@ -55,7 +55,7 @@ describe("SigningStargateClient", () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const addr = (await wallet.getAccounts())[0];
       expect(addr.address).toEqual(faucet.address0);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
         tendermintClient,
         wallet,
@@ -85,7 +85,7 @@ describe("SigningStargateClient", () => {
 
     it("works with legacy Amino signer", async () => {
       const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
         tendermintClient,
         wallet,
@@ -116,7 +116,7 @@ describe("SigningStargateClient", () => {
 
   it("returns DeliverTxFailure on DeliverTx failure", async () => {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-    const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+    const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
     const client = await SigningStargateClient.createWithSigner(tendermintClient, wallet, defaultSigningClientOptions);
 
     const msg = MsgSend.fromPartial({
@@ -142,7 +142,7 @@ describe("SigningStargateClient", () => {
 
   it("works with auto gas", async () => {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-    const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
+    const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
     const client = await SigningStargateClient.createWithSigner(tendermintClient, wallet, {
       ...defaultSigningClientOptions,
       gasPrice: defaultGasPrice,
