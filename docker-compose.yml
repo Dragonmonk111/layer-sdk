@@ -73,9 +73,3 @@ services:
     depends_on:
       - cometbft
     restart: unless-stopped
-
-  # vectis:
-  #   image: "pulsar/vectis-todo:latest"
-  #   ports:
-  #     # expose web app
-  #     - "8000:80"

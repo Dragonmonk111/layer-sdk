@@ -433,8 +433,8 @@ mod tests {
         let store = MemoryStore::new();
 
         let msg = cw20_base::msg::InstantiateMsg {
-            name: "pulsar".to_string(),
-            symbol: "PLS".to_string(),
+            name: "slayer".to_string(),
+            symbol: "SLAY".to_string(),
             decimals: 6,
             initial_balances: vec![Cw20Coin {
                 address: sender.to_string(),
@@ -491,8 +491,8 @@ mod tests {
 
         // instantiate
         let msg = cw20_base::msg::InstantiateMsg {
-            name: "pulsar".to_string(),
-            symbol: "PLS".to_string(),
+            name: "slayer".to_string(),
+            symbol: "SLAY".to_string(),
             decimals: 6,
             initial_balances: vec![Cw20Coin {
                 address: sender.to_string(),
@@ -606,8 +606,8 @@ mod tests {
 
         // instantiate
         let msg = cw20_base::msg::InstantiateMsg {
-            name: "pulsar".to_string(),
-            symbol: "PLS".to_string(),
+            name: "slayer".to_string(),
+            symbol: "SLAY".to_string(),
             decimals: 6,
             initial_balances: vec![
                 Cw20Coin {

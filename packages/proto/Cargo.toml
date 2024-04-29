@@ -1,6 +1,6 @@
 [package]
 name = "slay3r-proto"
-description = "Protobuf types for Pulsarium"
+description = "Protobuf types for Slay3r"
 version = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }

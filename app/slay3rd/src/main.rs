@@ -27,7 +27,7 @@ use crate::app::Pulsarium;
 use crate::cli::Cli;
 use crate::config::RawConfig;
 
-/// We check fro pulsar home dir:
+/// We check for slay3r home dir:
 /// * from --home flag
 /// * from SLAY_HOME env var
 /// * default to $HOME/.slay3r

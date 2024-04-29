@@ -1,4 +1,4 @@
-// Convert from abci types into pulsar types
+// Convert from abci types into slay3r types
 
 use slay3r_cosmos::{parse_cosmos_query, parse_cosmos_tx};
 use slay3r_std::{QueryError, TxError};

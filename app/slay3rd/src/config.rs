@@ -3,7 +3,7 @@ use thiserror::Error;
 use tracing::metadata::ParseLevelError;
 use tracing_subscriber::EnvFilter;
 
-/// Raw user input for the global Pulsarium config
+/// Raw user input for the global Slay3r config
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawConfig {
     /// The server we listen on (generally 127.0.0.1 or 0.0.0.0)
@@ -72,7 +72,7 @@ impl RawConfig {
     }
 }
 
-/// The global configuration for Pulsarium
+/// The global configuration for Slay3r
 #[derive(Debug)]
 pub struct Config {
     /// The server we listen on (generally 127.0.0.1 or 0.0.0.0)

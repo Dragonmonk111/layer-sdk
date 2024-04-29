@@ -221,7 +221,7 @@ pub struct TxData {
     /// We only support one sender per transaction
     pub signer: AccountId,
 
-    /// All messages in the payload, decoded to Pulsarium format
+    /// All messages in the payload, decoded to Slay3r format
     pub msgs: Vec<Msg>,
 
     /// Amount of gas this transaction may use

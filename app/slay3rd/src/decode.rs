@@ -2,7 +2,7 @@ use serde::Serialize;
 use tracing::trace_span;
 
 use cosmwasm_std::{to_json_vec, Event};
-// Convert from pulsar types into abci types
+// Convert from slay3r types into abci types
 use slay3r_app::{PulsarError, PulsarResult};
 use slay3r_cosmos::{encode_cosmos_response, msg_data_to_proto};
 

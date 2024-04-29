@@ -16,7 +16,7 @@ And replacing the JSON configuration with the one in [`devnet.json`](./devnet.js
 
 A Keplr Pop-Up will appear and you should approve.
 
-Now, go to Keplr, click on "Cosmos Hub" to select the chain selector, and scroll all the way to the bottom where you see "Pulsarium DevNet" down under Beta. Select this one and check your balance.
+Now, go to Keplr, click on "Cosmos Hub" to select the chain selector, and scroll all the way to the bottom where you see "Slay3r DevNet" down under Beta. Select this one and check your balance.
 
 For more fun, import the test mnemonic `economy stock theory fatal elder harbor betray wasp final emotion task crumble siren bottom lizard educate guess current outdoor pair theory focus wife stone`
 which you can get from [the integration tests](../integration/src/testutils.spec.ts).

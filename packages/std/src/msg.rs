@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
 
-/// This is the internal message format used in Pulsarium.
+/// This is the internal message format used in Slay3r.
 /// We convert various wire formats into this before processing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
@@ -129,7 +129,7 @@ pub enum WasmMsg {
         contract_addr: AccountId,
     },
     /// Only the gov address can call sudo.
-    /// Once pulsar checks the permissions, it should be trusted as root by the contract.
+    /// Once slay3r checks the permissions, it should be trusted as root by the contract.
     Sudo {
         sender: AccountId,
         contract_addr: AccountId,

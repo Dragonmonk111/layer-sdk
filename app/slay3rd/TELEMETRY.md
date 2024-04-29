@@ -18,7 +18,7 @@ You should now see the Web interface at http://localhost:16686
 
 **Note** If you enable jaeger, all logs will go to that server via an async batch API. Nothing will be written out to the shell, as it added too much overhead for tracing information.
 
-## Run Pulsarimd with OpenTelemetry
+## Run Slay3rd with OpenTelemetry
 
 You can enable jaeger tracing either with `--jaeger` flag or settings `SLAY_JAEGER=true` in the environment.
 Since you want to see real-world numbers, let's compile release mode:
