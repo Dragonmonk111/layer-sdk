@@ -198,8 +198,9 @@ pub struct AminoMsgInstantiate {
 
 #[cfg(test)]
 mod tests {
-    use serde::Deserialize;
+    use cosmwasm_std::Coin;
     use pulsar_std::AccountId;
+    use serde::Deserialize;
 
     use super::*;
 
@@ -228,12 +229,15 @@ mod tests {
         let orig_msg = EmbeddedMessage {
             name: "John Smith".into(),
             age: 32,
-            items: vec![SomeItem{ zeta: 25, alpha: 3}, SomeItem{ zeta: 10, alpha: 1}],
+            items: vec![
+                SomeItem { zeta: 25, alpha: 3 },
+                SomeItem { zeta: 10, alpha: 1 },
+            ],
         };
         let msg = serde_json::to_vec(&orig_msg).unwrap();
         let val: Value = serde_json::from_slice(&msg).unwrap();
         let reserialized = serde_json::to_string(&val).unwrap();
-        println!("{:?}", reserialized);
+
         // make sure this is properly sorted
         let expected = r#"{"age":32,"items":[{"alpha":3,"zeta":25},{"alpha":1,"zeta":10}],"name":"John Smith"}"#;
         assert_eq!(reserialized.as_str(), expected);
@@ -248,7 +252,10 @@ mod tests {
         let orig_msg = EmbeddedMessage {
             name: "John Smith".into(),
             age: 32,
-            items: vec![SomeItem{ zeta: 25, alpha: 3}, SomeItem{ zeta: 10, alpha: 1}],
+            items: vec![
+                SomeItem { zeta: 25, alpha: 3 },
+                SomeItem { zeta: 10, alpha: 1 },
+            ],
         };
         let msg: Binary = serde_json::to_vec(&orig_msg).unwrap().into();
         let raw = convert_message(&msg);
@@ -257,25 +264,6 @@ mod tests {
         assert_eq!(reserialized.as_str(), expected);
     }
 
-    /*
-    {"type":"wasm/MsgInstantiateContract",
-    "value":{
-        "admin":"cosmos10dyr9899g6t0pelew4nvf4j5c3jcgv0r73qga5",
-        "code_id":"12345",
-        "funds":[{"amount":"1234","denom":"ucosm"}],
-        "label":"sticky",
-        "msg":{"foo":"bar"},
-        "sender":"cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6"}
-    }
-
-    {"type":"wasm/MsgInstantiateContract",
-    "value":{"code_id":"12345",
-    "funds":[{"amount":"1234","denom":"ucosm"}],
-    "label":"sticky",
-    "msg":{"foo":"bar"},
-    "sender":"cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6"}}
-     */
-
     #[test]
     fn check_convert_execute() {
         let orig_msg = DemoMsg {
@@ -283,36 +271,67 @@ mod tests {
             age: 32,
             height: Some(187),
         };
-        let sender = AccountId::unchecked("funkychicken");
-        let contract_addr = AccountId::unchecked("blackholeson");
-        let exec_msg = Msg::Wasm(WasmMsg::Execute { 
-            sender: sender.clone(),
-            contract_addr: contract_addr.clone(),
-            msg: serde_json::to_vec(&orig_msg).unwrap().into(), 
+        let exec_msg = Msg::Wasm(WasmMsg::Execute {
+            sender: AccountId::parse_string("pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp")
+                .unwrap(),
+            contract_addr: AccountId::parse_string("pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp")
+                .unwrap(),
+            msg: serde_json::to_vec(&orig_msg).unwrap().into(),
             funds: vec![],
         });
-        
+
         let amino_msg = AminoMsg::build(&exec_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        // {"type":"wasm/MsgExecuteContract","value":{"contract":"cosmos1xy4yqngt0nlkdcenxymg8tenrghmek4nmqm28k","funds":[],"msg":{"foo":"bar"},"sender":"cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6"}}
-        // {"type":"wasm/MsgExecuteContract","value":{"contract":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}
-        let expected = format!(r#"{{"type":"wasm/MsgExecuteContract","value":{{"contract":"{}","funds":[],"msg":{{"age":32,"height":187,"name":"John Smith"}},"sender":"{}"}}}}"#, contract_addr, sender);
-        println!("{}", output);
+        let expected = r#"{"type":"wasm/MsgExecuteContract","value":{"contract":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
         assert_eq!(output, expected);
     }
 
-    /*
-    TODO: test cases
+    #[test]
+    fn check_convert_instantiate_with_fund_admin() {
+        let orig_msg = DemoMsg {
+            name: "n00b".into(),
+            age: 18,
+            height: Some(165),
+        };
+        let init_msg = Msg::Wasm(WasmMsg::Instantiate {
+            sender: AccountId::parse_string("pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp")
+                .unwrap(),
+            admin: Some(
+                AccountId::parse_string("pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp").unwrap(),
+            ),
+            code_id: 12345,
+            label: "sticky".into(),
+            msg: serde_json::to_vec(&orig_msg).unwrap().into(),
+            funds: vec![Coin::new(1234, "ucosm")],
+        });
 
-    Valid bank
-    {"account_number":"17","chain_id":"pulsar-dev-1","fee":{"amount":[{"amount":"2500","denom":"upulse"}],"gas":"100000"},"memo":"for dinner","msgs":[{"type":"cosmos-sdk/MsgSend","value":{"amount":[{"amount":"7890","denom":"upulse"}],"from_address":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l","to_address":"pulsar1v0s5z6t0cpj3hkazfckl67edlg5mxr6hcfqg2p"}}],"sequence":"3"}
+        let amino_msg = AminoMsg::build(&init_msg);
+        let output = serde_json::to_string(&amino_msg).unwrap();
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","code_id":"12345","funds":[{"amount":"1234","denom":"ucosm"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
+        assert_eq!(output, expected);
+    }
 
-    Invalid instantiate
-    {"account_number":"17","chain_id":"pulsar-dev-1","fee":{"amount":[{"amount":"2976","denom":"upulse"}],"gas":"119035"},"memo":"Create a hackatom instance in deploy_hackatom.js","msgs":[{"type":"wasm/MsgInstantiateContract","value":{"admin":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l","code_id":"3","funds":[],"label":"PULSE Token","msg":{"name":"pulsar","symbol":"PULSE","decimals":6,"initial_balances":[{"address":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l","amount":"50000000"}]},"sender":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"}}],"sequence":"5"}
+    // Ensure empty admin is not serialized but empty fund are
+    #[test]
+    fn check_convert_instantiate_no_fund_admin() {
+        let orig_msg = DemoMsg {
+            name: "n00b".into(),
+            age: 18,
+            height: Some(165),
+        };
+        let init_msg = Msg::Wasm(WasmMsg::Instantiate {
+            sender: AccountId::parse_string("pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp")
+                .unwrap(),
+            admin: None,
+            code_id: 12345,
+            label: "sticky".into(),
+            msg: serde_json::to_vec(&orig_msg).unwrap().into(),
+            funds: vec![],
+        });
 
-    Invalid execute
-    {"account_number":"17","chain_id":"pulsar-dev-1","fee":{"amount":[{"amount":"2696","denom":"upulse"}],"gas":"107830"},"memo":"","msgs":[{"type":"wasm/MsgExecuteContract","value":{"contract":"pulsar1c3rjc8s08mkkydnd5p7rvt0g6eqmtdlu7z2aye803feev2e7dvgswxlvhe","funds":[],"msg":{"transfer":{"recipient":"pulsar1ktacd99wv25p73kwryvu43tg4n8n2wwaxns079","amount":"42000000"}},"sender":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"}}],"sequence":"8"}
-
-     */
-
+        let amino_msg = AminoMsg::build(&init_msg);
+        let output = serde_json::to_string(&amino_msg).unwrap();
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"code_id":"12345","funds":[],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
+        assert_eq!(output, expected);
+    }
 }
