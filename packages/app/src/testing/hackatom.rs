@@ -186,7 +186,7 @@ fn basic_hackatom_usage() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/basic-hackatom-usage");
+    } = setup("/tmp/slay3r/basic-hackatom-usage");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -245,7 +245,7 @@ fn hackatom_with_instantiate_2() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/hackatom-with-instantiate-2");
+    } = setup("/tmp/slay3r/hackatom-with-instantiate-2");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -281,7 +281,7 @@ fn error_handling_from_api_call() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/error-handling-from-api-call");
+    } = setup("/tmp/slay3r/error-handling-from-api-call");
 
     // other actors
     let sender = signer.account_id();
@@ -322,7 +322,7 @@ fn check_message_loop() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-message-loop");
+    } = setup("/tmp/slay3r/check-message-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -372,7 +372,7 @@ fn check_memory_loop() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-memory-loop");
+    } = setup("/tmp/slay3r/check-memory-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -447,7 +447,7 @@ fn check_cpu_loop() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-cpu-loop");
+    } = setup("/tmp/slay3r/check-cpu-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -491,7 +491,7 @@ fn check_storage_loop() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-storage-loop");
+    } = setup("/tmp/slay3r/check-storage-loop");
 
     // other actors
     let sender = signer.account_id();
@@ -534,7 +534,7 @@ fn check_panic_handling() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-panic-handling");
+    } = setup("/tmp/slay3r/check-panic-handling");
 
     // other actors
     let sender = signer.account_id();
@@ -576,7 +576,7 @@ fn check_query_recursion() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-query-recursion");
+    } = setup("/tmp/slay3r/check-query-recursion");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -624,7 +624,7 @@ fn check_query_balance() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/check-query-balance");
+    } = setup("/tmp/slay3r/check-query-balance");
 
     // other actors
     let sender = signer.account_id();
@@ -666,7 +666,7 @@ fn migrate_works() {
         signer,
         code_id,
         ..
-    } = setup("/tmp/pulsar/migrate-works");
+    } = setup("/tmp/slay3r/migrate-works");
 
     // other actors
     let verify_key = PrivateKey::random();
@@ -742,7 +742,7 @@ fn sudo_works() {
         signer,
         code_id,
         gov_key,
-    } = setup("/tmp/pulsar/sudo-works");
+    } = setup("/tmp/slay3r/sudo-works");
 
     // other actors
     let verify_key = PrivateKey::random();

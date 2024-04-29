@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn can_instatiate() {
-        let path = "/tmp/pulsar/test-can-instantiate";
+        let path = "/tmp/slay3r/test-can-instantiate";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn happy_path_create_send_query() {
-        let path = "/tmp/pulsar/test-happy-path-create-send-query";
+        let path = "/tmp/slay3r/test-happy-path-create-send-query";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
@@ -585,7 +585,7 @@ mod tests {
 
     #[test]
     fn query_with_iterator() {
-        let path = "/tmp/pulsar/test-query-with-iterator";
+        let path = "/tmp/slay3r/test-query-with-iterator";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 

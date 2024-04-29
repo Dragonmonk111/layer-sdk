@@ -510,8 +510,8 @@ mod tests {
     // run finalize_block
     // query account + balances for update
     fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
-        let sender = must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l");
-        let recipient = must_id("pulsar1y5hl7x8hxl72dc9gu920eaz6l7vhl0lu264u06");
+        let sender = must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j");
+        let recipient = must_id("slay3r1y5hl7x8hxl72dc9gu920eaz6l7vhl0luu6s70h");
         let denom: &str = "uslay";
 
         let expected_gas = 16_000u64;
@@ -532,7 +532,7 @@ mod tests {
             },
         };
         // TODO: remove from App args, build inside (with config)
-        let logic = StateMachine::new(&AppConfig::new("/tmp/pulsar/transaction_workflow"));
+        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3r/transaction_workflow"));
         let request = mock_init(&genesis);
 
         // create the app
@@ -571,7 +571,7 @@ mod tests {
                 recipient: recipient.clone(),
                 amount: coins(2_000_000, denom),
             })],
-            signer: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
+            signer: must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"),
             signing_info: SigningInfo {
                 message_hash: Binary::from(
                     hex!("6d368a4b8436e0b19a2d06069e0b70086ba7c40e91a9d04d31946c10346d79a9")

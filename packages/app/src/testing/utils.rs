@@ -326,7 +326,7 @@ mod test {
         let account = AccountId::unchecked("foobar");
         let genesis = sample_genesis(&account);
 
-        let wasm_dir = "/tmp/pulsar/can_init_and_query_chain";
+        let wasm_dir = "/tmp/slay3r/can_init_and_query_chain";
         let mut app = TestApp::new(wasm_dir);
         app.init(&genesis, "super-chain");
 
@@ -358,7 +358,7 @@ mod test {
         let account = AccountId::unchecked("foobar");
         let genesis = sample_genesis(&account);
 
-        let mut app = TestApp::new("/tmp/pulsar/run_empty_blocks");
+        let mut app = TestApp::new("/tmp/slay3r/run_empty_blocks");
         app.init(&genesis, "super-chain");
 
         app.block(&[]);
@@ -380,7 +380,7 @@ mod test {
         let acct = signer.account_id().unwrap();
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("/tmp/pulsar/can_check_tx");
+        let mut app = TestApp::new("/tmp/slay3r/can_check_tx");
         let genesis = sample_genesis(&acct);
         app.init(&genesis, "super-chain");
 
@@ -417,7 +417,7 @@ mod test {
         let acct = signer.account_id().unwrap();
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("/tmp/pulsar/check_tx_failures");
+        let mut app = TestApp::new("/tmp/slay3r/check_tx_failures");
         let genesis = sample_genesis(&acct);
         app.init(&genesis, "super-chain");
 
@@ -449,7 +449,7 @@ mod test {
         let sender = AccountId::unchecked("no private key");
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("/tmp/pulsar/can_simulate_tx");
+        let mut app = TestApp::new("/tmp/slay3r/can_simulate_tx");
         let genesis = sample_genesis(&sender);
         app.init(&genesis, "super-chain");
 
@@ -473,7 +473,7 @@ mod test {
         let acct = signer.account_id().unwrap();
         let rcpt = AccountId::unchecked("getting paid");
 
-        let mut app = TestApp::new("/tmp/pulsar/process_block_with_send");
+        let mut app = TestApp::new("/tmp/slay3r/process_block_with_send");
         let genesis = sample_genesis(&acct);
         app.init(&genesis, "super-chain");
 

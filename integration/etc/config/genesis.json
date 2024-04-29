@@ -1,6 +1,6 @@
 {
   "genesis_time": "2023-05-23T18:35:27.386586Z",
-  "chain_id": "pulsar-dev-1",
+  "chain_id": "slay3r-dev",
   "initial_height": "0",
   "consensus_params": {
     "block": {
@@ -36,7 +36,7 @@
   "app_state": {
     "bank": [
       {
-        "address": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l",
+        "address": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j",
         "balance": [
           {
             "amount": "4000000000",
@@ -45,7 +45,7 @@
         ]
       },
       {
-        "address": "pulsar10dyr9899g6t0pelew4nvf4j5c3jcgv0rl3n2u3",
+        "address": "slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu",
         "balance": [
           {
             "amount": "4000000000",
@@ -54,7 +54,7 @@
         ]
       },
       {
-        "address": "pulsar1xy4yqngt0nlkdcenxymg8tenrghmek4n6qggxn",
+        "address": "slay3r1xy4yqngt0nlkdcenxymg8tenrghmek4nvqd2x7",
         "balance": [
           {
             "amount": "4000000000",
@@ -63,7 +63,7 @@
         ]
       },
       {
-        "address": "pulsar142u9fgcjdlycfcez3lw8x6x5h7rfjlnfkpag7r",
+        "address": "slay3r142u9fgcjdlycfcez3lw8x6x5h7rfjlnfqpc27w",
         "balance": [
           {
             "amount": "4000000000",
@@ -72,7 +72,7 @@
         ]
       },
       {
-        "address": "pulsar1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rwdtsdr",
+        "address": "slay3r1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rcdwjdw",
         "balance": [
           {
             "amount": "4000000000",
@@ -81,7 +81,7 @@
         ]
       },
       {
-        "address": "pulsar1cjsxept9rkggzxztslae9ndgpdyt24087k5kwe",
+        "address": "slay3r1cjsxept9rkggzxztslae9ndgpdyt2408gk35w5",
         "balance": [
           {
             "amount": "1000000000",
@@ -91,7 +91,7 @@
       }
     ],
     "wasm": {
-      "gov_account": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"
+      "gov_account": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"
     }
   }
 }

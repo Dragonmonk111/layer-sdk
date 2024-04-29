@@ -7,8 +7,8 @@ use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
 pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("SLAY_BECH32");
-// pub const DEFAULT_BECH32_PREFIX: &str = "slay3r";
-pub const DEFAULT_BECH32_PREFIX: &str = "pulsar";
+pub const DEFAULT_BECH32_PREFIX: &str = "slay3r";
+// pub const DEFAULT_BECH32_PREFIX: &str = "pulsar";
 
 /// Valid lengths of decoded addresses
 pub const VALID_ADDR_LENGTH: [usize; 2] = [20usize, 32usize];
