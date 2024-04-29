@@ -18,22 +18,22 @@ You should now see the Web interface at http://localhost:16686
 
 **Note** If you enable jaeger, all logs will go to that server via an async batch API. Nothing will be written out to the shell, as it added too much overhead for tracing information.
 
-## Run Pulsarimd with OpenTelemetry
+## Run Slay3rd with OpenTelemetry
 
-You can enable jaeger tracing either with `--jaeger` flag or settings `PULSE_JAEGER=true` in the environment.
+You can enable jaeger tracing either with `--jaeger` flag or settings `SLAY_JAEGER=true` in the environment.
 Since you want to see real-world numbers, let's compile release mode:
 
 ```bash
 # this will make runtime a bit faster if we don't want low-level tracing info
 cargo install --path . --features no-trace
 cargo install --path .
-PULSE_LOG=debug pulsariumd --jaeger
+SLAY_LOG=debug slay3rd --jaeger
 ```
 
 Or with lmdb:
 
 ```bash
-PULSE_LOG=debug pulsariumd --jaeger --lmdb ~/.pulse-test/lmdb-1
+SLAY_LOG=debug slay3rd --jaeger --lmdb ~/.slay3r-test/lmdb-1
 ```
 
 ## Test with integration tests

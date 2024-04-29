@@ -1,14 +1,14 @@
 # Integration Tests
 
 This is a series of high level integration tests using CosmJS, that run through
-the full stack - connecting to Tendermint RPC, then to Pulsariumd via ABCI.
+the full stack - connecting to Tendermint RPC, then to Slay3rd via ABCI.
 
 They should be used occasionally as a sanity check for compatibility with CosmJS,
 and also as a place to generate test vectors for fixtures for Rust unit tests.
 
 ## Running Tests
 
-First, we assume you have installed everything and know [how to run pulsariumd](../app/pulsariumd/README.md).
+First, we assume you have installed everything and know [how to run slay3rd](../app/slay3rd/README.md).
 This is currently designed to be run and debugged manually, and not set up for CI.
 This may change in the future.
 
@@ -27,10 +27,10 @@ cp -r ./etc ~/.pulse-test
 Run in one terminal:
 
 ```shell
-pulsariumd --home ~/.pulse-test
+slay3rd --home ~/.pulse-test
 
 # or dev mode
-cd ../app/pulsariumd
+cd ../app/slay3rd
 cargo run -- --home ~/.pulse-test
 ```
 

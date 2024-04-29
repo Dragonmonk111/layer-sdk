@@ -6,14 +6,14 @@ Pull the following images:
 
 ```bash
 docker pull alpine:latest
-docker pull rust:1.70-bookworm
+docker pull rust:1.77-bookworm
 docker pull debian:bookworm-slim
 ```
 
 Build the local code:
 
 ```bash
-docker build . -f docker/Dockerfile.pulsariumd -t pulsar/pulsariumd:latest
+docker build . -f docker/Dockerfile.slay3rd -t ghcr.io/lay3rlabs/slay3rd:latest
 ```
 
 ## Run With Docker Compose
@@ -35,7 +35,7 @@ docker compose up
 This is quite noisy with CometBFT spam, so you can check in another terminal:
 
 ```bash
-docker compose logs -f pulsariumd
+docker compose logs -f slay3rd
 ```
 
 You should be able to see the jaegar traces at http://localhost:8080

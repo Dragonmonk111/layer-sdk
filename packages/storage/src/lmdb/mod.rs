@@ -5,7 +5,7 @@ use std::path::Path;
 use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult, HexEncode};
+use slay3r_std::{GasMeter, GasResult, HexEncode};
 
 use crate::{
     FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, DEFAULT_PERSISTED_PRICES,

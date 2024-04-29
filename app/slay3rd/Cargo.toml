@@ -1,6 +1,6 @@
 [package]
-name = "pulsariumd"
-description = "Rust ABCI app to run Pulsarium with CometBFT 0.38"
+name = "slay3rd"
+description = "Rust ABCI app to run slay3r with CometBFT 0.38"
 version = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
@@ -15,12 +15,12 @@ optimize = ["tracing/release_max_level_info"]
 no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
-pulsar-abci = { workspace = true }
-pulsar-app = { workspace = true }
-pulsar-std = { workspace = true }
-pulsar-cosmos = { workspace = true }
-pulsar-proto = { workspace = true, features = ["server"] }
-pulsar-storage = { workspace = true, features = ["lmdb"] }
+slay3r-abci = { workspace = true }
+slay3r-app = { workspace = true }
+slay3r-std = { workspace = true }
+slay3r-cosmos = { workspace = true }
+slay3r-proto = { workspace = true, features = ["server"] }
+slay3r-storage = { workspace = true, features = ["lmdb"] }
 cosmwasm-std = { workspace = true }
 
 clap = { version = "4.2.4", features = ["derive"]}

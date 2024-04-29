@@ -2396,145 +2396,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pulsar-abci"
-version = "0.2.0"
-dependencies = [
- "bytes",
- "prost 0.12.1",
- "rayon",
- "tendermint-proto 0.34.0",
- "thiserror",
- "tokio",
- "tokio-rayon",
- "tracing",
-]
-
-[[package]]
-name = "pulsar-app"
-version = "0.2.0"
-dependencies = [
- "bytes",
- "cosmos-sdk-proto",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-vm",
- "cw-storage-plus",
- "cw-utils",
- "cw20",
- "cw20-base",
- "hex-literal",
- "itertools 0.11.0",
- "k256",
- "parking_lot",
- "pulsar-std",
- "pulsar-storage",
- "sha2 0.10.7",
- "tc-caller",
- "tc-echo",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "pulsar-cosmos"
-version = "0.2.0"
-dependencies = [
- "bytes",
- "cosmos-sdk-proto",
- "cosmrs",
- "cosmwasm-std",
- "flate2",
- "hex-literal",
- "pulsar-app",
- "pulsar-std",
- "serde",
- "serde_json",
- "sha2 0.10.7",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "pulsar-proto"
-version = "0.2.0"
-dependencies = [
- "bytes",
- "prost 0.12.1",
- "prost-types 0.12.1",
- "tonic 0.10.2",
-]
-
-[[package]]
-name = "pulsar-std"
-version = "0.2.0"
-dependencies = [
- "bech32",
- "bytes",
- "chrono",
- "cosmwasm-crypto",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus",
- "derivative",
- "hex",
- "itertools 0.11.0",
- "ripemd",
- "sha2 0.10.7",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "pulsar-storage"
-version = "0.2.0"
-dependencies = [
- "cosmwasm-std",
- "cw-storage-plus",
- "libc",
- "lmdb",
- "parking_lot",
- "pulsar-std",
- "serde",
- "sha2 0.10.7",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "pulsariumd"
-version = "0.2.0"
-dependencies = [
- "bytes",
- "clap",
- "cosmwasm-std",
- "figment",
- "hex-literal",
- "opentelemetry",
- "opentelemetry-jaeger",
- "parking_lot",
- "pico-args",
- "prost 0.12.1",
- "pulsar-abci",
- "pulsar-app",
- "pulsar-cosmos",
- "pulsar-proto",
- "pulsar-std",
- "pulsar-storage",
- "serde",
- "sha2 0.10.7",
- "tendermint 0.34.0",
- "tendermint-proto 0.34.0",
- "tendermint-rpc",
- "thiserror",
- "tokio",
- "tonic 0.10.2",
- "tower",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3160,6 +3021,145 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "slay3r-abci"
+version = "0.2.0"
+dependencies = [
+ "bytes",
+ "prost 0.12.1",
+ "rayon",
+ "tendermint-proto 0.34.0",
+ "thiserror",
+ "tokio",
+ "tokio-rayon",
+ "tracing",
+]
+
+[[package]]
+name = "slay3r-app"
+version = "0.2.0"
+dependencies = [
+ "bytes",
+ "cosmos-sdk-proto",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-vm",
+ "cw-storage-plus",
+ "cw-utils",
+ "cw20",
+ "cw20-base",
+ "hex-literal",
+ "itertools 0.11.0",
+ "k256",
+ "parking_lot",
+ "sha2 0.10.7",
+ "slay3r-std",
+ "slay3r-storage",
+ "tc-caller",
+ "tc-echo",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "slay3r-cosmos"
+version = "0.2.0"
+dependencies = [
+ "bytes",
+ "cosmos-sdk-proto",
+ "cosmrs",
+ "cosmwasm-std",
+ "flate2",
+ "hex-literal",
+ "serde",
+ "serde_json",
+ "sha2 0.10.7",
+ "slay3r-app",
+ "slay3r-std",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "slay3r-proto"
+version = "0.2.0"
+dependencies = [
+ "bytes",
+ "prost 0.12.1",
+ "prost-types 0.12.1",
+ "tonic 0.10.2",
+]
+
+[[package]]
+name = "slay3r-std"
+version = "0.2.0"
+dependencies = [
+ "bech32",
+ "bytes",
+ "chrono",
+ "cosmwasm-crypto",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "derivative",
+ "hex",
+ "itertools 0.11.0",
+ "ripemd",
+ "sha2 0.10.7",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "slay3r-storage"
+version = "0.2.0"
+dependencies = [
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "libc",
+ "lmdb",
+ "parking_lot",
+ "serde",
+ "sha2 0.10.7",
+ "slay3r-std",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "slay3rd"
+version = "0.2.0"
+dependencies = [
+ "bytes",
+ "clap",
+ "cosmwasm-std",
+ "figment",
+ "hex-literal",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "parking_lot",
+ "pico-args",
+ "prost 0.12.1",
+ "serde",
+ "sha2 0.10.7",
+ "slay3r-abci",
+ "slay3r-app",
+ "slay3r-cosmos",
+ "slay3r-proto",
+ "slay3r-std",
+ "slay3r-storage",
+ "tendermint 0.34.0",
+ "tendermint-proto 0.34.0",
+ "tendermint-rpc",
+ "thiserror",
+ "tokio",
+ "tonic 0.10.2",
+ "tower",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pulsar_proto::cosmwasm::wasm::v1::{
+use slay3r_proto::cosmwasm::wasm::v1::{
     query_server::{Query, QueryServer},
     QueryAllContractStateRequest, QueryAllContractStateResponse, QueryCodeRequest,
     QueryCodeResponse, QueryCodesRequest, QueryCodesResponse, QueryContractHistoryRequest,
@@ -11,7 +11,7 @@ use pulsar_proto::cosmwasm::wasm::v1::{
     QuerySmartContractStateResponse,
 };
 
-use pulsar_abci::MultiThreadedDispatcher;
+use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
 use super::{abci_response_to_grpc, grpc_request_to_abci};

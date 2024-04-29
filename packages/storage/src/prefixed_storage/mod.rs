@@ -2,7 +2,7 @@ mod length_prefixed;
 mod namespace_helpers;
 
 use cosmwasm_std::{Order, Record};
-use pulsar_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult};
 
 use crate::{ReadonlyStorage, Storage};
 use length_prefixed::{to_length_prefixed, to_length_prefixed_nested};

@@ -5,8 +5,8 @@ use cosmwasm_vm::{
     call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
     AnalysisReport, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
 };
-use pulsar_std::{AccountId, GasMeter};
-use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
+use slay3r_std::{AccountId, GasMeter};
+use slay3r_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
 use crate::{wasm::keeper::contract_storage, StateMachine};
 
@@ -404,8 +404,8 @@ mod tests {
         to_json_vec, Order, Uint128,
     };
     use cw20::Cw20Coin;
-    use pulsar_std::AccountId;
-    use pulsar_storage::{MemoryStore, PersistentStorage};
+    use slay3r_std::AccountId;
+    use slay3r_storage::{MemoryStore, PersistentStorage};
 
     use crate::AppConfig;
 
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn can_instatiate() {
-        let path = "/tmp/pulsar/test-can-instantiate";
+        let path = "/tmp/slay3r/test-can-instantiate";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
@@ -427,14 +427,14 @@ mod tests {
         let env = mock_env();
         let sender = AccountId::unchecked("Sillyness");
         let contract = AccountId::unchecked("My first cw20");
-        let info = mock_info(&sender.to_string(), &[coin(55_000, "upulse")]);
+        let info = mock_info(&sender.to_string(), &[coin(55_000, "uslay")]);
         let meter = GasMeter::infinite();
         let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
 
         let msg = cw20_base::msg::InstantiateMsg {
-            name: "pulsar".to_string(),
-            symbol: "PLS".to_string(),
+            name: "slayer".to_string(),
+            symbol: "SLAY".to_string(),
             decimals: 6,
             initial_balances: vec![Cw20Coin {
                 address: sender.to_string(),
@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn happy_path_create_send_query() {
-        let path = "/tmp/pulsar/test-happy-path-create-send-query";
+        let path = "/tmp/slay3r/test-happy-path-create-send-query";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
@@ -491,8 +491,8 @@ mod tests {
 
         // instantiate
         let msg = cw20_base::msg::InstantiateMsg {
-            name: "pulsar".to_string(),
-            symbol: "PLS".to_string(),
+            name: "slayer".to_string(),
+            symbol: "SLAY".to_string(),
             decimals: 6,
             initial_balances: vec![Cw20Coin {
                 address: sender.to_string(),
@@ -585,7 +585,7 @@ mod tests {
 
     #[test]
     fn query_with_iterator() {
-        let path = "/tmp/pulsar/test-query-with-iterator";
+        let path = "/tmp/slay3r/test-query-with-iterator";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
@@ -606,8 +606,8 @@ mod tests {
 
         // instantiate
         let msg = cw20_base::msg::InstantiateMsg {
-            name: "pulsar".to_string(),
-            symbol: "PLS".to_string(),
+            name: "slayer".to_string(),
+            symbol: "SLAY".to_string(),
             decimals: 6,
             initial_balances: vec![
                 Cw20Coin {

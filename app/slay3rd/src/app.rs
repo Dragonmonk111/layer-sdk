@@ -9,7 +9,7 @@ use tracing::{
     info, info_span, trace,
 };
 
-use pulsar_abci::Application;
+use slay3r_abci::Application;
 use tendermint_proto::abci::{
     response_process_proposal, RequestApplySnapshotChunk, RequestCheckTx, RequestEcho,
     RequestFinalizeBlock, RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
@@ -20,9 +20,9 @@ use tendermint_proto::abci::{
     ResponseProcessProposal, ResponseQuery,
 };
 
-use pulsar_app::{App, AppConfig, AppLoadError, StateMachine};
-use pulsar_std::{api::TxResult, HexEncode};
-use pulsar_storage::PersistentStorage;
+use slay3r_app::{App, AppConfig, AppLoadError, StateMachine};
+use slay3r_std::{api::TxResult, HexEncode};
+use slay3r_storage::PersistentStorage;
 
 use crate::{
     decode::{

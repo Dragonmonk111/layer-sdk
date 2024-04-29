@@ -1,5 +1,5 @@
-# docker build . -f docker/Dockerfile.gateway -t pulsar/gateway:latest
-# docker run --rm -it pulsar/gateway:latest /bin/bash
+# docker build . -f docker/Dockerfile.gateway -t ghcr.io/lay3rlabs/gateway:latest
+# docker run --rm -it ghcr.io/lay3rlabs/gateway:latest /bin/bash
 
 FROM golang:1.20 AS build-env
 

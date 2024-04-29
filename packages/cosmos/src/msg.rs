@@ -9,7 +9,7 @@ use cosmos_sdk_proto::{
 use cosmrs::Any;
 use tracing::trace_span;
 
-use pulsar_std::{AccountId, BankMsg, Msg, MsgError, WasmMsg};
+use slay3r_std::{AccountId, BankMsg, Msg, MsgError, WasmMsg};
 
 use crate::error::CosmosError;
 use crate::unzip::unzip_if_needed;

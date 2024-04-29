@@ -1,5 +1,5 @@
 [package]
-name = "pulsar-abci"
+name = "slay3r-abci"
 description = "Optimized async ABCI application for Tendermint"
 version = { workspace = true }
 license = { workspace = true }

@@ -1,12 +1,12 @@
-# Pulsarium Daemon
+# Slay3r Daemon
 
 This is the core application, and ABCI-enabled app that talks with tendermint to convert
 the powerful, pure-Rust state machine into a full-fledged blockchain.
 
 ## Configuration
 
-All values can be specified either in a `pulsarium.toml` file (located in `~/.pulsarium/config`),
-via environmental variables (prefixed with `PULSE_`), or as command-line flags.
+All values can be specified either in a `slay3r.toml` file (located in `~/.slay3r/config`),
+via environmental variables (prefixed with `SLAY_`), or as command-line flags.
 The actions listed later take precedence over those listed earlier.
 
 Any field not defined will use defaults from the code.
@@ -14,7 +14,7 @@ Any field not defined will use defaults from the code.
 You can see this via:
 
 ```shell
-PULSE_LOG="debug" cargo run -- --host 0.0.0.0
+SLAY_LOG="debug" cargo run -- --host 0.0.0.0
 ```
 
 To see the full options:
@@ -42,22 +42,22 @@ ls -l $(which cometbft)
 # Around 26MB at v0.38.0-alpha.2!
 ```
 
-You also need to install the pulsariumd binary from this repo:
+You also need to install the slay3rd binary from this repo:
 
 ```shell
-cargo install --path ./app/pulsariumd
+cargo install --path ./app/slay3rd
 
-pulsariumd -h
-ls -l $(which pulsariumd)
+slay3rd -h
+ls -l $(which slay3rd)
 # Around 2.7MB at v0.2.0!
 ```
 
 (Dev note: checking size and optimization...)
 
 ```shell
-cd ./app/pulsariumd
+cd ./app/slay3rd
 RUSTFLAGS='-C link-arg=-s' cargo build --release
-ls -l ../../target/release/pulsariumd
+ls -l ../../target/release/slay3rd
 # Around 1.8MB at v0.2.0!
 ```
 
@@ -66,29 +66,29 @@ ls -l ../../target/release/pulsariumd
 Set up basic tendermint
 
 ```
-rm -rf ~/.pulsarium
-mkdir -p ~/.pulsarium
-cometbft init --home ~/.pulsarium
+rm -rf ~/.slay3r
+mkdir -p ~/.slay3r
+cometbft init --home ~/.slay3r
 ```
 
 
-Add the following to `~/.pulsarium/config/genesis.json`:
+Add the following to `~/.slay3r/config/genesis.json`:
 
 ```json
   "app_state": {
     "bank": [
       {
-        "address": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l",
+        "address": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j",
         "balance": [
           {
             "amount": "4000000000",
-            "denom": "upulse"
+            "denom": "uslay"
           }
         ]
       }
     ],
     "wasm": {
-      "gov_account": "pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"
+      "gov_account": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"
     }
   }
 ```
@@ -98,13 +98,13 @@ Add the following to `~/.pulsarium/config/genesis.json`:
 One terminal:
 
 ```
-cometbft start --home ~/.pulsarium
+cometbft start --home ~/.slay3r
 ```
 
 Second terminal:
 
 ```
-pulsariumd --log debug
+slay3rd --log debug
 ```
 
 ### Reset
@@ -114,27 +114,27 @@ We need to reset and restart. (We will be able to continue later with similar ve
 once we have a disk store.)
 
 ```shell
-cometbft unsafe-reset-all --home ~/.pulsarium
+cometbft unsafe-reset-all --home ~/.slay3r
 ```
 
 ### Dev Mode
 
-For debugging, let's run a quick build of `pulsariumd`:
+For debugging, let's run a quick build of `slay3rd`:
 
 ```shell
-cd ./app/pulsariumd
-PULSE_LOG=debug,tendermint_abci::application=error cargo run
+cd ./app/slay3rd
+SLAY_LOG=debug,tendermint_abci::application=error cargo run
 ```
 
 For cometbft, we also need to reset state every crash.
 
 ```
-cometbft unsafe-reset-all --home ~/.pulsarium
-cometbft start --home ~/.pulsarium
+cometbft unsafe-reset-all --home ~/.slay3r
+cometbft start --home ~/.slay3r
 ```
 
 
-Then just keep restarting the `cometbft` and `pulsariumd` process on crash
+Then just keep restarting the `cometbft` and `slay3rd` process on crash
 
 Update: you also need to run the gateway
 
@@ -146,7 +146,7 @@ go run main.go -grpc-server-endpoint localhost:9090
 (Maybe with docker?)
 
 ```bash
-docker run --network host pulsar/gateway:latest /app -grpc-server-endpoint localhost:9090
+docker run --network host ghcr.io/lay3rlabs/gateway:latest /app -grpc-server-endpoint localhost:9090
 ```
 
 /cosmos.base.tendermint.v1beta1.Service/GetNodeInfo

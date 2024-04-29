@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Uint128};
 use cw20::Cw20Coin;
-use pulsar_std::{
+use slay3r_std::{
     response::{AccountResponse, AuthQueryResponse, QueryResponse, WasmQueryResponse},
     AccountId, AuthQuery, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };
@@ -39,7 +39,7 @@ fn happy_path_cw20() {
     let sender = signer.to_pubkey().account_id().unwrap();
     let rcpt = AccountId::unchecked("getting paid");
 
-    let path = prepare_cache("/tmp/pulsar/happy-path-cw20");
+    let path = prepare_cache("/tmp/slay3r/happy-path-cw20");
     let mut app = TestApp::new(path);
     let genesis = cw20_genesis(&sender);
     app.init(&genesis, "cw-chain");

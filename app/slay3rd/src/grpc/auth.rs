@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use pulsar_proto::cosmos::auth::v1beta1::{
+use slay3r_proto::cosmos::auth::v1beta1::{
     query_server::{Query, QueryServer},
     QueryAccountRequest, QueryAccountResponse, QueryAccountsRequest, QueryAccountsResponse,
     QueryModuleAccountByNameRequest, QueryModuleAccountByNameResponse, QueryParamsRequest,
     QueryParamsResponse,
 };
 
-use pulsar_abci::MultiThreadedDispatcher;
+use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
 use super::{abci_response_to_grpc, grpc_request_to_abci};

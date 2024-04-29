@@ -2,7 +2,7 @@ use cosmwasm_std::{Binary, StdError};
 use serde::Serialize;
 use serde_json::value::Value;
 
-use pulsar_std::{BankMsg, FeeInfo, Msg, WasmMsg};
+use slay3r_std::{BankMsg, FeeInfo, Msg, WasmMsg};
 
 // We must sort the keys alphabetically to get the "amino serialization"
 #[derive(Serialize, Debug)]
@@ -64,8 +64,8 @@ pub struct StdFee {
     // pub payer: Option<String>,
 }
 
-impl From<&pulsar_std::FeeInfo> for StdFee {
-    fn from(value: &pulsar_std::FeeInfo) -> Self {
+impl From<&slay3r_std::FeeInfo> for StdFee {
+    fn from(value: &slay3r_std::FeeInfo) -> Self {
         Self {
             amount: value.fee.iter().map(Into::into).collect(),
             gas: value.gas_limit.to_string(),
@@ -199,8 +199,8 @@ pub struct AminoMsgInstantiate {
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::Coin;
-    use pulsar_std::AccountId;
     use serde::Deserialize;
+    use slay3r_std::AccountId;
 
     use super::*;
 
@@ -272,9 +272,9 @@ mod tests {
             height: Some(187),
         };
         let exec_msg = Msg::Wasm(WasmMsg::Execute {
-            sender: AccountId::parse_string("pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp")
+            sender: AccountId::parse_string("slay3r1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqc5nacv")
                 .unwrap(),
-            contract_addr: AccountId::parse_string("pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp")
+            contract_addr: AccountId::parse_string("slay3r1vfkxzcmtdphkcetndahqqqqqqqqqqqqqyet8zv")
                 .unwrap(),
             msg: serde_json::to_vec(&orig_msg).unwrap().into(),
             funds: vec![],
@@ -282,7 +282,7 @@ mod tests {
 
         let amino_msg = AminoMsg::build(&exec_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgExecuteContract","value":{"contract":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
+        let expected = r#"{"type":"wasm/MsgExecuteContract","value":{"contract":"slay3r1vfkxzcmtdphkcetndahqqqqqqqqqqqqqyet8zv","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"slay3r1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqc5nacv"}}"#;
         assert_eq!(output, expected);
     }
 
@@ -294,20 +294,20 @@ mod tests {
             height: Some(165),
         };
         let init_msg = Msg::Wasm(WasmMsg::Instantiate {
-            sender: AccountId::parse_string("pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp")
+            sender: AccountId::parse_string("slay3r1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqc5nacv")
                 .unwrap(),
             admin: Some(
-                AccountId::parse_string("pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp").unwrap(),
+                AccountId::parse_string("slay3r1vfkxzcmtdphkcetndahqqqqqqqqqqqqqyet8zv").unwrap(),
             ),
             code_id: 12345,
             label: "sticky".into(),
             msg: serde_json::to_vec(&orig_msg).unwrap().into(),
-            funds: vec![Coin::new(1234, "ucosm")],
+            funds: vec![Coin::new(1234, "uslay")],
         });
 
         let amino_msg = AminoMsg::build(&init_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","code_id":"12345","funds":[{"amount":"1234","denom":"ucosm"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"slay3r1vfkxzcmtdphkcetndahqqqqqqqqqqqqqyet8zv","code_id":"12345","funds":[{"amount":"1234","denom":"uslay"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"slay3r1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqc5nacv"}}"#;
         assert_eq!(output, expected);
     }
 
@@ -320,7 +320,7 @@ mod tests {
             height: Some(165),
         };
         let init_msg = Msg::Wasm(WasmMsg::Instantiate {
-            sender: AccountId::parse_string("pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp")
+            sender: AccountId::parse_string("slay3r1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqc5nacv")
                 .unwrap(),
             admin: None,
             code_id: 12345,
@@ -331,7 +331,7 @@ mod tests {
 
         let amino_msg = AminoMsg::build(&init_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"code_id":"12345","funds":[],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}"#;
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"code_id":"12345","funds":[],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"slay3r1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqc5nacv"}}"#;
         assert_eq!(output, expected);
     }
 }

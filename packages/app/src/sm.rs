@@ -5,10 +5,10 @@ use tracing::{
 };
 
 use cosmwasm_std::{BlockInfo, Event, StdError};
-use pulsar_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
-use pulsar_std::response::QueryResponse;
-use pulsar_std::{AccountId, GasMeter, Msg, Query, Tx};
-use pulsar_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
+use slay3r_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
+use slay3r_std::response::QueryResponse;
+use slay3r_std::{AccountId, GasMeter, Msg, Query, Tx};
+use slay3r_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
 
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};

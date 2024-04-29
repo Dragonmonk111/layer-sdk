@@ -3,11 +3,11 @@ use tracing::debug_span;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
-use pulsar_std::{
+use slay3r_std::{
     response::{AccountResponse, QueryResponse},
     AccountId, AuthQuery, GasMeter, Msg, PubKey, Tx, TxError,
 };
-use pulsar_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
+use slay3r_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;
@@ -221,7 +221,7 @@ pub struct TxData {
     /// We only support one sender per transaction
     pub signer: AccountId,
 
-    /// All messages in the payload, decoded to Pulsarium format
+    /// All messages in the payload, decoded to Slay3r format
     pub msgs: Vec<Msg>,
 
     /// Amount of gas this transaction may use

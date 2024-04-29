@@ -37,7 +37,7 @@ impl Tx {
 /// The encoding schemes are defined separately and there are many ways to transform
 /// raw bytes into a proper SignedTx instance.
 /// Once of which is the Cosmos SDK format (direct or legacy amino signing modes)
-/// There will be others more native to Pulsar in the future, or for compatibility with other chains.
+/// There will be others more native to Slay3r in the future, or for compatibility with other chains.
 #[derive(Derivative, Clone, PartialEq, Eq)]
 #[derivative(Debug)]
 pub struct SignedTx {

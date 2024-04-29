@@ -1,8 +1,8 @@
 {
-  "rpc": "http://rpc.spinner.zone",
-  "rest": "http://lcd.spinner.zone",
-  "chainId": "slay3r-dev",
-  "chainName": "Slay3r DevlNet",
+  "rpc": "http://localhost:26657",
+  "rest": "http://localhost:1317",
+  "chainId": "slay3r-local",
+  "chainName": "Slay3r LocalNet",
   "stakeCurrency": {
     "coinDenom": "SLAY",
     "coinMinimalDenom": "uslay",

@@ -14,13 +14,13 @@ use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
 };
-use pulsar_std::api::{
+use slay3r_std::api::{
     Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
     TxResponse, TxResult,
 };
-use pulsar_std::response::QueryResponse;
-use pulsar_std::{GasMeter, Query, Rfc3339, Tx};
-use pulsar_storage::{
+use slay3r_std::response::QueryResponse;
+use slay3r_std::{GasMeter, Query, Rfc3339, Tx};
+use slay3r_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
     Transaction,
 };
@@ -441,8 +441,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     #[cfg(test)]
-    pub fn copy_storage_to_memory(&self) -> pulsar_storage::MemoryStore {
-        pulsar_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
+    pub fn copy_storage_to_memory(&self) -> slay3r_storage::MemoryStore {
+        slay3r_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
     }
 }
 
@@ -455,15 +455,15 @@ mod tests {
     use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
     use hex_literal::hex;
 
-    use pulsar_std::api::{TmPubKey, ValidatorUpdate};
-    use pulsar_std::response::{
+    use slay3r_std::api::{TmPubKey, ValidatorUpdate};
+    use slay3r_std::response::{
         AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
     };
-    use pulsar_std::{
+    use slay3r_std::{
         must_id, AccountId, AuthQuery, BankMsg, BankQuery, FeeInfo, Msg, PubKey, SignedTx,
         SigningInfo,
     };
-    use pulsar_storage::MemoryStore;
+    use slay3r_storage::MemoryStore;
 
     use crate::genesis::{BankAccount, WasmParams};
     use crate::sm::AppConfig;
@@ -494,12 +494,12 @@ mod tests {
     #[test]
     fn transaction_workflow_lmdb() {
         // always delete, ignore "does not exist" error
-        let path = "/tmp/pulsar-test-lmdb";
+        let path = "/tmp/slay3r-test-lmdb";
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
         // create lmdb store and run same tests
-        let storage = pulsar_storage::LmdbStore::new(path, None);
+        let storage = slay3r_storage::LmdbStore::new(path, None);
         transaction_workflow(storage);
     }
 
@@ -510,9 +510,9 @@ mod tests {
     // run finalize_block
     // query account + balances for update
     fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
-        let sender = must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l");
-        let recipient = must_id("pulsar1y5hl7x8hxl72dc9gu920eaz6l7vhl0lu264u06");
-        let denom: &str = "upulse";
+        let sender = must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j");
+        let recipient = must_id("slay3r1y5hl7x8hxl72dc9gu920eaz6l7vhl0luu6s70h");
+        let denom: &str = "uslay";
 
         let expected_gas = 16_000u64;
 
@@ -532,7 +532,7 @@ mod tests {
             },
         };
         // TODO: remove from App args, build inside (with config)
-        let logic = StateMachine::new(&AppConfig::new("/tmp/pulsar/transaction_workflow"));
+        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3r/transaction_workflow"));
         let request = mock_init(&genesis);
 
         // create the app
@@ -571,7 +571,7 @@ mod tests {
                 recipient: recipient.clone(),
                 amount: coins(2_000_000, denom),
             })],
-            signer: must_id("pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"),
+            signer: must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"),
             signing_info: SigningInfo {
                 message_hash: Binary::from(
                     hex!("6d368a4b8436e0b19a2d06069e0b70086ba7c40e91a9d04d31946c10346d79a9")
@@ -599,7 +599,7 @@ mod tests {
                     },
                 ..
             }) => {
-                assert_eq!(gas_wanted, pulsar_std::api::DEFAULT_BLOCK_GAS);
+                assert_eq!(gas_wanted, slay3r_std::api::DEFAULT_BLOCK_GAS);
                 gas_used
             }
             x => panic!("Expected SimulateResponse, got {:?}", x),
@@ -611,7 +611,7 @@ mod tests {
 
         // create proper tx (from cosmjs)
         tx.fee = FeeInfo {
-            fee: Some(coin(2500, "upulse")),
+            fee: Some(coin(2500, "uslay")),
             gas_limit: 100000,
         };
         tx.signing_info.signature = Binary::from(hex!("e5367dc058d8942bddc453eb1b61119bf71186693d8fd0f1683ff7a1b4666e3b67d32f3ddf52360e365099f72b2417a9d6034883032ad1ac97b48f73e754351c").as_slice());

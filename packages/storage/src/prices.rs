@@ -1,4 +1,4 @@
-use pulsar_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PriceList {

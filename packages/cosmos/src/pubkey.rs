@@ -2,7 +2,7 @@ use cosmrs::tendermint::PublicKey as TendermintPublicKey;
 use cosmrs::tx::SignerPublicKey;
 use cosmrs::Any;
 
-use pulsar_std::{PubKey, QueryError, TxError};
+use slay3r_std::{PubKey, QueryError, TxError};
 
 pub fn parse_cosmos_pubkey(pubkey: &SignerPublicKey) -> Result<PubKey, TxError> {
     match pubkey {

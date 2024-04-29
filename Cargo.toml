@@ -37,12 +37,12 @@ prost = { version = "0.12.1" }
 prost-types = { version = "0.12.1" }
 tonic = { version = "0.10.2", default_features = false, features = ["codegen", "transport", "prost"] }
 
-pulsar-abci = { path = "./packages/abci" }
-pulsar-app = { path = "./packages/app" }
-pulsar-cosmos = { path = "./packages/cosmos" }
-pulsar-proto = { path = "./packages/proto" }
-pulsar-std = { path = "./packages/std" }
-pulsar-storage = { path = "./packages/storage" }
+slay3r-abci = { path = "./packages/abci" }
+slay3r-app = { path = "./packages/app" }
+slay3r-cosmos = { path = "./packages/cosmos" }
+slay3r-proto = { path = "./packages/proto" }
+slay3r-std = { path = "./packages/std" }
+slay3r-storage = { path = "./packages/storage" }
 
 tc-echo = { path = "./contracts/echo" }
 tc-caller = { path = "./contracts/caller" }

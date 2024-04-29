@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use cosmwasm_std::{from_json, Addr, CustomQuery, QuerierWrapper, Record, StdResult};
 
-use pulsar_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult};
 
 use super::error::{PlusError, PlusResult};
 use super::helpers::query_raw;

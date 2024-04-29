@@ -4,10 +4,10 @@ use tracing::debug_span;
 
 use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
 
-use pulsar_std::api::MsgResponse;
-use pulsar_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
-use pulsar_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
-use pulsar_storage::{
+use slay3r_std::api::MsgResponse;
+use slay3r_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
+use slay3r_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
+use slay3r_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
 };
 
@@ -361,8 +361,8 @@ mod test {
     use crate::AppConfig;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, coins, StdError};
-    use pulsar_std::response::BankQueryResponse;
-    use pulsar_storage::{MemoryStore, PersistentStorage, Storage};
+    use slay3r_std::response::BankQueryResponse;
+    use slay3r_storage::{MemoryStore, PersistentStorage, Storage};
 
     fn query_balance(bank: &Bank, store: &dyn Storage, rcpt: &AccountId) -> Vec<Coin> {
         let req = BankQuery::AllBalances {
@@ -370,7 +370,7 @@ mod test {
         };
         let block = mock_env().block;
         let meter = GasMeter::new(500_000);
-        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/query_balance"));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/query_balance"));
 
         let resp = bank
             .query(store.as_ref(), &meter, &block, &sm, req)
@@ -389,7 +389,7 @@ mod test {
         };
         let block = mock_env().block;
         let meter = GasMeter::new(500_000);
-        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/query_supply"));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/query_supply"));
 
         let resp = bank
             .query(store.as_ref(), &meter, &block, &sm, req)
@@ -407,7 +407,7 @@ mod test {
         let storage = MemoryStore::new();
         let mut store = storage.writer();
         let block = mock_env().block;
-        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/get_set_balance"));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/get_set_balance"));
         let meter = GasMeter::new(500_000);
 
         let owner = AccountId::unchecked("owner");
@@ -517,7 +517,7 @@ mod test {
         let mut store = storage.writer();
         let meter = GasMeter::new(1_000_000);
         let block = mock_env().block;
-        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/send_coins"));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/send_coins"));
 
         let owner = AccountId::unchecked("owner");
         let rcpt = AccountId::unchecked("receiver");
@@ -570,7 +570,7 @@ mod test {
         let mut store = storage.writer();
         let block = mock_env().block;
         let meter = GasMeter::new(1_000_000);
-        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/burn_coins"));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/burn_coins"));
 
         let owner = AccountId::unchecked("owner");
         let rcpt = AccountId::unchecked("recipient");
@@ -680,7 +680,7 @@ mod test {
         let mut store = storage.writer();
         let meter = GasMeter::new(1_000_000);
         let block = mock_env().block;
-        let sm = StateMachine::new(&AppConfig::new("/tmp/pulsar/fail_on_zero_values"));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/fail_on_zero_values"));
 
         let owner = AccountId::unchecked("owner");
         let rcpt = AccountId::unchecked("recipient");

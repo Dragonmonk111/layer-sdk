@@ -1,6 +1,6 @@
 use cosmwasm_std::{Attribute, Event};
 use cosmwasm_vm::AnalysisReport;
-use pulsar_std::AccountId;
+use slay3r_std::AccountId;
 
 use super::WasmError;
 

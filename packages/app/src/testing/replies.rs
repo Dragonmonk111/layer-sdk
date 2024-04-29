@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_json_binary, Event};
-use pulsar_std::api::TxResponse;
-use pulsar_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
+use slay3r_std::api::TxResponse;
+use slay3r_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
@@ -141,7 +141,7 @@ fn basic_init_callback_and_catching_errors() {
         signer,
         caller_id,
         echo_id,
-    } = setup("/tmp/pulsar/basic_init_callback_and_catching_errors");
+    } = setup("/tmp/slay3r/basic_init_callback_and_catching_errors");
     let sender = signer.account_id();
 
     let subcall = tc_caller::CallInfo {
@@ -261,7 +261,7 @@ fn submsg_gas_limits() {
         signer,
         caller_id,
         echo_id,
-    } = setup("/tmp/pulsar/submsg_gas_limits");
+    } = setup("/tmp/slay3r/submsg_gas_limits");
     let sender = signer.account_id();
 
     // simple init message with no problems

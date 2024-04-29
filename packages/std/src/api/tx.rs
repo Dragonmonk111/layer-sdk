@@ -20,7 +20,7 @@ impl MsgResponse {
 }
 
 // We get the gas_used / gas_wanted from the gas meter (outside of scope)
-// Errors get codespace = "pulsar", code = 1, log = err.to_string()
+// Errors get codespace = "slay3r", code = 1, log = err.to_string()
 // Success get data and events
 // One entry in data and events per message
 #[derive(Debug, Clone, PartialEq, Eq)]

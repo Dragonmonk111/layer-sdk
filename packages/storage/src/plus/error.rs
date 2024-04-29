@@ -1,5 +1,5 @@
 use cosmwasm_std::{OverflowError, StdError};
-use pulsar_std::GasError;
+use slay3r_std::GasError;
 use thiserror::Error;
 
 pub type PlusResult<T> = Result<T, PlusError>;
