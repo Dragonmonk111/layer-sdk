@@ -166,7 +166,7 @@ describe("Cw20 Test Cases", () => {
       expect(yourBal2.balance).toEqual("42000000");
     });
 
-    fit("legacy signer works for execute and instantiate", async () => {
+    it("legacy signer works for execute and instantiate", async () => {
       // we need this for the upload
       const signer = faucet.address0;
       const directWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);

@@ -83,7 +83,7 @@ describe("SigningStargateClient", () => {
       expect(after).toEqual(amount[0]);
     });
 
-    fit("works with legacy Amino signer", async () => {
+    it("works with legacy Amino signer", async () => {
       const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const tendermintClient = await Tendermint37Client.connect(pulsarium.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
