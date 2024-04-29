@@ -70,7 +70,8 @@ impl HashableMessage {
         memo: &str,
     ) -> Result<Binary, CosmosError> {
         let sign_bytes = StdSignDoc::build(self.doc, msgs, fee, sequence, memo).to_bytes()?;
-        let message_hash = Sha256::digest(sign_bytes).to_vec();
+        let message_hash = Sha256::digest(&sign_bytes).to_vec();
+        println!("Amino: {}", String::from_utf8(sign_bytes).unwrap());
         Ok(message_hash.into())
     }
 }

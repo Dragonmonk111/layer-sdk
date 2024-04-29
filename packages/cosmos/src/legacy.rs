@@ -165,6 +165,7 @@ impl AminoMsg {
 }
 
 // TODO: test this
+// This must be recursively sorted JSON object!!!
 fn convert_message(msg: &Binary) -> Box<RawValue> {
     let val: &RawValue = serde_json::from_slice(msg).unwrap();
     val.to_owned()
@@ -221,6 +222,25 @@ mod tests {
         assert_eq!(raw.get(), r#"{"age":32,"height":187,"name":"John Smith"}"#);
     }
 
+    /*
+    {"type":"wasm/MsgInstantiateContract",
+    "value":{
+        "admin":"cosmos10dyr9899g6t0pelew4nvf4j5c3jcgv0r73qga5",
+        "code_id":"12345",
+        "funds":[{"amount":"1234","denom":"ucosm"}],
+        "label":"sticky",
+        "msg":{"foo":"bar"},
+        "sender":"cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6"}
+    }
+
+    {"type":"wasm/MsgInstantiateContract",
+    "value":{"code_id":"12345",
+    "funds":[{"amount":"1234","denom":"ucosm"}],
+    "label":"sticky",
+    "msg":{"foo":"bar"},
+    "sender":"cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6"}}
+     */
+
     #[test]
     fn check_convert_execute() {
         let orig_msg = DemoMsg {
@@ -239,8 +259,26 @@ mod tests {
         
         let amino_msg = AminoMsg::build(&exec_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
+        // {"type":"wasm/MsgExecuteContract","value":{"contract":"cosmos1xy4yqngt0nlkdcenxymg8tenrghmek4nmqm28k","funds":[],"msg":{"foo":"bar"},"sender":"cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6"}}
+        // {"type":"wasm/MsgExecuteContract","value":{"contract":"pulsar1vfkxzcmtdphkcetndahqqqqqqqqqqqqqjew9zp","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"pulsar1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqw5klcp"}}
         let expected = format!(r#"{{"type":"wasm/MsgExecuteContract","value":{{"contract":"{}","funds":[],"msg":{{"age":32,"height":187,"name":"John Smith"}},"sender":"{}"}}}}"#, contract_addr, sender);
+        println!("{}", output);
         assert_eq!(output, expected);
+        assert_eq!(1, 2);
     }
+
+    /*
+    TODO: test cases
+
+    Valid bank
+    {"account_number":"17","chain_id":"pulsar-dev-1","fee":{"amount":[{"amount":"2500","denom":"upulse"}],"gas":"100000"},"memo":"for dinner","msgs":[{"type":"cosmos-sdk/MsgSend","value":{"amount":[{"amount":"7890","denom":"upulse"}],"from_address":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l","to_address":"pulsar1v0s5z6t0cpj3hkazfckl67edlg5mxr6hcfqg2p"}}],"sequence":"3"}
+
+    Invalid instantiate
+    {"account_number":"17","chain_id":"pulsar-dev-1","fee":{"amount":[{"amount":"2976","denom":"upulse"}],"gas":"119035"},"memo":"Create a hackatom instance in deploy_hackatom.js","msgs":[{"type":"wasm/MsgInstantiateContract","value":{"admin":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l","code_id":"3","funds":[],"label":"PULSE Token","msg":{"name":"pulsar","symbol":"PULSE","decimals":6,"initial_balances":[{"address":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l","amount":"50000000"}]},"sender":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"}}],"sequence":"5"}
+
+    Invalid execute
+    {"account_number":"17","chain_id":"pulsar-dev-1","fee":{"amount":[{"amount":"2696","denom":"upulse"}],"gas":"107830"},"memo":"","msgs":[{"type":"wasm/MsgExecuteContract","value":{"contract":"pulsar1c3rjc8s08mkkydnd5p7rvt0g6eqmtdlu7z2aye803feev2e7dvgswxlvhe","funds":[],"msg":{"transfer":{"recipient":"pulsar1ktacd99wv25p73kwryvu43tg4n8n2wwaxns079","amount":"42000000"}},"sender":"pulsar1pkptre7fdkl6gfrzlesjjvhxhlc3r4gm6k5p3l"}}],"sequence":"8"}
+
+     */
 
 }

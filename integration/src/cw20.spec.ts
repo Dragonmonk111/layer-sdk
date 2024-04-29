@@ -166,7 +166,7 @@ describe("Cw20 Test Cases", () => {
       expect(yourBal2.balance).toEqual("42000000");
     });
 
-    it("legacy signer works for execute and instantiate", async () => {
+    fit("legacy signer works for execute and instantiate", async () => {
       // we need this for the upload
       const signer = faucet.address0;
       const directWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
@@ -195,8 +195,6 @@ describe("Cw20 Test Cases", () => {
 
       // instantiate contract
       const initMsg = {
-        name: "pulsar",
-        symbol: "PULSE",
         decimals: 6,
         initial_balances: [
           {
@@ -204,7 +202,21 @@ describe("Cw20 Test Cases", () => {
             amount: "50000000", // 50 PULSE
           },
         ],
+        name: "pulsar",
+        symbol: "PULSE",
       };
+
+      // const initMsg = {
+      //   name: "pulsar",
+      //   symbol: "PULSE",
+      //   decimals: 6,
+      //   initial_balances: [
+      //     {
+      //       address: signer,
+      //       amount: "50000000", // 50 PULSE
+      //     },
+      //   ],
+      // };
 
       // TODO: failure here
       const { contractAddress } = await client.instantiate(signer, codeId, initMsg, "PULSE Token", "auto", {
@@ -222,10 +234,17 @@ describe("Cw20 Test Cases", () => {
 
       const execMsg = {
         transfer: {
-          recipient: recipient,
           amount: "42000000",
+          recipient: recipient,
         },
       };
+      // const execMsg = {
+      //   transfer: {
+      //     recipient: recipient,
+      //     amount: "42000000",
+      //   },
+      // };
+      // TODO: failure here
       await client.execute(signer, contractAddress, execMsg, "auto");
 
       // query balances
