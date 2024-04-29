@@ -3,7 +3,7 @@
 Unleash the Power of Slay3r: A Developer-Friendly, Pure-Rust, CosmWasm Blockchain. Blazing-fast Speed, Interchain Connectivity via IBC, and Stellar Stability
 
 <p align="center">
-  <img width="384" height="384" src="./img/slay3r.jpg">
+  <img width="384" height="384" src="https://github.com/Lay3rLabs/dev-net/blob/main/assets/slay3r.jpg?raw=true">
 </p>
 
 ## Quick Start
