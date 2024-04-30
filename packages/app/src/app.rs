@@ -79,14 +79,13 @@ pub enum AppLoadError {
 }
 
 pub const NAMESPACE_APP: &[u8] = b"app";
-
 const APP_STATE: Item<AppState> = Item::new("state");
+// _ prefix ensures it is not included in the app hash
+const LAST_BLOCK: Item<BlockInfo> = Item::new("_last_block");
 
 #[cw_serde]
 pub struct AppState {
     pub chain_id: String,
-
-    pub last_block: BlockInfo,
 
     pub params: BlockParams,
 }
@@ -109,25 +108,30 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// Otherwise we fail on loading.
     pub fn load_from_storage(&mut self) -> Result<(), AppLoadError> {
         let meter = GasMeter::infinite();
-        let state = {
+        let (state, block) = {
             let reader = self.storage.reader();
+            let b = LAST_BLOCK
+                .may_load(&reader, &meter)
+                .map_err(|e| AppLoadError::InvalidState(e.to_string()))?;
+
             let app_store = prefixed_read(&reader, NAMESPACE_APP);
-            APP_STATE
+            let s = APP_STATE
                 .may_load(&app_store, &meter)
-                .map_err(|e| AppLoadError::InvalidState(e.to_string()))?
+                .map_err(|e| AppLoadError::InvalidState(e.to_string()))?;
+            (s, b)
         };
-        match state {
-            Some(state) => {
+        match (state, block) {
+            (Some(state), Some(block)) => {
                 debug!(?state, "Loaded state from storage");
                 let data = InnerData {
-                    block: state.last_block,
+                    block,
                     chain_id: state.chain_id,
                     params: state.params,
                 };
                 self.data = Some(data);
                 Ok(())
             }
-            None => Err(AppLoadError::NoStoredState),
+            _ => Err(AppLoadError::NoStoredState),
         }
     }
 
@@ -152,10 +156,11 @@ impl<T: PersistentStorage + 'static> App<T> {
         let genesis = GenesisState::parse(&request.app_state)?;
         self.logic.init(&mut writer, &meter, &last_block, genesis)?;
 
+        // Store the block info
+        LAST_BLOCK.save(&mut writer, &meter, &last_block)?;
         // Store the application data
         let state = AppState {
             chain_id,
-            last_block,
             params: request.consensus_params.block.clone(),
         };
         {
@@ -169,7 +174,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Create the response
         self.data = Some(InnerData {
-            block: state.last_block,
+            block: last_block,
             chain_id: state.chain_id,
             params: state.params,
         });
@@ -417,15 +422,10 @@ impl<T: PersistentStorage + 'static> App<T> {
         let end_events = self.logic.end_block(&mut writer, &end_meter, &block)?;
         events.extend(end_events);
 
-        // Commit to underlying store. Use infinite gas meter to ensure we don't fail here
+        // Update block data and commit to underlying store.
+        // Use infinite gas meter to ensure we don't fail here
         let meter = GasMeter::infinite();
-        {
-            // ensure we drop app_store before the commit
-            let mut app_store = prefixed(&mut writer, NAMESPACE_APP);
-            let mut state = APP_STATE.load(&app_store, &meter)?;
-            state.last_block = block.clone();
-            APP_STATE.save(&mut app_store, &meter, &state)?;
-        }
+        LAST_BLOCK.save(&mut writer, &meter, &block)?;
         writer.commit(&meter)?;
 
         // update block in cache

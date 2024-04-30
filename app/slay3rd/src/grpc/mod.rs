@@ -3,10 +3,10 @@ mod bank;
 mod cosmwasm;
 mod log;
 
-pub use auth::{auth_service, AuthService};
-pub use bank::{bank_service, BankService};
-pub use cosmwasm::{cosmwasm_service, CosmWasmService};
-pub use log::{LogLayer, LogService};
+pub use auth::auth_service;
+pub use bank::bank_service;
+pub use cosmwasm::cosmwasm_service;
+pub use log::LogLayer;
 
 use tendermint_proto::abci::RequestQuery;
 use tendermint_proto::v0_38::abci::ResponseQuery;

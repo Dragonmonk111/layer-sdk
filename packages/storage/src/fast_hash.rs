@@ -1,27 +1,55 @@
 use sha2::{Digest, Sha256};
 
-pub struct FastHasher(Sha256);
+/// Usage: call new with the old hash, a variety of set and remove statements, then call hash to get the new hash.
+/// If no set or remove was called, it will return the old hash unmodified.
+/// If set or remove are called with keys starting with _, they are ignored ("cheap sidecar data")
+/// If you change the data stored or change the order of the operations, the resulting hash will be different
+pub struct FastHasher {
+    old_hash: Vec<u8>,
+    tally: Option<Sha256>,
+}
 
 impl FastHasher {
     pub fn new(old_hash: &[u8]) -> Self {
-        let mut hasher = Sha256::new();
-        hasher.update(old_hash);
-        Self(hasher)
+        Self {
+            old_hash: old_hash.to_vec(),
+            tally: None,
+        }
+    }
+
+    fn ensure_hasher(&mut self) -> &mut Sha256 {
+        if self.tally.is_some() {
+            self.tally.as_mut().unwrap()
+        } else {
+            let mut hasher = Sha256::new();
+            hasher.update(&self.old_hash);
+            self.tally = Some(hasher);
+            self.tally.as_mut().unwrap()
+        }
     }
 
     pub fn set(&mut self, key: &[u8], value: &[u8]) {
-        self.0.update(b"set");
-        self.0.update(key);
-        self.0.update(value);
+        if key[0] != b'_' {
+            let hasher = self.ensure_hasher();
+            hasher.update(b"set");
+            hasher.update(key);
+            hasher.update(value);
+        }
     }
 
     pub fn remove(&mut self, key: &[u8]) {
-        self.0.update(b"remove");
-        self.0.update(key);
+        if key[0] != b'_' {
+            let hasher = self.ensure_hasher();
+            hasher.update(b"remove");
+            hasher.update(key);
+        }
     }
 
     pub fn hash(self) -> Vec<u8> {
-        self.0.finalize().to_vec()
+        match self.tally {
+            Some(hasher) => hasher.finalize().to_vec(),
+            None => self.old_hash,
+        }
     }
 }
 
@@ -31,15 +59,52 @@ mod tests {
 
     #[test]
     fn reproducable() {
-        let mut a = FastHasher::new(&[0u8; 32]);
+        let old_hash = vec![0u8; 32];
+        let mut a = FastHasher::new(&old_hash);
         a.set(b"foo", b"bar");
         a.remove(b"super");
         let hashed_a = a.hash();
         assert_eq!(hashed_a.len(), 32);
+        assert_ne!(hashed_a, old_hash);
 
-        let mut b = FastHasher::new(&[0u8; 32]);
+        let mut b = FastHasher::new(&old_hash);
         b.set(b"foo", b"bar");
         b.remove(b"super");
+        let hashed_b = b.hash();
+        assert_eq!(hashed_a, hashed_b);
+        assert_ne!(hashed_a, old_hash);
+    }
+
+    #[test]
+    fn empty_block_unchanged() {
+        let old_hash = vec![0u8; 32];
+        let a = FastHasher::new(&old_hash);
+        let hashed_a = a.hash();
+        assert_eq!(old_hash, hashed_a);
+    }
+
+    #[test]
+    fn empty_block_sidecar_ignored() {
+        let old_hash = vec![0u8; 32];
+        let mut a = FastHasher::new(&old_hash);
+        a.set(b"_block_height", b"123");
+        a.remove(b"_app_hash");
+        let hashed_a = a.hash();
+        assert_eq!(old_hash, hashed_a);
+    }
+
+    #[test]
+    fn full_block_sidecar_ignored() {
+        let old_hash = vec![0u8; 32];
+        let mut a = FastHasher::new(&old_hash);
+        a.set(b"_block_height", b"123");
+        a.set(b"important_data", b"must be hashed");
+        a.remove(b"_app_hash");
+        let hashed_a = a.hash();
+        assert_ne!(old_hash, hashed_a);
+
+        let mut b = FastHasher::new(&old_hash);
+        b.set(b"important_data", b"must be hashed");
         let hashed_b = b.hash();
         assert_eq!(hashed_a, hashed_b);
     }
