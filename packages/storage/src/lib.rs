@@ -15,6 +15,11 @@ mod lmdb;
 #[cfg(feature = "lmdb")]
 pub use crate::lmdb::LmdbStore;
 
+#[cfg(feature = "rocksdb")]
+mod rocks;
+#[cfg(feature = "rocksdb")]
+pub use crate::rocks::RockStore;
+
 pub use app_meter::AppMeter;
 pub use fast_hash::FastHasher;
 pub use plus::{Item, Map, PlusError, PlusResult};
