@@ -9,6 +9,7 @@ docker volume rm -f "$ABCI_VOL"
 docker volume create "$ABCI_VOL"
 
 # copy the data here
+# sudo docker run --rm -it -v "lay3r_data:/mnt" "alpine:latest" /bin/sh 
 C=$(docker run --rm -d -v "$ABCI_VOL:/mnt" "$ALPINE" sleep 100)
 docker cp ./docker/config "$C:/mnt"
 # register everything as root

@@ -20,8 +20,8 @@ pub struct RawConfig {
     // jeager collector to send trace data, if defined
     pub jaeger: Option<String>,
 
-    // A directory to store the LMDB database (if missing use memory db)
-    pub lmdb: Option<String>,
+    // A directory to store the Rocks database (if missing use memory db)
+    pub rocksdb: Option<String>,
 
     pub grpc: String,
     // /// The directory we read all files from (default $HOME/.slay3r)
@@ -36,7 +36,7 @@ impl Default for RawConfig {
             log: "info".to_string(),
             read_buf_size: 4 * 1024 * 1024,
             jaeger: None,
-            lmdb: None,
+            rocksdb: None,
             grpc: "0.0.0.0:9090".to_string(),
         }
     }
@@ -59,14 +59,14 @@ impl RawConfig {
         }
         let filter = EnvFilter::new(&self.log);
         // TODO: validate host
-        // TODO: check if lmdb path exists
+        // TODO: check if rocksdb path exists
         Ok(Config {
             host: self.host,
             port: self.port,
             filter,
             read_buf_size: self.read_buf_size,
             jaeger: self.jaeger,
-            lmdb: self.lmdb,
+            rocksdb: self.rocksdb,
             grpc: self.grpc,
         })
     }
@@ -88,8 +88,8 @@ pub struct Config {
 
     pub jaeger: Option<String>,
 
-    // A directory to store the LMDB database (if missing use memory db)
-    pub lmdb: Option<String>,
+    // A directory to store the rocksdb database (if missing use memory db)
+    pub rocksdb: Option<String>,
 
     pub grpc: String,
     // /// The directory we read all files from (default $HOME/.slay3r)

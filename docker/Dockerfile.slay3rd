@@ -6,6 +6,8 @@
 FROM rust:1.77-bookworm as builder
 WORKDIR /myapp
 
+RUN apt update && apt install -y clang
+
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
 COPY Cargo.lock Cargo.toml /myapp/
 COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
@@ -41,8 +43,9 @@ RUN cargo build --release --bin slay3rd
 # Now, pack up that binary in a nice small image
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get upgrade
-RUN apt install -y libcurl4
+RUN apt install -y libcurl4 wget
 COPY --from=builder /myapp/target/release/slay3rd /usr/local/bin/slay3rd
+# COPY --from=builder /myapp/Cargo.toml /usr/local/bin/slay3rd
 EXPOSE 26658
 CMD ["slay3rd"]
 
