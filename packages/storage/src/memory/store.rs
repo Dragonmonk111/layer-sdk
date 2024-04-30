@@ -265,9 +265,10 @@ impl BTreeStorage {
     }
 
     fn set(&mut self, meter: &GasMeter, key: Vec<u8>, value: Vec<u8>) -> GasResult<()> {
-        if value.is_empty() {
-            panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
-        }
+        // TODO: review this, I think panic is quite sketchy
+        // if value.is_empty() {
+        //     panic!("TL;DR: Value must not be empty in Storage::set but in most cases you can use Storage::remove instead. Long story: Getting empty values from storage is not well supported at the moment. Some of our internal interfaces cannot differentiate between a non-existent key and an empty value. Right now, you cannot rely on the behaviour of empty values. To protect you from trouble later on, we stop here. Sorry for the inconvenience! We highly welcome you to contribute to CosmWasm, making this more solid one way or the other.");
+        // }
         self.price_list.charge_write(meter, &key, &value)?;
         self.data.insert(key, value);
         Ok(())
@@ -317,61 +318,69 @@ fn clone_item(item_ref: GasResult<BTreeMapRecordRef>) -> GasResult<Record> {
     item_ref.map(|(key, value)| (key.clone(), value.clone()))
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
+    use slay3r_std::GasError;
 
     #[test]
     fn get_and_set() {
-        let mut store = BTreeStorage::new();
-        assert_eq!(store.get(b"foo"), None);
-        store.set(b"foo", b"bar");
-        assert_eq!(store.get(b"foo"), Some(b"bar".to_vec()));
-        assert_eq!(store.get(b"food"), None);
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let gas = GasMeter::infinite();
+        assert_eq!(store.get(&gas, b"foo").unwrap(), None);
+        store.set(&gas, b"foo", b"bar").unwrap();
+        assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
+        assert_eq!(store.get(&gas, b"food").unwrap(), None);
     }
 
-    #[test]
-    #[should_panic(
-        expected = "Getting empty values from storage is not well supported at the moment."
-    )]
-    fn set_panics_for_empty() {
-        let mut store = BTreeStorage::new();
-        store.set(b"foo", b"");
-    }
+    // #[test]
+    // #[should_panic(
+    //     expected = "Getting empty values from storage is not well supported at the moment."
+    // )]
+    // fn set_panics_for_empty() {
+    //     let storage = MemoryStore::new();
+    //     let mut store = storage.writer();
+    //     let gas = GasMeter::infinite();
+    //     store.set(&gas, b"foo", b"").unwrap();
+    // }
 
     #[test]
     fn delete() {
-        let mut store = BTreeStorage::new();
-        store.set(b"foo", b"bar");
-        store.set(b"food", b"bank");
-        store.remove(b"foo");
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let gas = GasMeter::infinite();
+        store.set(&gas, b"foo", b"bar").unwrap();
+        store.set(&gas, b"food", b"bank").unwrap();
+        store.remove(&gas, b"foo").unwrap();
 
-        assert_eq!(store.get(b"foo"), None);
-        assert_eq!(store.get(b"food"), Some(b"bank".to_vec()));
+        assert_eq!(store.get(&gas, b"foo").unwrap(), None);
+        assert_eq!(store.get(&gas, b"food").unwrap(), Some(b"bank".to_vec()));
     }
 
     #[test]
     fn iterator() {
-        let mut store = BTreeStorage::new();
-        store.set(b"foo", b"bar");
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let gas = GasMeter::infinite();
+        store.set(&gas, b"foo", b"bar").unwrap();
 
         // ensure we had previously set "foo" = "bar"
-        assert_eq!(store.get(b"foo"), Some(b"bar".to_vec()));
-        assert_eq!(store.range(None, None, Order::Ascending).count(), 1);
+        assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
+        assert_eq!(store.range(&gas, None, None, Order::Ascending).unwrap().count(), 1);
 
         // setup - add some data, and delete part of it as well
-        store.set(b"ant", b"hill");
-        store.set(b"ze", b"bra");
+        store.set(&gas, b"ant", b"hill").unwrap();
+        store.set(&gas, b"ze", b"bra").unwrap();
 
         // noise that should be ignored
-        store.set(b"bye", b"bye");
-        store.remove(b"bye");
+        store.set(&gas, b"bye", b"bye").unwrap();
+        store.remove(&gas, b"bye").unwrap();
 
         // unbounded
         {
-            let iter = store.range(None, None, Order::Ascending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, None, None, Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
                 vec![
@@ -384,8 +393,8 @@ mod tests {
 
         // unbounded (descending)
         {
-            let iter = store.range(None, None, Order::Descending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, None, None, Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
                 vec![
@@ -398,15 +407,15 @@ mod tests {
 
         // bounded
         {
-            let iter = store.range(Some(b"f"), Some(b"n"), Order::Ascending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"f"), Some(b"n"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![(b"foo".to_vec(), b"bar".to_vec())]);
         }
 
         // bounded (descending)
         {
-            let iter = store.range(Some(b"air"), Some(b"loop"), Order::Descending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"air"), Some(b"loop"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
                 vec![
@@ -418,36 +427,36 @@ mod tests {
 
         // bounded empty [a, a)
         {
-            let iter = store.range(Some(b"foo"), Some(b"foo"), Order::Ascending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, a) (descending)
         {
-            let iter = store.range(Some(b"foo"), Some(b"foo"), Order::Descending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, b) with b < a
         {
-            let iter = store.range(Some(b"z"), Some(b"a"), Order::Ascending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, b) with b < a (descending)
         {
-            let iter = store.range(Some(b"z"), Some(b"a"), Order::Descending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // right unbounded
         {
-            let iter = store.range(Some(b"f"), None, Order::Ascending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"f"), None, Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
                 vec![
@@ -459,8 +468,8 @@ mod tests {
 
         // right unbounded (descending)
         {
-            let iter = store.range(Some(b"f"), None, Order::Descending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, Some(b"f"), None, Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
                 vec![
@@ -472,15 +481,15 @@ mod tests {
 
         // left unbounded
         {
-            let iter = store.range(None, Some(b"f"), Order::Ascending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, None, Some(b"f"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![(b"ant".to_vec(), b"hill".to_vec()),]);
         }
 
         // left unbounded (descending)
         {
-            let iter = store.range(None, Some(b"no"), Order::Descending);
-            let elements: Vec<Record> = iter.collect();
+            let iter = store.range(&gas, None, Some(b"no"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
                 vec![
@@ -490,6 +499,7 @@ mod tests {
             );
         }
     }
+/*
 
     #[test]
     fn memory_storage_implements_debug() {
@@ -540,5 +550,5 @@ mod tests {
             }"
         );
     }
-}
 */
+}

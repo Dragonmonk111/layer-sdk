@@ -144,11 +144,16 @@ impl<'a> ReadonlyStorage for RockWriter<'a> {
 
 impl<'a> Storage for RockWriter<'a> {
     fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
-        todo!();
+        // TODO: use transaction or manual batching...
+        self.price_list.charge_write(meter, key, value)?;
+        self.db.put(key, value).unwrap();
+        Ok(())
     }
 
     fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
-        todo!()
+        self.price_list.charge_remove(meter, key)?;
+        self.db.delete(key).unwrap();
+        Ok(())
     }
 
     fn as_ref(&self) -> &dyn ReadonlyStorage {
@@ -164,5 +169,189 @@ impl<'a> Transaction for RockWriter<'a> {
 
     fn as_mut(&mut self) -> &mut dyn Storage {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slay3r_std::GasError;
+
+    #[test]
+    fn get_and_set() {
+        let storage = RockStore::open("/tmp/foo1");
+        let mut store = storage.writer();
+        let gas = GasMeter::infinite();
+        assert_eq!(store.get(&gas, b"foo").unwrap(), None);
+        store.set(&gas, b"foo", b"bar").unwrap();
+        assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
+        assert_eq!(store.get(&gas, b"food").unwrap(), None);
+    }
+
+    // #[test]
+    // #[should_panic(
+    //     expected = "Getting empty values from storage is not well supported at the moment."
+    // )]
+    // fn set_panics_for_empty() {
+    //     let storage = RockStore::new();
+    //     let mut store = storage.writer();
+    //     let gas = GasMeter::infinite();
+    //     store.set(&gas, b"foo", b"").unwrap();
+    // }
+
+    #[test]
+    fn delete() {
+        let storage = RockStore::open("/tmp/foo2");
+        let mut store = storage.writer();
+        let gas = GasMeter::infinite();
+        store.set(&gas, b"foo", b"bar").unwrap();
+        store.set(&gas, b"food", b"bank").unwrap();
+        store.remove(&gas, b"foo").unwrap();
+
+        assert_eq!(store.get(&gas, b"foo").unwrap(), None);
+        assert_eq!(store.get(&gas, b"food").unwrap(), Some(b"bank".to_vec()));
+    }
+
+    #[ignore]
+    #[test]
+    fn iterator() {
+        let storage = RockStore::open("/tmp/foo3");
+        let mut store = storage.writer();
+        let gas = GasMeter::infinite();
+        store.set(&gas, b"foo", b"bar").unwrap();
+
+        // ensure we had previously set "foo" = "bar"
+        assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
+        assert_eq!(store.range(&gas, None, None, Order::Ascending).unwrap().count(), 1);
+
+        // setup - add some data, and delete part of it as well
+        store.set(&gas, b"ant", b"hill").unwrap();
+        store.set(&gas, b"ze", b"bra").unwrap();
+
+        // noise that should be ignored
+        store.set(&gas, b"bye", b"bye").unwrap();
+        store.remove(&gas, b"bye").unwrap();
+
+        // unbounded
+        {
+            let iter = store.range(&gas, None, None, Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(
+                elements,
+                vec![
+                    (b"ant".to_vec(), b"hill".to_vec()),
+                    (b"foo".to_vec(), b"bar".to_vec()),
+                    (b"ze".to_vec(), b"bra".to_vec()),
+                ]
+            );
+        }
+
+        // unbounded (descending)
+        {
+            let iter = store.range(&gas, None, None, Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(
+                elements,
+                vec![
+                    (b"ze".to_vec(), b"bra".to_vec()),
+                    (b"foo".to_vec(), b"bar".to_vec()),
+                    (b"ant".to_vec(), b"hill".to_vec()),
+                ]
+            );
+        }
+
+        // bounded
+        {
+            let iter = store.range(&gas, Some(b"f"), Some(b"n"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(elements, vec![(b"foo".to_vec(), b"bar".to_vec())]);
+        }
+
+        // bounded (descending)
+        {
+            let iter = store.range(&gas, Some(b"air"), Some(b"loop"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(
+                elements,
+                vec![
+                    (b"foo".to_vec(), b"bar".to_vec()),
+                    (b"ant".to_vec(), b"hill".to_vec()),
+                ]
+            );
+        }
+
+        // bounded empty [a, a)
+        {
+            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(elements, vec![]);
+        }
+
+        // bounded empty [a, a) (descending)
+        {
+            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(elements, vec![]);
+        }
+
+        // bounded empty [a, b) with b < a
+        {
+            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(elements, vec![]);
+        }
+
+        // bounded empty [a, b) with b < a (descending)
+        {
+            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(elements, vec![]);
+        }
+
+        // right unbounded
+        {
+            let iter = store.range(&gas, Some(b"f"), None, Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(
+                elements,
+                vec![
+                    (b"foo".to_vec(), b"bar".to_vec()),
+                    (b"ze".to_vec(), b"bra".to_vec()),
+                ]
+            );
+        }
+
+        // right unbounded (descending)
+        {
+            let iter = store.range(&gas, Some(b"f"), None, Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(
+                elements,
+                vec![
+                    (b"ze".to_vec(), b"bra".to_vec()),
+                    (b"foo".to_vec(), b"bar".to_vec()),
+                ]
+            );
+        }
+
+        // left unbounded
+        {
+            let iter = store.range(&gas, None, Some(b"f"), Order::Ascending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(elements, vec![(b"ant".to_vec(), b"hill".to_vec()),]);
+        }
+
+        // left unbounded (descending)
+        {
+            let iter = store.range(&gas, None, Some(b"no"), Order::Descending).unwrap();
+            let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
+            assert_eq!(
+                elements,
+                vec![
+                    (b"foo".to_vec(), b"bar".to_vec()),
+                    (b"ant".to_vec(), b"hill".to_vec()),
+                ]
+            );
+        }
     }
 }
