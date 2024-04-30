@@ -1,3 +1,4 @@
 host = "0.0.0.0"
 jaeger = "http://jaeger:14268"
 log = "debug"
+rocksdb = "/root/.slay3r/data/app"

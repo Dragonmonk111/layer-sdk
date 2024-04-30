@@ -111,10 +111,10 @@ async fn main() {
     let server_port = format!("{}:{}", config.host, config.port);
 
     // Create ABCI server
-    let server = match config.lmdb {
+    let server = match config.rocksdb {
         Some(path) => {
-            info!("using lmdb database at {}", path);
-            let storage = slay3r_storage::LmdbStore::new(&path, None);
+            info!("using rocks db at {}", path);
+            let storage = slay3r_storage::RockStore::open(&path);
             let app = Pulsarium::new(storage, app_config);
             server_config.bind(server_port, app).await.unwrap()
         }

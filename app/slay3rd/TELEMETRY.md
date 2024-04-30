@@ -30,10 +30,10 @@ cargo install --path .
 SLAY_LOG=debug slay3rd --jaeger
 ```
 
-Or with lmdb:
+Or with rocksdb:
 
 ```bash
-SLAY_LOG=debug slay3rd --jaeger --lmdb ~/.slay3r-test/lmdb-1
+SLAY_LOG=debug slay3rd --jaeger --rocksdb ~/.slay3r-test/rocks-1
 ```
 
 ## Test with integration tests

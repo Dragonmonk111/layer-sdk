@@ -20,7 +20,7 @@ slay3r-app = { workspace = true }
 slay3r-std = { workspace = true }
 slay3r-cosmos = { workspace = true }
 slay3r-proto = { workspace = true, features = ["server"] }
-slay3r-storage = { workspace = true, features = ["lmdb"] }
+slay3r-storage = { workspace = true, features = ["rocksdb"] }
 cosmwasm-std = { workspace = true }
 
 clap = { version = "4.2.4", features = ["derive"]}
