@@ -7,8 +7,8 @@ use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 
 use crate::{
-    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage,
-    Transaction, DEFAULT_PERSISTED_PRICES,
+    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
+    DEFAULT_PERSISTED_PRICES,
 };
 
 pub struct RockStore {
@@ -178,7 +178,7 @@ impl<'a> Transaction for RockWriter<'a> {
     fn commit(self, _meter: &GasMeter) -> GasResult<()> {
         // calculate and update app_hash
         let app_hash = self.hasher.hash();
-        self.transaction.put(APP_HASH_KEY, &app_hash).unwrap();
+        self.transaction.put(APP_HASH_KEY, app_hash).unwrap();
         self.transaction.commit().unwrap();
         Ok(())
     }
@@ -300,11 +300,21 @@ impl<'a, T: DBAccess> Iterator for RockIterator<'a, T> {
 #[cfg(test)]
 mod rock_tests {
     use super::*;
+
     use slay3r_std::GasError;
+    use std::path::PathBuf;
+
+    // prepares the path before calling the function
+    fn prep(name: &str) -> PathBuf {
+        let path = PathBuf::from_iter(&["/tmp/slay3r-rocks", name]);
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
 
     #[test]
     fn get_and_set() {
-        let storage = RockStore::open("/tmp/foo1");
+        let storage = RockStore::open(prep("foo1"));
         let mut store = storage.writer();
         let gas = GasMeter::infinite();
         assert_eq!(store.get(&gas, b"foo").unwrap(), None);
@@ -315,7 +325,7 @@ mod rock_tests {
 
     #[test]
     fn read_on_commit() {
-        let storage = RockStore::open("/tmp/foo2");
+        let storage = RockStore::open(prep("foo2"));
         let gas = GasMeter::infinite();
 
         // start a tx
@@ -336,7 +346,7 @@ mod rock_tests {
 
     #[test]
     fn delete() {
-        let storage = RockStore::open("/tmp/foo3");
+        let storage = RockStore::open(prep("foo3"));
         let mut store = storage.writer();
         let gas = GasMeter::infinite();
         store.set(&gas, b"foo", b"bar").unwrap();
@@ -349,7 +359,7 @@ mod rock_tests {
 
     #[test]
     fn app_hash_updates() {
-        let storage = RockStore::open("/tmp/foo5");
+        let storage = RockStore::open(prep("foo5"));
         let gas = GasMeter::infinite();
         let orig_hash = storage.app_hash();
 
@@ -377,7 +387,7 @@ mod rock_tests {
 
     #[test]
     fn iterator() {
-        let storage = RockStore::open("/tmp/foo4");
+        let storage = RockStore::open(prep("foo4"));
         let mut store = storage.writer();
         let gas = GasMeter::infinite();
         store.set(&gas, b"foo", b"bar").unwrap();
