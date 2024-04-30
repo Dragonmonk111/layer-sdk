@@ -28,7 +28,7 @@ services:
     depends_on:
       - jaeger
   cometbft:
-    image: "cometbft/cometbft:v0.38.0"
+    image: "cometbft/cometbft:v0.38.7"
     expose:
       # for slay3r grpc callbacks
       - "26657"
