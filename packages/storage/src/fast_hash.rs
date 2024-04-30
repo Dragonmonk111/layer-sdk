@@ -33,7 +33,7 @@ impl FastHasher {
             let hasher = self.ensure_hasher();
             hasher.update(b"set");
             hasher.update(key);
-            hasher.update(value);    
+            hasher.update(value);
         }
     }
 

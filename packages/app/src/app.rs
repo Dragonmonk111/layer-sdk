@@ -124,7 +124,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             (Some(state), Some(block)) => {
                 debug!(?state, "Loaded state from storage");
                 let data = InnerData {
-                    block: block,
+                    block,
                     chain_id: state.chain_id,
                     params: state.params,
                 };
