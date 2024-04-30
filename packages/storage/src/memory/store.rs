@@ -367,7 +367,13 @@ mod tests {
 
         // ensure we had previously set "foo" = "bar"
         assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
-        assert_eq!(store.range(&gas, None, None, Order::Ascending).unwrap().count(), 1);
+        assert_eq!(
+            store
+                .range(&gas, None, None, Order::Ascending)
+                .unwrap()
+                .count(),
+            1
+        );
 
         // setup - add some data, and delete part of it as well
         store.set(&gas, b"ant", b"hill").unwrap();
@@ -407,14 +413,18 @@ mod tests {
 
         // bounded
         {
-            let iter = store.range(&gas, Some(b"f"), Some(b"n"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"f"), Some(b"n"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![(b"foo".to_vec(), b"bar".to_vec())]);
         }
 
         // bounded (descending)
         {
-            let iter = store.range(&gas, Some(b"air"), Some(b"loop"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"air"), Some(b"loop"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -427,35 +437,45 @@ mod tests {
 
         // bounded empty [a, a)
         {
-            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"foo"), Some(b"foo"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, a) (descending)
         {
-            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"foo"), Some(b"foo"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, b) with b < a
         {
-            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"z"), Some(b"a"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, b) with b < a (descending)
         {
-            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"z"), Some(b"a"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // right unbounded
         {
-            let iter = store.range(&gas, Some(b"f"), None, Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"f"), None, Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -468,7 +488,9 @@ mod tests {
 
         // right unbounded (descending)
         {
-            let iter = store.range(&gas, Some(b"f"), None, Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"f"), None, Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -481,14 +503,18 @@ mod tests {
 
         // left unbounded
         {
-            let iter = store.range(&gas, None, Some(b"f"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, None, Some(b"f"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![(b"ant".to_vec(), b"hill".to_vec()),]);
         }
 
         // left unbounded (descending)
         {
-            let iter = store.range(&gas, None, Some(b"no"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, None, Some(b"no"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -499,56 +525,56 @@ mod tests {
             );
         }
     }
-/*
+    /*
 
-    #[test]
-    fn memory_storage_implements_debug() {
-        let store = BTreeStorage::new();
-        assert_eq!(
-            format!("{:?}", store),
-            "MemoryStorage (0 entries) {\n\
-            }"
-        );
+        #[test]
+        fn memory_storage_implements_debug() {
+            let store = BTreeStorage::new();
+            assert_eq!(
+                format!("{:?}", store),
+                "MemoryStorage (0 entries) {\n\
+                }"
+            );
 
-        // With one element
-        let mut store = BTreeStorage::new();
-        store.set(&[0x00, 0xAB, 0xDD], &[0xFF, 0xD5]);
-        assert_eq!(
-            format!("{:?}", store),
-            "MemoryStorage (1 entries) {\n\
-            \x20\x200x00abdd: 0xffd5\n\
-            }"
-        );
+            // With one element
+            let mut store = BTreeStorage::new();
+            store.set(&[0x00, 0xAB, 0xDD], &[0xFF, 0xD5]);
+            assert_eq!(
+                format!("{:?}", store),
+                "MemoryStorage (1 entries) {\n\
+                \x20\x200x00abdd: 0xffd5\n\
+                }"
+            );
 
-        // Sorted by key
-        let mut store = BTreeStorage::new();
-        store.set(&[0x00, 0xAB, 0xDD], &[0xFF, 0xD5]);
-        store.set(&[0x00, 0xAB, 0xEE], &[0xFF, 0xD5]);
-        store.set(&[0x00, 0xAB, 0xCC], &[0xFF, 0xD5]);
-        assert_eq!(
-            format!("{:?}", store),
-            "MemoryStorage (3 entries) {\n\
-            \x20\x200x00abcc: 0xffd5\n\
-            \x20\x200x00abdd: 0xffd5\n\
-            \x20\x200x00abee: 0xffd5\n\
-            }"
-        );
+            // Sorted by key
+            let mut store = BTreeStorage::new();
+            store.set(&[0x00, 0xAB, 0xDD], &[0xFF, 0xD5]);
+            store.set(&[0x00, 0xAB, 0xEE], &[0xFF, 0xD5]);
+            store.set(&[0x00, 0xAB, 0xCC], &[0xFF, 0xD5]);
+            assert_eq!(
+                format!("{:?}", store),
+                "MemoryStorage (3 entries) {\n\
+                \x20\x200x00abcc: 0xffd5\n\
+                \x20\x200x00abdd: 0xffd5\n\
+                \x20\x200x00abee: 0xffd5\n\
+                }"
+            );
 
-        // Different lengths
-        let mut store = BTreeStorage::new();
-        store.set(&[0xAA], &[0x11]);
-        store.set(&[0xAA, 0xBB], &[0x11, 0x22]);
-        store.set(&[0xAA, 0xBB, 0xCC], &[0x11, 0x22, 0x33]);
-        store.set(&[0xAA, 0xBB, 0xCC, 0xDD], &[0x11, 0x22, 0x33, 0x44]);
-        assert_eq!(
-            format!("{:?}", store),
-            "MemoryStorage (4 entries) {\n\
-            \x20\x200xaa: 0x11\n\
-            \x20\x200xaabb: 0x1122\n\
-            \x20\x200xaabbcc: 0x112233\n\
-            \x20\x200xaabbccdd: 0x11223344\n\
-            }"
-        );
-    }
-*/
+            // Different lengths
+            let mut store = BTreeStorage::new();
+            store.set(&[0xAA], &[0x11]);
+            store.set(&[0xAA, 0xBB], &[0x11, 0x22]);
+            store.set(&[0xAA, 0xBB, 0xCC], &[0x11, 0x22, 0x33]);
+            store.set(&[0xAA, 0xBB, 0xCC, 0xDD], &[0x11, 0x22, 0x33, 0x44]);
+            assert_eq!(
+                format!("{:?}", store),
+                "MemoryStorage (4 entries) {\n\
+                \x20\x200xaa: 0x11\n\
+                \x20\x200xaabb: 0x1122\n\
+                \x20\x200xaabbcc: 0x112233\n\
+                \x20\x200xaabbccdd: 0x11223344\n\
+                }"
+            );
+        }
+    */
 }

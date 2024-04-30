@@ -1,10 +1,10 @@
 use std::fmt;
 use std::path::Path;
 
-use rocksdb::{Direction, IteratorMode, Options, DB};
+use rocksdb::{DBAccess, OptimisticTransactionDB, Options};
 
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult, HexEncode};
+use slay3r_std::{GasMeter, GasResult};
 
 use crate::{
     FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub struct RockStore {
-    pub db: DB,
+    pub db: OptimisticTransactionDB,
 }
 
 // TODO: tune dynamically
@@ -30,7 +30,7 @@ impl RockStore {
     }
 
     pub fn open_opts<P: AsRef<Path>>(path: P, opts: Options) -> RockStore {
-        let db = DB::open(&opts, path).unwrap();
+        let db = OptimisticTransactionDB::open(&opts, path).unwrap();
         RockStore { db }
     }
 
@@ -77,7 +77,7 @@ impl PersistentStorage for RockStore {
     // assumes internal rwlock
     fn writer(&self) -> RockWriter<'_> {
         RockWriter {
-            db: &self.db,
+            transaction: self.db.transaction(),
             price_list: DEFAULT_PERSISTED_PRICES,
         }
     }
@@ -91,7 +91,7 @@ impl PersistentStorage for RockStore {
 }
 
 pub struct RockReader<'a> {
-    db: &'a DB,
+    db: &'a OptimisticTransactionDB,
     price_list: PriceList,
 }
 
@@ -113,12 +113,15 @@ impl<'a> ReadonlyStorage for RockReader<'a> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'b>> {
-        todo!()
+        self.price_list.charge_range(meter)?;
+        let iter = self.db.raw_iterator();
+        let res = RockIterator::new(iter, order, start, end, meter, self.price_list);
+        Ok(Box::new(res))
     }
 }
 
 pub struct RockWriter<'a> {
-    db: &'a DB,
+    transaction: rocksdb::Transaction<'a, OptimisticTransactionDB>,
     price_list: PriceList,
 }
 
@@ -126,7 +129,7 @@ impl<'a> ReadonlyStorage for RockWriter<'a> {
     fn abort(self) {}
 
     fn get(&self, meter: &GasMeter, key: &[u8]) -> GasResult<Option<Vec<u8>>> {
-        let val = self.db.get(key).unwrap();
+        let val = self.transaction.get(key).unwrap();
         self.price_list.charge_read(meter, key, val.as_deref())?;
         Ok(val)
     }
@@ -138,7 +141,10 @@ impl<'a> ReadonlyStorage for RockWriter<'a> {
         end: Option<&[u8]>,
         order: Order,
     ) -> GasResult<Box<dyn Iterator<Item = GasResult<Record>> + 'b>> {
-        todo!()
+        self.price_list.charge_range(meter)?;
+        let iter = self.transaction.raw_iterator();
+        let res = RockIterator::new(iter, order, start, end, meter, self.price_list);
+        Ok(Box::new(res))
     }
 }
 
@@ -146,13 +152,13 @@ impl<'a> Storage for RockWriter<'a> {
     fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> GasResult<()> {
         // TODO: use transaction or manual batching...
         self.price_list.charge_write(meter, key, value)?;
-        self.db.put(key, value).unwrap();
+        self.transaction.put(key, value).unwrap();
         Ok(())
     }
 
     fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         self.price_list.charge_remove(meter, key)?;
-        self.db.delete(key).unwrap();
+        self.transaction.delete(key).unwrap();
         Ok(())
     }
 
@@ -163,8 +169,9 @@ impl<'a> Storage for RockWriter<'a> {
 
 impl<'a> Transaction for RockWriter<'a> {
     // This writes all changes to the underlying storage and consumes this wrapper
-    fn commit(self, meter: &GasMeter) -> GasResult<()> {
-        todo!()
+    fn commit(self, _meter: &GasMeter) -> GasResult<()> {
+        self.transaction.commit().unwrap();
+        Ok(())
     }
 
     fn as_mut(&mut self) -> &mut dyn Storage {
@@ -172,8 +179,117 @@ impl<'a> Transaction for RockWriter<'a> {
     }
 }
 
+pub struct RockIterator<'a, T: DBAccess> {
+    iterator: rocksdb::DBRawIteratorWithThreadMode<'a, T>,
+    order: Order,
+    stop: Option<Vec<u8>>,
+    meter: &'a GasMeter,
+    price_list: PriceList,
+    finished: bool,
+}
+
+impl<'a, T: DBAccess> RockIterator<'a, T> {
+    pub fn new(
+        mut iter: rocksdb::DBRawIteratorWithThreadMode<'a, T>,
+        order: Order,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+        meter: &'a GasMeter,
+        price_list: PriceList,
+    ) -> Self {
+        let stop = match order {
+            Order::Ascending => {
+                match start {
+                    Some(begin) => iter.seek(begin),
+                    None => iter.seek_to_first(),
+                }
+                end
+            }
+            Order::Descending => {
+                match end {
+                    // Note: our semantics specify we do not include end, yet seek_for_prev will
+                    // stop on an exact match. If it is a perfect match, we have to go one before
+                    Some(finish) => {
+                        iter.seek_for_prev(finish);
+                        if let Some(k) = iter.key() {
+                            if k == finish {
+                                iter.prev()
+                            }
+                        }
+                    }
+                    None => iter.seek_to_last(),
+                }
+                start
+            }
+        }
+        .map(Vec::from);
+
+        Self {
+            iterator: iter,
+            order,
+            stop,
+            meter,
+            price_list,
+            finished: false,
+        }
+    }
+}
+
+impl<'a, T: DBAccess> Iterator for RockIterator<'a, T> {
+    type Item = GasResult<Record>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Note, when it is created, it key, value already have the
+        // first value we want to return. We should only advance with
+        // next / prev after processing the current location and preparing
+        // the return value
+        if self.finished {
+            return None;
+        }
+
+        let record: Option<Record> = match self.order {
+            Order::Ascending => {
+                // get next one, and ensure it is not after end
+                let record = match (self.iterator.key(), self.stop.as_deref()) {
+                    (None, _) => None,
+                    // We don't include the higher stop value
+                    (Some(k), Some(e)) if k >= e => None,
+                    (Some(k), _) => Some((k.to_owned(), self.iterator.value().unwrap().to_owned())),
+                };
+                self.iterator.next();
+                record
+            }
+            Order::Descending => {
+                // get previous one, and ensure it is not before end
+                let record = match (self.iterator.key(), self.stop.as_deref()) {
+                    (None, _) => None,
+                    // we do include the lower stop value
+                    (Some(k), Some(e)) if k < e => None,
+                    (Some(k), _) => Some((k.to_owned(), self.iterator.value().unwrap().to_owned())),
+                };
+                self.iterator.prev();
+                record
+            }
+        };
+
+        match record {
+            Some(r) => {
+                let res = self
+                    .price_list
+                    .charge_read(self.meter, &r.0, Some(&r.1))
+                    .and(Ok(r));
+                Some(res)
+            }
+            None => {
+                self.finished = true;
+                None
+            }
+        }
+    }
+}
+
 #[cfg(test)]
-mod tests {
+mod rock_tests {
     use super::*;
     use slay3r_std::GasError;
 
@@ -188,20 +304,30 @@ mod tests {
         assert_eq!(store.get(&gas, b"food").unwrap(), None);
     }
 
-    // #[test]
-    // #[should_panic(
-    //     expected = "Getting empty values from storage is not well supported at the moment."
-    // )]
-    // fn set_panics_for_empty() {
-    //     let storage = RockStore::new();
-    //     let mut store = storage.writer();
-    //     let gas = GasMeter::infinite();
-    //     store.set(&gas, b"foo", b"").unwrap();
-    // }
+    #[test]
+    fn read_on_commit() {
+        let storage = RockStore::open("/tmp/foo2");
+        let gas = GasMeter::infinite();
+
+        // start a tx
+        let mut store = storage.writer();
+        assert_eq!(store.get(&gas, b"foo").unwrap(), None);
+        store.set(&gas, b"foo", b"bar").unwrap();
+        assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
+
+        // uncommitted tx won't show up in reader query
+        let reader = storage.reader();
+        assert_eq!(reader.get(&gas, b"foo").unwrap(), None);
+
+        // now commit and it shows up in the reader
+        store.commit(&gas).unwrap();
+        assert_eq!(reader.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
+        assert_eq!(reader.get(&gas, b"food").unwrap(), None);
+    }
 
     #[test]
     fn delete() {
-        let storage = RockStore::open("/tmp/foo2");
+        let storage = RockStore::open("/tmp/foo3");
         let mut store = storage.writer();
         let gas = GasMeter::infinite();
         store.set(&gas, b"foo", b"bar").unwrap();
@@ -212,17 +338,22 @@ mod tests {
         assert_eq!(store.get(&gas, b"food").unwrap(), Some(b"bank".to_vec()));
     }
 
-    #[ignore]
     #[test]
     fn iterator() {
-        let storage = RockStore::open("/tmp/foo3");
+        let storage = RockStore::open("/tmp/foo4");
         let mut store = storage.writer();
         let gas = GasMeter::infinite();
         store.set(&gas, b"foo", b"bar").unwrap();
 
         // ensure we had previously set "foo" = "bar"
         assert_eq!(store.get(&gas, b"foo").unwrap(), Some(b"bar".to_vec()));
-        assert_eq!(store.range(&gas, None, None, Order::Ascending).unwrap().count(), 1);
+        assert_eq!(
+            store
+                .range(&gas, None, None, Order::Ascending)
+                .unwrap()
+                .count(),
+            1
+        );
 
         // setup - add some data, and delete part of it as well
         store.set(&gas, b"ant", b"hill").unwrap();
@@ -262,14 +393,18 @@ mod tests {
 
         // bounded
         {
-            let iter = store.range(&gas, Some(b"f"), Some(b"n"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"f"), Some(b"n"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![(b"foo".to_vec(), b"bar".to_vec())]);
         }
 
         // bounded (descending)
         {
-            let iter = store.range(&gas, Some(b"air"), Some(b"loop"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"air"), Some(b"loop"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -282,35 +417,45 @@ mod tests {
 
         // bounded empty [a, a)
         {
-            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"foo"), Some(b"foo"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, a) (descending)
         {
-            let iter = store.range(&gas, Some(b"foo"), Some(b"foo"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"foo"), Some(b"foo"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, b) with b < a
         {
-            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"z"), Some(b"a"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // bounded empty [a, b) with b < a (descending)
         {
-            let iter = store.range(&gas, Some(b"z"), Some(b"a"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"z"), Some(b"a"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![]);
         }
 
         // right unbounded
         {
-            let iter = store.range(&gas, Some(b"f"), None, Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"f"), None, Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -323,7 +468,9 @@ mod tests {
 
         // right unbounded (descending)
         {
-            let iter = store.range(&gas, Some(b"f"), None, Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, Some(b"f"), None, Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
@@ -336,14 +483,18 @@ mod tests {
 
         // left unbounded
         {
-            let iter = store.range(&gas, None, Some(b"f"), Order::Ascending).unwrap();
+            let iter = store
+                .range(&gas, None, Some(b"f"), Order::Ascending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(elements, vec![(b"ant".to_vec(), b"hill".to_vec()),]);
         }
 
         // left unbounded (descending)
         {
-            let iter = store.range(&gas, None, Some(b"no"), Order::Descending).unwrap();
+            let iter = store
+                .range(&gas, None, Some(b"no"), Order::Descending)
+                .unwrap();
             let elements = iter.collect::<Result<Vec<Record>, GasError>>().unwrap();
             assert_eq!(
                 elements,
