@@ -503,6 +503,19 @@ mod tests {
         transaction_workflow(storage);
     }
 
+    #[cfg(feature = "rocksdb")]
+    #[test]
+    fn transaction_workflow_rocksdb() {
+        // always delete, ignore "does not exist" error
+        let path = "/tmp/slay3r-test-rocksdb";
+        let _ = std::fs::remove_dir_all(path);
+        std::fs::create_dir_all(path).unwrap();
+
+        // create rocksdb store and run same tests
+        let storage = slay3r_storage::RockStore::open(path);
+        transaction_workflow(storage);
+    }
+
     // this emulates the run of a transaction being submitted
     // query account + balances
     // run simulate
