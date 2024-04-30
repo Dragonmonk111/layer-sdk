@@ -7,8 +7,8 @@ use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 
 use crate::{
-    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
-    DEFAULT_PERSISTED_PRICES,
+    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage,
+    Transaction, DEFAULT_PERSISTED_PRICES,
 };
 
 pub struct RockStore {
@@ -20,7 +20,7 @@ const NUM_CPUS: i32 = 8;
 
 // Underscore means it is not appended to the hasher,
 // Everything should be namespaced and thus avoid collision
-// pub const APP_HASH_KEY: &[u8] = b"_app_hash";
+pub const APP_HASH_KEY: &[u8] = b"_app_hash";
 
 impl RockStore {
     /// opens or creates a store
@@ -79,14 +79,17 @@ impl PersistentStorage for RockStore {
         RockWriter {
             transaction: self.db.transaction(),
             price_list: DEFAULT_PERSISTED_PRICES,
+            hasher: FastHasher::new(&self.app_hash()),
         }
     }
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8> {
-        todo!();
-        // let tx = self.env.begin_ro_txn().unwrap();
-        // read_app_hash(&tx, self.db)
+        // load the key or return the empty first block hash (all 0)
+        self.db
+            .get(APP_HASH_KEY)
+            .unwrap()
+            .unwrap_or_else(|| vec![0; 32])
     }
 }
 
@@ -123,6 +126,7 @@ impl<'a> ReadonlyStorage for RockReader<'a> {
 pub struct RockWriter<'a> {
     transaction: rocksdb::Transaction<'a, OptimisticTransactionDB>,
     price_list: PriceList,
+    hasher: FastHasher,
 }
 
 impl<'a> ReadonlyStorage for RockWriter<'a> {
@@ -153,12 +157,14 @@ impl<'a> Storage for RockWriter<'a> {
         // TODO: use transaction or manual batching...
         self.price_list.charge_write(meter, key, value)?;
         self.transaction.put(key, value).unwrap();
+        self.hasher.set(key, value);
         Ok(())
     }
 
     fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> GasResult<()> {
         self.price_list.charge_remove(meter, key)?;
         self.transaction.delete(key).unwrap();
+        self.hasher.remove(key);
         Ok(())
     }
 
@@ -170,6 +176,9 @@ impl<'a> Storage for RockWriter<'a> {
 impl<'a> Transaction for RockWriter<'a> {
     // This writes all changes to the underlying storage and consumes this wrapper
     fn commit(self, _meter: &GasMeter) -> GasResult<()> {
+        // calculate and update app_hash
+        let app_hash = self.hasher.hash();
+        self.transaction.put(APP_HASH_KEY, &app_hash).unwrap();
         self.transaction.commit().unwrap();
         Ok(())
     }
@@ -336,6 +345,34 @@ mod rock_tests {
 
         assert_eq!(store.get(&gas, b"foo").unwrap(), None);
         assert_eq!(store.get(&gas, b"food").unwrap(), Some(b"bank".to_vec()));
+    }
+
+    #[test]
+    fn app_hash_updates() {
+        let storage = RockStore::open("/tmp/foo5");
+        let gas = GasMeter::infinite();
+        let orig_hash = storage.app_hash();
+
+        // write something, new hash
+        let mut store = storage.writer();
+        store.set(&gas, b"foo", b"bar").unwrap();
+        store.set(&gas, b"angel", b"food").unwrap();
+        store.commit(&gas).unwrap();
+        let hash2 = storage.app_hash();
+        assert_ne!(hash2, orig_hash);
+
+        // delete something, new hash
+        let mut store = storage.writer();
+        store.remove(&gas, b"foo").unwrap();
+        store.commit(&gas).unwrap();
+        let hash3 = storage.app_hash();
+        assert_ne!(hash3, hash2);
+
+        // do nothing, hash remains the same
+        let store = storage.writer();
+        store.commit(&gas).unwrap();
+        let hash4 = storage.app_hash();
+        assert_eq!(hash4, hash3);
     }
 
     #[test]
