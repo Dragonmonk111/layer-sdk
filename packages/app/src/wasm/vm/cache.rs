@@ -57,12 +57,12 @@ impl fmt::Debug for VmCache {
 impl VmCache {
     // TODO: make more args?
     pub fn init(cache_dir: &str) -> Self {
-        let cache_options = CacheOptions {
-            base_dir: PathBuf::from(cache_dir),
-            memory_cache_size: Size::mebi(DEFAULT_CACHE_MB),
-            instance_memory_limit: Size::mebi(DEFAULT_INSTANCE_MB),
-            available_capabilities: capabilities(),
-        };
+        let cache_options = CacheOptions::new(
+            cache_dir,
+            capabilities(),
+            Size::mebi(DEFAULT_CACHE_MB),
+            Size::mebi(DEFAULT_INSTANCE_MB),
+        );
         let cache = unsafe { Cache::new(cache_options).unwrap() };
         VmCache {
             cache,
@@ -152,9 +152,7 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions {
-            gas_limit,
-        };
+        let options = InstanceOptions { gas_limit };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();
@@ -301,9 +299,7 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions {
-            gas_limit,
-        };
+        let options = InstanceOptions { gas_limit };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();

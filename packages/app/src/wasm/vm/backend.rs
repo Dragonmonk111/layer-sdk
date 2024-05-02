@@ -19,6 +19,7 @@ use super::cache::{sdk_gas_to_wasmer, wasmer_gas_to_sdk};
 
 pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
+pub const GAS_COST_VALIDATE_ADDRESS: u64 = 20;
 
 pub type CustomQuery = Empty;
 pub type CustomMsg = Empty;
@@ -55,7 +56,7 @@ pub(crate) unsafe fn danger_will_robinson(
 pub struct VmApi;
 
 impl BackendApi for VmApi {
-    fn canonical_address(&self, human: &str) -> BackendResult<Vec<u8>> {
+    fn addr_canonicalize(&self, human: &str) -> BackendResult<Vec<u8>> {
         let cost = GasInfo::with_cost(GAS_COST_CANONICAL_ADDRESS);
         let res = AccountId::parse_string(human)
             .map(|id| id.to_vec())
@@ -63,10 +64,18 @@ impl BackendApi for VmApi {
         (res, cost)
     }
 
-    fn human_address(&self, canonical: &[u8]) -> BackendResult<String> {
+    fn addr_humanize(&self, canonical: &[u8]) -> BackendResult<String> {
         let cost = GasInfo::with_cost(GAS_COST_HUMAN_ADDRESS);
         let res = AccountId::new(canonical)
             .map(|id| id.to_string())
+            .map_err(account_error_to_backend);
+        (res, cost)
+    }
+
+    fn addr_validate(&self, input: &str) -> BackendResult<()> {
+        let cost = GasInfo::with_cost(GAS_COST_VALIDATE_ADDRESS);
+        let res = AccountId::parse_string(input)
+            .map(|_| ())
             .map_err(account_error_to_backend);
         (res, cost)
     }
@@ -225,15 +234,11 @@ fn slay3r_response_to_cosmwasm(
     match response {
         Bank(bank) => match bank {
             BankQueryResponse::AllBalances(balances) => {
-                let res = cosmwasm_std::AllBalanceResponse {
-                    amount: balances.amount,
-                };
+                let res = cosmwasm_std::AllBalanceResponse::new(balances.amount);
                 Ok(to_json_binary(&res).unwrap())
             }
             BankQueryResponse::Balance(balance) => {
-                let res = cosmwasm_std::BalanceResponse {
-                    amount: balance.amount,
-                };
+                let res = cosmwasm_std::BalanceResponse::new(balance.amount);
                 Ok(to_json_binary(&res).unwrap())
             }
             BankQueryResponse::Supply(supply) => {
@@ -246,12 +251,13 @@ fn slay3r_response_to_cosmwasm(
             slay3r_std::response::WasmQueryResponse::Smart(data) => Ok(data),
             slay3r_std::response::WasmQueryResponse::Raw(value) => Ok(value),
             slay3r_std::response::WasmQueryResponse::ContractInfo(info) => {
-                let mut res = cosmwasm_std::ContractInfoResponse::default();
-                res.code_id = info.code_id;
-                res.creator = info.creator.to_string();
-                res.admin = info.admin.map(|a| a.to_string());
-                res.pinned = info.pinned;
-                res.ibc_port = info.ibc_port;
+                let res = cosmwasm_std::ContractInfoResponse::new(
+                    info.code_id,
+                    info.creator.into(),
+                    info.admin.map(|a| a.into()),
+                    info.pinned,
+                    info.ibc_port,
+                );
                 Ok(to_json_binary(&res).unwrap())
             }
             x => unsupported_response(&x),

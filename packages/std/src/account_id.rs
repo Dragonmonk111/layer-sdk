@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
-use cosmwasm_std::StdResult;
+use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
@@ -75,6 +75,18 @@ impl Debug for AccountId {
 impl From<&AccountId> for String {
     fn from(value: &AccountId) -> Self {
         value.to_string()
+    }
+}
+
+impl From<AccountId> for Addr {
+    fn from(value: AccountId) -> Self {
+        Addr::unchecked(value.to_string())
+    }
+}
+
+impl From<&AccountId> for Addr {
+    fn from(value: &AccountId) -> Self {
+        Addr::unchecked(value.to_string())
     }
 }
 

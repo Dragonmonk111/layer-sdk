@@ -729,7 +729,7 @@ impl Wasm {
                     checksum,
                     pinned,
                 } = self.load_code(storage, meter, code_id)?;
-                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_vm_error)?;
+                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_checksum_error)?;
                 let data = self.cache.load_code(&hash).map_err(map_vm_error)?;
                 let resp = CodeInfoResponse {
                     data: data.into(),
@@ -874,6 +874,10 @@ fn map_vm_error(err: VmError) -> PulsarError {
         // FIXME: make this deterministic
         e => WasmError::Vm(e.to_string()).into(),
     }
+}
+
+fn map_checksum_error(err: cosmwasm_std::ChecksumError) -> PulsarError {
+    PulsarError::Wasm(WasmError::Checksum)
 }
 
 fn map_contract_error(err: String) -> PulsarError {

@@ -18,4 +18,7 @@ pub enum WasmError {
 
     #[error("Instantiate2: {0}")]
     Instantiate2Error(#[from] Instantiate2AddressError),
+
+    #[error("Invalid Checksum, must be 32 bytes")]
+    Checksum,
 }
