@@ -13,13 +13,14 @@ use cosmos_sdk_proto::cosmos::auth::v1beta1::{
 use cosmos_sdk_proto::cosmos::bank::v1beta1::{
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
     QuerySpendableBalancesRequest, QuerySupplyOfRequest, QuerySupplyOfResponse,
+    QueryTotalSupplyRequest, QueryTotalSupplyResponse,
 };
 use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
-    AbsoluteTxPosition, QueryCodeRequest, QueryCodeResponse, QueryContractInfoRequest,
-    QueryContractInfoResponse, QueryContractsByCodeRequest, QueryContractsByCodeResponse,
-    QueryRawContractStateRequest, QueryRawContractStateResponse, QuerySmartContractStateRequest,
-    QuerySmartContractStateResponse,
+    AbsoluteTxPosition, QueryCodeRequest, QueryCodeResponse, QueryCodesRequest, QueryCodesResponse,
+    QueryContractInfoRequest, QueryContractInfoResponse, QueryContractsByCodeRequest,
+    QueryContractsByCodeResponse, QueryRawContractStateRequest, QueryRawContractStateResponse,
+    QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
 use cosmos_sdk_proto::prost::Message;
 use cosmos_sdk_proto::traits::MessageExt;
@@ -114,6 +115,11 @@ fn parse_cosmos_grpc_query(
             let query = BankQuery::AllBalances { address };
             Ok(Some(query.into()))
         }
+        "/cosmos.bank.v1beta1.Query/TotalSupply" => {
+            let _req = QueryTotalSupplyRequest::decode(data).map_err(CosmosError::from)?;
+            let query = BankQuery::TotalSupply {};
+            Ok(Some(query.into()))
+        }
         "/cosmos.bank.v1beta1.Query/SupplyOf" => {
             let req = QuerySupplyOfRequest::decode(data).map_err(CosmosError::from)?;
             let denom = req.denom;
@@ -167,6 +173,14 @@ fn parse_cosmos_grpc_query(
             let req = QueryCodeRequest::decode(data).map_err(CosmosError::from)?;
             let query = WasmQuery::CodeInfo {
                 code_id: req.code_id,
+            };
+            Ok(Some(query.into()))
+        }
+        "/cosmwasm.wasm.v1.Query/Codes" => {
+            let req = QueryCodesRequest::decode(data).map_err(CosmosError::from)?;
+            let query = WasmQuery::ListCodes {
+                from: req.pagination.as_ref().map(|p| p.offset),
+                limit: req.pagination.as_ref().map(|p| p.limit as u32),
             };
             Ok(Some(query.into()))
         }
@@ -239,6 +253,14 @@ pub fn encode_bank_response(res: BankQueryResponse) -> Vec<u8> {
             let amount = Some(encode_sdk_coin(&r.amount));
             QuerySupplyOfResponse { amount }.encode_to_vec()
         }
+        BankQueryResponse::TotalSupply(r) => {
+            let supply = r.amounts.iter().map(encode_sdk_coin).collect();
+            QueryTotalSupplyResponse {
+                supply,
+                pagination: None,
+            }
+            .encode_to_vec()
+        }
     }
 }
 
@@ -269,17 +291,33 @@ pub fn encode_wasm_response(res: WasmQueryResponse) -> Vec<u8> {
             QueryRawContractStateResponse { data: data.into() }.encode_to_vec()
         }
         WasmQueryResponse::CodeInfo(code) => QueryCodeResponse {
-            data: vec![],
+            data: code.data.into(),
             code_info: Some(cosmos_sdk_proto::cosmwasm::wasm::v1::CodeInfoResponse {
-                code_id: code.code_id,
-                creator: code.creator.to_string(),
-                data_hash: code.checksum.into(),
+                code_id: code.code_info.code_id,
+                creator: code.code_info.creator.to_string(),
+                data_hash: code.code_info.checksum.into(),
                 instantiate_permission: None,
             }),
         }
         .encode_to_vec(),
+        WasmQueryResponse::ListCodes(codes) => QueryCodesResponse {
+            code_infos: codes
+                .code_infos
+                .into_iter()
+                .map(
+                    |code| cosmos_sdk_proto::cosmwasm::wasm::v1::CodeInfoResponse {
+                        code_id: code.code_id,
+                        creator: code.creator.to_string(),
+                        data_hash: code.checksum.into(),
+                        instantiate_permission: None,
+                    },
+                )
+                .collect(),
+            pagination: None, // TODO
+        }
+        .encode_to_vec(),
         WasmQueryResponse::ContractInfo(info) => QueryContractInfoResponse {
-            address: "".to_string(), // TODO: do we need the queried address? expose more info here
+            address: info.addresss.to_string(),
             contract_info: Some(cosmos_sdk_proto::cosmwasm::wasm::v1::ContractInfo {
                 code_id: info.code_id,
                 creator: info.creator.to_string(),

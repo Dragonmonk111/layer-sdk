@@ -1,9 +1,10 @@
 use cosmos_sdk_proto::{
     cosmos::bank::v1beta1::MsgSend,
     cosmwasm::wasm::v1::{
-        MsgClearAdmin, MsgExecuteContract, MsgInstantiateContract, MsgMigrateContract,
-        MsgStoreCode, MsgUpdateAdmin,
+        MsgClearAdmin, MsgExecuteContract, MsgInstantiateContract, MsgInstantiateContract2,
+        MsgMigrateContract, MsgStoreCode, MsgUpdateAdmin,
     },
+    prost::Message,
     traits::{MessageExt, TypeUrl},
 };
 use cosmrs::Any;
@@ -53,6 +54,26 @@ pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
                 msg: parsed.msg.into(),
                 funds: parse_sdk_coins(&parsed.funds)?,
                 label: parsed.label,
+            }
+            .into())
+        }
+        // FIXME: add this to cosmrs
+        // MsgInstantiateContract2::TYPE_URL => {
+        "/cosmwasm.wasm.v1.MsgInstantiateContract2" => {
+            let parsed = MsgInstantiateContract2::decode(&*msg.value).map_err(CosmosError::from)?;
+            let admin = if parsed.admin.is_empty() {
+                None
+            } else {
+                Some(AccountId::parse_string(&parsed.admin)?)
+            };
+            Ok(WasmMsg::Instantiate2 {
+                sender: AccountId::parse_string(&parsed.sender)?,
+                admin,
+                code_id: parsed.code_id,
+                msg: parsed.msg.into(),
+                funds: parse_sdk_coins(&parsed.funds)?,
+                label: parsed.label,
+                salt: parsed.salt.into(),
             }
             .into())
         }

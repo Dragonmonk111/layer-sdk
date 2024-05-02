@@ -1,0 +1,820 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "tendermint/abci/types.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "ABCIApplication"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {},
+  "definitions": {
+    "ResponseProcessProposalProposalStatus": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "ACCEPT",
+        "REJECT"
+      ],
+      "default": "UNKNOWN"
+    },
+    "abciCheckTxType": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "RECHECK"
+      ],
+      "default": "NEW"
+    },
+    "abciCommitInfo": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "votes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciVoteInfo"
+          }
+        }
+      }
+    },
+    "abciEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciEventAttribute"
+          }
+        }
+      },
+      "description": "Event allows application developers to attach additional information to\nResponseBeginBlock, ResponseEndBlock, ResponseCheckTx and ResponseDeliverTx.\nLater, transactions may be queried using these events."
+    },
+    "abciEventAttribute": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "index": {
+          "type": "boolean",
+          "title": "nondeterministic"
+        }
+      },
+      "description": "EventAttribute is a single key-value pair, associated with an event."
+    },
+    "abciExtendedCommitInfo": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The round at which the block proposer decided in the previous height."
+        },
+        "votes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciExtendedVoteInfo"
+          },
+          "description": "List of validators' addresses in the last validator set with their voting\ninformation, including vote extensions."
+        }
+      }
+    },
+    "abciExtendedVoteInfo": {
+      "type": "object",
+      "properties": {
+        "validator": {
+          "$ref": "#/definitions/tendermintabciValidator"
+        },
+        "signedLastBlock": {
+          "type": "boolean"
+        },
+        "voteExtension": {
+          "type": "string",
+          "format": "byte",
+          "title": "Reserved for future use"
+        }
+      }
+    },
+    "abciMisbehavior": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/abciMisbehaviorType"
+        },
+        "validator": {
+          "$ref": "#/definitions/tendermintabciValidator",
+          "title": "The offending validator"
+        },
+        "height": {
+          "type": "string",
+          "format": "int64",
+          "title": "The height when the offense occurred"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "title": "The corresponding time where the offense occurred"
+        },
+        "totalVotingPower": {
+          "type": "string",
+          "format": "int64",
+          "title": "Total voting power of the validator set in case the ABCI application does\nnot store historical validators.\nhttps://github.com/tendermint/tendermint/issues/4581"
+        }
+      }
+    },
+    "abciMisbehaviorType": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "DUPLICATE_VOTE",
+        "LIGHT_CLIENT_ATTACK"
+      ],
+      "default": "UNKNOWN"
+    },
+    "abciResponseApplySnapshotChunk": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/definitions/abciResponseApplySnapshotChunkResult"
+        },
+        "refetchChunks": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": "Chunks to refetch and reapply"
+        },
+        "rejectSenders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Chunk senders to reject and ban"
+        }
+      }
+    },
+    "abciResponseApplySnapshotChunkResult": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "ACCEPT",
+        "ABORT",
+        "RETRY",
+        "RETRY_SNAPSHOT",
+        "REJECT_SNAPSHOT"
+      ],
+      "default": "UNKNOWN",
+      "title": "- UNKNOWN: Unknown result, abort all snapshot restoration\n - ACCEPT: Chunk successfully accepted\n - ABORT: Abort all snapshot restoration\n - RETRY: Retry chunk (combine with refetch and reject)\n - RETRY_SNAPSHOT: Retry snapshot (combine with refetch and reject)\n - REJECT_SNAPSHOT: Reject this snapshot, try others"
+    },
+    "abciResponseBeginBlock": {
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciEvent"
+          }
+        }
+      }
+    },
+    "abciResponseCheckTx": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte"
+        },
+        "log": {
+          "type": "string",
+          "title": "nondeterministic"
+        },
+        "info": {
+          "type": "string",
+          "title": "nondeterministic"
+        },
+        "gas_wanted": {
+          "type": "string",
+          "format": "int64"
+        },
+        "gas_used": {
+          "type": "string",
+          "format": "int64"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciEvent"
+          }
+        },
+        "codespace": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "format": "int64"
+        },
+        "mempoolError": {
+          "type": "string",
+          "description": "mempool_error is set by CometBFT.\nABCI applictions creating a ResponseCheckTX should not set mempool_error."
+        }
+      }
+    },
+    "abciResponseCommit": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "format": "byte",
+          "title": "reserve 1"
+        },
+        "retainHeight": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "abciResponseDeliverTx": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte"
+        },
+        "log": {
+          "type": "string",
+          "title": "nondeterministic"
+        },
+        "info": {
+          "type": "string",
+          "title": "nondeterministic"
+        },
+        "gasWanted": {
+          "type": "string",
+          "format": "int64"
+        },
+        "gasUsed": {
+          "type": "string",
+          "format": "int64"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciEvent"
+          },
+          "title": "nondeterministic"
+        },
+        "codespace": {
+          "type": "string"
+        }
+      }
+    },
+    "abciResponseEcho": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "abciResponseEndBlock": {
+      "type": "object",
+      "properties": {
+        "validatorUpdates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciValidatorUpdate"
+          }
+        },
+        "consensusParamUpdates": {
+          "$ref": "#/definitions/typesConsensusParams"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciEvent"
+          }
+        }
+      }
+    },
+    "abciResponseFlush": {
+      "type": "object"
+    },
+    "abciResponseInfo": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "appVersion": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "lastBlockHeight": {
+          "type": "string",
+          "format": "int64"
+        },
+        "lastBlockAppHash": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "abciResponseInitChain": {
+      "type": "object",
+      "properties": {
+        "consensusParams": {
+          "$ref": "#/definitions/typesConsensusParams"
+        },
+        "validators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciValidatorUpdate"
+          }
+        },
+        "appHash": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "abciResponseListSnapshots": {
+      "type": "object",
+      "properties": {
+        "snapshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/abciSnapshot"
+          }
+        }
+      }
+    },
+    "abciResponseLoadSnapshotChunk": {
+      "type": "object",
+      "properties": {
+        "chunk": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "abciResponseOfferSnapshot": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/definitions/abciResponseOfferSnapshotResult"
+        }
+      }
+    },
+    "abciResponseOfferSnapshotResult": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "ACCEPT",
+        "ABORT",
+        "REJECT",
+        "REJECT_FORMAT",
+        "REJECT_SENDER"
+      ],
+      "default": "UNKNOWN",
+      "title": "- UNKNOWN: Unknown result, abort all snapshot restoration\n - ACCEPT: Snapshot accepted, apply chunks\n - ABORT: Abort all snapshot restoration\n - REJECT: Reject this specific snapshot, try others\n - REJECT_FORMAT: Reject all snapshots of this format, try others\n - REJECT_SENDER: Reject all snapshots from the sender(s), try others"
+    },
+    "abciResponsePrepareProposal": {
+      "type": "object",
+      "properties": {
+        "txs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        }
+      }
+    },
+    "abciResponseProcessProposal": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/ResponseProcessProposalProposalStatus"
+        }
+      }
+    },
+    "abciResponseQuery": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "log": {
+          "type": "string",
+          "description": "bytes data = 2; // use \"value\" instead.\n\nnondeterministic"
+        },
+        "info": {
+          "type": "string",
+          "title": "nondeterministic"
+        },
+        "index": {
+          "type": "string",
+          "format": "int64"
+        },
+        "key": {
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        },
+        "proofOps": {
+          "$ref": "#/definitions/tendermintcryptoProofOps"
+        },
+        "height": {
+          "type": "string",
+          "format": "int64"
+        },
+        "codespace": {
+          "type": "string"
+        }
+      }
+    },
+    "abciSnapshot": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "string",
+          "format": "uint64",
+          "title": "The height at which the snapshot was taken"
+        },
+        "format": {
+          "type": "integer",
+          "format": "int64",
+          "title": "The application-specific snapshot format"
+        },
+        "chunks": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Number of chunks in the snapshot"
+        },
+        "hash": {
+          "type": "string",
+          "format": "byte",
+          "title": "Arbitrary snapshot hash, equal only if identical"
+        },
+        "metadata": {
+          "type": "string",
+          "format": "byte",
+          "title": "Arbitrary application metadata"
+        }
+      }
+    },
+    "abciValidatorUpdate": {
+      "type": "object",
+      "properties": {
+        "pubKey": {
+          "$ref": "#/definitions/cryptoPublicKey"
+        },
+        "power": {
+          "type": "string",
+          "format": "int64"
+        }
+      },
+      "title": "ValidatorUpdate"
+    },
+    "abciVoteInfo": {
+      "type": "object",
+      "properties": {
+        "validator": {
+          "$ref": "#/definitions/tendermintabciValidator"
+        },
+        "signedLastBlock": {
+          "type": "boolean"
+        }
+      },
+      "title": "VoteInfo"
+    },
+    "cryptoPublicKey": {
+      "type": "object",
+      "properties": {
+        "ed25519": {
+          "type": "string",
+          "format": "byte"
+        },
+        "secp256k1": {
+          "type": "string",
+          "format": "byte"
+        }
+      },
+      "title": "PublicKey defines the keys available for use with Validators"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string",
+          "description": "A URL/resource name that uniquely identifies the type of the serialized\nprotocol buffer message. This string must contain at least\none \"/\" character. The last segment of the URL's path must represent\nthe fully qualified name of the type (as in\n`path/google.protobuf.Duration`). The name should be in a canonical form\n(e.g., leading \".\" is not accepted).\n\nIn practice, teams usually precompile into the binary all types that they\nexpect it to use in the context of Any. However, for URLs which use the\nscheme `http`, `https`, or no scheme, one can optionally set up a type\nserver that maps type URLs to message definitions as follows:\n\n* If no scheme is provided, `https` is assumed.\n* An HTTP GET on the URL must yield a [google.protobuf.Type][]\n  value in binary format, or produce an error.\n* Applications are allowed to cache lookup results based on the\n  URL, or have them precompiled into a binary to avoid any\n  lookup. Therefore, binary compatibility needs to be preserved\n  on changes to types. (Use versioned type names to manage\n  breaking changes.)\n\nNote: this functionality is not currently available in the official\nprotobuf release, and it is not used for type URLs beginning with\ntype.googleapis.com.\n\nSchemes other than `http`, `https` (or the empty scheme) might be\nused with implementation specific semantics."
+        }
+      },
+      "additionalProperties": {},
+      "description": "`Any` contains an arbitrary serialized protocol buffer message along with a\nURL that describes the type of the serialized message.\n\nProtobuf library provides support to pack/unpack Any values in the form\nof utility functions or additional generated methods of the Any type.\n\nExample 1: Pack and unpack a message in C++.\n\n    Foo foo = ...;\n    Any any;\n    any.PackFrom(foo);\n    ...\n    if (any.UnpackTo(\u0026foo)) {\n      ...\n    }\n\nExample 2: Pack and unpack a message in Java.\n\n    Foo foo = ...;\n    Any any = Any.pack(foo);\n    ...\n    if (any.is(Foo.class)) {\n      foo = any.unpack(Foo.class);\n    }\n    // or ...\n    if (any.isSameTypeAs(Foo.getDefaultInstance())) {\n      foo = any.unpack(Foo.getDefaultInstance());\n    }\n\n Example 3: Pack and unpack a message in Python.\n\n    foo = Foo(...)\n    any = Any()\n    any.Pack(foo)\n    ...\n    if any.Is(Foo.DESCRIPTOR):\n      any.Unpack(foo)\n      ...\n\n Example 4: Pack and unpack a message in Go\n\n     foo := \u0026pb.Foo{...}\n     any, err := anypb.New(foo)\n     if err != nil {\n       ...\n     }\n     ...\n     foo := \u0026pb.Foo{}\n     if err := any.UnmarshalTo(foo); err != nil {\n       ...\n     }\n\nThe pack methods provided by protobuf library will by default use\n'type.googleapis.com/full.type.name' as the type URL and the unpack\nmethods only use the fully qualified type name after the last '/'\nin the type URL, for example \"foo.bar.com/x/y.z\" will yield type\nname \"y.z\".\n\nJSON\n====\nThe JSON representation of an `Any` value uses the regular\nrepresentation of the deserialized, embedded message, with an\nadditional field `@type` which contains the type URL. Example:\n\n    package google.profile;\n    message Person {\n      string first_name = 1;\n      string last_name = 2;\n    }\n\n    {\n      \"@type\": \"type.googleapis.com/google.profile.Person\",\n      \"firstName\": \u003cstring\u003e,\n      \"lastName\": \u003cstring\u003e\n    }\n\nIf the embedded message type is well-known and has a custom JSON\nrepresentation, that representation will be embedded adding a field\n`value` which holds the custom JSON in addition to the `@type`\nfield. Example (for message [google.protobuf.Duration][]):\n\n    {\n      \"@type\": \"type.googleapis.com/google.protobuf.Duration\",\n      \"value\": \"1.212s\"\n    }"
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "tendermintabciValidator": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "format": "byte",
+          "title": "The first 20 bytes of SHA256(public key)"
+        },
+        "power": {
+          "type": "string",
+          "format": "int64",
+          "description": "The voting power",
+          "title": "PubKey pub_key = 2;"
+        }
+      },
+      "title": "Validator"
+    },
+    "tendermintcryptoProofOp": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string",
+          "format": "byte"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte"
+        }
+      },
+      "title": "ProofOp defines an operation used for calculating Merkle root\nThe data could be arbitrary format, providing nessecary data\nfor example neighbouring node hash"
+    },
+    "tendermintcryptoProofOps": {
+      "type": "object",
+      "properties": {
+        "ops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/tendermintcryptoProofOp"
+          }
+        }
+      },
+      "title": "ProofOps is Merkle proof defined by the list of ProofOps"
+    },
+    "tenderminttypesHeader": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "$ref": "#/definitions/versionConsensus",
+          "title": "basic block info"
+        },
+        "chainId": {
+          "type": "string"
+        },
+        "height": {
+          "type": "string",
+          "format": "int64"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastBlockId": {
+          "$ref": "#/definitions/typesBlockID",
+          "title": "prev block info"
+        },
+        "lastCommitHash": {
+          "type": "string",
+          "format": "byte",
+          "description": "commit from validators from the last block",
+          "title": "hashes of block data"
+        },
+        "dataHash": {
+          "type": "string",
+          "format": "byte",
+          "title": "transactions"
+        },
+        "validatorsHash": {
+          "type": "string",
+          "format": "byte",
+          "description": "validators for the current block",
+          "title": "hashes from the app output from the prev block"
+        },
+        "nextValidatorsHash": {
+          "type": "string",
+          "format": "byte",
+          "title": "validators for the next block"
+        },
+        "consensusHash": {
+          "type": "string",
+          "format": "byte",
+          "title": "consensus params for current block"
+        },
+        "appHash": {
+          "type": "string",
+          "format": "byte",
+          "title": "state after txs from the previous block"
+        },
+        "lastResultsHash": {
+          "type": "string",
+          "format": "byte",
+          "title": "root hash of all results from the txs from the previous block"
+        },
+        "evidenceHash": {
+          "type": "string",
+          "format": "byte",
+          "description": "evidence included in the block",
+          "title": "consensus info"
+        },
+        "proposerAddress": {
+          "type": "string",
+          "format": "byte",
+          "title": "original proposer of the block"
+        }
+      },
+      "description": "Header defines the structure of a block header."
+    },
+    "typesBlockID": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "partSetHeader": {
+          "$ref": "#/definitions/typesPartSetHeader"
+        }
+      },
+      "title": "BlockID"
+    },
+    "typesBlockParams": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": "string",
+          "format": "int64",
+          "title": "Max block size, in bytes.\nNote: must be greater than 0"
+        },
+        "maxGas": {
+          "type": "string",
+          "format": "int64",
+          "title": "Max gas per block.\nNote: must be greater or equal to -1"
+        }
+      },
+      "description": "BlockParams contains limits on the block size."
+    },
+    "typesConsensusParams": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "$ref": "#/definitions/typesBlockParams"
+        },
+        "evidence": {
+          "$ref": "#/definitions/typesEvidenceParams"
+        },
+        "validator": {
+          "$ref": "#/definitions/typesValidatorParams"
+        },
+        "version": {
+          "$ref": "#/definitions/typesVersionParams"
+        }
+      },
+      "description": "ConsensusParams contains consensus critical parameters that determine the\nvalidity of blocks."
+    },
+    "typesEvidenceParams": {
+      "type": "object",
+      "properties": {
+        "maxAgeNumBlocks": {
+          "type": "string",
+          "format": "int64",
+          "description": "Max age of evidence, in blocks.\n\nThe basic formula for calculating this is: MaxAgeDuration / {average block\ntime}."
+        },
+        "maxAgeDuration": {
+          "type": "string",
+          "description": "Max age of evidence, in time.\n\nIt should correspond with an app's \"unbonding period\" or other similar\nmechanism for handling [Nothing-At-Stake\nattacks](https://github.com/ethereum/wiki/wiki/Proof-of-Stake-FAQ#what-is-the-nothing-at-stake-problem-and-how-can-it-be-fixed)."
+        },
+        "maxBytes": {
+          "type": "string",
+          "format": "int64",
+          "title": "This sets the maximum size of total evidence in bytes that can be committed in a single block.\nand should fall comfortably under the max block bytes.\nDefault is 1048576 or 1MB"
+        }
+      },
+      "description": "EvidenceParams determine how we handle evidence of malfeasance."
+    },
+    "typesPartSetHeader": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        }
+      },
+      "title": "PartsetHeader"
+    },
+    "typesValidatorParams": {
+      "type": "object",
+      "properties": {
+        "pubKeyTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "ValidatorParams restrict the public key types validators can use.\nNOTE: uses ABCI pubkey naming, not Amino names."
+    },
+    "typesVersionParams": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "description": "VersionParams contains the ABCI application version."
+    },
+    "versionConsensus": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "app": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "description": "Consensus captures the consensus rules for processing a block in the blockchain,\nincluding all blockchain data structures and the rules of the application's\nstate transition machine."
+    }
+  }
+}

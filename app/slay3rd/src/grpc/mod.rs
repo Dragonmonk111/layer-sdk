@@ -2,11 +2,15 @@ mod auth;
 mod bank;
 mod cosmwasm;
 mod log;
+mod tendermint;
+mod tx;
 
+pub use self::tendermint::tendermint_service;
 pub use auth::auth_service;
 pub use bank::bank_service;
 pub use cosmwasm::cosmwasm_service;
 pub use log::LogLayer;
+pub use tx::tx_service;
 
 use tendermint_proto::abci::RequestQuery;
 use tendermint_proto::v0_38::abci::ResponseQuery;

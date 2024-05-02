@@ -4,15 +4,20 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	auth "github.com/pulsar/pulsariumd/gateway/cosmos/auth/v1beta1"
 	bank "github.com/pulsar/pulsariumd/gateway/cosmos/bank/v1beta1"
+	tendermint "github.com/pulsar/pulsariumd/gateway/cosmos/base/tendermint/v1beta1"
+	tx "github.com/pulsar/pulsariumd/gateway/cosmos/tx/v1beta1"
 	cosmwasm "github.com/pulsar/pulsariumd/gateway/cosmwasm/wasm/v1"
 
 	// to register pubkey any types
@@ -26,18 +31,44 @@ var (
 	grpcServerEndpoint = flag.String("grpc-server-endpoint", "localhost:9090", "gRPC server endpoint")
 )
 
+// Logic taken from the cosmos SDK code (server/api/server.go), so I guess it is needed
+// We need to explicitly pass this header through (why? which client?)
+const GRPCBlockHeightHeader = "x-cosmos-block-height"
+
+func CustomGRPCHeaderMatcher(key string) (string, bool) {
+	switch strings.ToLower(key) {
+	case GRPCBlockHeightHeader:
+		return GRPCBlockHeightHeader, true
+	default:
+		return runtime.DefaultHeaderMatcher(key)
+	}
+}
+
 func run() error {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Register gRPC server endpoint
-	// Note: Make sure the gRPC server is running properly and accessible
-	mux := runtime.NewServeMux()
+	// Create the grpc proxy mux, with custom header support
+	mux := runtime.NewServeMux(
+		runtime.WithIncomingHeaderMatcher(CustomGRPCHeaderMatcher),
+		// This will use lower-case names (what we find in .proto), not the Golang camelCase names
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+			MarshalOptions: protojson.MarshalOptions{
+				UseProtoNames:   true,
+				EmitUnpopulated: true,
+			},
+			UnmarshalOptions: protojson.UnmarshalOptions{
+				DiscardUnknown: true,
+			},
+		}),
+	)
+
 	endpoint := *grpcServerEndpoint
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 
 	// create a connection to the underlying grpc server
+	// Note: Make sure the gRPC server is running properly and accessible
 	conn, err := grpc.DialContext(ctx, endpoint, opts...)
 	if err != nil {
 		return err
@@ -57,6 +88,7 @@ func run() error {
 		}()
 	}()
 
+	// Register the gateway handlers
 	err = auth.RegisterQueryHandler(ctx, mux, conn)
 	if err != nil {
 		return err
@@ -69,9 +101,26 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	err = tendermint.RegisterServiceHandler(ctx, mux, conn)
+	if err != nil {
+		return err
+	}
+	err = tx.RegisterServiceHandler(ctx, mux, conn)
+	if err != nil {
+		return err
+	}
+
+	// TODO: config via env vars or such
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"https://*.spinner.zone", "http://localhost:*"},
+		AllowCredentials: true,
+		// Enable Debugging for testing, consider disabling in production
+		Debug: true,
+	})
+	handler := c.Handler(mux)
 
 	// Start HTTP server (and proxy calls to gRPC server endpoint)
-	return http.ListenAndServe(":1317", mux)
+	return http.ListenAndServe("0.0.0.0:1317", handler)
 }
 
 func main() {

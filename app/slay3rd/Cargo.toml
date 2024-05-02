@@ -47,6 +47,7 @@ bytes = {workspace = true}
 prost = { workspace = true }
 tonic = { workspace = true }
 tower = "0.4.13"
+hex = "0.4.3"
 
 [dev-dependencies]
 hex-literal = {workspace = true }

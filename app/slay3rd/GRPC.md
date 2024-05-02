@@ -8,6 +8,8 @@ Now, check the following endpoints:
 
 ```bash
 curl localhost:1317/cosmos/bank/v1beta1/balances/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j | jq .
+
+curl localhost:1317/cosmos/bank/v1beta1/balances/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j/by_denom?denom=uslay | jq .
 ```
 
 ```bash
@@ -16,22 +18,48 @@ curl localhost:1317/cosmos/auth/v1beta1/accounts/slay3r1pkptre7fdkl6gfrzlesjjvhx
 
 Run the integration tests and check again, along with the following cosmwasm ones:
 
-**TODO**
-
 ```bash
-curl localhost:1317/cosmwasm/wasm/v1/contract/slay3r16jxkxy3zx9ac7e7ykh8sek0mnu8d69v4hz90xa2m2nc9fudhfgzsdd74w6 | jq .
-```
+# Is this right? Should it be snake case?
+curl localhost:1317/cosmwasm/wasm/v1/code | jq .code_infos
 
-```bash
+# Warning, this dumps entire wasm blob now
 curl localhost:1317/cosmwasm/wasm/v1/code/1 | jq .
 
-curl localhost:1317/cosmwasm/wasm/v1/code/1/contracts | jq .
+# Get actual contracts
+curl localhost:1317/cosmwasm/wasm/v1/code/1/contracts | jq .contracts
+
+# Replace with address from your contract
+curl localhost:1317/cosmwasm/wasm/v1/contract/slay3r13xthx4g4vjyp43gnwxk0mw4zeuvp96ljhh7q0pec9znj409er0csv5pw6v | jq .
 ```
 
 ```bash
 echo -n '{"balance":{"address":"slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"}}' | base64 -w0
 
-curl localhost:1317/cosmwasm/wasm/v1/contract/pulsar16jxkxy3zx9ac7e7ykh8sek0mnu8d69v4hz90xa2m2nc9fudhfgzsftqzfr/smart/eyJiYWxhbmNlIjp7ImFkZHJlc3MiOiJwdWxzYXIxcGtwdHJlN2Zka2w2Z2Zyemxlc2pqdmh4aGxjM3I0Z202azVwM2wifX0= | jq -r .data | base64 -d
+curl localhost:1317/cosmwasm/wasm/v1/contract/slay3r13xthx4g4vjyp43gnwxk0mw4zeuvp96ljhh7q0pec9znj409er0csv5pw6v/smart/eyJiYWxhbmNlIjp7ImFkZHJlc3MiOiJzbGF5M3IxcGtwdHJlN2Zka2w2Z2Zyemxlc2pqdmh4aGxjM3I0Z212azNyM2oifX0= | jq -r .data | base64 -d
 ```
 
 This is a basic end-to-end that they are working.
+
+## Tendermint queries
+
+Test that basic tendermint node queries are working:
+
+```bash
+# Sample cometbft endpoints
+curl localhost:1317/cosmos/base/tendermint/v1beta1/syncing
+curl localhost:1317/cosmos/base/tendermint/v1beta1/node_info | jq .
+curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/latest
+curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/123 | jq .
+
+# Note, this should have a subfield `tx: []` rather than omitting when empty
+curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/latest | jq .block.data
+
+# Bank supply
+curl localhost:1317/cosmos/bank/v1beta1/supply | jq .
+curl localhost:1317/cosmos/bank/v1beta1/supply/uslay | jq .
+
+curl localhost:26657/status | jq .result.sync_info
+
+# Example for rpc error code
+curl localhost:1317/cosmos/tx/v1beta1/decode/amino
+```
