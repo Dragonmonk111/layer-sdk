@@ -59,6 +59,7 @@ fn build_submsg(msg: impl Into<CosmosMsg>, info: CallInfo, is_init: bool) -> Sub
     };
     SubMsg {
         id,
+        payload: Binary::default(),
         msg: msg.into(),
         gas_limit: info.gas_limit,
         reply_on: info.reply_on,

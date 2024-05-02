@@ -1,10 +1,9 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_vm::{Checksum, VmError};
-
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Order, Reply,
-    ReplyOn, SubMsg, SubMsgResponse,
+    ensure_eq, Addr, Binary, BlockInfo, Checksum, Coin, CosmosMsg, Empty, Env, MessageInfo, Order,
+    Reply, ReplyOn, SubMsg, SubMsgResponse,
 };
+use cosmwasm_vm::VmError;
 
 use cw_storage_plus::Bound;
 use slay3r_std::api::MsgResponse;
