@@ -27,7 +27,7 @@ const CAPABILITIES: &[&str] = &[
 ];
 const PRINT_DEBUG: bool = false;
 // TODO: what is this really?
-const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000_000;
+const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000;
 
 pub fn sdk_gas_to_wasmer(gas: u64) -> u64 {
     gas.saturating_mul(SDK_TO_WASMER_GAS_FACTOR)
@@ -122,6 +122,7 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_instantiate(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
+        println!("{:?}", instance.create_gas_report());
         let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
 
         // commit or abort the open WeakSubTx
