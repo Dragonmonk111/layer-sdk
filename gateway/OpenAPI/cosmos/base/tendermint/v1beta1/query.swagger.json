@@ -413,7 +413,7 @@
           "$ref": "#/definitions/tenderminttypesHeader"
         },
         "data": {
-          "$ref": "#/definitions/typesData"
+          "$ref": "#/definitions/tenderminttypesData"
         },
         "evidence": {
           "$ref": "#/definitions/typesEvidenceList"
@@ -422,6 +422,20 @@
           "$ref": "#/definitions/typesCommit"
         }
       }
+    },
+    "tenderminttypesData": {
+      "type": "object",
+      "properties": {
+        "txs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          },
+          "description": "Txs that will be applied by state @ block.Height+1.\nNOTE: not all txs here are valid.  We're just agreeing on the order first.\nThis means that block.AppHash does not include these txs."
+        }
+      },
+      "title": "Data contains the set of transactions included in the block"
     },
     "tenderminttypesHeader": {
       "type": "object",
@@ -523,7 +537,7 @@
           "$ref": "#/definitions/tendermintv1beta1Header"
         },
         "data": {
-          "$ref": "#/definitions/typesData"
+          "$ref": "#/definitions/tenderminttypesData"
         },
         "evidence": {
           "$ref": "#/definitions/typesEvidenceList"
@@ -724,20 +738,6 @@
         }
       },
       "description": "CommitSig is a part of the Vote included in a Commit."
-    },
-    "typesData": {
-      "type": "object",
-      "properties": {
-        "txs": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          },
-          "description": "Txs that will be applied by state @ block.Height+1.\nNOTE: not all txs here are valid.  We're just agreeing on the order first.\nThis means that block.AppHash does not include these txs."
-        }
-      },
-      "title": "Data contains the set of transactions included in the block"
     },
     "typesDuplicateVoteEvidence": {
       "type": "object",

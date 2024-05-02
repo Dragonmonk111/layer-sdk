@@ -41,5 +41,12 @@ This is a basic end-to-end that they are working.
 Test that basic tendermint node queries are working:
 
 ```bash
+# Sample cometbft endpoints
+curl localhost:1317/cosmos/base/tendermint/v1beta1/syncing
+curl localhost:1317/cosmos/base/tendermint/v1beta1/node_info | jq .
+curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/latest
+curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/123 | jq .
 
+# Example for rpc error code
+curl localhost:1317/cosmos/tx/v1beta1/decode/amino
 ```
