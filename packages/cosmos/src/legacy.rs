@@ -109,6 +109,7 @@ pub enum AminoMsg {
     MsgExecute(AminoMsgExecute),
     #[serde(rename = "wasm/MsgInstantiateContract")]
     MsgInstantiate(AminoMsgInstantiate),
+    // TODO
     // #[serde(rename = "wasm/MsgInstantiateContract2")]
     // MsgInstantiate2(AminoMsgInstantiate2),
     // #[serde(rename = "wasm/MsgMigrateContract")]
@@ -164,8 +165,7 @@ impl AminoMsg {
     }
 }
 
-// TODO: test this
-// This must be recursively sorted JSON object!!!
+// This "magically" creates recursively sorted JSON object when reserialized
 fn convert_message(msg: &Binary) -> Value {
     serde_json::from_slice(msg).unwrap()
 }

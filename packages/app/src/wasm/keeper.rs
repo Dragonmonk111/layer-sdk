@@ -928,8 +928,23 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
                 label,
             }
             .into(),
-            // TODO: enable feature flags and support this
-            // cosmwasm_std::WasmMsg::Instantiate2 { .. } => todo!(),
+            cosmwasm_std::WasmMsg::Instantiate2 {
+                admin,
+                code_id,
+                label,
+                msg,
+                funds,
+                salt,
+            } => slay3r_std::WasmMsg::Instantiate2 {
+                sender: sender.clone(),
+                admin: admin.map(|x| AccountId::parse_string(&x)).transpose()?,
+                code_id,
+                msg,
+                funds,
+                label,
+                salt,
+            }
+            .into(),
             cosmwasm_std::WasmMsg::Migrate {
                 contract_addr,
                 msg,
