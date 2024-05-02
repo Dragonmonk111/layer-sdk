@@ -239,7 +239,8 @@ fn slay3r_response_to_cosmwasm(
             BankQueryResponse::Supply(supply) => {
                 let res = cosmwasm_std::SupplyResponse::new(supply.amount);
                 Ok(to_json_binary(&res).unwrap())
-            } // x => unsupported_response(&x),
+            }
+            x => unsupported_response(&x),
         },
         Wasm(wasm) => match wasm {
             slay3r_std::response::WasmQueryResponse::Smart(data) => Ok(data),

@@ -65,16 +65,19 @@ impl Query for BankService {
         &self,
         request: Request<QueryTotalSupplyRequest>,
     ) -> Result<Response<QueryTotalSupplyResponse>, Status> {
-        let query = grpc_request_to_abci("/cosmos.bank.v1beta1.Query/SupplyOf", request.get_ref());
+        let query =
+            grpc_request_to_abci("/cosmos.bank.v1beta1.Query/TotalSupply", request.get_ref());
         let response = self.dispatcher.dispatch_query(query).await;
         abci_response_to_grpc(response).map(Response::new)
     }
 
     async fn supply_of(
         &self,
-        _request: Request<QuerySupplyOfRequest>,
+        request: Request<QuerySupplyOfRequest>,
     ) -> Result<Response<QuerySupplyOfResponse>, Status> {
-        unimplemented!()
+        let query = grpc_request_to_abci("/cosmos.bank.v1beta1.Query/SupplyOf", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(Response::new)
     }
 
     async fn params(

@@ -39,12 +39,15 @@ pub(crate) const LOAD_WASM_GAS: u64 = 60_000;
 pub(crate) const LOAD_PINNED_WASM_GAS: u64 = 2_000;
 
 // Contract state is kept in Storage, separate from the contracts themselves
-const CONTRACTS: Map<&AccountId, ContractData> = Map::new("contracts");
 const CODES: Map<u64, CodeInfo> = Map::new("codes");
+const CONTRACTS: Map<&AccountId, ContractData> = Map::new("contracts");
+const CONTRACTS_BY_CODE: Map<(u64, &AccountId), bool> = Map::new("contracts_by_code");
 
 // list of all pinned code_ids, so you can range over them
 const PINNED: Map<u64, Empty> = Map::new("pinned");
+// latest code id
 const CODE_ID: Item<u64> = Item::new("code_id");
+// A counter of total contracts created for the v1 instantiate algorithm
 const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
 
 const PARAMS: Item<WasmParams> = Item::new("params");
@@ -323,9 +326,11 @@ impl Wasm {
                     _ => Err(WasmError::Unauthorized),
                 }?;
                 // update the code and get the new code info
+                self.remove_contract_by_code(storage, meter, &contract_addr, &contract)?;
                 let code = self.load_code(storage.as_ref(), meter, new_code_id)?;
                 contract.code_id = new_code_id;
                 self.save_contract(storage, meter, &contract_addr, &contract)?;
+                self.save_contract_by_code(storage, meter, &contract_addr, &contract)?;
 
                 // call migrate on vm
                 let env = build_env(block, &contract_addr);
@@ -516,6 +521,7 @@ impl Wasm {
             created: block.height,
         };
         self.save_contract(storage, meter, &contract_addr, &contract)?;
+        self.save_contract_by_code(storage, meter, &contract_addr, &contract)?;
 
         // send funds
         if !funds.is_empty() {
@@ -757,23 +763,13 @@ impl Wasm {
                 WasmQueryResponse::ListCodes(ListCodesResponse { code_infos })
             }
             WasmQuery::ContractsByCode { code_id } => {
-                // TODO: new data structure to make this efficient
-                // Currently loops through all contracts and filters. Really needs secondary index
+                // Uses a manually tracked secondary index...
                 let wasm_store = prefixed_read(storage, NAMESPACE_WASM);
-                let contracts = CONTRACTS
+                let contracts = CONTRACTS_BY_CODE
+                    .prefix(code_id)
                     .range(&wasm_store, meter, None, None, Order::Ascending)?
-                    .filter_map(|r| match r {
-                        Err(e) => Some(Err(e)),
-                        Ok((k, v)) => {
-                            if v.code_id == code_id {
-                                Some(Ok(k))
-                            } else {
-                                None
-                            }
-                        }
-                    })
+                    .map(|r| r.map(|(k, _)| k))
                     .collect::<Result<Vec<_>, _>>()?;
-
                 let resp = ContractsByCodeResponse { contracts };
                 WasmQueryResponse::ContractsByCode(resp)
             }
@@ -797,12 +793,32 @@ impl Wasm {
         address: &AccountId,
         contract: &ContractData,
     ) -> Result<(), PlusError> {
-        CONTRACTS.save(
-            &mut prefixed(storage, NAMESPACE_WASM),
-            meter,
-            address,
-            contract,
-        )
+        let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
+        CONTRACTS.save(&mut wasm_store, meter, address, contract)
+    }
+
+    fn save_contract_by_code(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        address: &AccountId,
+        contract: &ContractData,
+    ) -> Result<(), PlusError> {
+        let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
+        // We need to manually remove old code id entry in migrate... but this handles a lot of the tracking
+        CONTRACTS_BY_CODE.save(&mut wasm_store, meter, (contract.code_id, address), &true)
+    }
+
+    // call this on migrate of whenever a contract will have a new code_id
+    fn remove_contract_by_code(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        address: &AccountId,
+        contract: &ContractData,
+    ) -> Result<(), GasError> {
+        let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
+        CONTRACTS_BY_CODE.remove(&mut wasm_store, meter, (contract.code_id, address))
     }
 
     fn load_code(

@@ -40,6 +40,9 @@ impl From<WasmQuery> for Query {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankQuery {
+    /// Returns the supply of all native tokens
+    /// Return value is of type TotalSupplyResponse.
+    TotalSupply {},
     /// Return value is of type SupplyResponse.
     Supply { denom: String },
     /// Return value is BalanceResponse
@@ -52,6 +55,7 @@ pub enum BankQuery {
 impl Display for BankQuery {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            BankQuery::TotalSupply { .. } => f.write_str("BankQuery::TotalSupply"),
             BankQuery::Supply { .. } => f.write_str("BankQuery::Supply"),
             BankQuery::Balance { .. } => f.write_str("BankQuery::Balance"),
             BankQuery::AllBalances { .. } => f.write_str("BankQuery::AllBalances"),
@@ -137,9 +141,21 @@ impl<E: Err> From<AccountResponse> for QueryResponse<E> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BankQueryResponse {
+    TotalSupply(TotalSupplyResponse),
     Supply(SupplyResponse),
     Balance(BalanceResponse),
     AllBalances(AllBalanceResponse),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TotalSupplyResponse {
+    pub amounts: Vec<Coin>,
+}
+
+impl<E: Err> From<TotalSupplyResponse> for QueryResponse<E> {
+    fn from(value: TotalSupplyResponse) -> Self {
+        BankQueryResponse::TotalSupply(value).into()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

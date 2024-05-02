@@ -13,6 +13,7 @@ use cosmos_sdk_proto::cosmos::auth::v1beta1::{
 use cosmos_sdk_proto::cosmos::bank::v1beta1::{
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
     QuerySpendableBalancesRequest, QuerySupplyOfRequest, QuerySupplyOfResponse,
+    QueryTotalSupplyRequest, QueryTotalSupplyResponse,
 };
 use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, SimulateResponse};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
@@ -112,6 +113,11 @@ fn parse_cosmos_grpc_query(
             let req = QuerySpendableBalancesRequest::decode(data).map_err(CosmosError::from)?;
             let address = AccountId::parse_string(&req.address)?;
             let query = BankQuery::AllBalances { address };
+            Ok(Some(query.into()))
+        }
+        "/cosmos.bank.v1beta1.Query/TotalSupply" => {
+            let _req = QueryTotalSupplyRequest::decode(data).map_err(CosmosError::from)?;
+            let query = BankQuery::TotalSupply {};
             Ok(Some(query.into()))
         }
         "/cosmos.bank.v1beta1.Query/SupplyOf" => {
@@ -246,6 +252,14 @@ pub fn encode_bank_response(res: BankQueryResponse) -> Vec<u8> {
         BankQueryResponse::Supply(r) => {
             let amount = Some(encode_sdk_coin(&r.amount));
             QuerySupplyOfResponse { amount }.encode_to_vec()
+        }
+        BankQueryResponse::TotalSupply(r) => {
+            let supply = r.amounts.iter().map(encode_sdk_coin).collect();
+            QueryTotalSupplyResponse {
+                supply,
+                pagination: None,
+            }
+            .encode_to_vec()
         }
     }
 }

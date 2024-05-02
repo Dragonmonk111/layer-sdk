@@ -8,6 +8,8 @@ Now, check the following endpoints:
 
 ```bash
 curl localhost:1317/cosmos/bank/v1beta1/balances/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j | jq .
+
+curl localhost:1317/cosmos/bank/v1beta1/balances/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j/by_denom?denom=uslay | jq .
 ```
 
 ```bash
@@ -15,8 +17,6 @@ curl localhost:1317/cosmos/auth/v1beta1/accounts/slay3r1pkptre7fdkl6gfrzlesjjvhx
 ```
 
 Run the integration tests and check again, along with the following cosmwasm ones:
-
-**TODO**
 
 ```bash
 # Is this right? Should it be snake case?
@@ -53,6 +53,10 @@ curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/123 | jq .
 
 # Note, this should have a subfield `tx: []` rather than omitting when empty
 curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/latest | jq .block.data
+
+# Bank supply
+curl localhost:1317/cosmos/bank/v1beta1/supply | jq .
+curl localhost:1317/cosmos/bank/v1beta1/supply/uslay | jq .
 
 curl localhost:26657/status | jq .result.sync_info
 

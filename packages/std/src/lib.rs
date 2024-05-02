@@ -24,7 +24,7 @@ pub mod response {
     pub use crate::query::{
         AccountResponse, AllBalanceResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
         CodeInfo, CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse,
-        ListCodesResponse, QueryResponse, SupplyResponse, WasmQueryResponse,
+        ListCodesResponse, QueryResponse, SupplyResponse, TotalSupplyResponse, WasmQueryResponse,
     };
 }
 

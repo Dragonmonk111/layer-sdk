@@ -5,7 +5,9 @@ use tracing::debug_span;
 use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
 
 use slay3r_std::api::MsgResponse;
-use slay3r_std::response::{AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse};
+use slay3r_std::response::{
+    AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse, TotalSupplyResponse,
+};
 use slay3r_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
 use slay3r_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
@@ -287,6 +289,26 @@ impl Bank {
             BankQuery::Balance { address, denom } => {
                 let amount = self.get_balance(&bank_storage, meter, &address, &denom)?;
                 let res = BalanceResponse { amount };
+                Ok(res.into())
+            }
+            BankQuery::TotalSupply {} => {
+                let amounts = SUPPLY
+                    .range(
+                        &bank_storage,
+                        meter,
+                        None,
+                        None,
+                        cosmwasm_std::Order::Ascending,
+                    )?
+                    .map(|r| {
+                        let (denom, amount) = r?;
+                        Ok(Coin {
+                            amount,
+                            denom: denom.to_string(),
+                        })
+                    })
+                    .collect::<PlusResult<Vec<_>>>()?;
+                let res = TotalSupplyResponse { amounts };
                 Ok(res.into())
             }
             BankQuery::Supply { denom } => {
