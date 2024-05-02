@@ -3286,6 +3286,7 @@ dependencies = [
  "clap",
  "cosmwasm-std",
  "figment",
+ "hex",
  "hex-literal",
  "opentelemetry",
  "opentelemetry-jaeger",

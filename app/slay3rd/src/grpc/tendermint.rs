@@ -1,5 +1,8 @@
 // use std::sync::Arc;
 
+use std::sync::Arc;
+
+use slay3r_abci::MultiThreadedDispatcher;
 use slay3r_proto::tendermint::p2p::{DefaultNodeInfo, DefaultNodeInfoOther, ProtocolVersion};
 use slay3r_proto::tendermint::types::{BlockId, Header, PartSetHeader};
 use slay3r_proto::{
@@ -16,6 +19,8 @@ use slay3r_proto::{
 use tendermint::node::info::TxIndexStatus;
 use tendermint_rpc::{Client, HttpClient, Paging};
 
+use crate::grpc::{abci_response_to_grpc, grpc_request_to_abci};
+
 // auth::v1beta1::{
 //     query_server::{Query, QueryServer},
 //     QueryAccountRequest, QueryAccountResponse, QueryAccountsRequest, QueryAccountsResponse,
@@ -28,21 +33,23 @@ use tendermint_rpc::{Client, HttpClient, Paging};
 
 // use {abci_response_to_grpc, grpc_request_to_abci};
 
-pub fn tendermint_service() -> ServiceServer<TendermintService> {
-    ServiceServer::new(TendermintService::new())
+pub fn tendermint_service(
+    dispatcher: Arc<MultiThreadedDispatcher>,
+    rpc_url: &str,
+) -> ServiceServer<TendermintService> {
+    ServiceServer::new(TendermintService::new(dispatcher, rpc_url))
 }
 
 pub struct TendermintService {
     client: HttpClient,
+    dispatcher: Arc<MultiThreadedDispatcher>,
 }
 
 impl TendermintService {
-    pub fn new() -> Self {
-        // TODO: take as arg
-        // let target = "http://localhost:26657";
-        let target = "http://cometbft:26657";
+    pub fn new(dispatcher: Arc<MultiThreadedDispatcher>, rpc_url: &str) -> Self {
         Self {
-            client: HttpClient::new(target).unwrap(),
+            client: HttpClient::new(rpc_url).unwrap(),
+            dispatcher,
         }
     }
 }
@@ -70,7 +77,7 @@ impl Service for TendermintService {
             listen_addr: status.node_info.listen_addr.to_string(),
             network: status.node_info.network.to_string(),
             version: status.node_info.version.to_string(),
-            channels: vec![], // ????
+            channels: vec![], // TODO
             moniker: status.node_info.moniker.to_string(),
             other: Some(DefaultNodeInfoOther {
                 tx_index: tx_index.to_string(),
@@ -103,52 +110,9 @@ impl Service for TendermintService {
         _request: tonic::Request<GetLatestBlockRequest>,
     ) -> std::result::Result<tonic::Response<GetLatestBlockResponse>, tonic::Status> {
         let block = self.client.latest_block().await.unwrap();
-        let h = &block.block.header;
-        let block_time: tendermint_proto::google::protobuf::Timestamp = h.time.into();
-        let block_data = Block {
-            header: Some(Header {
-                version: Some(slay3r_proto::tendermint::version::Consensus {
-                    block: h.version.block,
-                    app: h.version.app,
-                }),
-                chain_id: h.chain_id.to_string(),
-                height: u64::from(h.height) as i64,
-                time: Some(slay3r_proto::google::protobuf::Timestamp {
-                    seconds: block_time.seconds,
-                    nanos: block_time.nanos,
-                }),
-                last_block_id: None,
-                last_commit_hash: opt_hash_to_vec(h.last_commit_hash),
-                data_hash: opt_hash_to_vec(h.data_hash),
-                validators_hash: hash_to_vec(h.validators_hash),
-                next_validators_hash: hash_to_vec(h.next_validators_hash),
-                consensus_hash: hash_to_vec(h.consensus_hash),
-                app_hash: h.app_hash.as_bytes().into(),
-                last_results_hash: opt_hash_to_vec(h.last_results_hash),
-                evidence_hash: opt_hash_to_vec(h.evidence_hash),
-                proposer_address: h.proposer_address.into(),
-            }),
-            data: Some(slay3r_proto::tendermint::types::Data {
-                txs: block.block.data.clone(),
-            }),
-            evidence: None,
-            last_commit: block.block.last_commit.as_ref().map(|c| {
-                slay3r_proto::tendermint::types::Commit {
-                    height: u64::from(c.height) as i64,
-                    round: c.round.into(),
-                    block_id: Some(BlockId {
-                        hash: hash_to_vec(c.block_id.hash),
-                        part_set_header: Some(PartSetHeader {
-                            total: c.block_id.part_set_header.total,
-                            hash: hash_to_vec(c.block_id.part_set_header.hash),
-                        }),
-                    }),
-                    signatures: vec![],
-                }
-            }),
-        };
+        let block_data = convert_tendermint_block(&block.block);
         let response = GetLatestBlockResponse {
-            block_id: None,
+            block_id: Some(convert_block_id(&block.block_id)),
             block: Some(block_data),
             sdk_block: None,
         };
@@ -160,12 +124,18 @@ impl Service for TendermintService {
         &self,
         request: tonic::Request<GetBlockByHeightRequest>,
     ) -> std::result::Result<tonic::Response<GetBlockByHeightResponse>, tonic::Status> {
-        let _block = self
+        let block = self
             .client
             .block(request.get_ref().height as u32)
             .await
             .unwrap();
-        unimplemented!();
+        let block_data = convert_tendermint_block(&block.block);
+        let response = GetBlockByHeightResponse {
+            block_id: Some(convert_block_id(&block.block_id)),
+            block: Some(block_data),
+            sdk_block: None,
+        };
+        Ok(tonic::Response::new(response))
     }
 
     /// GetLatestValidatorSet queries latest validator-set.
@@ -173,7 +143,7 @@ impl Service for TendermintService {
         &self,
         _request: tonic::Request<GetLatestValidatorSetRequest>,
     ) -> std::result::Result<tonic::Response<GetLatestValidatorSetResponse>, tonic::Status> {
-        unimplemented!();
+        todo!();
     }
 
     /// GetValidatorSetByHeight queries validator-set at a given height.
@@ -188,7 +158,7 @@ impl Service for TendermintService {
             .validators(height, Paging::Default)
             .await
             .unwrap();
-        unimplemented!();
+        todo!();
     }
 
     /// ABCIQuery defines a query handler that supports ABCI queries directly to the
@@ -198,9 +168,74 @@ impl Service for TendermintService {
     /// Since: cosmos-sdk 0.46
     async fn abci_query(
         &self,
-        _request: tonic::Request<AbciQueryRequest>,
+        request: tonic::Request<AbciQueryRequest>,
     ) -> std::result::Result<tonic::Response<AbciQueryResponse>, tonic::Status> {
-        unimplemented!();
+        println!("*** Got ABCI query request ***");
+        let query = grpc_request_to_abci(&request.get_ref().path, &request.get_ref().data);
+        let response = self.dispatcher.dispatch_query(query).await;
+        abci_response_to_grpc(response).map(tonic::Response::new)
+    }
+}
+
+fn convert_tendermint_block(
+    b: &tendermint::block::Block,
+) -> slay3r_proto::tendermint::types::Block {
+    Block {
+        header: Some(convert_tendermint_header(&b.header)),
+        data: Some(slay3r_proto::tendermint::types::Data {
+            txs: b.data.clone(),
+        }),
+        evidence: None, // TODO
+        last_commit: b.last_commit.as_ref().map(convert_tendermint_commit),
+    }
+}
+
+fn convert_tendermint_header(
+    h: &tendermint::block::Header,
+) -> slay3r_proto::tendermint::types::Header {
+    let block_time: tendermint_proto::google::protobuf::Timestamp = h.time.into();
+    Header {
+        version: Some(slay3r_proto::tendermint::version::Consensus {
+            block: h.version.block,
+            app: h.version.app,
+        }),
+        chain_id: h.chain_id.to_string(),
+        height: u64::from(h.height) as i64,
+        time: Some(slay3r_proto::google::protobuf::Timestamp {
+            seconds: block_time.seconds,
+            nanos: block_time.nanos,
+        }),
+        last_block_id: None, // TODO
+        last_commit_hash: opt_hash_to_vec(h.last_commit_hash),
+        data_hash: opt_hash_to_vec(h.data_hash),
+        validators_hash: hash_to_vec(h.validators_hash),
+        next_validators_hash: hash_to_vec(h.next_validators_hash),
+        consensus_hash: hash_to_vec(h.consensus_hash),
+        app_hash: h.app_hash.as_bytes().into(),
+        last_results_hash: opt_hash_to_vec(h.last_results_hash),
+        evidence_hash: opt_hash_to_vec(h.evidence_hash),
+        proposer_address: h.proposer_address.into(),
+    }
+}
+
+fn convert_tendermint_commit(
+    c: &tendermint::block::Commit,
+) -> slay3r_proto::tendermint::types::Commit {
+    slay3r_proto::tendermint::types::Commit {
+        height: u64::from(c.height) as i64,
+        round: c.round.into(),
+        block_id: Some(convert_block_id(&c.block_id)),
+        signatures: vec![], // TODO
+    }
+}
+
+fn convert_block_id(id: &tendermint::block::Id) -> BlockId {
+    BlockId {
+        hash: hash_to_vec(id.hash),
+        part_set_header: Some(PartSetHeader {
+            total: id.part_set_header.total,
+            hash: hash_to_vec(id.part_set_header.hash),
+        }),
     }
 }
 

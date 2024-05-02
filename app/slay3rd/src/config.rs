@@ -24,6 +24,9 @@ pub struct RawConfig {
     pub rocksdb: Option<String>,
 
     pub grpc: String,
+
+    // Required
+    pub rpc_url: Option<String>,
     // /// The directory we read all files from (default $HOME/.slay3r)
     // pub basedir: String,
 }
@@ -38,6 +41,7 @@ impl Default for RawConfig {
             jaeger: None,
             rocksdb: None,
             grpc: "0.0.0.0:9090".to_string(),
+            rpc_url: None,
         }
     }
 }
@@ -46,6 +50,9 @@ impl Default for RawConfig {
 pub enum ConfigError {
     #[error("Using a system port below 1024")]
     ReservedPort,
+
+    #[error("You didn't provide a valid rpc_url for cometbft")]
+    MissingRpcUrl,
 
     #[error("Unknown log level: {0}")]
     InvalidLogLevel(#[from] ParseLevelError),
@@ -58,7 +65,7 @@ impl RawConfig {
             return Err(ConfigError::ReservedPort);
         }
         let filter = EnvFilter::new(&self.log);
-        // TODO: validate host
+        // TODO: validate host, grpc, rpc_url
         // TODO: check if rocksdb path exists
         Ok(Config {
             host: self.host,
@@ -68,6 +75,7 @@ impl RawConfig {
             jaeger: self.jaeger,
             rocksdb: self.rocksdb,
             grpc: self.grpc,
+            rpc_url: self.rpc_url.ok_or(ConfigError::MissingRpcUrl)?,
         })
     }
 }
@@ -91,7 +99,11 @@ pub struct Config {
     // A directory to store the rocksdb database (if missing use memory db)
     pub rocksdb: Option<String>,
 
+    /// Where to listen for gRPC connections (eg. 0.0.0.0:9090)
     pub grpc: String,
+
+    /// Connection back to local cometbft rpc server, to relay some grpc requests (eg. http://cometbft:26657)
+    pub rpc_url: String,
     // /// The directory we read all files from (default $HOME/.slay3r)
     // pub basedir: String,
 }

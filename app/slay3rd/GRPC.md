@@ -35,3 +35,11 @@ curl localhost:1317/cosmwasm/wasm/v1/contract/pulsar16jxkxy3zx9ac7e7ykh8sek0mnu8
 ```
 
 This is a basic end-to-end that they are working.
+
+## Tendermint queries
+
+Test that basic tendermint node queries are working:
+
+```bash
+
+```
