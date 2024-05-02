@@ -44,4 +44,8 @@ The messages are dispatched in `WasmKeeper::dispatch_response_messages` and the 
 
 This happens in [`slayer_cosmos`](./packages/cosmos) but is rather complex and will be explained more later.
 
-**TODO**
+[This commit](https://github.com/ethanfrey/pulsarium/pull/90/commits/e7c63f0b256e6f36f697094369ebd5fe89cfe607) is a nice example of how we handle
+queries. It includes attaching the grpc handler for the query, the abci handler, and adding a new internal query type, which
+is added to the wasm keeper. At the least it shows you all the places that need to be updated to add a query full-stack.
+
+**TODO**: example with messages

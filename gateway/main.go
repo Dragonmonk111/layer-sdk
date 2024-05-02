@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	auth "github.com/pulsar/pulsariumd/gateway/cosmos/auth/v1beta1"
 	bank "github.com/pulsar/pulsariumd/gateway/cosmos/bank/v1beta1"
@@ -51,6 +52,16 @@ func run() error {
 	// Create the grpc proxy mux, with custom header support
 	mux := runtime.NewServeMux(
 		runtime.WithIncomingHeaderMatcher(CustomGRPCHeaderMatcher),
+		// This will use lower-case names (what we find in .proto), not the Golang camelCase names
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+			MarshalOptions: protojson.MarshalOptions{
+				UseProtoNames:   true,
+				EmitUnpopulated: true,
+			},
+			UnmarshalOptions: protojson.UnmarshalOptions{
+				DiscardUnknown: true,
+			},
+		}),
 	)
 
 	endpoint := *grpcServerEndpoint

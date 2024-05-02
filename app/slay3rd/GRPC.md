@@ -20,7 +20,7 @@ Run the integration tests and check again, along with the following cosmwasm one
 
 ```bash
 # Is this right? Should it be snake case?
-curl localhost:1317/cosmwasm/wasm/v1/code | jq .codeInfos
+curl localhost:1317/cosmwasm/wasm/v1/code | jq .code_infos
 
 # Warning, this dumps entire wasm blob now
 curl localhost:1317/cosmwasm/wasm/v1/code/1 | jq .
@@ -50,6 +50,9 @@ curl localhost:1317/cosmos/base/tendermint/v1beta1/syncing
 curl localhost:1317/cosmos/base/tendermint/v1beta1/node_info | jq .
 curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/latest
 curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/123 | jq .
+
+# Note, this should have a subfield `tx: []` rather than omitting when empty
+curl localhost:1317/cosmos/base/tendermint/v1beta1/blocks/latest | jq .block.data
 
 curl localhost:26657/status | jq .result.sync_info
 
