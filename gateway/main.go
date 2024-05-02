@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
@@ -98,8 +99,17 @@ func run() error {
 		return err
 	}
 
+	// TODO: config via env vars or such
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"https://*.spinner.zone", "http://localhost:*"},
+		AllowCredentials: true,
+		// Enable Debugging for testing, consider disabling in production
+		Debug: true,
+	})
+	handler := c.Handler(mux)
+
 	// Start HTTP server (and proxy calls to gRPC server endpoint)
-	return http.ListenAndServe(":1317", mux)
+	return http.ListenAndServe("0.0.0.0:1317", handler)
 }
 
 func main() {
