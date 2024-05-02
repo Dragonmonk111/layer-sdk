@@ -11,7 +11,7 @@ case $(uname -m) in
 esac
 
 # compile all files in contracts directory
-docker run --rm -v "$(pwd)":/code \
+sudo docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="pulsar_contracts_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
   "cosmwasm/workspace-optimizer${ARCH}:0.12.13"

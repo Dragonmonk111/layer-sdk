@@ -26,7 +26,9 @@ const CAPABILITIES: &[&str] = &[
     "cosmwasm_2_0",
 ];
 const PRINT_DEBUG: bool = false;
+
 // TODO: what is this really?
+// Changed by 1000 in 2.0 upgrade: https://github.com/CosmWasm/cosmwasm/pull/1884
 const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000;
 
 pub fn sdk_gas_to_wasmer(gas: u64) -> u64 {
@@ -122,7 +124,6 @@ impl VmCache {
         instance.set_storage_readonly(false);
         let result = call_instantiate(&mut instance, env, info, msg);
         let result = result.map(|x| x.into_result());
-        println!("{:?}", instance.create_gas_report());
         let gas_used = wasmer_gas_to_sdk(instance.create_gas_report().used_internally);
 
         // commit or abort the open WeakSubTx

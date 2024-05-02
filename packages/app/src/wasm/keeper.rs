@@ -990,17 +990,23 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
 use cosmos_sdk_proto::traits::{Message, TypeUrl};
 
 pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
+    // FIXME: we used to have nice types from cosmrs...
+    // cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+    // but they were incorrect, we needed the response type. Unfortuntely, this line doesn't work
+    // cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse::TYPE_URL,
+    // So we just encode them manually
+
     match data {
         MsgData::Bank(bank) => match bank {
             BankMsgData::Send {} => (
-                cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+                "/cosmos.bank.v1beta1.MsgSendResponse",
                 cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse {}.encode_to_vec(),
             ),
             BankMsgData::Burn {} => unknown_cosmwasm_response(),
         },
         MsgData::Wasm(wasm) => match wasm {
             WasmMsgData::Store { code_id, checksum } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCode::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgStoreCodeResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCodeResponse {
                     code_id,
                     checksum: checksum.to_vec(),
@@ -1008,14 +1014,14 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 .encode_to_vec(),
             ),
             WasmMsgData::Execute { data } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContract::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgExecuteContractResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContractResponse {
                     data: data.to_vec(),
                 }
                 .encode_to_vec(),
             ),
             WasmMsgData::Instantiate { contract, data } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgInstantiateContractResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContractResponse {
                     address: contract.to_string(),
                     data: data.to_vec(),
@@ -1023,7 +1029,7 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 .encode_to_vec(),
             ),
             WasmMsgData::Instantiate2 { contract, data } => (
-                "/cosmwasm.wasm.v1.MsgInstantiateContract2", // missing in cosmos-sdk-proto
+                "/cosmwasm.wasm.v1.MsgInstantiateContract2Response",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract2Response {
                     address: contract.to_string(),
                     data: data.to_vec(),
@@ -1031,18 +1037,18 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 .encode_to_vec(),
             ),
             WasmMsgData::Migrate { data } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContract::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgMigrateContractResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContractResponse {
                     data: data.to_vec(),
                 }
                 .encode_to_vec(),
             ),
             WasmMsgData::UpdateAdmin {} => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgUpdateAdmin::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgUpdateAdminResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgUpdateAdminResponse {}.encode_to_vec(),
             ),
             WasmMsgData::ClearAdmin {} => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgClearAdmin::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgClearAdminResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgClearAdminResponse {}.encode_to_vec(),
             ),
             WasmMsgData::Sudo { data: _ } => unknown_cosmwasm_response(),
