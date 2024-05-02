@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use slay3r_abci::MultiThreadedDispatcher;
+use slay3r_proto::cosmos::base::tendermint::v1beta1::VersionInfo;
 use slay3r_proto::tendermint::p2p::{DefaultNodeInfo, DefaultNodeInfoOther, ProtocolVersion};
 use slay3r_proto::tendermint::types::{BlockId, Header, PartSetHeader};
 use slay3r_proto::{
@@ -84,9 +85,21 @@ impl Service for TendermintService {
                 rpc_address: status.node_info.other.rpc_address,
             }),
         };
+        // TODO: revisit this, better info
+        let version_info = VersionInfo {
+            name: "Slay3r".to_string(),
+            app_name: "Slay3r".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            git_commit: env!("GIT_HASH").to_string(),
+            build_tags: "".to_string(), // TODO
+            go_version: env!("RUST_VERSION").to_string(),
+            build_deps: vec![], // TODO
+            // Pretend we are 0.50.0 for now
+            cosmos_sdk_version: "0.50.0".to_string(), // TODO
+        };
         let response = GetNodeInfoResponse {
             default_node_info: Some(node_info),
-            application_version: None,
+            application_version: Some(version_info),
         };
         Ok(tonic::Response::new(response))
     }
