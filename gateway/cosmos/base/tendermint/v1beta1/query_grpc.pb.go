@@ -21,10 +21,10 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	Service_GetNodeInfo_FullMethodName             = "/cosmos.base.tendermint.v1beta1.Service/GetNodeInfo"
 	Service_GetSyncing_FullMethodName              = "/cosmos.base.tendermint.v1beta1.Service/GetSyncing"
-	Service_GetLatestBlock_FullMethodName          = "/cosmos.base.tendermint.v1beta1.Service/GetLatestBlock"
 	Service_GetBlockByHeight_FullMethodName        = "/cosmos.base.tendermint.v1beta1.Service/GetBlockByHeight"
-	Service_GetLatestValidatorSet_FullMethodName   = "/cosmos.base.tendermint.v1beta1.Service/GetLatestValidatorSet"
+	Service_GetLatestBlock_FullMethodName          = "/cosmos.base.tendermint.v1beta1.Service/GetLatestBlock"
 	Service_GetValidatorSetByHeight_FullMethodName = "/cosmos.base.tendermint.v1beta1.Service/GetValidatorSetByHeight"
+	Service_GetLatestValidatorSet_FullMethodName   = "/cosmos.base.tendermint.v1beta1.Service/GetLatestValidatorSet"
 	Service_ABCIQuery_FullMethodName               = "/cosmos.base.tendermint.v1beta1.Service/ABCIQuery"
 )
 
@@ -36,14 +36,14 @@ type ServiceClient interface {
 	GetNodeInfo(ctx context.Context, in *GetNodeInfoRequest, opts ...grpc.CallOption) (*GetNodeInfoResponse, error)
 	// GetSyncing queries node syncing.
 	GetSyncing(ctx context.Context, in *GetSyncingRequest, opts ...grpc.CallOption) (*GetSyncingResponse, error)
-	// GetLatestBlock returns the latest block.
-	GetLatestBlock(ctx context.Context, in *GetLatestBlockRequest, opts ...grpc.CallOption) (*GetLatestBlockResponse, error)
 	// GetBlockByHeight queries block for given height.
 	GetBlockByHeight(ctx context.Context, in *GetBlockByHeightRequest, opts ...grpc.CallOption) (*GetBlockByHeightResponse, error)
-	// GetLatestValidatorSet queries latest validator-set.
-	GetLatestValidatorSet(ctx context.Context, in *GetLatestValidatorSetRequest, opts ...grpc.CallOption) (*GetLatestValidatorSetResponse, error)
+	// GetLatestBlock returns the latest block.
+	GetLatestBlock(ctx context.Context, in *GetLatestBlockRequest, opts ...grpc.CallOption) (*GetLatestBlockResponse, error)
 	// GetValidatorSetByHeight queries validator-set at a given height.
 	GetValidatorSetByHeight(ctx context.Context, in *GetValidatorSetByHeightRequest, opts ...grpc.CallOption) (*GetValidatorSetByHeightResponse, error)
+	// GetLatestValidatorSet queries latest validator-set.
+	GetLatestValidatorSet(ctx context.Context, in *GetLatestValidatorSetRequest, opts ...grpc.CallOption) (*GetLatestValidatorSetResponse, error)
 	// ABCIQuery defines a query handler that supports ABCI queries directly to the
 	// application, bypassing Tendermint completely. The ABCI query must contain
 	// a valid and supported path, including app, custom, p2p, and store.
@@ -78,15 +78,6 @@ func (c *serviceClient) GetSyncing(ctx context.Context, in *GetSyncingRequest, o
 	return out, nil
 }
 
-func (c *serviceClient) GetLatestBlock(ctx context.Context, in *GetLatestBlockRequest, opts ...grpc.CallOption) (*GetLatestBlockResponse, error) {
-	out := new(GetLatestBlockResponse)
-	err := c.cc.Invoke(ctx, Service_GetLatestBlock_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *serviceClient) GetBlockByHeight(ctx context.Context, in *GetBlockByHeightRequest, opts ...grpc.CallOption) (*GetBlockByHeightResponse, error) {
 	out := new(GetBlockByHeightResponse)
 	err := c.cc.Invoke(ctx, Service_GetBlockByHeight_FullMethodName, in, out, opts...)
@@ -96,9 +87,9 @@ func (c *serviceClient) GetBlockByHeight(ctx context.Context, in *GetBlockByHeig
 	return out, nil
 }
 
-func (c *serviceClient) GetLatestValidatorSet(ctx context.Context, in *GetLatestValidatorSetRequest, opts ...grpc.CallOption) (*GetLatestValidatorSetResponse, error) {
-	out := new(GetLatestValidatorSetResponse)
-	err := c.cc.Invoke(ctx, Service_GetLatestValidatorSet_FullMethodName, in, out, opts...)
+func (c *serviceClient) GetLatestBlock(ctx context.Context, in *GetLatestBlockRequest, opts ...grpc.CallOption) (*GetLatestBlockResponse, error) {
+	out := new(GetLatestBlockResponse)
+	err := c.cc.Invoke(ctx, Service_GetLatestBlock_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +99,15 @@ func (c *serviceClient) GetLatestValidatorSet(ctx context.Context, in *GetLatest
 func (c *serviceClient) GetValidatorSetByHeight(ctx context.Context, in *GetValidatorSetByHeightRequest, opts ...grpc.CallOption) (*GetValidatorSetByHeightResponse, error) {
 	out := new(GetValidatorSetByHeightResponse)
 	err := c.cc.Invoke(ctx, Service_GetValidatorSetByHeight_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) GetLatestValidatorSet(ctx context.Context, in *GetLatestValidatorSetRequest, opts ...grpc.CallOption) (*GetLatestValidatorSetResponse, error) {
+	out := new(GetLatestValidatorSetResponse)
+	err := c.cc.Invoke(ctx, Service_GetLatestValidatorSet_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,14 +131,14 @@ type ServiceServer interface {
 	GetNodeInfo(context.Context, *GetNodeInfoRequest) (*GetNodeInfoResponse, error)
 	// GetSyncing queries node syncing.
 	GetSyncing(context.Context, *GetSyncingRequest) (*GetSyncingResponse, error)
-	// GetLatestBlock returns the latest block.
-	GetLatestBlock(context.Context, *GetLatestBlockRequest) (*GetLatestBlockResponse, error)
 	// GetBlockByHeight queries block for given height.
 	GetBlockByHeight(context.Context, *GetBlockByHeightRequest) (*GetBlockByHeightResponse, error)
-	// GetLatestValidatorSet queries latest validator-set.
-	GetLatestValidatorSet(context.Context, *GetLatestValidatorSetRequest) (*GetLatestValidatorSetResponse, error)
+	// GetLatestBlock returns the latest block.
+	GetLatestBlock(context.Context, *GetLatestBlockRequest) (*GetLatestBlockResponse, error)
 	// GetValidatorSetByHeight queries validator-set at a given height.
 	GetValidatorSetByHeight(context.Context, *GetValidatorSetByHeightRequest) (*GetValidatorSetByHeightResponse, error)
+	// GetLatestValidatorSet queries latest validator-set.
+	GetLatestValidatorSet(context.Context, *GetLatestValidatorSetRequest) (*GetLatestValidatorSetResponse, error)
 	// ABCIQuery defines a query handler that supports ABCI queries directly to the
 	// application, bypassing Tendermint completely. The ABCI query must contain
 	// a valid and supported path, including app, custom, p2p, and store.
@@ -158,17 +158,17 @@ func (UnimplementedServiceServer) GetNodeInfo(context.Context, *GetNodeInfoReque
 func (UnimplementedServiceServer) GetSyncing(context.Context, *GetSyncingRequest) (*GetSyncingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSyncing not implemented")
 }
-func (UnimplementedServiceServer) GetLatestBlock(context.Context, *GetLatestBlockRequest) (*GetLatestBlockResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLatestBlock not implemented")
-}
 func (UnimplementedServiceServer) GetBlockByHeight(context.Context, *GetBlockByHeightRequest) (*GetBlockByHeightResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlockByHeight not implemented")
 }
-func (UnimplementedServiceServer) GetLatestValidatorSet(context.Context, *GetLatestValidatorSetRequest) (*GetLatestValidatorSetResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLatestValidatorSet not implemented")
+func (UnimplementedServiceServer) GetLatestBlock(context.Context, *GetLatestBlockRequest) (*GetLatestBlockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLatestBlock not implemented")
 }
 func (UnimplementedServiceServer) GetValidatorSetByHeight(context.Context, *GetValidatorSetByHeightRequest) (*GetValidatorSetByHeightResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetValidatorSetByHeight not implemented")
+}
+func (UnimplementedServiceServer) GetLatestValidatorSet(context.Context, *GetLatestValidatorSetRequest) (*GetLatestValidatorSetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLatestValidatorSet not implemented")
 }
 func (UnimplementedServiceServer) ABCIQuery(context.Context, *ABCIQueryRequest) (*ABCIQueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ABCIQuery not implemented")
@@ -222,24 +222,6 @@ func _Service_GetSyncing_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_GetLatestBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLatestBlockRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ServiceServer).GetLatestBlock(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Service_GetLatestBlock_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).GetLatestBlock(ctx, req.(*GetLatestBlockRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Service_GetBlockByHeight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBlockByHeightRequest)
 	if err := dec(in); err != nil {
@@ -258,20 +240,20 @@ func _Service_GetBlockByHeight_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_GetLatestValidatorSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLatestValidatorSetRequest)
+func _Service_GetLatestBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLatestBlockRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).GetLatestValidatorSet(ctx, in)
+		return srv.(ServiceServer).GetLatestBlock(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_GetLatestValidatorSet_FullMethodName,
+		FullMethod: Service_GetLatestBlock_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).GetLatestValidatorSet(ctx, req.(*GetLatestValidatorSetRequest))
+		return srv.(ServiceServer).GetLatestBlock(ctx, req.(*GetLatestBlockRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -290,6 +272,24 @@ func _Service_GetValidatorSetByHeight_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ServiceServer).GetValidatorSetByHeight(ctx, req.(*GetValidatorSetByHeightRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_GetLatestValidatorSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLatestValidatorSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).GetLatestValidatorSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Service_GetLatestValidatorSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).GetLatestValidatorSet(ctx, req.(*GetLatestValidatorSetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -328,20 +328,20 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_GetSyncing_Handler,
 		},
 		{
-			MethodName: "GetLatestBlock",
-			Handler:    _Service_GetLatestBlock_Handler,
-		},
-		{
 			MethodName: "GetBlockByHeight",
 			Handler:    _Service_GetBlockByHeight_Handler,
 		},
 		{
-			MethodName: "GetLatestValidatorSet",
-			Handler:    _Service_GetLatestValidatorSet_Handler,
+			MethodName: "GetLatestBlock",
+			Handler:    _Service_GetLatestBlock_Handler,
 		},
 		{
 			MethodName: "GetValidatorSetByHeight",
 			Handler:    _Service_GetValidatorSetByHeight_Handler,
+		},
+		{
+			MethodName: "GetLatestValidatorSet",
+			Handler:    _Service_GetLatestValidatorSet_Handler,
 		},
 		{
 			MethodName: "ABCIQuery",

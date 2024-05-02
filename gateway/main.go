@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -28,18 +29,34 @@ var (
 	grpcServerEndpoint = flag.String("grpc-server-endpoint", "localhost:9090", "gRPC server endpoint")
 )
 
+// Logic taken from the cosmos SDK code (server/api/server.go), so I guess it is needed
+// We need to explicitly pass this header through (why? which client?)
+const GRPCBlockHeightHeader = "x-cosmos-block-height"
+
+func CustomGRPCHeaderMatcher(key string) (string, bool) {
+	switch strings.ToLower(key) {
+	case GRPCBlockHeightHeader:
+		return GRPCBlockHeightHeader, true
+	default:
+		return runtime.DefaultHeaderMatcher(key)
+	}
+}
+
 func run() error {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Register gRPC server endpoint
-	// Note: Make sure the gRPC server is running properly and accessible
-	mux := runtime.NewServeMux()
+	// Create the grpc proxy mux, with custom header support
+	mux := runtime.NewServeMux(
+		runtime.WithIncomingHeaderMatcher(CustomGRPCHeaderMatcher),
+	)
+
 	endpoint := *grpcServerEndpoint
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 
 	// create a connection to the underlying grpc server
+	// Note: Make sure the gRPC server is running properly and accessible
 	conn, err := grpc.DialContext(ctx, endpoint, opts...)
 	if err != nil {
 		return err
@@ -59,6 +76,7 @@ func run() error {
 		}()
 	}()
 
+	// Register the gateway handlers
 	err = auth.RegisterQueryHandler(ctx, mux, conn)
 	if err != nil {
 		return err
