@@ -590,22 +590,16 @@ impl Wasm {
     ) -> PulsarResult<()> {
         for msg in msgs {
             // if there is a limit, and it is less than what we have left, use a sub-meter
-            let limit_meter = match (msg.gas_limit, meter.remaining()) {
-                (Some(limit), left) if limit < left => Some(GasMeter::new(limit)),
-                _ => None,
+            let sub_meter = match (msg.gas_limit, meter.remaining()) {
+                (Some(limit), left) if limit < left => GasMeter::new(limit),
+                (_, left) => GasMeter::new(left),
             };
-            let sub_meter = match limit_meter.as_ref() {
-                Some(m) => m,
-                None => meter,
-            };
-
             let slay3r_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
 
             // ensure we charge if there is a limit_meter, even on error
-            let msg_result = sm.process_msg(storage, sub_meter, contract, block, slay3r_msg);
-            if let Some(limit_meter) = limit_meter {
-                meter.charge(limit_meter.used())?;
-            }
+            let msg_result = sm.process_msg(storage, &sub_meter, contract, block, slay3r_msg);
+            let gas_used = sub_meter.used();
+            meter.charge(gas_used)?;
 
             // check if we want to call reply and call
             let is_success = msg_result.is_ok(); // we use this variable later
@@ -618,10 +612,19 @@ impl Wasm {
                     Ok(res) => {
                         // append events to parent response (only on success)
                         parent_response.events.extend(res.events.clone());
-                        // and prepare a response value to call the contract
+                        // and prepare a response value to call the contract with both (1.x) data and (2.x) msg_responses
+                        let (type_url, value) = encode_cosmwasm_response(res.data);
+                        #[allow(deprecated)]
+                        let data = maybe_binary(value.clone());
+                        let msg_response = cosmwasm_std::MsgResponse {
+                            type_url: type_url.to_string(),
+                            value: value.into(),
+                        };
+                        #[allow(deprecated)]
                         Ok(SubMsgResponse {
                             events: res.events,
-                            data: maybe_binary(encode_cosmwasm_response(res.data).1),
+                            data,
+                            msg_responses: vec![msg_response],
                         })
                     }
                     Err(err) => Err(err.to_string()),
@@ -629,6 +632,8 @@ impl Wasm {
                 let reply = Reply {
                     id: msg.id,
                     result: result.into(),
+                    gas_used,
+                    payload: msg.payload,
                 };
 
                 // call the reply entry point
@@ -876,7 +881,7 @@ fn map_vm_error(err: VmError) -> PulsarError {
     }
 }
 
-fn map_checksum_error(err: cosmwasm_std::ChecksumError) -> PulsarError {
+fn map_checksum_error(_: cosmwasm_std::ChecksumError) -> PulsarError {
     PulsarError::Wasm(WasmError::Checksum)
 }
 

@@ -228,7 +228,9 @@ impl<'a> TxBuilder<'a> {
         if self.invalid_sig && !signature.is_empty() {
             // this is a hack to make the signature invalid
             // we just flip the first bit
-            signature.0[0] ^= 0x80;
+            let mut swap: Vec<u8> = signature.into();
+            swap[0] ^= 0x80;
+            signature = swap.into();
         }
 
         let sender = self

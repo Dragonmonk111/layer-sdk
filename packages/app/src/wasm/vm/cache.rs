@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, path::PathBuf};
+use std::{collections::HashSet, fmt};
 
 use cosmwasm_std::{Binary, Checksum, Empty, Env, MessageInfo, Reply, Response};
 use cosmwasm_vm::{
