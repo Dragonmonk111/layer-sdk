@@ -23,8 +23,8 @@ pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
 pub mod response {
     pub use crate::query::{
         AccountResponse, AllBalanceResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
-        CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, QueryResponse,
-        SupplyResponse, WasmQueryResponse,
+        CodeInfo, CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse,
+        ListCodesResponse, QueryResponse, SupplyResponse, WasmQueryResponse,
     };
 }
 

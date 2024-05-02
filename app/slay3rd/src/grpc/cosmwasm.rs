@@ -49,21 +49,26 @@ impl Query for CosmWasmService {
         &self,
         _request: Request<QueryContractHistoryRequest>,
     ) -> Result<Response<QueryContractHistoryResponse>, Status> {
-        unimplemented!();
+        todo!();
     }
     /// ContractsByCode lists all smart contracts for a code id
     async fn contracts_by_code(
         &self,
-        _request: Request<QueryContractsByCodeRequest>,
+        request: Request<QueryContractsByCodeRequest>,
     ) -> Result<Response<QueryContractsByCodeResponse>, Status> {
-        unimplemented!();
+        let query =
+            grpc_request_to_abci("/cosmwasm.wasm.v1.Query/ContractsByCode", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        let res: QueryContractsByCodeResponse = abci_response_to_grpc(response)?;
+        // TODO: pagination info
+        Ok(Response::new(res))
     }
     /// AllContractState gets all raw store data for a single contract
     async fn all_contract_state(
         &self,
         _request: Request<QueryAllContractStateRequest>,
     ) -> Result<Response<QueryAllContractStateResponse>, Status> {
-        unimplemented!();
+        todo!();
     }
     /// RawContractState gets single key from the raw store data of a contract
     async fn raw_contract_state(
@@ -90,6 +95,7 @@ impl Query for CosmWasmService {
         let response = self.dispatcher.dispatch_query(query).await;
         abci_response_to_grpc(response).map(Response::new)
     }
+
     /// Code gets the binary code and metadata for a singe wasm code
     async fn code(
         &self,
@@ -103,9 +109,13 @@ impl Query for CosmWasmService {
     /// Codes gets the metadata for all stored wasm codes
     async fn codes(
         &self,
-        _request: Request<QueryCodesRequest>,
+        request: Request<QueryCodesRequest>,
     ) -> Result<Response<QueryCodesResponse>, Status> {
-        unimplemented!();
+        let query = grpc_request_to_abci("/cosmwasm.wasm.v1.Query/Codes", request.get_ref());
+        let response = self.dispatcher.dispatch_query(query).await;
+        let res: QueryCodesResponse = abci_response_to_grpc(response)?;
+        // TODO: pagination info
+        Ok(Response::new(res))
     }
 
     /// PinnedCodes gets the pinned code ids

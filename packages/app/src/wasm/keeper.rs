@@ -6,10 +6,11 @@ use cosmwasm_std::{
     ReplyOn, SubMsg, SubMsgResponse,
 };
 
+use cw_storage_plus::Bound;
 use slay3r_std::api::MsgResponse;
 use slay3r_std::response::{
-    CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, QueryResponse,
-    WasmQueryResponse,
+    CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, ListCodesResponse,
+    QueryResponse, WasmQueryResponse,
 };
 use slay3r_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
@@ -512,7 +513,7 @@ impl Wasm {
             creator: sender.clone(),
             admin,
             label,
-            created: block.time.seconds(),
+            created: block.height,
         };
         self.save_contract(storage, meter, &contract_addr, &contract)?;
 
@@ -706,6 +707,7 @@ impl Wasm {
                 } = self.load_contract(storage, meter, &contract_addr)?;
                 let CodeInfo { pinned, .. } = self.load_code(storage, meter, code_id)?;
                 let resp = ContractInfoResponse {
+                    addresss: contract_addr,
                     code_id,
                     creator,
                     admin,
@@ -722,13 +724,37 @@ impl Wasm {
                     checksum,
                     pinned,
                 } = self.load_code(storage, meter, code_id)?;
+                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_vm_error)?;
+                let data = self.cache.load_code(&hash).map_err(map_vm_error)?;
                 let resp = CodeInfoResponse {
-                    code_id,
-                    creator,
-                    checksum,
-                    pinned,
+                    data: data.into(),
+                    code_info: slay3r_std::response::CodeInfo {
+                        code_id,
+                        creator,
+                        checksum,
+                        pinned,
+                    },
                 };
                 WasmQueryResponse::CodeInfo(resp)
+            }
+            WasmQuery::ListCodes { from, limit } => {
+                let start = from.map(Bound::inclusive);
+                let limit = limit.unwrap_or(100u32) as u64; // max page size // TODO: configure??
+                let end = Some(Bound::exclusive(from.unwrap_or(0) + limit));
+
+                let reader = prefixed_read(storage, NAMESPACE_WASM);
+                let iter = CODES.range(&reader, meter, start, end, Order::Ascending)?;
+                let code_infos = iter
+                    .map(|r| {
+                        r.map(|(k, v)| slay3r_std::response::CodeInfo {
+                            code_id: k,
+                            creator: v.creator,
+                            checksum: v.checksum,
+                            pinned: v.pinned,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                WasmQueryResponse::ListCodes(ListCodesResponse { code_infos })
             }
             WasmQuery::ContractsByCode { code_id } => {
                 // TODO: new data structure to make this efficient

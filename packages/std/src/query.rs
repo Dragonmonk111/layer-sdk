@@ -202,6 +202,11 @@ pub enum WasmQuery {
     ContractInfo { contract_addr: AccountId },
     /// Returns a [`CodeInfoResponse`] with metadata of the code
     CodeInfo { code_id: u64 },
+    /// Returns a [`ListCodesResponse`] with metadata of the codes, starting from the given code_id
+    ListCodes {
+        from: Option<u64>,
+        limit: Option<u32>,
+    },
     /// Returns a [`ContractsByCodeResponse`] with list of addresses using this code_id
     ContractsByCode { code_id: u64 },
 }
@@ -212,10 +217,14 @@ pub enum WasmQueryResponse {
     Raw(#[derivative(Debug(format_with = "slay3r_std::binary_to_string"))] Binary),
     ContractInfo(ContractInfoResponse),
     CodeInfo(CodeInfoResponse),
+    ListCodes(ListCodesResponse),
     ContractsByCode(ContractsByCodeResponse),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractInfoResponse {
+    /// The contract address queried
+    pub addresss: AccountId,
+    /// The code id of the contract
     pub code_id: u64,
     /// address that instantiated this contract
     pub creator: AccountId,
@@ -241,13 +250,21 @@ pub struct ContractInfoResponse {
 /// [CodeInfoResponse]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/query.proto#L184-L199
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodeInfoResponse {
+    pub code_info: CodeInfo,
+    // The actual WASM code blob
+    pub data: Binary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeInfo {
     pub code_id: u64,
     /// The address that initially stored the code
     pub creator: AccountId,
-    /// The hash of the Wasm blob
+    /// The hash of the Wasm blob (aka data_hash)
     pub checksum: Binary,
     /// If this code is pinned to the cache
     pub pinned: bool,
+    // TODO: instantiate permissions... if we choose to use them
 }
 
 /// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].
@@ -255,8 +272,18 @@ pub struct CodeInfoResponse {
 /// `code_hash`/`data_hash` was renamed to `checksum` to follow the CosmWasm
 /// convention and naming in `instantiate2_address`.
 ///
-/// [CodeInfo]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/types.proto#L62-L72
-/// [CodeInfoResponse]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/query.proto#L184-L199
+/// [QueryCodesResponse]: https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/query.proto#L215-L220
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListCodesResponse {
+    pub code_infos: Vec<CodeInfo>,
+}
+
+/// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].
+///
+/// `code_hash`/`data_hash` was renamed to `checksum` to follow the CosmWasm
+/// convention and naming in `instantiate2_address`.
+///
+/// [QueryContractsByCodeResponse](https://github.com/CosmWasm/wasmd/blob/v0.30.0/proto/cosmwasm/wasm/v1/query.proto#L121-L129)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractsByCodeResponse {
     /// All contract addresses currently using this code_id
