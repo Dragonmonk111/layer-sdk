@@ -174,7 +174,6 @@ impl Service for TxService {
             .collect();
         let tx_responses: Result<Vec<_>, Status> =
             try_join_all(result.txs.into_iter().map(|tx| async {
-                // TODO: make this safer
                 let time = self.get_blocktime(tx.height).await?;
                 Ok(convert_tx_response(tx, time))
             }))
