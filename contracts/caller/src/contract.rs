@@ -144,7 +144,7 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
             INIT_SET_DATA => {
                 // empty reply, we just want to get the address
                 // We try the new (2.x) way
-                let resp = r.msg_responses.get(0).unwrap();
+                let resp = r.msg_responses.first().unwrap();
                 assert_eq!(
                     resp.type_url,
                     "/cosmwasm.wasm.v1.MsgInstantiateContractResponse"
@@ -160,7 +160,7 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
             EXEC_SET_DATA => {
                 // empty reply, we just want to get the address
                 // We try the new (2.x) way
-                let resp = r.msg_responses.get(0).unwrap();
+                let resp = r.msg_responses.first().unwrap();
                 assert_eq!(
                     resp.type_url,
                     "/cosmwasm.wasm.v1.MsgExecuteContractResponse"

@@ -78,7 +78,7 @@ pub struct CodeInfo {
     /// The address that initially stored the code
     pub creator: AccountId,
     /// The hash of the Wasm blob
-    pub checksum: Binary,
+    pub checksum: Checksum,
     /// If it is pinned or not
     pub pinned: bool,
 }
@@ -91,12 +91,7 @@ impl CodeInfo {
         } else {
             meter.charge(LOAD_WASM_GAS)?;
         }
-        Ok(self.get_checksum_not_executing())
-    }
-
-    /// Use this is you need Checksum to interact with the cache, but not run wasmer vm, like pin/unpin
-    fn get_checksum_not_executing(&self) -> Checksum {
-        Checksum::try_from(self.checksum.as_slice()).unwrap()
+        Ok(self.checksum)
     }
 }
 
@@ -179,7 +174,7 @@ impl Wasm {
                 let (checksum, analysis) = self.cache.store_code(&code).map_err(map_vm_error)?;
                 let info = CodeInfo {
                     creator: sender,
-                    checksum: Vec::<u8>::from(checksum).into(),
+                    checksum,
                     pinned: false,
                 };
                 let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
@@ -449,9 +444,7 @@ impl Wasm {
                 if !code.pinned {
                     code.pinned = true;
                     self.save_code(storage, meter, code_id, &code)?;
-                    self.cache
-                        .pin(&code.get_checksum_not_executing())
-                        .map_err(map_vm_error)?;
+                    self.cache.pin(&code.checksum).map_err(map_vm_error)?;
                     PINNED.save(
                         &mut prefixed(storage, NAMESPACE_WASM),
                         meter,
@@ -473,9 +466,7 @@ impl Wasm {
                 if code.pinned {
                     code.pinned = false;
                     self.save_code(storage, meter, code_id, &code)?;
-                    self.cache
-                        .unpin(&code.get_checksum_not_executing())
-                        .map_err(map_vm_error)?;
+                    self.cache.unpin(&code.checksum).map_err(map_vm_error)?;
                     PINNED.remove(&mut prefixed(storage, NAMESPACE_WASM), meter, code_id)?;
                 }
                 // add events
@@ -728,14 +719,21 @@ impl Wasm {
                 };
                 WasmQueryResponse::ContractInfo(resp)
             }
-            WasmQuery::CodeInfo { code_id } => {
+            WasmQuery::CodeInfo {
+                code_id,
+                include_wasm,
+            } => {
                 let CodeInfo {
                     creator,
                     checksum,
                     pinned,
                 } = self.load_code(storage, meter, code_id)?;
                 let hash = Checksum::try_from(checksum.as_slice()).map_err(map_checksum_error)?;
-                let data = self.cache.load_code(&hash).map_err(map_vm_error)?;
+                let data = if include_wasm {
+                    self.cache.load_code(&hash).map_err(map_vm_error)?
+                } else {
+                    vec![]
+                };
                 let resp = CodeInfoResponse {
                     data: data.into(),
                     code_info: slay3r_std::response::CodeInfo {
@@ -1009,7 +1007,7 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 "/cosmwasm.wasm.v1.MsgStoreCodeResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCodeResponse {
                     code_id,
-                    checksum: checksum.to_vec(),
+                    checksum: checksum.into(),
                 }
                 .encode_to_vec(),
             ),

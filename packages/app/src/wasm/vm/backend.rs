@@ -10,7 +10,7 @@ use cosmwasm_vm::{
     Storage as BackendStorage,
 };
 
-use slay3r_std::{AccountId, AccountIdError, GasError, GasMeter};
+use slay3r_std::{response::CodeInfo, AccountId, AccountIdError, GasError, GasMeter};
 use slay3r_storage::{ReadonlyStorage, Storage};
 
 use crate::{PulsarError, StateMachine};
@@ -213,6 +213,11 @@ fn cosmwasm_query_to_pulsar(
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
                 Ok(slay3r_std::WasmQuery::ContractInfo { contract_addr }.into())
             }
+            cosmwasm_std::WasmQuery::CodeInfo { code_id } => Ok(slay3r_std::WasmQuery::CodeInfo {
+                code_id,
+                include_wasm: false,
+            }
+            .into()),
             x => unsupported_request(&x),
         },
         x => unsupported_request(&x),
@@ -258,6 +263,16 @@ fn slay3r_response_to_cosmwasm(
                     info.pinned,
                     info.ibc_port,
                 );
+                Ok(to_json_binary(&res).unwrap())
+            }
+            slay3r_std::response::WasmQueryResponse::CodeInfo(info) => {
+                let CodeInfo {
+                    code_id,
+                    creator,
+                    checksum,
+                    pinned: _,
+                } = info.code_info;
+                let res = cosmwasm_std::CodeInfoResponse::new(code_id, creator.into(), checksum);
                 Ok(to_json_binary(&res).unwrap())
             }
             x => unsupported_response(&x),

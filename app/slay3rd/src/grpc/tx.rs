@@ -224,7 +224,7 @@ fn convert_tx_response(
 
     slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
         height: tx.height.into(),
-        txhash: hex::encode(&tx.hash),
+        txhash: hex::encode(tx.hash),
         codespace: exec_tx.codespace,
         code: exec_tx.code.into(),
         data: Binary::new(exec_tx.data.into()).to_base64(),
@@ -266,8 +266,8 @@ fn convert_tx_broadcast_response(
     slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
         height: 0,
         // hex encoding
-        txhash: hex::encode(&hash),
-        codespace: codespace,
+        txhash: hex::encode(hash),
+        codespace,
         code: code.into(),
         // base64 encoding
         data: Binary::new(data.into()).to_base64(),
