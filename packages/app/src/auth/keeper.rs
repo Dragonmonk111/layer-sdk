@@ -138,13 +138,16 @@ impl Auth {
 
         // charge fee info from tx sender (not pubkey if smart account)
         if let Some(fee) = tx.fee.fee {
-            sm.bank.transfer(
-                storage,
-                meter,
-                tx.signer.clone(),
-                fee_collector_account(),
-                vec![fee],
-            )?;
+            // Skip 0 values like None values (for cw-orch compatibility)
+            if !fee.amount.is_zero() {
+                sm.bank.transfer(
+                    storage,
+                    meter,
+                    tx.signer.clone(),
+                    fee_collector_account(),
+                    vec![fee],
+                )?;
+            }
         }
 
         // Return data

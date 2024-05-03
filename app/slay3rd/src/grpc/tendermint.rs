@@ -22,6 +22,8 @@ use tendermint_rpc::{Client, HttpClient, Paging};
 
 use crate::grpc::{abci_response_to_grpc, grpc_request_to_abci};
 
+use super::tx::gateway_error;
+
 // auth::v1beta1::{
 //     query_server::{Query, QueryServer},
 //     QueryAccountRequest, QueryAccountResponse, QueryAccountsRequest, QueryAccountsResponse,
@@ -62,8 +64,7 @@ impl Service for TendermintService {
         &self,
         _request: tonic::Request<GetNodeInfoRequest>,
     ) -> std::result::Result<tonic::Response<GetNodeInfoResponse>, tonic::Status> {
-        // TODO: no unwrap, but proper errors
-        let status = self.client.status().await.unwrap();
+        let status = self.client.status().await.map_err(gateway_error)?;
         let tx_index = match status.node_info.other.tx_index {
             TxIndexStatus::On => "on",
             TxIndexStatus::Off => "off",
@@ -109,8 +110,7 @@ impl Service for TendermintService {
         &self,
         _request: tonic::Request<GetSyncingRequest>,
     ) -> std::result::Result<tonic::Response<GetSyncingResponse>, tonic::Status> {
-        // TODO: no unwrap, but proper errors
-        let status = self.client.status().await.unwrap();
+        let status = self.client.status().await.map_err(gateway_error)?;
         let response = GetSyncingResponse {
             syncing: status.sync_info.catching_up,
         };
@@ -122,7 +122,7 @@ impl Service for TendermintService {
         &self,
         _request: tonic::Request<GetLatestBlockRequest>,
     ) -> std::result::Result<tonic::Response<GetLatestBlockResponse>, tonic::Status> {
-        let block = self.client.latest_block().await.unwrap();
+        let block = self.client.latest_block().await.map_err(gateway_error)?;
         let block_data = convert_tendermint_block(&block.block);
         let response = GetLatestBlockResponse {
             block_id: Some(convert_block_id(&block.block_id)),
@@ -141,7 +141,7 @@ impl Service for TendermintService {
             .client
             .block(request.get_ref().height as u32)
             .await
-            .unwrap();
+            .map_err(gateway_error)?;
         let block_data = convert_tendermint_block(&block.block);
         let response = GetBlockByHeightResponse {
             block_id: Some(convert_block_id(&block.block_id)),
@@ -170,7 +170,7 @@ impl Service for TendermintService {
             .client
             .validators(height, Paging::Default)
             .await
-            .unwrap();
+            .map_err(gateway_error)?;
         todo!();
     }
 
