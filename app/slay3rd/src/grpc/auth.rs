@@ -28,6 +28,7 @@ impl AuthService {
 
 #[tonic::async_trait]
 impl Query for AuthService {
+    #[tracing::instrument(skip(self), level = "info")]
     async fn accounts(
         &self,
         _request: Request<QueryAccountsRequest>,
@@ -35,6 +36,7 @@ impl Query for AuthService {
         Err(unimplemented("accounts")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn account(
         &self,
         request: Request<QueryAccountRequest>,
@@ -44,6 +46,7 @@ impl Query for AuthService {
         abci_response_to_grpc::<QueryAccountResponse>(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn params(
         &self,
         _request: Request<QueryParamsRequest>,
@@ -51,6 +54,7 @@ impl Query for AuthService {
         Err(unimplemented("params")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn module_account_by_name(
         &self,
         _request: Request<QueryModuleAccountByNameRequest>,

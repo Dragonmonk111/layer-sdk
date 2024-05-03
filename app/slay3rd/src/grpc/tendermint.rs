@@ -81,6 +81,7 @@ impl TendermintService {
 #[tonic::async_trait]
 impl Service for TendermintService {
     /// GetNodeInfo queries the current node info.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_node_info(
         &self,
         _request: tonic::Request<GetNodeInfoRequest>,
@@ -126,6 +127,7 @@ impl Service for TendermintService {
     }
 
     /// GetSyncing queries node syncing.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_syncing(
         &self,
         _request: tonic::Request<GetSyncingRequest>,
@@ -138,6 +140,7 @@ impl Service for TendermintService {
     }
 
     /// GetLatestBlock returns the latest block.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_latest_block(
         &self,
         _request: tonic::Request<GetLatestBlockRequest>,
@@ -153,6 +156,7 @@ impl Service for TendermintService {
     }
 
     /// GetBlockByHeight queries block for given height.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_block_by_height(
         &self,
         request: tonic::Request<GetBlockByHeightRequest>,
@@ -172,6 +176,7 @@ impl Service for TendermintService {
     }
 
     /// GetLatestValidatorSet queries latest validator-set.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_latest_validator_set(
         &self,
         _request: tonic::Request<GetLatestValidatorSetRequest>,
@@ -203,6 +208,7 @@ impl Service for TendermintService {
     }
 
     /// GetValidatorSetByHeight queries validator-set at a given height.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_validator_set_by_height(
         &self,
         request: tonic::Request<GetValidatorSetByHeightRequest>,
@@ -219,6 +225,7 @@ impl Service for TendermintService {
     /// a valid and supported path, including app, custom, p2p, and store.
     ///
     /// Since: cosmos-sdk 0.46
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn abci_query(
         &self,
         request: tonic::Request<AbciQueryRequest>,

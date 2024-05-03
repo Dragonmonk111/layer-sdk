@@ -11,6 +11,7 @@ use slay3r_proto::cosmos::tx::v1beta1::{
     TxDecodeResponse, TxEncodeAminoRequest, TxEncodeAminoResponse, TxEncodeRequest,
     TxEncodeResponse,
 };
+use slay3r_std::HexEncode;
 
 use slay3r_abci::MultiThreadedDispatcher;
 use tendermint_rpc::{Client, HttpClient};
@@ -67,6 +68,7 @@ impl TxService {
 #[tonic::async_trait]
 impl Service for TxService {
     /// Simulate simulates executing a transaction for estimating gas usage.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn simulate(
         &self,
         request: Request<SimulateRequest>,
@@ -77,6 +79,7 @@ impl Service for TxService {
     }
 
     /// GetTx fetches a tx by hash.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_tx(
         &self,
         request: Request<GetTxRequest>,
@@ -96,6 +99,7 @@ impl Service for TxService {
     }
 
     /// BroadcastTx broadcast transaction.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn broadcast_tx(
         &self,
         request: Request<BroadcastTxRequest>,
@@ -147,6 +151,7 @@ impl Service for TxService {
     }
 
     /// GetTxsEvent fetches txs by event.
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_txs_event(
         &self,
         request: Request<GetTxsEventRequest>,
@@ -201,6 +206,7 @@ impl Service for TxService {
     /// GetBlockWithTxs fetches a block with decoded txs.
     ///
     /// Since: cosmos-sdk 0.45.2
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_block_with_txs(
         &self,
         request: Request<GetBlockWithTxsRequest>,
@@ -229,6 +235,7 @@ impl Service for TxService {
     /// TxDecode decodes the transaction.
     ///
     /// Since: cosmos-sdk 0.47
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_decode(
         &self,
         _request: Request<TxDecodeRequest>,
@@ -239,6 +246,7 @@ impl Service for TxService {
     /// TxEncode encodes the transaction.
     ///
     /// Since: cosmos-sdk 0.47
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_encode(
         &self,
         _request: Request<TxEncodeRequest>,
@@ -249,6 +257,7 @@ impl Service for TxService {
     /// TxEncodeAmino encodes an Amino transaction from JSON to encoded bytes.
     ///
     /// Since: cosmos-sdk 0.47
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_encode_amino(
         &self,
         _request: Request<TxEncodeAminoRequest>,
@@ -259,6 +268,7 @@ impl Service for TxService {
     /// TxDecodeAmino decodes an Amino transaction from encoded bytes to JSON.
     ///
     /// Since: cosmos-sdk 0.47
+    #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_decode_amino(
         &self,
         _request: Request<TxDecodeAminoRequest>,
@@ -281,6 +291,14 @@ fn convert_tx_response(
 ) -> slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
     let exec_tx = tx.tx_result;
 
+    let _span = tracing::info_span!(
+        "convert_tx_response",
+        height = u64::from(tx.height),
+        tx_hash = %HexEncode::new(&tx.hash.as_bytes()),
+        raw_tx = %HexEncode::new(&tx.tx),
+    )
+    .entered();
+
     let logs = parse_log_structs(&exec_tx.log);
     slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
         height: tx.height.into(),
@@ -295,7 +313,7 @@ fn convert_tx_response(
         gas_used: exec_tx.gas_used,
         tx: Some(slay3r_proto::google::protobuf::Any {
             // TODO: what type_url is this supposed to be?? Any????
-            type_url: "/cosmos.Tx".to_string(),
+            type_url: "/cosmos.tx.v1beta1.Tx".to_string(),
             value: tx.tx,
         }),
         timestamp,

@@ -30,6 +30,7 @@ impl BankService {
 
 #[tonic::async_trait]
 impl Query for BankService {
+    #[tracing::instrument(skip(self), level = "info")]
     async fn balance(
         &self,
         request: Request<QueryBalanceRequest>,
@@ -39,6 +40,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn all_balances(
         &self,
         request: Request<QueryAllBalancesRequest>,
@@ -49,6 +51,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn spendable_balances(
         &self,
         request: Request<QuerySpendableBalancesRequest>,
@@ -61,6 +64,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn total_supply(
         &self,
         request: Request<QueryTotalSupplyRequest>,
@@ -71,6 +75,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn supply_of(
         &self,
         request: Request<QuerySupplyOfRequest>,
@@ -80,6 +85,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn params(
         &self,
         _request: Request<QueryParamsRequest>,
@@ -87,6 +93,7 @@ impl Query for BankService {
         Err(unimplemented("params")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn denom_metadata(
         &self,
         _request: Request<QueryDenomMetadataRequest>,
@@ -94,6 +101,7 @@ impl Query for BankService {
         Err(unimplemented("denom_metadata")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn denoms_metadata(
         &self,
         _request: Request<QueryDenomsMetadataRequest>,
