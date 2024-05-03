@@ -12,7 +12,7 @@ use slay3r_proto::cosmos::bank::v1beta1::{
 // use ibc_proto::cosmos::base::v1beta1::Coin as RawCoin;
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{abci_response_to_grpc, grpc_request_to_abci, unimplemented};
 
 pub fn bank_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<BankService> {
     QueryServer::new(BankService::new(dispatcher))
@@ -30,6 +30,7 @@ impl BankService {
 
 #[tonic::async_trait]
 impl Query for BankService {
+    #[tracing::instrument(skip(self), level = "info")]
     async fn balance(
         &self,
         request: Request<QueryBalanceRequest>,
@@ -39,6 +40,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn all_balances(
         &self,
         request: Request<QueryAllBalancesRequest>,
@@ -49,6 +51,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn spendable_balances(
         &self,
         request: Request<QuerySpendableBalancesRequest>,
@@ -61,6 +64,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn total_supply(
         &self,
         request: Request<QueryTotalSupplyRequest>,
@@ -71,6 +75,7 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn supply_of(
         &self,
         request: Request<QuerySupplyOfRequest>,
@@ -80,24 +85,27 @@ impl Query for BankService {
         abci_response_to_grpc(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn params(
         &self,
         _request: Request<QueryParamsRequest>,
     ) -> Result<Response<QueryParamsResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("params")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn denom_metadata(
         &self,
         _request: Request<QueryDenomMetadataRequest>,
     ) -> Result<Response<QueryDenomMetadataResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("denom_metadata")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn denoms_metadata(
         &self,
         _request: Request<QueryDenomsMetadataRequest>,
     ) -> Result<Response<QueryDenomsMetadataResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("denoms_metadata")) // TODO
     }
 }

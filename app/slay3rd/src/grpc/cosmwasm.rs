@@ -14,7 +14,7 @@ use slay3r_proto::cosmwasm::wasm::v1::{
 use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{abci_response_to_grpc, grpc_request_to_abci, unimplemented};
 
 pub fn cosmwasm_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<CosmWasmService> {
     QueryServer::new(CosmWasmService::new(dispatcher))
@@ -33,6 +33,7 @@ impl CosmWasmService {
 #[tonic::async_trait]
 impl Query for CosmWasmService {
     /// ContractInfo gets the contract meta data
+    #[tracing::instrument(skip(self), level = "info")]
     async fn contract_info(
         &self,
         request: Request<QueryContractInfoRequest>,
@@ -45,6 +46,7 @@ impl Query for CosmWasmService {
     }
 
     /// ContractHistory gets the contract code history
+    #[tracing::instrument(skip(self), level = "info")]
     async fn contract_history(
         &self,
         _request: Request<QueryContractHistoryRequest>,
@@ -52,6 +54,7 @@ impl Query for CosmWasmService {
         todo!();
     }
     /// ContractsByCode lists all smart contracts for a code id
+    #[tracing::instrument(skip(self), level = "info")]
     async fn contracts_by_code(
         &self,
         request: Request<QueryContractsByCodeRequest>,
@@ -64,13 +67,16 @@ impl Query for CosmWasmService {
         Ok(Response::new(res))
     }
     /// AllContractState gets all raw store data for a single contract
+    #[tracing::instrument(skip(self), level = "info")]
     async fn all_contract_state(
         &self,
         _request: Request<QueryAllContractStateRequest>,
     ) -> Result<Response<QueryAllContractStateResponse>, Status> {
         todo!();
     }
+
     /// RawContractState gets single key from the raw store data of a contract
+    #[tracing::instrument(skip(self), level = "info")]
     async fn raw_contract_state(
         &self,
         request: Request<QueryRawContractStateRequest>,
@@ -84,6 +90,7 @@ impl Query for CosmWasmService {
     }
 
     /// SmartContractState get smart query result from the contract
+    #[tracing::instrument(skip(self), level = "info")]
     async fn smart_contract_state(
         &self,
         request: Request<QuerySmartContractStateRequest>,
@@ -97,6 +104,7 @@ impl Query for CosmWasmService {
     }
 
     /// Code gets the binary code and metadata for a singe wasm code
+    // #[tracing::instrument(skip(self), level = "info")]
     async fn code(
         &self,
         request: Request<QueryCodeRequest>,
@@ -107,6 +115,7 @@ impl Query for CosmWasmService {
     }
 
     /// Codes gets the metadata for all stored wasm codes
+    #[tracing::instrument(skip(self), level = "info")]
     async fn codes(
         &self,
         request: Request<QueryCodesRequest>,
@@ -119,18 +128,20 @@ impl Query for CosmWasmService {
     }
 
     /// PinnedCodes gets the pinned code ids
+    #[tracing::instrument(skip(self), level = "info")]
     async fn pinned_codes(
         &self,
         _request: Request<QueryPinnedCodesRequest>,
     ) -> Result<Response<QueryPinnedCodesResponse>, Status> {
-        unimplemented!();
+        Err(unimplemented("pinned_codes")) // TODO
     }
 
     /// Params gets the module params
+    #[tracing::instrument(skip(self), level = "info")]
     async fn params(
         &self,
         _request: Request<QueryParamsRequest>,
     ) -> Result<Response<QueryParamsResponse>, Status> {
-        unimplemented!();
+        Err(unimplemented("params")) // TODO
     }
 }

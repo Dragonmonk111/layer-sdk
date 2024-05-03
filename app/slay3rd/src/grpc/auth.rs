@@ -10,7 +10,7 @@ use slay3r_proto::cosmos::auth::v1beta1::{
 use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{abci_response_to_grpc, grpc_request_to_abci, unimplemented};
 
 pub fn auth_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<AuthService> {
     QueryServer::new(AuthService::new(dispatcher))
@@ -28,13 +28,15 @@ impl AuthService {
 
 #[tonic::async_trait]
 impl Query for AuthService {
+    #[tracing::instrument(skip(self), level = "info")]
     async fn accounts(
         &self,
         _request: Request<QueryAccountsRequest>,
     ) -> Result<Response<QueryAccountsResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("accounts")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn account(
         &self,
         request: Request<QueryAccountRequest>,
@@ -44,17 +46,19 @@ impl Query for AuthService {
         abci_response_to_grpc::<QueryAccountResponse>(response).map(Response::new)
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn params(
         &self,
         _request: Request<QueryParamsRequest>,
     ) -> Result<Response<QueryParamsResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("params")) // TODO
     }
 
+    #[tracing::instrument(skip(self), level = "info")]
     async fn module_account_by_name(
         &self,
         _request: Request<QueryModuleAccountByNameRequest>,
     ) -> Result<Response<QueryModuleAccountByNameResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("module_account_by_name")) // TODO
     }
 }
