@@ -67,24 +67,23 @@ impl Service for TendermintService {
             listen_addr: status.node_info.listen_addr.to_string(),
             network: status.node_info.network.to_string(),
             version: status.node_info.version.to_string(),
-            channels: vec![], // TODO
+            channels: status.node_info.channels.to_string().into_bytes(),
             moniker: status.node_info.moniker.to_string(),
             other: Some(DefaultNodeInfoOther {
                 tx_index: tx_index.to_string(),
                 rpc_address: status.node_info.other.rpc_address,
             }),
         };
-        // TODO: revisit this, better info
         let version_info = VersionInfo {
             name: "Slay3r".to_string(),
             app_name: "Slay3r".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             git_commit: env!("GIT_HASH").to_string(),
-            build_tags: "".to_string(), // TODO
+            build_tags: "".to_string(), // FIXME: read features
             go_version: env!("RUST_VERSION").to_string(),
-            build_deps: vec![], // TODO
+            build_deps: vec![], // FIXME: what deps to put here?
             // Pretend we are 0.50.0 for now
-            cosmos_sdk_version: "0.50.0".to_string(), // TODO
+            cosmos_sdk_version: "0.50.0".to_string(),
         };
         let response = GetNodeInfoResponse {
             default_node_info: Some(node_info),
@@ -178,7 +177,7 @@ impl Service for TendermintService {
     }
 }
 
-fn convert_tendermint_block(
+pub(crate) fn convert_tendermint_block(
     b: &tendermint::block::Block,
 ) -> slay3r_proto::tendermint::types::Block {
     Block {
@@ -230,7 +229,7 @@ fn convert_tendermint_commit(
     }
 }
 
-fn convert_block_id(id: &tendermint::block::Id) -> BlockId {
+pub(crate) fn convert_block_id(id: &tendermint::block::Id) -> BlockId {
     BlockId {
         hash: hash_to_vec(id.hash),
         part_set_header: Some(PartSetHeader {

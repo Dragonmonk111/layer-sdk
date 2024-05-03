@@ -1,3 +1,4 @@
+use futures::future::try_join_all;
 use std::sync::Arc;
 
 use cosmwasm_std::Binary;
@@ -15,7 +16,10 @@ use slay3r_abci::MultiThreadedDispatcher;
 use tendermint_rpc::{Client, HttpClient};
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{
+    abci_response_to_grpc, grpc_request_to_abci,
+    tendermint::{convert_block_id, convert_tendermint_block},
+};
 
 pub fn tx_service(
     dispatcher: Arc<MultiThreadedDispatcher>,
@@ -145,9 +149,44 @@ impl Service for TxService {
     /// GetTxsEvent fetches txs by event.
     async fn get_txs_event(
         &self,
-        _request: Request<GetTxsEventRequest>,
+        request: Request<GetTxsEventRequest>,
     ) -> std::result::Result<tonic::Response<GetTxsEventResponse>, Status> {
-        todo!();
+        let r = request.get_ref();
+        if r.events.len() != 1 {
+            return Err(invalid_arg("only support exactly one event query for now"));
+        }
+        let query = r.events[0].parse().map_err(invalid_arg)?;
+        let order = match r.order_by {
+            1 => tendermint_rpc::Order::Ascending,
+            2 => tendermint_rpc::Order::Descending,
+            _ => return Err(invalid_arg("invalid order")),
+        };
+        let result = self
+            .client
+            .tx_search(query, false, r.page as u32, r.limit as u8, order)
+            .await
+            .map_err(gateway_error)?;
+
+        let txs = result
+            .txs
+            .iter()
+            .filter_map(|tx| parse_cosmos_tx(&tx.tx))
+            .collect();
+        let tx_responses: Result<Vec<_>, Status> =
+            try_join_all(result.txs.into_iter().map(|tx| async {
+                // TODO: make this safer
+                let time = self.get_blocktime(tx.height).await?;
+                Ok(convert_tx_response(tx, time))
+            }))
+            .await;
+        #[allow(deprecated)]
+        let res = GetTxsEventResponse {
+            txs,
+            tx_responses: tx_responses?,
+            pagination: None,
+            total: result.total_count as u64,
+        };
+        Ok(tonic::Response::new(res))
     }
 
     /// GetBlockWithTxs fetches a block with decoded txs.
@@ -155,9 +194,27 @@ impl Service for TxService {
     /// Since: cosmos-sdk 0.45.2
     async fn get_block_with_txs(
         &self,
-        _request: Request<GetBlockWithTxsRequest>,
+        request: Request<GetBlockWithTxsRequest>,
     ) -> std::result::Result<tonic::Response<GetBlockWithTxsResponse>, Status> {
-        todo!();
+        let block = self
+            .client
+            .block(request.get_ref().height as u32)
+            .await
+            .map_err(gateway_error)?;
+        let block_data = convert_tendermint_block(&block.block);
+        let txs = block
+            .block
+            .data
+            .iter()
+            .filter_map(|a| parse_cosmos_tx(a.as_slice()))
+            .collect();
+        let response = GetBlockWithTxsResponse {
+            txs,
+            block_id: Some(convert_block_id(&block.block_id)),
+            block: Some(block_data),
+            pagination: None,
+        };
+        Ok(tonic::Response::new(response))
     }
 
     /// TxDecode decodes the transaction.
@@ -226,12 +283,12 @@ fn convert_tx_response(
         logs,
         info: exec_tx.info,
         gas_wanted: exec_tx.gas_wanted,
-        gas_used: exec_tx.gas_used, 
-        tx: Some(slay3r_proto::google::protobuf::Any{
+        gas_used: exec_tx.gas_used,
+        tx: Some(slay3r_proto::google::protobuf::Any {
             // TODO: what type_url is this supposed to be?? Any????
             type_url: "/cosmos.Tx".to_string(),
-            value: tx.tx.into(),
-        }), 
+            value: tx.tx,
+        }),
         timestamp,
         events: exec_tx.events.into_iter().map(convert_event).collect(),
     }
