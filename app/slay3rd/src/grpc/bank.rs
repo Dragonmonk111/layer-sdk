@@ -12,7 +12,7 @@ use slay3r_proto::cosmos::bank::v1beta1::{
 // use ibc_proto::cosmos::base::v1beta1::Coin as RawCoin;
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{abci_response_to_grpc, grpc_request_to_abci, unimplemented};
 
 pub fn bank_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<BankService> {
     QueryServer::new(BankService::new(dispatcher))
@@ -84,20 +84,20 @@ impl Query for BankService {
         &self,
         _request: Request<QueryParamsRequest>,
     ) -> Result<Response<QueryParamsResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("params")) // TODO
     }
 
     async fn denom_metadata(
         &self,
         _request: Request<QueryDenomMetadataRequest>,
     ) -> Result<Response<QueryDenomMetadataResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("denom_metadata")) // TODO
     }
 
     async fn denoms_metadata(
         &self,
         _request: Request<QueryDenomsMetadataRequest>,
     ) -> Result<Response<QueryDenomsMetadataResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("denoms_metadata")) // TODO
     }
 }

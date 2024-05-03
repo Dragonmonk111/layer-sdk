@@ -10,7 +10,7 @@ use slay3r_proto::cosmos::auth::v1beta1::{
 use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{abci_response_to_grpc, grpc_request_to_abci, unimplemented};
 
 pub fn auth_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<AuthService> {
     QueryServer::new(AuthService::new(dispatcher))
@@ -32,7 +32,7 @@ impl Query for AuthService {
         &self,
         _request: Request<QueryAccountsRequest>,
     ) -> Result<Response<QueryAccountsResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("accounts")) // TODO
     }
 
     async fn account(
@@ -48,13 +48,13 @@ impl Query for AuthService {
         &self,
         _request: Request<QueryParamsRequest>,
     ) -> Result<Response<QueryParamsResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("params")) // TODO
     }
 
     async fn module_account_by_name(
         &self,
         _request: Request<QueryModuleAccountByNameRequest>,
     ) -> Result<Response<QueryModuleAccountByNameResponse>, Status> {
-        unimplemented!()
+        Err(unimplemented("module_account_by_name")) // TODO
     }
 }

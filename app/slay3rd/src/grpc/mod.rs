@@ -35,3 +35,7 @@ fn abci_response_to_grpc<M: prost::Message + Default>(
     }
     M::decode(response.value).map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))
 }
+
+pub(crate) fn unimplemented(msg: &str) -> tonic::Status {
+    tonic::Status::new(tonic::Code::Unimplemented, msg.to_string())
+}

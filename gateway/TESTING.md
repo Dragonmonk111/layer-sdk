@@ -22,3 +22,12 @@ For more fun, import the test mnemonic `economy stock theory fatal elder harbor 
 which you can get from [the integration tests](../integration/src/testutils.spec.ts).
 
 (Note: sending still fails. Legacy Amino issue?)
+
+## Getting tokens
+
+```bash
+curl --header "Content-Type: application/json" \
+  --request POST \
+  --data '{"denom":"uslay","address":"slay3r1z6cn9ahndgpz9xnzydad08qpkzlrkdjpglymu2"}' \
+  http://localhost:8000/credit
+```

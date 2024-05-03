@@ -14,7 +14,7 @@ use slay3r_proto::cosmwasm::wasm::v1::{
 use slay3r_abci::MultiThreadedDispatcher;
 use tonic::{Request, Response, Status};
 
-use super::{abci_response_to_grpc, grpc_request_to_abci};
+use super::{abci_response_to_grpc, grpc_request_to_abci, unimplemented};
 
 pub fn cosmwasm_service(dispatcher: Arc<MultiThreadedDispatcher>) -> QueryServer<CosmWasmService> {
     QueryServer::new(CosmWasmService::new(dispatcher))
@@ -123,7 +123,7 @@ impl Query for CosmWasmService {
         &self,
         _request: Request<QueryPinnedCodesRequest>,
     ) -> Result<Response<QueryPinnedCodesResponse>, Status> {
-        unimplemented!();
+        Err(unimplemented("pinned_codes")) // TODO
     }
 
     /// Params gets the module params
@@ -131,6 +131,6 @@ impl Query for CosmWasmService {
         &self,
         _request: Request<QueryParamsRequest>,
     ) -> Result<Response<QueryParamsResponse>, Status> {
-        unimplemented!();
+        Err(unimplemented("params")) // TODO
     }
 }

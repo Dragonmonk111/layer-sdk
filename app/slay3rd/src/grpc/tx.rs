@@ -161,9 +161,19 @@ impl Service for TxService {
             2 => tendermint_rpc::Order::Descending,
             _ => return Err(invalid_arg("invalid order")),
         };
+
+        // Try to handle older queries and never ones as well
+        #[allow(deprecated)]
+        let limit = if let Some(p) = r.pagination.as_ref() {
+            p.limit
+        } else {
+            r.limit
+        };
+        let page = if r.page == 0 { 1 } else { r.page };
+
         let result = self
             .client
-            .tx_search(query, false, r.page as u32, r.limit as u8, order)
+            .tx_search(query, false, page as u32, limit as u8, order)
             .await
             .map_err(gateway_error)?;
 
