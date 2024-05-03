@@ -24,18 +24,6 @@ use crate::grpc::{abci_response_to_grpc, grpc_request_to_abci};
 
 use super::tx::gateway_error;
 
-// auth::v1beta1::{
-//     query_server::{Query, QueryServer},
-//     QueryAccountRequest, QueryAccountResponse, QueryAccountsRequest, QueryAccountsResponse,
-//     QueryModuleAccountByNameRequest, QueryModuleAccountByNameResponse, QueryParamsRequest,
-//     QueryParamsResponse,
-// };
-
-// use slay3r_abci::MultiThreadedDispatcher;
-// use tonic::{Request, Response, Status};
-
-// use {abci_response_to_grpc, grpc_request_to_abci};
-
 pub fn tendermint_service(
     dispatcher: Arc<MultiThreadedDispatcher>,
     rpc_url: &str,

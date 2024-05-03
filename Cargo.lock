@@ -3273,6 +3273,7 @@ version = "0.2.0"
 dependencies = [
  "bytes",
  "clap",
+ "cosmrs",
  "cosmwasm-std",
  "figment",
  "hex",
@@ -3283,6 +3284,7 @@ dependencies = [
  "pico-args",
  "prost 0.12.1",
  "serde",
+ "serde_json",
  "sha2 0.10.7",
  "slay3r-abci",
  "slay3r-app",
