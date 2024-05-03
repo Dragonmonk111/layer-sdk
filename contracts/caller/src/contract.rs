@@ -59,6 +59,7 @@ fn build_submsg(msg: impl Into<CosmosMsg>, info: CallInfo, is_init: bool) -> Sub
     };
     SubMsg {
         id,
+        payload: Binary::default(),
         msg: msg.into(),
         gas_limit: info.gas_limit,
         reply_on: info.reply_on,
@@ -134,13 +135,21 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
         Ok(r) => match reply.id {
             INIT_IGNORE_DATA => {
                 // empty reply, we just want to get the address
+                // We do it the old way (1.x style) to ensure we can still parse it
+                #[allow(deprecated)]
                 let init_data = parse_instantiate_response_data(&r.data.unwrap())?;
                 ECHO.save(deps.storage, &init_data.contract_address)?;
                 Response::new()
             }
             INIT_SET_DATA => {
                 // empty reply, we just want to get the address
-                let init_data = parse_instantiate_response_data(&r.data.unwrap())?;
+                // We try the new (2.x) way
+                let resp = r.msg_responses.get(0).unwrap();
+                assert_eq!(
+                    resp.type_url,
+                    "/cosmwasm.wasm.v1.MsgInstantiateContractResponse"
+                );
+                let init_data = parse_instantiate_response_data(&resp.value)?;
                 ECHO.save(deps.storage, &init_data.contract_address)?;
                 if let Some(data) = init_data.data {
                     Response::new().set_data(data)
@@ -150,7 +159,13 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
             }
             EXEC_SET_DATA => {
                 // empty reply, we just want to get the address
-                let exec_data = parse_execute_response_data(&r.data.unwrap())?;
+                // We try the new (2.x) way
+                let resp = r.msg_responses.get(0).unwrap();
+                assert_eq!(
+                    resp.type_url,
+                    "/cosmwasm.wasm.v1.MsgExecuteContractResponse"
+                );
+                let exec_data = parse_execute_response_data(&resp.value)?;
                 if let Some(data) = exec_data.data {
                     Response::new().set_data(data)
                 } else {

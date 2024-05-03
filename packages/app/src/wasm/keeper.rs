@@ -1,10 +1,9 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_vm::{Checksum, VmError};
-
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Order, Reply,
-    ReplyOn, SubMsg, SubMsgResponse,
+    ensure_eq, Addr, Binary, BlockInfo, Checksum, Coin, CosmosMsg, Empty, Env, MessageInfo, Order,
+    Reply, ReplyOn, SubMsg, SubMsgResponse,
 };
+use cosmwasm_vm::VmError;
 
 use cw_storage_plus::Bound;
 use slay3r_std::api::MsgResponse;
@@ -591,22 +590,16 @@ impl Wasm {
     ) -> PulsarResult<()> {
         for msg in msgs {
             // if there is a limit, and it is less than what we have left, use a sub-meter
-            let limit_meter = match (msg.gas_limit, meter.remaining()) {
-                (Some(limit), left) if limit < left => Some(GasMeter::new(limit)),
-                _ => None,
+            let sub_meter = match (msg.gas_limit, meter.remaining()) {
+                (Some(limit), left) if limit < left => GasMeter::new(limit),
+                (_, left) => GasMeter::new(left),
             };
-            let sub_meter = match limit_meter.as_ref() {
-                Some(m) => m,
-                None => meter,
-            };
-
             let slay3r_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
 
             // ensure we charge if there is a limit_meter, even on error
-            let msg_result = sm.process_msg(storage, sub_meter, contract, block, slay3r_msg);
-            if let Some(limit_meter) = limit_meter {
-                meter.charge(limit_meter.used())?;
-            }
+            let msg_result = sm.process_msg(storage, &sub_meter, contract, block, slay3r_msg);
+            let gas_used = sub_meter.used();
+            meter.charge(gas_used)?;
 
             // check if we want to call reply and call
             let is_success = msg_result.is_ok(); // we use this variable later
@@ -619,10 +612,19 @@ impl Wasm {
                     Ok(res) => {
                         // append events to parent response (only on success)
                         parent_response.events.extend(res.events.clone());
-                        // and prepare a response value to call the contract
+                        // and prepare a response value to call the contract with both (1.x) data and (2.x) msg_responses
+                        let (type_url, value) = encode_cosmwasm_response(res.data);
+                        #[allow(deprecated)]
+                        let data = maybe_binary(value.clone());
+                        let msg_response = cosmwasm_std::MsgResponse {
+                            type_url: type_url.to_string(),
+                            value: value.into(),
+                        };
+                        #[allow(deprecated)]
                         Ok(SubMsgResponse {
                             events: res.events,
-                            data: maybe_binary(encode_cosmwasm_response(res.data).1),
+                            data,
+                            msg_responses: vec![msg_response],
                         })
                     }
                     Err(err) => Err(err.to_string()),
@@ -630,6 +632,8 @@ impl Wasm {
                 let reply = Reply {
                     id: msg.id,
                     result: result.into(),
+                    gas_used,
+                    payload: msg.payload,
                 };
 
                 // call the reply entry point
@@ -730,7 +734,7 @@ impl Wasm {
                     checksum,
                     pinned,
                 } = self.load_code(storage, meter, code_id)?;
-                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_vm_error)?;
+                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_checksum_error)?;
                 let data = self.cache.load_code(&hash).map_err(map_vm_error)?;
                 let resp = CodeInfoResponse {
                     data: data.into(),
@@ -877,6 +881,10 @@ fn map_vm_error(err: VmError) -> PulsarError {
     }
 }
 
+fn map_checksum_error(_: cosmwasm_std::ChecksumError) -> PulsarError {
+    PulsarError::Wasm(WasmError::Checksum)
+}
+
 fn map_contract_error(err: String) -> PulsarError {
     WasmError::Contract(err).into()
 }
@@ -982,17 +990,23 @@ fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Pul
 use cosmos_sdk_proto::traits::{Message, TypeUrl};
 
 pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
+    // FIXME: we used to have nice types from cosmrs...
+    // cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+    // but they were incorrect, we needed the response type. Unfortuntely, this line doesn't work
+    // cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse::TYPE_URL,
+    // So we just encode them manually
+
     match data {
         MsgData::Bank(bank) => match bank {
             BankMsgData::Send {} => (
-                cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSend::TYPE_URL,
+                "/cosmos.bank.v1beta1.MsgSendResponse",
                 cosmos_sdk_proto::cosmos::bank::v1beta1::MsgSendResponse {}.encode_to_vec(),
             ),
             BankMsgData::Burn {} => unknown_cosmwasm_response(),
         },
         MsgData::Wasm(wasm) => match wasm {
             WasmMsgData::Store { code_id, checksum } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCode::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgStoreCodeResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgStoreCodeResponse {
                     code_id,
                     checksum: checksum.to_vec(),
@@ -1000,14 +1014,14 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 .encode_to_vec(),
             ),
             WasmMsgData::Execute { data } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContract::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgExecuteContractResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgExecuteContractResponse {
                     data: data.to_vec(),
                 }
                 .encode_to_vec(),
             ),
             WasmMsgData::Instantiate { contract, data } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgInstantiateContractResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContractResponse {
                     address: contract.to_string(),
                     data: data.to_vec(),
@@ -1015,7 +1029,7 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 .encode_to_vec(),
             ),
             WasmMsgData::Instantiate2 { contract, data } => (
-                "/cosmwasm.wasm.v1.MsgInstantiateContract2", // missing in cosmos-sdk-proto
+                "/cosmwasm.wasm.v1.MsgInstantiateContract2Response",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgInstantiateContract2Response {
                     address: contract.to_string(),
                     data: data.to_vec(),
@@ -1023,18 +1037,18 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
                 .encode_to_vec(),
             ),
             WasmMsgData::Migrate { data } => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContract::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgMigrateContractResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgMigrateContractResponse {
                     data: data.to_vec(),
                 }
                 .encode_to_vec(),
             ),
             WasmMsgData::UpdateAdmin {} => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgUpdateAdmin::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgUpdateAdminResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgUpdateAdminResponse {}.encode_to_vec(),
             ),
             WasmMsgData::ClearAdmin {} => (
-                cosmos_sdk_proto::cosmwasm::wasm::v1::MsgClearAdmin::TYPE_URL,
+                "/cosmwasm.wasm.v1.MsgClearAdminResponse",
                 cosmos_sdk_proto::cosmwasm::wasm::v1::MsgClearAdminResponse {}.encode_to_vec(),
             ),
             WasmMsgData::Sudo { data: _ } => unknown_cosmwasm_response(),

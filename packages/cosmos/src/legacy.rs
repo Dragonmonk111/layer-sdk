@@ -302,7 +302,7 @@ mod tests {
             code_id: 12345,
             label: "sticky".into(),
             msg: serde_json::to_vec(&orig_msg).unwrap().into(),
-            funds: vec![Coin::new(1234, "uslay")],
+            funds: vec![Coin::new(1234u128, "uslay")],
         });
 
         let amino_msg = AminoMsg::build(&init_msg);

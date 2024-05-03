@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
-use cosmwasm_std::StdResult;
+use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
@@ -78,6 +78,18 @@ impl From<&AccountId> for String {
     }
 }
 
+impl From<AccountId> for Addr {
+    fn from(value: AccountId) -> Self {
+        Addr::unchecked(value.to_string())
+    }
+}
+
+impl From<&AccountId> for Addr {
+    fn from(value: &AccountId) -> Self {
+        Addr::unchecked(value.to_string())
+    }
+}
+
 /// This is meant as a helper for testcode
 /// Panics on error
 pub fn must_id(str: &str) -> AccountId {
@@ -144,6 +156,7 @@ impl<'a> Prefixer<'a> for AccountId {
 }
 
 impl KeyDeserialize for AccountId {
+    const KEY_ELEMS: u16 = 1;
     type Output = AccountId;
 
     #[inline(always)]
@@ -153,6 +166,7 @@ impl KeyDeserialize for AccountId {
 }
 
 impl KeyDeserialize for &AccountId {
+    const KEY_ELEMS: u16 = 1;
     type Output = AccountId;
 
     #[inline(always)]
