@@ -1,4 +1,4 @@
-use cosmwasm_std::{Binary, Coin, StdError};
+use cosmwasm_std::{Binary, Checksum, Coin, StdError};
 use derivative::Derivative;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
@@ -234,7 +234,7 @@ pub enum MsgData {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum WasmMsgData {
-    Store { code_id: u64, checksum: Binary },
+    Store { code_id: u64, checksum: Checksum },
     Execute { data: Binary },
     Instantiate { contract: AccountId, data: Binary },
     Instantiate2 { contract: AccountId, data: Binary },

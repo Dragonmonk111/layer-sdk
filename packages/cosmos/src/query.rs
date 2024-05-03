@@ -173,6 +173,7 @@ fn parse_cosmos_grpc_query(
             let req = QueryCodeRequest::decode(data).map_err(CosmosError::from)?;
             let query = WasmQuery::CodeInfo {
                 code_id: req.code_id,
+                include_wasm: true, // consistent with the sdk format
             };
             Ok(Some(query.into()))
         }

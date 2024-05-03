@@ -1,4 +1,4 @@
-use cosmwasm_std::{Binary, Coin, StdError};
+use cosmwasm_std::{Binary, Checksum, Coin, StdError};
 use derivative::Derivative;
 use std::error::Error as Err;
 use std::fmt::{Display, Formatter};
@@ -217,7 +217,7 @@ pub enum WasmQuery {
     /// Returns a [`ContractInfoResponse`] with metadata on the contract from the runtime
     ContractInfo { contract_addr: AccountId },
     /// Returns a [`CodeInfoResponse`] with metadata of the code
-    CodeInfo { code_id: u64 },
+    CodeInfo { code_id: u64, include_wasm: bool },
     /// Returns a [`ListCodesResponse`] with metadata of the codes, starting from the given code_id
     ListCodes {
         from: Option<u64>,
@@ -277,7 +277,7 @@ pub struct CodeInfo {
     /// The address that initially stored the code
     pub creator: AccountId,
     /// The hash of the Wasm blob (aka data_hash)
-    pub checksum: Binary,
+    pub checksum: Checksum,
     /// If this code is pinned to the cache
     pub pinned: bool,
     // TODO: instantiate permissions... if we choose to use them
