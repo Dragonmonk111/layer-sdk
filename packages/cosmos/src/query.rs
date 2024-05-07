@@ -49,8 +49,12 @@ pub fn parse_cosmos_query(path: &str, data: Bytes, chain_id: &str) -> Result<Que
         return Ok(grpc_res);
     }
 
+    // FIXME: use cleaner match
     // try some special cases
     let fragments: Vec<&str> = path.split('/').collect();
+    if fragments.len() < 2 {
+        return Err(QueryError::UnsupportedPath(path.to_string()));
+    }
     match fragments[1] {
         QUERY_PATH_APP => {
             if fragments.len() != 2 {
