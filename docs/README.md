@@ -36,6 +36,36 @@ in absence of a clear plan of a new consensus engine.
 
 ## System Overview
 
+```mermaid
+%%{init: {'theme': 'forest'}}%%
+flowchart TD
+  subgraph Clients
+  A(CosmJS Client);
+  B(Abstract Client);
+  C(Keplr);
+  D(Ping.pub);
+  end
+
+  subgraph Proxies
+  A  -. Tendermint RPC .-> F{{CometBFT}};
+  C  -. "REST" .-> G{{gRPC Gateway}};
+  D  -. "REST" .-> G;
+  end
+
+  subgraph Slay3rd
+  F --> M[ABCI];
+  G --> N[gRPC];
+  B -. gRPC .-> N;
+  M <--> O(Encoder/Decoder);
+  N <--> O;
+  O --> P(State Machine);
+  P --> Q(Auth);
+  P --> R(Bank);
+  P --> S(Wasm);
+  end
+```
+
+
 **TODO**
 
 ## Code Overview
