@@ -2,30 +2,30 @@
 
 Lay3r is a high-performance, pure Rust blockchain built around CosmWasm smart contracts.
 It will add other VMs (notably EVM) in the future, but the system infrastructure
-(namely staking and governance) will remain in privileged COsmWasm contracts.
+(namely staking and governance) will remain in privileged CosmWasm contracts.
 
 It has it's own internal query and message system, which are not meant to be serialized,
 but designed for efficient and safe in-memory execution. It then has an adapter layer
 to parse various transaction and query formats into the native representation, 
-and the responses back, in order to emulate compatibility with existing systems.
+and the responses back, in order to support compatibility with existing systems.
 
 ## Designed for Compatibility
 
 As of May 2024, we have currently implemented compatibility with Cosmos SDK APIs
 to a large degree, based on testing with major client projects. This includes
 Tendermint RPC format (CosmJS compatibility), gRPC, and the LCD/REST endpoints,
-as well as the transaction format and legacy signing mode. Note that not all features
-of the Cosmos SDK are supported, which is a deliberate design decision to keep
-our system streamlined. Rather, all features of the Cosmos SDK that we support will also
-be accessible via the standard Cosmos SDK types and APIs.
+as well as the transaction format and both direct and legacy Amino signing modes.
+
+Note that not all features of the Cosmos SDK are supported, which is a deliberate design decision to keep our system streamlined. Rather, all features of the Cosmos SDK that we support will
+also be accessible via the standard Cosmos SDK types and APIs.
 
 This push for both compatibility and to avoid any tight coupling to the Cosmos SDK
 will allow us much more flexibility to enter other blockchain ecosystems. As a clear
-next step, we want to work as an Ethereum L2 and have tight compatibility with Ethereum
-tooling. Part of this is future plans for integrating the EVM, but more than that, we need
+next step, we want to have tight compatibility with Ethereum tooling. 
+Part of this is future plans for integrating the EVM, but more than that, we need
 to ensure that Ethereum transaction formats work with our system, Ethereum RPC endpoints
 are provided with proper functionality, etc. We will want Metamask, Hardhat, Truffle, etc
-to all "just work" with our system, with no more difficulty than pointing to a new Ethereum L2.
+to all "just work" with our system, with no more difficulty than pointing to a new EVM chain.
 
 CometBFT (Tendermint) types are also not tightly coupled to our system, with the
 desire that we could use this codebase to support a chain on another consensus algorithm
@@ -64,9 +64,6 @@ flowchart TD
   P --> S(Wasm);
   end
 ```
-
-
-**TODO**
 
 ## Code Overview
 
