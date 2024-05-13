@@ -1,0 +1,16 @@
+[package]
+name = "slay3r-tube"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+exclude.workspace = true
+description = "Like Osmosis Test Tube for Slay3r, implements CwEnv for cw-orch to allow local node testing"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cosmwasm-std = { workspace = true }
+cw-orch-core = { workspace = true, default-features = false}
+serde = { workspace = true }
+anyhow = { workspace = true }
+slay3r-app = { workspace = true }

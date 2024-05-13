@@ -36,6 +36,7 @@ bytes = { version = "1.4.0", default_features = false, features = ["serde"] }
 prost = { version = "0.12.1" }
 prost-types = { version = "0.12.1" }
 tonic = { version = "0.10.2", default_features = false, features = ["codegen", "transport", "prost"] }
+anyhow = "1"
 
 slay3r-abci = { path = "./packages/abci" }
 slay3r-app = { path = "./packages/app" }
@@ -43,6 +44,7 @@ slay3r-cosmos = { path = "./packages/cosmos" }
 slay3r-proto = { path = "./packages/proto" }
 slay3r-std = { path = "./packages/std" }
 slay3r-storage = { path = "./packages/storage" }
+slay3r-tube = { path = "./packages/tube" }
 
 tc-echo = { path = "./contracts/echo" }
 tc-caller = { path = "./contracts/caller" }
@@ -59,7 +61,8 @@ tracing-opentelemetry = "0.19.0"
 
 cosmrs = {version = "0.13.0", default_features = false, features = ["cosmwasm"] }
 cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
-
+cw-orch-core = { version = "1"}
+abstract-cw-multi-test = { version = "1"}
 
 [profile.release]
 # temporary to speed up testing
