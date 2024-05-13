@@ -305,7 +305,7 @@ fn convert_tx_response(
         txhash: hex::encode(tx.hash),
         codespace: exec_tx.codespace,
         code: exec_tx.code.into(),
-        data: Binary::new(exec_tx.data.into()).to_base64(),
+        data: Binary(exec_tx.data.into()).to_base64(),
         raw_log: exec_tx.log,
         logs,
         info: exec_tx.info,
@@ -352,7 +352,7 @@ fn convert_tx_broadcast_response(
         codespace,
         code: code.into(),
         // base64 encoding
-        data: Binary::new(data.into()).to_base64(),
+        data: Binary(data.into()).to_base64(),
         raw_log: log,
         logs: vec![],
         info: "".to_string(),

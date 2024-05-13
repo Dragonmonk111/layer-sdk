@@ -1,10 +1,13 @@
-use cosmwasm_std::{Binary, Checksum, Coin, StdError};
+use cosmwasm_std::{Binary, Coin, StdError};
 use derivative::Derivative;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
+
+// 2.0: use cosmwasm_std::Checksum
+type Checksum = Binary;
 
 /// This is the internal message format used in Slay3r.
 /// We convert various wire formats into this before processing.

@@ -19,7 +19,8 @@ use super::cache::{sdk_gas_to_wasmer, wasmer_gas_to_sdk};
 
 pub const GAS_COST_CANONICAL_ADDRESS: u64 = 40;
 pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
-pub const GAS_COST_VALIDATE_ADDRESS: u64 = 20;
+// 2.0:
+// pub const GAS_COST_VALIDATE_ADDRESS: u64 = 20;
 
 pub type CustomQuery = Empty;
 pub type CustomMsg = Empty;
@@ -56,7 +57,8 @@ pub(crate) unsafe fn danger_will_robinson(
 pub struct VmApi;
 
 impl BackendApi for VmApi {
-    fn addr_canonicalize(&self, human: &str) -> BackendResult<Vec<u8>> {
+    // fn addr_canonicalize(&self, human: &str) -> BackendResult<Vec<u8>> {
+    fn canonical_address(&self, human: &str) -> BackendResult<Vec<u8>> {
         let cost = GasInfo::with_cost(GAS_COST_CANONICAL_ADDRESS);
         let res = AccountId::parse_string(human)
             .map(|id| id.to_vec())
@@ -64,7 +66,8 @@ impl BackendApi for VmApi {
         (res, cost)
     }
 
-    fn addr_humanize(&self, canonical: &[u8]) -> BackendResult<String> {
+    // fn addr_humanize(&self, canonical: &[u8]) -> BackendResult<String> {
+    fn human_address(&self, canonical: &[u8]) -> BackendResult<String> {
         let cost = GasInfo::with_cost(GAS_COST_HUMAN_ADDRESS);
         let res = AccountId::new(canonical)
             .map(|id| id.to_string())
@@ -72,13 +75,14 @@ impl BackendApi for VmApi {
         (res, cost)
     }
 
-    fn addr_validate(&self, input: &str) -> BackendResult<()> {
-        let cost = GasInfo::with_cost(GAS_COST_VALIDATE_ADDRESS);
-        let res = AccountId::parse_string(input)
-            .map(|_| ())
-            .map_err(account_error_to_backend);
-        (res, cost)
-    }
+    // 2.0
+    // fn addr_validate(&self, input: &str) -> BackendResult<()> {
+    //     let cost = GasInfo::with_cost(GAS_COST_VALIDATE_ADDRESS);
+    //     let res = AccountId::parse_string(input)
+    //         .map(|_| ())
+    //         .map_err(account_error_to_backend);
+    //     (res, cost)
+    // }
 }
 
 fn account_error_to_backend(e: AccountIdError) -> BackendError {
@@ -256,13 +260,20 @@ fn slay3r_response_to_cosmwasm(
             slay3r_std::response::WasmQueryResponse::Smart(data) => Ok(data),
             slay3r_std::response::WasmQueryResponse::Raw(value) => Ok(value),
             slay3r_std::response::WasmQueryResponse::ContractInfo(info) => {
-                let res = cosmwasm_std::ContractInfoResponse::new(
-                    info.code_id,
-                    info.creator.into(),
-                    info.admin.map(|a| a.into()),
-                    info.pinned,
-                    info.ibc_port,
-                );
+                // 2.0:
+                // let res = cosmwasm_std::ContractInfoResponse::new(
+                //     info.code_id,
+                //     info.creator.into(),
+                //     info.admin.map(|a| a.into()),
+                //     info.pinned,
+                //     info.ibc_port,
+                // );
+                let mut res = cosmwasm_std::ContractInfoResponse::default();
+                res.code_id = info.code_id;
+                res.creator = info.creator.to_string();
+                res.admin = info.admin.map(|a| a.to_string());
+                res.pinned = info.pinned;
+                res.ibc_port = info.ibc_port;
                 Ok(to_json_binary(&res).unwrap())
             }
             slay3r_std::response::WasmQueryResponse::CodeInfo(info) => {
@@ -272,7 +283,11 @@ fn slay3r_response_to_cosmwasm(
                     checksum,
                     pinned: _,
                 } = info.code_info;
-                let res = cosmwasm_std::CodeInfoResponse::new(code_id, creator.into(), checksum);
+                let res = cosmwasm_std::CodeInfoResponse::new(
+                    code_id,
+                    creator.to_string(),
+                    checksum.into(),
+                );
                 Ok(to_json_binary(&res).unwrap())
             }
             x => unsupported_response(&x),
