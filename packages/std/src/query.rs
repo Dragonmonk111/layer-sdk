@@ -260,6 +260,18 @@ pub struct ContractInfoResponse {
     pub created: u64,
 }
 
+impl From<ContractInfoResponse> for cosmwasm_std::ContractInfoResponse {
+    fn from(value: ContractInfoResponse) -> Self {
+        let mut res = cosmwasm_std::ContractInfoResponse::default();
+        res.code_id = value.code_id;
+        res.creator = value.creator.to_string();
+        res.admin = value.admin.map(|a| a.to_string());
+        res.pinned = value.pinned;
+        res.ibc_port = value.ibc_port;
+        res
+    }
+}
+
 /// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].
 ///
 /// `code_hash`/`data_hash` was renamed to `checksum` to follow the CosmWasm

@@ -3,4 +3,4 @@ mod query;
 mod state;
 
 pub use core::Slay3rTube;
-pub use state::TestState;
+pub use state::OrchRegistry;

@@ -3452,6 +3452,8 @@ dependencies = [
  "cw-orch-core",
  "serde",
  "slay3r-app",
+ "slay3r-std",
+ "slay3r-storage",
 ]
 
 [[package]]
