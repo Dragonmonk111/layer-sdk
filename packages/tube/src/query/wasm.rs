@@ -1,6 +1,8 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-use cosmwasm_std::{from_json, to_json_binary, Binary, CodeInfoResponse, ContractInfoResponse, HexBinary, StdError};
+use cosmwasm_std::{
+    from_json, to_json_binary, Binary, CodeInfoResponse, ContractInfoResponse, HexBinary, StdError,
+};
 
 use cw_orch_core::contract::interface_traits::{ContractInstance, Uploadable};
 use cw_orch_core::environment::{Querier, WasmQuerier};
@@ -53,7 +55,10 @@ impl WasmQuerier for Slay3rWasm {
     ) -> Result<Vec<u8>, Self::Error> {
         let app = self.tube.app.borrow();
         let contract_addr = AccountId::parse_string(&address.into())?;
-        let query = WasmQuery::Raw { contract_addr, key: query_keys.into() };
+        let query = WasmQuery::Raw {
+            contract_addr,
+            key: query_keys.into(),
+        };
         let res = app.query(query.into())?;
         match res {
             QueryResponse::Wasm(WasmQueryResponse::Raw(r)) => Ok(r.into()),
@@ -79,7 +84,10 @@ impl WasmQuerier for Slay3rWasm {
 
     fn code(&self, code_id: u64) -> Result<CodeInfoResponse, Self::Error> {
         let app = self.tube.app.borrow();
-        let query = WasmQuery::CodeInfo { code_id, include_wasm: false };
+        let query = WasmQuery::CodeInfo {
+            code_id,
+            include_wasm: false,
+        };
         let res = app.query(query.into())?;
         let res = match res {
             QueryResponse::Wasm(WasmQueryResponse::CodeInfo(r)) => r.code_info,
