@@ -3,17 +3,11 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use cosmwasm_std::{coin, Addr, Coins};
-use cosmwasm_std::{Binary, Coin, Uint128};
+use abstract_cw_multi_test::AppResponse;
+use cosmwasm_std::{Addr, Binary, Coin};
 
 use cw_orch_core::contract::{interface_traits::Uploadable, WasmPath};
-use cw_orch_core::environment::{
-    BankQuerier, BankSetter, ChainInfo, ChainState, DefaultQueriers, NetworkInfo, QueryHandler,
-    StateInterface, TxHandler,
-};
-use cw_orch_core::CwEnvError;
-
-// use abstract_cw_multi_test::AppResponse;
+use cw_orch_core::environment::{BankSetter, ChainState, StateInterface, TxHandler};
 
 use crate::TestState;
 
@@ -36,7 +30,7 @@ impl<S: StateInterface> ChainState for Slay3rTube<S> {
 }
 
 impl<S: StateInterface> TxHandler for Slay3rTube<S> {
-    type Response = ();
+    type Response = AppResponse;
 
     type Error = slay3r_app::PulsarError;
 
@@ -45,10 +39,12 @@ impl<S: StateInterface> TxHandler for Slay3rTube<S> {
     type Sender = ();
 
     fn sender(&self) -> Addr {
-        self.sender.addr()
+        todo!()
     }
 
-    fn set_sender(&mut self, _sender: Self::Sender) {}
+    fn set_sender(&mut self, _sender: Self::Sender) {
+        todo!()
+    }
 
     /// Uploads a contract to the chain.
     fn upload<T: Uploadable>(&self, contract_source: &T) -> Result<Self::Response, Self::Error> {

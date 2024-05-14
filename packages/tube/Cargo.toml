@@ -10,7 +10,9 @@ description = "Like Osmosis Test Tube for Slay3r, implements CwEnv for cw-orch t
 
 [dependencies]
 cosmwasm-std = { workspace = true }
-cw-orch-core = { workspace = true, default-features = false}
+abstract-cw-multi-test = { workspace = true }
+
 serde = { workspace = true }
-anyhow = { workspace = true }
+cw-orch-core = { workspace = true }
+
 slay3r-app = { workspace = true }

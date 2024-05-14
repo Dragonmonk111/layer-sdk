@@ -13,8 +13,8 @@ use cosmwasm_std::{Addr, BlockInfo, Coin};
 
 use cw_orch_core::environment::EnvironmentInfo;
 use cw_orch_core::environment::{
-    BankQuerier, DefaultQueriers, EnvironmentQuerier, Querier, QuerierGetter, QueryHandler,
-    StateInterface,
+    BankQuerier, DefaultQueriers, EnvironmentQuerier, NodeQuerier, Querier, QuerierGetter,
+    QueryHandler, StateInterface, WasmQuerier,
 };
 
 use crate::Slay3rTube;
@@ -62,7 +62,7 @@ impl<S: StateInterface> QueryHandler for Slay3rTube<S> {
 
 impl<S: StateInterface> DefaultQueriers for Slay3rTube<S> {
     type Bank = Slay3rBank;
-    type Wasm = Slay3rWasm;
+    type Wasm = Slay3rWasm<S>;
     type Node = Slay3rNode;
 }
 
@@ -72,8 +72,8 @@ impl<S: StateInterface> QuerierGetter<Slay3rBank> for Slay3rTube<S> {
     }
 }
 
-impl<S: StateInterface> QuerierGetter<Slay3rWasm> for Slay3rTube<S> {
-    fn querier(&self) -> Slay3rWasm {
+impl<S: StateInterface> QuerierGetter<Slay3rWasm<S>> for Slay3rTube<S> {
+    fn querier(&self) -> Slay3rWasm<S> {
         todo!()
     }
 }

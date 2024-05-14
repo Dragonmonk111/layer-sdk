@@ -1,6 +1,6 @@
 use cosmwasm_std::Coin;
 
-use cw_orch_core::environment::{BankQuerier, BankSetter, Querier};
+use cw_orch_core::environment::{BankQuerier, Querier};
 
 pub struct Slay3rBank {}
 

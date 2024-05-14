@@ -1,4 +1,4 @@
-use cosmwasm_std::Coin;
+use abstract_cw_multi_test::AppResponse;
 
 use cw_orch_core::environment::{NodeQuerier, Querier};
 
@@ -10,7 +10,7 @@ impl Querier for Slay3rNode {
 
 impl NodeQuerier for Slay3rNode {
     // TODO: implement IndexResponse
-    type Response = ();
+    type Response = AppResponse;
 
     fn latest_block(&self) -> Result<cosmwasm_std::BlockInfo, Self::Error> {
         todo!()

@@ -1,20 +1,23 @@
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 
 use cosmwasm_std::{Binary, CodeInfoResponse, ContractInfoResponse, HexBinary};
 
 use cw_orch_core::contract::interface_traits::{ContractInstance, Uploadable};
-use cw_orch_core::environment::{Querier, WasmQuerier};
+use cw_orch_core::environment::{Querier, StateInterface, WasmQuerier};
 use cw_orch_core::CwEnvError;
 
-pub struct Slay3rWasm {}
+use crate::Slay3rTube;
 
-impl Querier for Slay3rWasm {
+pub struct Slay3rWasm<S: StateInterface> {
+    _store: std::marker::PhantomData<S>,
+}
+
+impl<S: StateInterface> Querier for Slay3rWasm<S> {
     type Error = slay3r_app::PulsarError;
 }
 
-impl WasmQuerier for Slay3rWasm {
-    type Chain = ();
+impl<S: StateInterface> WasmQuerier for Slay3rWasm<S> {
+    type Chain = Slay3rTube<S>;
 
     fn code_id_hash(&self, code_id: u64) -> Result<HexBinary, Self::Error> {
         todo!()

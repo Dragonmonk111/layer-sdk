@@ -284,7 +284,7 @@ dependencies = [
  "bitflags 2.5.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2630,7 +2630,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9554e3ab233f0a932403704f1a1d08c30d5ccd931adfdfa1e8b5a19b52c1d55a"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.60",
@@ -3353,11 +3353,13 @@ dependencies = [
 name = "slay3r-app"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "bytes",
  "cosmos-sdk-proto 0.18.0",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-vm",
+ "cw-orch-core",
  "cw-storage-plus",
  "cw-utils",
  "cw20",
@@ -3445,7 +3447,7 @@ dependencies = [
 name = "slay3r-tube"
 version = "0.2.0"
 dependencies = [
- "anyhow",
+ "abstract-cw-multi-test",
  "cosmwasm-std",
  "cw-orch-core",
  "serde",
