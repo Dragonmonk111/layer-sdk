@@ -234,7 +234,7 @@ impl Wasm {
                     &code.checksum,
                     &sender,
                     &salt,
-                    &[], // we consider fix_msg to always be false, this was cosmwasm-std decision
+                    b"", // we consider fix_msg to always be false, this was cosmwasm-std decision
                 )?;
                 return self.do_instantiate(
                     storage,

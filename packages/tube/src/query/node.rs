@@ -1,6 +1,8 @@
 use abstract_cw_multi_test::AppResponse;
 
+use cosmwasm_std::StdError;
 use cw_orch_core::environment::{NodeQuerier, Querier};
+use slay3r_std::{response::QueryResponse, Query, QueryError};
 
 use crate::Slay3rTube;
 
@@ -19,7 +21,6 @@ impl Querier for Slay3rNode {
 }
 
 impl NodeQuerier for Slay3rNode {
-    // TODO: implement IndexResponse
     type Response = AppResponse;
 
     fn latest_block(&self) -> Result<cosmwasm_std::BlockInfo, Self::Error> {
@@ -37,14 +38,29 @@ impl NodeQuerier for Slay3rNode {
     }
 
     fn simulate_tx(&self, tx_bytes: Vec<u8>) -> Result<u64, Self::Error> {
-        todo!()
+        let tx = slay3r_cosmos::parse_cosmos_tx(tx_bytes.into(), &self.tube.config.chain_id)
+            .map_err(|e| QueryError::ParseError(e.to_string()))?;
+        let query = Query::Simulate(tx);
+
+        let app: std::cell::Ref<slay3r_app::App<slay3r_storage::MemoryStore>> =
+            self.tube.app.borrow();
+        let res = app.query(query)?;
+        match res {
+            QueryResponse::Simulate(r) => {
+                // Return an error if execution failed
+                let _ = r.result?;
+                // Otherwise return gas used
+                Ok(r.gas.gas_used)
+            }
+            _ => Err(StdError::generic_err("unexpected response").into()),
+        }
     }
 
-    fn block_by_height(&self, height: u64) -> Result<cosmwasm_std::BlockInfo, Self::Error> {
+    fn block_by_height(&self, _height: u64) -> Result<cosmwasm_std::BlockInfo, Self::Error> {
         unimplemented!("Not supported")
     }
 
-    fn find_tx(&self, hash: String) -> Result<Self::Response, Self::Error> {
+    fn find_tx(&self, _hash: String) -> Result<Self::Response, Self::Error> {
         unimplemented!("Not supported")
     }
 }

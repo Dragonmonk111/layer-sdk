@@ -5,10 +5,10 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use abstract_cw_multi_test::AppResponse;
-use cosmwasm_std::{to_json_binary, Addr, Binary, BlockInfo, Coin};
+use cosmwasm_std::{to_json_binary, Addr, Binary, BlockInfo, Coin, StdError};
 
 use cw_orch_core::contract::{interface_traits::Uploadable, WasmPath};
-use cw_orch_core::environment::{ChainState, TxHandler};
+use cw_orch_core::environment::{ChainInfo, ChainKind, ChainState, NetworkInfo, TxHandler};
 
 use slay3r_app::{App, AppConfig, PulsarError, StateMachine};
 use slay3r_std::api::{Block, TxResult};
@@ -16,6 +16,22 @@ use slay3r_std::{AccountId, FeeInfo, Msg, SigningInfo, WasmMsg};
 use slay3r_storage::MemoryStore;
 
 use crate::OrchRegistry;
+
+/// Mock Chain info for osmosis test tube. This is used to get the right wasm
+pub const MOCK_CHAIN_INFO: ChainInfo = ChainInfo {
+    chain_id: "slay3r-orch",
+    gas_denom: "uslay",
+    gas_price: 0.025,
+    grpc_urls: &[],
+    lcd_url: None,
+    fcd_url: None,
+    network_info: NetworkInfo {
+        chain_name: "slay3r",
+        pub_address_prefix: "slay3r",
+        coin_type: 118u32,
+    },
+    kind: ChainKind::Local,
+};
 
 #[derive(Clone)]
 pub struct Slay3rTube {
@@ -35,14 +51,18 @@ pub struct TubeConfig {
     /// Default gas price
     pub gas_price: f64,
     pub gas_denom: String,
+    // Chain ID
+    pub chain_id: String,
 }
 
 impl Default for TubeConfig {
     fn default() -> Self {
+        // FIXME: can we configure this along with the MOCK_CHAIN_INFO somehow?
         Self {
-            block_time_ms: 2000,
-            gas_price: 0.025,
-            gas_denom: "uslay".to_string(),
+            block_time_ms: 2000, // used to update artifical clock when we move forward a block (1 block = 2 second)
+            gas_price: MOCK_CHAIN_INFO.gas_price,
+            gas_denom: MOCK_CHAIN_INFO.gas_denom.to_string(),
+            chain_id: MOCK_CHAIN_INFO.chain_id.to_string(),
         }
     }
 }
@@ -52,12 +72,13 @@ fn wrap<T>(val: T) -> Rc<RefCell<T>> {
 }
 
 impl Slay3rTube {
-    pub fn new(chain_id: &str, cache_dir: &str) -> Self {
+    pub fn new(cache_dir: &str) -> Self {
         let sm = StateMachine::new(&AppConfig::new(cache_dir));
         let app = App::new(MemoryStore::new(), sm);
         let config = TubeConfig::default();
         Self {
-            state: wrap(OrchRegistry::new(chain_id)),
+            // FIXME: make chain_id configurable?
+            state: wrap(OrchRegistry::new(MOCK_CHAIN_INFO.chain_id)),
             app: wrap(app),
             config,
         }
@@ -108,13 +129,13 @@ impl Slay3rTube {
     }
 
     // simple helper for the usual one msg/one tx case
-    fn build_tx(&self, msg: impl Into<Msg>, signer: AccountId) -> slay3r_std::Tx {
-        self.build_tx_multi(vec![msg.into()], signer)
+    pub(crate) fn prepare_tx(&self, msg: impl Into<Msg>, signer: AccountId) -> slay3r_std::Tx {
+        self.prepare_tx_multi(vec![msg.into()], signer)
     }
 
     // Use to create a valid "SignedTx" for the given account
     // TODO: implement, needs key material
-    fn build_tx_multi(&self, msgs: Vec<Msg>, signer: AccountId) -> slay3r_std::Tx {
+    pub(crate) fn prepare_tx_multi(&self, msgs: Vec<Msg>, signer: AccountId) -> slay3r_std::Tx {
         // query account info for the sequence
 
         // generate raw_tx bytes (via Debug?)
@@ -192,8 +213,21 @@ impl TxHandler for Slay3rTube {
     }
 
     /// Uploads a contract to the chain.
-    fn upload<T: Uploadable>(&self, contract_source: &T) -> Result<Self::Response, Self::Error> {
-        unimplemented!();
+    fn upload<T: Uploadable>(&self, _contract: &T) -> Result<Self::Response, Self::Error> {
+        let sender = AccountId::parse_string(self.sender().as_str())?;
+        let signer = sender.clone();
+
+        // load contract wasm
+        let file_res = std::fs::read(<T as Uploadable>::wasm(&MOCK_CHAIN_INFO.into()).path());
+        let code = file_res
+            .map_err(|e| StdError::generic_err(e.to_string()))?
+            .into();
+        let msg = WasmMsg::StoreCode { sender, code };
+
+        // sign it, run it, convert output
+        let tx = self.prepare_tx(msg, signer);
+        let res = self.run_block(vec![tx])?.pop().unwrap();
+        tx_to_app_response(res)
     }
 
     /// Send a InstantiateMsg to a contract.
@@ -223,7 +257,7 @@ impl TxHandler for Slay3rTube {
         };
 
         // sign it, run it, convert output
-        let tx = self.build_tx(msg, signer);
+        let tx = self.prepare_tx(msg, signer);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -256,7 +290,7 @@ impl TxHandler for Slay3rTube {
         };
 
         // sign it, run it, convert output
-        let tx = self.build_tx(msg, signer);
+        let tx = self.prepare_tx(msg, signer);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -280,7 +314,7 @@ impl TxHandler for Slay3rTube {
         };
 
         // sign it, run it, convert output
-        let tx = self.build_tx(msg, signer);
+        let tx = self.prepare_tx(msg, signer);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -304,7 +338,7 @@ impl TxHandler for Slay3rTube {
         };
 
         // sign it, run it, convert output
-        let tx = self.build_tx(msg, signer);
+        let tx = self.prepare_tx(msg, signer);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -321,7 +355,7 @@ impl TxHandler for Slay3rTube {
 fn tx_to_app_response(tx: TxResult<PulsarError>) -> Result<AppResponse, PulsarError> {
     // If the tx was a failure, also return error
     let res = tx.result?;
-    let events = res.events.into_iter().flat_map(|evs| evs).collect();
+    let events = res.events.into_iter().flatten().collect();
     let data = slay3r_cosmos::msg_data_to_proto(res.data);
 
     let output = AppResponse {

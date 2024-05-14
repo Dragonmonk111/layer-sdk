@@ -44,7 +44,7 @@ impl WasmQuerier for Slay3rWasm {
         let res = app.query(query.into())?;
         match res {
             QueryResponse::Wasm(WasmQueryResponse::ContractInfo(r)) => Ok(r.into()),
-            _ => return Err(StdError::generic_err("unexpected response").into()),
+            _ => Err(StdError::generic_err("unexpected response").into()),
         }
     }
 
@@ -62,7 +62,7 @@ impl WasmQuerier for Slay3rWasm {
         let res = app.query(query.into())?;
         match res {
             QueryResponse::Wasm(WasmQueryResponse::Raw(r)) => Ok(r.into()),
-            _ => return Err(StdError::generic_err("unexpected response").into()),
+            _ => Err(StdError::generic_err("unexpected response").into()),
         }
     }
 
@@ -71,14 +71,15 @@ impl WasmQuerier for Slay3rWasm {
         address: impl Into<String>,
         query_msg: &Q,
     ) -> Result<T, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app: std::cell::Ref<slay3r_app::App<slay3r_storage::MemoryStore>> =
+            self.tube.app.borrow();
         let contract_addr = AccountId::parse_string(&address.into())?;
         let msg = to_json_binary(query_msg)?;
         let query = WasmQuery::Smart { contract_addr, msg };
         let res = app.query(query.into())?;
         match res {
-            QueryResponse::Wasm(WasmQueryResponse::Smart(r)) => Ok(from_json(&r)?),
-            _ => return Err(StdError::generic_err("unexpected response").into()),
+            QueryResponse::Wasm(WasmQueryResponse::Smart(r)) => Ok(from_json(r)?),
+            _ => Err(StdError::generic_err("unexpected response").into()),
         }
     }
 
@@ -100,9 +101,9 @@ impl WasmQuerier for Slay3rWasm {
     /// Returns the checksum of the WASM file if the env supports it. Will re-upload every time if not supported.
     fn local_hash<T: Uploadable + ContractInstance<Self::Chain>>(
         &self,
-        contract: &T,
+        _contract: &T,
     ) -> Result<HexBinary, CwEnvError> {
-        todo!()
+        <T as Uploadable>::wasm(&crate::core::MOCK_CHAIN_INFO.into()).checksum()
     }
 
     fn instantiate2_addr(
@@ -111,6 +112,14 @@ impl WasmQuerier for Slay3rWasm {
         creator: impl Into<String>,
         salt: Binary,
     ) -> Result<String, Self::Error> {
-        todo!()
+        // load code hash / checksum from the chain
+        let checksum: Binary = self.code(code_id)?.checksum.into();
+        let creator = AccountId::parse_string(&creator.into())?;
+        // Note: implementation ignores message part:
+        // https://github.com/CosmWasm/cosmwasm/blob/v1.5.5/packages/std/src/addresses.rs#L349-L358
+        // https://medium.com/cosmwasm/dev-note-3-limitations-of-instantiate2-and-how-to-deal-with-them-a3f946874230
+        // Slay3r also does this inside WasmKeeper::process_msg (WasmMsg::Instantiate2 branch)
+        let addr = slay3r_app::build_instantiate_2_address(&checksum, &creator, &salt, b"")?;
+        Ok(addr.to_string())
     }
 }
