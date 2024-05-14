@@ -156,7 +156,7 @@ impl<'a> Prefixer<'a> for AccountId {
 }
 
 impl KeyDeserialize for AccountId {
-    const KEY_ELEMS: u16 = 1;
+    // const KEY_ELEMS: u16 = 1;
     type Output = AccountId;
 
     #[inline(always)]
@@ -166,7 +166,7 @@ impl KeyDeserialize for AccountId {
 }
 
 impl KeyDeserialize for &AccountId {
-    const KEY_ELEMS: u16 = 1;
+    // const KEY_ELEMS: u16 = 1;
     type Output = AccountId;
 
     #[inline(always)]

@@ -1,9 +1,10 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Checksum, Coin, CosmosMsg, Empty, Env, MessageInfo, Order,
-    Reply, ReplyOn, SubMsg, SubMsgResponse,
+    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Order, Reply,
+    ReplyOn, SubMsg, SubMsgResponse,
 };
-use cosmwasm_vm::VmError;
+// 2.0: use cosmwasm_std::Checksum
+use cosmwasm_vm::{Checksum, VmError};
 
 use cw_storage_plus::Bound;
 use slay3r_std::api::MsgResponse;
@@ -78,7 +79,7 @@ pub struct CodeInfo {
     /// The address that initially stored the code
     pub creator: AccountId,
     /// The hash of the Wasm blob
-    pub checksum: Checksum,
+    pub checksum: Binary,
     /// If it is pinned or not
     pub pinned: bool,
 }
@@ -91,7 +92,11 @@ impl CodeInfo {
         } else {
             meter.charge(LOAD_WASM_GAS)?;
         }
-        Ok(self.checksum)
+        Ok(self.get_checksum_not_executing())
+    }
+    /// Use this is you need Checksum to interact with the cache, but not run wasmer vm, like pin/unpin
+    fn get_checksum_not_executing(&self) -> Checksum {
+        Checksum::try_from(self.checksum.as_slice()).unwrap()
     }
 }
 
@@ -174,7 +179,7 @@ impl Wasm {
                 let (checksum, analysis) = self.cache.store_code(&code).map_err(map_vm_error)?;
                 let info = CodeInfo {
                     creator: sender,
-                    checksum,
+                    checksum: Vec::<u8>::from(checksum).into(),
                     pinned: false,
                 };
                 let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
@@ -444,7 +449,9 @@ impl Wasm {
                 if !code.pinned {
                     code.pinned = true;
                     self.save_code(storage, meter, code_id, &code)?;
-                    self.cache.pin(&code.checksum).map_err(map_vm_error)?;
+                    self.cache
+                        .pin(&code.get_checksum_not_executing())
+                        .map_err(map_vm_error)?;
                     PINNED.save(
                         &mut prefixed(storage, NAMESPACE_WASM),
                         meter,
@@ -466,7 +473,9 @@ impl Wasm {
                 if code.pinned {
                     code.pinned = false;
                     self.save_code(storage, meter, code_id, &code)?;
-                    self.cache.unpin(&code.checksum).map_err(map_vm_error)?;
+                    self.cache
+                        .unpin(&code.get_checksum_not_executing())
+                        .map_err(map_vm_error)?;
                     PINNED.remove(&mut prefixed(storage, NAMESPACE_WASM), meter, code_id)?;
                 }
                 // add events
@@ -604,18 +613,19 @@ impl Wasm {
                         // append events to parent response (only on success)
                         parent_response.events.extend(res.events.clone());
                         // and prepare a response value to call the contract with both (1.x) data and (2.x) msg_responses
-                        let (type_url, value) = encode_cosmwasm_response(res.data);
+                        let (_type_url, value) = encode_cosmwasm_response(res.data);
                         #[allow(deprecated)]
                         let data = maybe_binary(value.clone());
-                        let msg_response = cosmwasm_std::MsgResponse {
-                            type_url: type_url.to_string(),
-                            value: value.into(),
-                        };
+                        // 2.0:
+                        // let msg_response = cosmwasm_std::MsgResponse {
+                        //     type_url: type_url.to_string(),
+                        //     value: value.into(),
+                        // };
                         #[allow(deprecated)]
                         Ok(SubMsgResponse {
                             events: res.events,
                             data,
-                            msg_responses: vec![msg_response],
+                            // msg_responses: vec![msg_response],
                         })
                     }
                     Err(err) => Err(err.to_string()),
@@ -623,8 +633,9 @@ impl Wasm {
                 let reply = Reply {
                     id: msg.id,
                     result: result.into(),
-                    gas_used,
-                    payload: msg.payload,
+                    // 2.0:
+                    // gas_used,
+                    // payload: msg.payload,
                 };
 
                 // call the reply entry point
@@ -728,7 +739,7 @@ impl Wasm {
                     checksum,
                     pinned,
                 } = self.load_code(storage, meter, code_id)?;
-                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_checksum_error)?;
+                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_vm_error)?;
                 let data = if include_wasm {
                     self.cache.load_code(&hash).map_err(map_vm_error)?
                 } else {
@@ -879,9 +890,10 @@ fn map_vm_error(err: VmError) -> PulsarError {
     }
 }
 
-fn map_checksum_error(_: cosmwasm_std::ChecksumError) -> PulsarError {
-    PulsarError::Wasm(WasmError::Checksum)
-}
+// 2.0:
+// fn map_checksum_error(_: cosmwasm_std::ChecksumError) -> PulsarError {
+//     PulsarError::Wasm(WasmError::Checksum)
+// }
 
 fn map_contract_error(err: String) -> PulsarError {
     WasmError::Contract(err).into()

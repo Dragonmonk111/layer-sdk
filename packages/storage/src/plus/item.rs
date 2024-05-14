@@ -239,6 +239,8 @@ mod test {
         let output = CONFIG.update(&mut store, meter, |_c| {
             Err(PlusError::Std(StdError::overflow(OverflowError::new(
                 OverflowOperation::Sub,
+                4,
+                7,
             ))))
         });
         match output.unwrap_err() {

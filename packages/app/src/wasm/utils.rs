@@ -1,4 +1,3 @@
-use cosmwasm_std::Checksum;
 use sha2::{
     digest::{Digest, Update},
     Sha256,
@@ -10,6 +9,9 @@ use slay3r_std::AccountId;
 use crate::PulsarError;
 
 use super::WasmError;
+
+// 2.0: use cosmwasm_std::Checksum
+type Checksum = cosmwasm_std::Binary;
 
 pub fn build_instantiate_address(
     sender: &[u8],
@@ -37,13 +39,16 @@ pub fn build_instantiate_2_address(
     salt: &[u8],
     msg: &[u8],
 ) -> Result<AccountId, PulsarError> {
+    if checksum.len() != 32 {
+        return Err(Instantiate2AddressError::InvalidChecksumLength.into());
+    }
     if salt.is_empty() || salt.len() > 64 {
         return Err(Instantiate2AddressError::InvalidSaltLength.into());
     };
 
     let mut key = Vec::<u8>::new();
     key.extend_from_slice(b"wasm\0");
-    // Fixed length from Checksum type
+    // Fixed length from Checksum type (checked above)
     key.extend_from_slice(&(32u64).to_be_bytes());
     key.extend_from_slice(checksum.as_slice());
     key.extend_from_slice(&(creator.len() as u64).to_be_bytes());
@@ -95,8 +100,7 @@ mod tests {
     #[test]
     fn build_instantiate_2_address_works() {
         let checksum1 =
-            Checksum::from_hex("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5")
-                .unwrap();
+            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5").into();
         let creator1 = AccountId::new(&hex!("9999999999aaaaaaaaaabbbbbbbbbbcccccccccc")).unwrap();
         let salt1 = hex!("61");
         let salt2 = hex!("aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbbbcc221100acadae");
@@ -160,14 +164,40 @@ mod tests {
             ))
         ));
 
-        // invalid checksum length won't even make a Checksum
-        let _ =
-            Checksum::from_hex("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2")
-                .unwrap_err();
-        let _ = Checksum::from_hex("").unwrap_err();
-        let _ = Checksum::from_hex(
-            "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa",
-        )
-        .unwrap_err();
+        // invalid checksum length
+        let broken_cs =
+            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2").into();
+        assert!(matches!(
+            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidChecksumLength
+            ))
+        ));
+        let broken_cs = hex!("").into();
+        assert!(matches!(
+            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidChecksumLength
+            ))
+        ));
+        let broken_cs =
+            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa").into();
+        assert!(matches!(
+            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
+            PulsarError::Wasm(WasmError::Instantiate2Error(
+                Instantiate2AddressError::InvalidChecksumLength
+            ))
+        ));
+
+        // 2.0
+        // // invalid checksum length won't even make a Checksum
+        // let _ =
+        //     Checksum::from_hex("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2")
+        //         .unwrap_err();
+        // let _ = Checksum::from_hex("").unwrap_err();
+        // let _ = Checksum::from_hex(
+        //     "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa",
+        // )
+        // .unwrap_err();
     }
 }

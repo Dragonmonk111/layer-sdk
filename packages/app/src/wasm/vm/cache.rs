@@ -1,9 +1,9 @@
 use std::{collections::HashSet, fmt};
 
-use cosmwasm_std::{Binary, Checksum, Empty, Env, MessageInfo, Reply, Response};
+use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Reply, Response};
 use cosmwasm_vm::{
     call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
-    AnalysisReport, Cache, CacheOptions, InstanceOptions, Size, VmError,
+    AnalysisReport, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
 };
 use slay3r_std::{AccountId, GasMeter};
 use slay3r_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
@@ -14,7 +14,6 @@ use super::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
-// const CAPABILITIES: &[&str] = &["iterator", "staking"];
 const CAPABILITIES: &[&str] = &[
     "iterator",
     "staking",
@@ -23,13 +22,15 @@ const CAPABILITIES: &[&str] = &[
     "cosmwasm_1_2",
     "cosmwasm_1_3",
     "cosmwasm_1_4",
-    "cosmwasm_2_0",
+    // 2.0:
+    // "cosmwasm_2_0",
 ];
 const PRINT_DEBUG: bool = false;
 
 // TODO: what is this really?
 // Changed by 1000 in 2.0 upgrade: https://github.com/CosmWasm/cosmwasm/pull/1884
-const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000;
+// 2.0: down to 150_000
+const SDK_TO_WASMER_GAS_FACTOR: u64 = 150_000_000;
 
 pub fn sdk_gas_to_wasmer(gas: u64) -> u64 {
     gas.saturating_mul(SDK_TO_WASMER_GAS_FACTOR)
@@ -104,7 +105,10 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions { gas_limit };
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();
@@ -154,7 +158,10 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions { gas_limit };
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();
@@ -203,7 +210,10 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions { gas_limit };
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();
@@ -252,7 +262,10 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions { gas_limit };
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();
@@ -301,7 +314,10 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions { gas_limit };
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let query = global_storage.as_ref();
@@ -350,7 +366,10 @@ impl VmCache {
         sm: &StateMachine,
     ) -> (Result<Result<Binary, String>, VmError>, u64) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
-        let options = InstanceOptions { gas_limit };
+        let options = InstanceOptions {
+            gas_limit,
+            print_debug: self.print_debug,
+        };
 
         // Create WeakSubTx that only holds readable access, so we can query underlying storage as contract is working
         let mut scratch = ScratchTx::new(global_storage);
