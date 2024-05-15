@@ -5,7 +5,9 @@ use bip32::{DerivationPath, Mnemonic, PrivateKey, XPrv};
 use k256::ecdsa::{signature::hazmat::PrehashSigner, Signature, SigningKey};
 use slay3r_std::AccountId;
 
-#[derive(Clone)]
+use super::core::MOCK_CHAIN_INFO;
+
+#[derive(Clone, Debug)]
 pub struct KeyConfig {
     pub address_prefix: String,
     pub coin_type: u32,
@@ -14,8 +16,8 @@ pub struct KeyConfig {
 impl Default for KeyConfig {
     fn default() -> Self {
         Self {
-            address_prefix: "slay3r".into(),
-            coin_type: 118u32,
+            address_prefix: MOCK_CHAIN_INFO.network_info.pub_address_prefix.into(),
+            coin_type: MOCK_CHAIN_INFO.network_info.coin_type,
         }
     }
 }

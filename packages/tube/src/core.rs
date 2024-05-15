@@ -1,8 +1,10 @@
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use slay3r_app::genesis::{BankAccount, GenesisState, WasmParams};
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use abstract_cw_multi_test::AppResponse;
 use cosmwasm_std::{to_json_binary, Addr, Binary, BlockInfo, Coin, StdError};
@@ -11,8 +13,8 @@ use cw_orch_core::contract::{interface_traits::Uploadable, WasmPath};
 use cw_orch_core::environment::{ChainInfo, ChainKind, ChainState, NetworkInfo, TxHandler};
 
 use slay3r_app::{App, AppConfig, PulsarError, StateMachine};
-use slay3r_std::api::{Block, TxResult};
-use slay3r_std::{AccountId, FeeInfo, Msg, SigningInfo, WasmMsg};
+use slay3r_std::api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate};
+use slay3r_std::{AccountId, FeeInfo, Msg, SigningInfo, Timestamp, WasmMsg};
 use slay3r_storage::MemoryStore;
 
 use crate::{DerivedKey, OrchRegistry};
@@ -72,17 +74,58 @@ fn wrap<T>(val: T) -> Rc<RefCell<T>> {
 }
 
 impl Slay3rTube {
-    pub fn new(cache_dir: &str, signer: DerivedKey) -> Self {
+    pub(crate) fn new(cache_dir: &str, signer: DerivedKey) -> Self {
         let sm = StateMachine::new(&AppConfig::new(cache_dir));
         let app = App::new(MemoryStore::new(), sm);
         let config = TubeConfig::default();
-        Self {
+        let output = Self {
             signer: Rc::new(signer),
-            // FIXME: make chain_id configurable?
             state: wrap(OrchRegistry::new(MOCK_CHAIN_INFO.chain_id)),
             app: wrap(app),
             config,
+        };
+        // FIXME: allow configuring genesis
+        output.init();
+        output
+    }
+
+    fn build_genesis(&self) -> GenesisState {
+        let init_balance = vec![Coin {
+            denom: self.config.gas_denom.clone(),
+            amount: 2_000_000_000u128.into(),
+        }];
+        // first 20 derived accounts have some tokens
+        let accounts = (0..20)
+            .map(|i| BankAccount {
+                address: self.signer.with_index(i).account().to_string(),
+                balance: init_balance.clone(),
+            })
+            .collect();
+        GenesisState {
+            bank: accounts,
+            wasm: WasmParams {
+                gov_account: self.account().to_string(),
+            },
         }
+    }
+
+    // FIXME: allow configuring genesis
+    fn init(&self) {
+        let genesis = self.build_genesis();
+        let app_state = to_json_binary(&genesis).unwrap();
+        let request = InitChainRequest {
+            time: Timestamp::from_seconds(seconds_since_epoch()), // current time
+            chain_id: self.config.chain_id.clone(),
+            consensus_params: Default::default(),
+            // TODO: something real (whole mock validator story needs revisiting when we do staking)
+            validators: vec![ValidatorUpdate {
+                pub_key: TmPubKey::Ed25519(vec![123u8; 32]),
+                power: 1_000_000,
+            }],
+            app_state,
+            initial_height: 1,
+        };
+        self.app.borrow_mut().init(request).unwrap();
     }
 
     // This clones the daemon but uses a different index for the key
@@ -95,27 +138,6 @@ impl Slay3rTube {
     fn account(&self) -> AccountId {
         self.signer.account()
     }
-
-    // TODO: init
-    // {
-    //     let genesis = GenesisState {
-    //         bank: vec![BankAccount {
-    //             address: sender.to_string(),
-    //             balance: coins(2_000_000_000, denom),
-    //         }],
-    //         wasm: WasmParams {
-    //             gov_account: sender.to_string(),
-    //         },
-    //     };
-    //     // TODO: remove from App args, build inside (with config)
-    //     let logic = StateMachine::new(&AppConfig::new("/tmp/slay3r/transaction_workflow"));
-    //     let request = mock_init(&genesis);
-
-    //     // create the app
-    //     let mut app = App::new(storage, logic);
-    //     app.init(request).unwrap();
-
-    // }
 
     pub fn run_block(
         &self,
@@ -146,17 +168,11 @@ impl Slay3rTube {
     }
 
     // Use to create a valid "SignedTx" for the given account
-    // TODO: implement, needs key material
     pub(crate) fn prepare_tx_multi(
         &self,
         msgs: Vec<Msg>,
         gas_limit: Option<u64>,
     ) -> slay3r_std::Tx {
-        // query account info for the sequence
-
-        // generate raw_tx bytes (via Debug?)
-        // generate message hash
-
         // FIXME: simulate gas fees? (right now hardcoded)
         let gas_limit = gas_limit.unwrap_or(50_000_000u64);
         let gas_amount = (gas_limit as f64 * self.config.gas_price) as u128;
@@ -198,8 +214,6 @@ impl Slay3rTube {
 
         slay3r_std::Tx::Signed(tx)
     }
-
-    // TODO: more init stuff
 }
 
 impl ChainState for Slay3rTube {
@@ -368,4 +382,11 @@ fn tx_to_app_response(tx: TxResult<PulsarError>) -> Result<AppResponse, PulsarEr
         events,
     };
     Ok(output)
+}
+
+fn seconds_since_epoch() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
