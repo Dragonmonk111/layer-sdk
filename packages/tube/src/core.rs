@@ -15,7 +15,7 @@ use slay3r_std::api::{Block, TxResult};
 use slay3r_std::{AccountId, FeeInfo, Msg, SigningInfo, WasmMsg};
 use slay3r_storage::MemoryStore;
 
-use crate::OrchRegistry;
+use crate::{DerivedKey, OrchRegistry};
 
 /// Mock Chain info for osmosis test tube. This is used to get the right wasm
 pub const MOCK_CHAIN_INFO: ChainInfo = ChainInfo {
@@ -35,13 +35,13 @@ pub const MOCK_CHAIN_INFO: ChainInfo = ChainInfo {
 
 #[derive(Clone)]
 pub struct Slay3rTube {
-    pub config: TubeConfig,
-    /// Address used for the operations.
-    // pub sender: Rc<SigningAccount>,
+    pub(crate) config: TubeConfig,
+    /// Key used for the operations.
+    pub(crate) signer: Rc<DerivedKey>,
     /// Inner mutable state storage for contract addresses and code-ids
-    pub state: Rc<RefCell<OrchRegistry>>,
+    pub(crate) state: Rc<RefCell<OrchRegistry>>,
     // Inner mutable app backend
-    pub app: Rc<RefCell<App<MemoryStore>>>,
+    pub(crate) app: Rc<RefCell<App<MemoryStore>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,16 +72,28 @@ fn wrap<T>(val: T) -> Rc<RefCell<T>> {
 }
 
 impl Slay3rTube {
-    pub fn new(cache_dir: &str) -> Self {
+    pub fn new(cache_dir: &str, signer: DerivedKey) -> Self {
         let sm = StateMachine::new(&AppConfig::new(cache_dir));
         let app = App::new(MemoryStore::new(), sm);
         let config = TubeConfig::default();
         Self {
+            signer: Rc::new(signer),
             // FIXME: make chain_id configurable?
             state: wrap(OrchRegistry::new(MOCK_CHAIN_INFO.chain_id)),
             app: wrap(app),
             config,
         }
+    }
+
+    // This clones the daemon but uses a different index for the key
+    pub fn with_index(&self, index: u32) -> Self {
+        let mut out = self.clone();
+        out.signer = self.signer.with_index(index).into();
+        out
+    }
+
+    fn account(&self) -> AccountId {
+        self.signer.account()
     }
 
     // TODO: init
@@ -129,20 +141,24 @@ impl Slay3rTube {
     }
 
     // simple helper for the usual one msg/one tx case
-    pub(crate) fn prepare_tx(&self, msg: impl Into<Msg>, signer: AccountId) -> slay3r_std::Tx {
-        self.prepare_tx_multi(vec![msg.into()], signer)
+    pub(crate) fn prepare_tx(&self, msg: impl Into<Msg>, gas_limit: Option<u64>) -> slay3r_std::Tx {
+        self.prepare_tx_multi(vec![msg.into()], gas_limit)
     }
 
     // Use to create a valid "SignedTx" for the given account
     // TODO: implement, needs key material
-    pub(crate) fn prepare_tx_multi(&self, msgs: Vec<Msg>, signer: AccountId) -> slay3r_std::Tx {
+    pub(crate) fn prepare_tx_multi(
+        &self,
+        msgs: Vec<Msg>,
+        gas_limit: Option<u64>,
+    ) -> slay3r_std::Tx {
         // query account info for the sequence
 
         // generate raw_tx bytes (via Debug?)
         // generate message hash
 
         // FIXME: simulate gas fees? (right now hardcoded)
-        let gas_limit = 50_000_000u64;
+        let gas_limit = gas_limit.unwrap_or(50_000_000u64);
         let gas_amount = (gas_limit as f64 * self.config.gas_price) as u128;
         let fee = FeeInfo {
             fee: Some(Coin {
@@ -154,8 +170,8 @@ impl Slay3rTube {
 
         // placeholder for signing info
         let signing_info = SigningInfo {
-            sequence: 0,  // TODO: query this
-            pubkey: None, // TODO: get this from signer
+            sequence: 0, // TODO: query this
+            pubkey: Some(self.signer.pub_key()),
             // these intentionally left blank
             signature: Binary::from(b""),
             message_hash: Binary::from(b""),
@@ -164,18 +180,17 @@ impl Slay3rTube {
         // make tx with no real signing info
         let mut tx = slay3r_std::SignedTx {
             msgs,
-            signer, // AccountId
+            signer: self.signer.account(),
             fee,
             timeout_height: None,
             signing_info,
             raw_tx: vec![].into(),
         };
 
-        // generate bytes from debug info, then hash
+        // generate bytes from debug info, then hash and sign
         let tx_bytes = format!("{:?}", tx).into_bytes();
         let message_hash = Sha256::digest(&tx_bytes).to_vec();
-        // TODO: make signature
-        let signature = vec![];
+        let signature = self.signer.sign_prehash(&message_hash);
 
         tx.raw_tx = tx_bytes.into();
         tx.signing_info.message_hash = message_hash.into();
@@ -202,21 +217,19 @@ impl TxHandler for Slay3rTube {
 
     type ContractSource = WasmPath;
 
-    type Sender = ();
+    type Sender = DerivedKey;
 
     fn sender(&self) -> Addr {
-        todo!()
+        self.account().into()
     }
 
-    fn set_sender(&mut self, _sender: Self::Sender) {
-        todo!()
+    fn set_sender(&mut self, sender: Self::Sender) {
+        self.signer = Rc::new(sender);
     }
 
     /// Uploads a contract to the chain.
     fn upload<T: Uploadable>(&self, _contract: &T) -> Result<Self::Response, Self::Error> {
-        let sender = AccountId::parse_string(self.sender().as_str())?;
-        let signer = sender.clone();
-
+        let sender = self.account();
         // load contract wasm
         let file_res = std::fs::read(<T as Uploadable>::wasm(&MOCK_CHAIN_INFO.into()).path());
         let code = file_res
@@ -225,7 +238,7 @@ impl TxHandler for Slay3rTube {
         let msg = WasmMsg::StoreCode { sender, code };
 
         // sign it, run it, convert output
-        let tx = self.prepare_tx(msg, signer);
+        let tx = self.prepare_tx(msg, None);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -240,15 +253,13 @@ impl TxHandler for Slay3rTube {
         coins: &[cosmwasm_std::Coin],
     ) -> Result<Self::Response, Self::Error> {
         // construct message format
-        let sender = AccountId::parse_string(self.sender().as_str())?;
-        let signer = sender.clone();
         let admin = admin
             .map(|a| AccountId::parse_string(a.as_str()))
             .transpose()?;
         let label = label.unwrap_or("default").to_string();
         let msg = to_json_binary(init_msg)?;
         let msg = WasmMsg::Instantiate {
-            sender,
+            sender: self.account(),
             admin,
             code_id,
             msg,
@@ -257,7 +268,7 @@ impl TxHandler for Slay3rTube {
         };
 
         // sign it, run it, convert output
-        let tx = self.prepare_tx(msg, signer);
+        let tx = self.prepare_tx(msg, None);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -272,15 +283,13 @@ impl TxHandler for Slay3rTube {
         coins: &[cosmwasm_std::Coin],
         salt: Binary,
     ) -> Result<Self::Response, Self::Error> {
-        let sender = AccountId::parse_string(self.sender().as_str())?;
-        let signer = sender.clone();
         let admin = admin
             .map(|a| AccountId::parse_string(a.as_str()))
             .transpose()?;
         let label = label.unwrap_or("default").to_string();
         let msg = to_json_binary(init_msg)?;
         let msg = WasmMsg::Instantiate2 {
-            sender,
+            sender: self.account(),
             admin,
             code_id,
             msg,
@@ -290,7 +299,7 @@ impl TxHandler for Slay3rTube {
         };
 
         // sign it, run it, convert output
-        let tx = self.prepare_tx(msg, signer);
+        let tx = self.prepare_tx(msg, None);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -302,19 +311,17 @@ impl TxHandler for Slay3rTube {
         coins: &[Coin],
         contract_address: &Addr,
     ) -> Result<Self::Response, Self::Error> {
-        let sender = AccountId::parse_string(self.sender().as_str())?;
-        let signer = sender.clone();
         let contract_addr = AccountId::parse_string(contract_address.as_str())?;
         let msg = to_json_binary(exec_msg)?;
         let msg = WasmMsg::Execute {
-            sender,
+            sender: self.account(),
             contract_addr,
             msg,
             funds: coins.into(),
         };
 
         // sign it, run it, convert output
-        let tx = self.prepare_tx(msg, signer);
+        let tx = self.prepare_tx(msg, None);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }
@@ -326,19 +333,17 @@ impl TxHandler for Slay3rTube {
         new_code_id: u64,
         contract_address: &Addr,
     ) -> Result<Self::Response, Self::Error> {
-        let sender = AccountId::parse_string(self.sender().as_str())?;
-        let signer = sender.clone();
         let contract_addr = AccountId::parse_string(contract_address.as_str())?;
         let msg = to_json_binary(migrate_msg)?;
         let msg = WasmMsg::Migrate {
-            sender,
+            sender: self.account(),
             contract_addr,
             new_code_id,
             msg,
         };
 
         // sign it, run it, convert output
-        let tx = self.prepare_tx(msg, signer);
+        let tx = self.prepare_tx(msg, None);
         let res = self.run_block(vec![tx])?.pop().unwrap();
         tx_to_app_response(res)
     }

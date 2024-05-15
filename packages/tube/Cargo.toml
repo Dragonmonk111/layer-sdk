@@ -20,3 +20,8 @@ slay3r-app = { workspace = true }
 slay3r-cosmos = { workspace = true }
 slay3r-std = { workspace = true }
 slay3r-storage = { workspace = true }
+
+# crypto stuff (from cosmrs... not sure if we need to be so strict
+k256 = { version = "0.13", features = ["ecdsa", "sha256"], default-features = false}
+ecdsa = { version = "0.16" }
+bip32 = { versiomn = "0.5"}
