@@ -136,6 +136,30 @@ pub enum AccountResponse {
     },
 }
 
+impl AccountResponse {
+    pub fn address(&self) -> &AccountId {
+        match self {
+            AccountResponse::External { address, .. } => address,
+            AccountResponse::Internal { address } => address,
+            AccountResponse::Smart { address, .. } => address,
+        }
+    }
+
+    /// Gets sequence if an external account, panics otherwise
+    pub fn external_sequence(&self) -> u64 {
+        match self {
+            AccountResponse::External { sequence, .. } => *sequence,
+            AccountResponse::Internal { .. } => panic!("internal account has no sequence"),
+            AccountResponse::Smart { .. } => panic!("smart account has no sequence"),
+        }
+    }
+
+    /// Returns true iff this is an external account
+    pub fn is_external(&self) -> bool {
+        matches!(self, AccountResponse::External { .. })
+    }
+}
+
 impl<E: Err> From<AccountResponse> for QueryResponse<E> {
     fn from(value: AccountResponse) -> Self {
         AuthQueryResponse::Account(value).into()
@@ -258,6 +282,18 @@ pub struct ContractInfoResponse {
 
     /// blockchain height when contract was first created
     pub created: u64,
+}
+
+impl From<ContractInfoResponse> for cosmwasm_std::ContractInfoResponse {
+    fn from(value: ContractInfoResponse) -> Self {
+        let mut res = cosmwasm_std::ContractInfoResponse::default();
+        res.code_id = value.code_id;
+        res.creator = value.creator.to_string();
+        res.admin = value.admin.map(|a| a.to_string());
+        res.pinned = value.pinned;
+        res.ibc_port = value.ibc_port;
+        res
+    }
 }
 
 /// The essential data from wasmd's [CodeInfo]/[CodeInfoResponse].

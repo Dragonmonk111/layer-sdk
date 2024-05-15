@@ -28,6 +28,9 @@ cosmwasm-vm = { workspace = true }
 # needed just for the responses for the messages - proto-encoded, maybe we can pull this out to just a few structs
 cosmos-sdk-proto = { workspace = true }
 
+cw-orch-core = { workspace = true }
+anyhow = { workspace = true }
+
 [dev-dependencies]
 hex-literal = { workspace = true }
 cw20-base = { version = "1" }

@@ -53,3 +53,9 @@ impl From<PlusError> for PulsarError {
         }
     }
 }
+
+impl From<PulsarError> for cw_orch_core::CwEnvError {
+    fn from(value: PulsarError) -> Self {
+        anyhow::Error::new(value).into()
+    }
+}
