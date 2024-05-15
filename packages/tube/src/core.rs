@@ -413,10 +413,16 @@ fn seconds_since_epoch() -> u64 {
 mod tests {
     // use super::*;
 
-    use cosmwasm_std::coins;
+    use cosmwasm_std::{coins, Uint128};
     use cw_orch_core::environment::{BankQuerier, DefaultQueriers, TxHandler};
 
     use crate::Slay3rTubeBuilder;
+
+    // for testing contract uploads... let's see if we can limit so many dependencies...
+    use abstract_cw20::{msg::Cw20ExecuteMsgFns, Cw20Coin};
+    use abstract_cw20_base::msg::{InstantiateMsg as CW20InstantiateMsg, QueryMsgFns};
+    use abstract_cw_plus_interface::cw20_base::Cw20Base;
+    use cw_orch_core::contract::interface_traits::{CwOrchInstantiate, CwOrchUpload};
 
     #[test]
     fn chain_supports_bank() {
@@ -454,5 +460,43 @@ mod tests {
         chain
             .send_tokens(&recipient, coins(to_send, "uslay"))
             .unwrap();
+    }
+
+    #[test]
+    fn chain_supports_wasm_contract() {
+        let chain = Slay3rTubeBuilder::new().build();
+        let sender = chain.sender();
+        let recipient = chain.with_index(2).sender();
+        let init_amount = Uint128::new(55_000_000);
+
+        // why do we need contract id here and not on the task contract?
+        let cw20 = Cw20Base::new("my-cw20-base", chain);
+        cw20.upload().unwrap();
+        let msg = CW20InstantiateMsg {
+            name: "slay3r gov token".into(),
+            symbol: "SLAY".into(),
+            decimals: 6,
+            initial_balances: vec![Cw20Coin {
+                address: sender.to_string(),
+                amount: init_amount,
+            }],
+            mint: None,
+            marketing: None,
+        };
+        cw20.instantiate(&msg, None, None).unwrap();
+
+        // let's try to query the balance
+        let balance = cw20.balance(sender.to_string()).unwrap();
+        assert_eq!(balance.balance, init_amount);
+
+        // let's try to transfer the balance
+        let amount = Uint128::new(1_000_000);
+        cw20.transfer(amount, recipient.to_string()).unwrap();
+
+        // and ensure sender and recipient have properly updated balances
+        let sb = cw20.balance(sender.into()).unwrap();
+        assert_eq!(sb.balance, init_amount - amount);
+        let rb = cw20.balance(recipient.into()).unwrap();
+        assert_eq!(rb.balance, amount);
     }
 }
