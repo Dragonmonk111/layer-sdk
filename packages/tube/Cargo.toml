@@ -24,4 +24,4 @@ slay3r-storage = { workspace = true }
 # crypto stuff (from cosmrs... not sure if we need to be so strict
 k256 = { version = "0.13", features = ["ecdsa", "sha256"], default-features = false}
 ecdsa = { version = "0.16" }
-bip32 = { versiomn = "0.5"}
+bip32 = { version = "0.5"}

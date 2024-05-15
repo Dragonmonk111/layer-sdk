@@ -66,8 +66,7 @@ impl DerivedKey {
 
     pub fn pub_key(&self) -> slay3r_std::PubKey {
         let pk = self.key.public_key();
-        // don't compress for cosmos style...
-        let raw_point = pk.to_encoded_point(false);
+        let raw_point = pk.to_encoded_point(true);
         slay3r_std::PubKey::secp256k1(raw_point.as_bytes())
     }
 
@@ -82,4 +81,29 @@ fn derive_key(mnemonic: &Mnemonic, coin_type: u32, index: u32) -> SigningKey {
     let seed = mnemonic.to_seed("");
     let xprv = XPrv::derive_from_path(&seed, &derive).unwrap();
     xprv.private_key().clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn derive_proper_addresses() {
+        let mnemonic = "economy stock theory fatal elder harbor betray wasp final emotion task crumble siren bottom lizard educate guess current outdoor pair theory focus wife stone".to_string();
+        let config = KeyConfig::default();
+        let key = DerivedKey::new(mnemonic, config);
+
+        assert_eq!(
+            key.account(),
+            AccountId::parse_string("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j").unwrap()
+        );
+        assert_eq!(key.index(), 0);
+
+        let key2 = key.with_index(1);
+        assert_eq!(
+            key2.account(),
+            AccountId::parse_string("slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu").unwrap()
+        );
+        assert_eq!(key2.index(), 1);
+    }
 }

@@ -14,7 +14,7 @@ use cw_orch_core::environment::{ChainInfo, ChainKind, ChainState, NetworkInfo, T
 
 use slay3r_app::{App, AppConfig, PulsarError, StateMachine};
 use slay3r_std::api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate};
-use slay3r_std::{AccountId, FeeInfo, Msg, SigningInfo, Timestamp, WasmMsg};
+use slay3r_std::{AccountId, BankMsg, FeeInfo, Msg, SigningInfo, Timestamp, WasmMsg};
 use slay3r_storage::MemoryStore;
 
 use crate::{DerivedKey, OrchRegistry};
@@ -135,8 +135,29 @@ impl Slay3rTube {
         out
     }
 
-    fn account(&self) -> AccountId {
+    pub fn account(&self) -> AccountId {
         self.signer.account()
+    }
+
+    pub fn block_info(&self) -> BlockInfo {
+        let app = self.app.borrow();
+        app.info().unwrap().clone()
+    }
+
+    pub fn send_tokens(
+        &self,
+        recipient: &Addr,
+        amount: Vec<Coin>,
+    ) -> Result<AppResponse, PulsarError> {
+        let recipient = AccountId::parse_string(recipient.as_str()).unwrap();
+        let msg = BankMsg::Send {
+            sender: self.account(),
+            recipient,
+            amount,
+        };
+        let tx = self.prepare_tx(msg, None);
+        let res = self.run_block(vec![tx])?.pop().unwrap();
+        tx_to_app_response(res)
     }
 
     pub fn run_block(
@@ -157,11 +178,6 @@ impl Slay3rTube {
         Ok(res.tx_results)
     }
 
-    pub fn block_info(&self) -> BlockInfo {
-        let app = self.app.borrow();
-        app.info().unwrap().clone()
-    }
-
     // simple helper for the usual one msg/one tx case
     pub(crate) fn prepare_tx(&self, msg: impl Into<Msg>, gas_limit: Option<u64>) -> slay3r_std::Tx {
         self.prepare_tx_multi(vec![msg.into()], gas_limit)
@@ -174,7 +190,8 @@ impl Slay3rTube {
         gas_limit: Option<u64>,
     ) -> slay3r_std::Tx {
         // FIXME: simulate gas fees? (right now hardcoded)
-        let gas_limit = gas_limit.unwrap_or(50_000_000u64);
+        // Note: block_gas_limit is set by default to 20M
+        let gas_limit = gas_limit.unwrap_or(10_000_000u64);
         let gas_amount = (gas_limit as f64 * self.config.gas_price) as u128;
         let fee = FeeInfo {
             fee: Some(Coin {
@@ -185,8 +202,9 @@ impl Slay3rTube {
         };
 
         // placeholder for signing info
+        let sequence = self.get_sequence(self.sender()).unwrap();
         let signing_info = SigningInfo {
-            sequence: 0, // TODO: query this
+            sequence,
             pubkey: Some(self.signer.pub_key()),
             // these intentionally left blank
             signature: Binary::from(b""),
@@ -389,4 +407,52 @@ fn seconds_since_epoch() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    use cosmwasm_std::coins;
+    use cw_orch_core::environment::{BankQuerier, DefaultQueriers, TxHandler};
+
+    use crate::Slay3rTubeBuilder;
+
+    #[test]
+    fn chain_supports_bank() {
+        let builder = Slay3rTubeBuilder::new();
+        let chain = builder.build();
+        assert_eq!(chain.signer.index(), 0);
+
+        // check we initialized balances properly
+        let bank_query = chain.bank_querier();
+        let balance = bank_query.balance(chain.sender(), None).unwrap();
+        assert_eq!(balance, coins(2_000_000_000u128, "uslay"));
+
+        // check we can send a transaction
+        let to_send = 123_456_789u128;
+        let chain2 = chain.with_index(2);
+        let recipient = chain2.sender();
+        assert_ne!(chain.sender(), recipient);
+        chain
+            .send_tokens(&recipient, coins(to_send, "uslay"))
+            .unwrap();
+
+        // money arrived
+        let balance = bank_query.balance(recipient.clone(), None).unwrap();
+        assert_eq!(balance, coins(2_000_000_000u128 + to_send, "uslay"));
+
+        // money sent and gas paid
+        let balance = bank_query.balance(chain.sender(), None).unwrap();
+        let gas_fees = 250_000u128; // 10M gas * 0.025 uslay/gas (defaults)
+        assert_eq!(
+            balance,
+            coins(2_000_000_000u128 - to_send - gas_fees, "uslay")
+        );
+
+        // second send fails until we query sequence
+        chain
+            .send_tokens(&recipient, coins(to_send, "uslay"))
+            .unwrap();
+    }
 }

@@ -5,9 +5,11 @@ mod wasm;
 use slay3r_app::PulsarError;
 
 use serde::{de::DeserializeOwned, Serialize};
+use slay3r_std::response::{AuthQueryResponse, QueryResponse};
+use slay3r_std::{AccountId, AuthQuery};
 use std::fmt::Debug;
 
-use cosmwasm_std::{Addr, BlockInfo, Coin};
+use cosmwasm_std::{Addr, BlockInfo, Coin, StdError};
 
 use cw_orch_core::environment::EnvironmentInfo;
 use cw_orch_core::environment::{
@@ -19,6 +21,20 @@ use crate::Slay3rTube;
 use bank::Slay3rBank;
 use node::Slay3rNode;
 use wasm::Slay3rWasm;
+
+// More queries can be added here
+impl Slay3rTube {
+    pub fn get_sequence(&self, address: impl Into<String>) -> Result<u64, PulsarError> {
+        let app = self.app.borrow();
+        let address = AccountId::parse_string(&address.into())?;
+        let query = AuthQuery::Account { address };
+        let res = app.query(query.into())?;
+        match res {
+            QueryResponse::Auth(AuthQueryResponse::Account(r)) => Ok(r.external_sequence()),
+            _ => Err(StdError::generic_err("unexpected response").into()),
+        }
+    }
+}
 
 impl QueryHandler for Slay3rTube {
     type Error = slay3r_app::PulsarError;

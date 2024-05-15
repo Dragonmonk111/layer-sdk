@@ -136,6 +136,30 @@ pub enum AccountResponse {
     },
 }
 
+impl AccountResponse {
+    pub fn address(&self) -> &AccountId {
+        match self {
+            AccountResponse::External { address, .. } => address,
+            AccountResponse::Internal { address } => address,
+            AccountResponse::Smart { address, .. } => address,
+        }
+    }
+
+    /// Gets sequence if an external account, panics otherwise
+    pub fn external_sequence(&self) -> u64 {
+        match self {
+            AccountResponse::External { sequence, .. } => *sequence,
+            AccountResponse::Internal { .. } => panic!("internal account has no sequence"),
+            AccountResponse::Smart { .. } => panic!("smart account has no sequence"),
+        }
+    }
+
+    /// Returns true iff this is an external account
+    pub fn is_external(&self) -> bool {
+        matches!(self, AccountResponse::External { .. })
+    }
+}
+
 impl<E: Err> From<AccountResponse> for QueryResponse<E> {
     fn from(value: AccountResponse) -> Self {
         AuthQueryResponse::Account(value).into()
