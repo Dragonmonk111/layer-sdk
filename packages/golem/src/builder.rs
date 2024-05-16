@@ -2,14 +2,14 @@ use std::fs::create_dir_all;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{signer::KeyConfig, DerivedKey, Slay3rTube};
+use crate::{signer::KeyConfig, DerivedKey, Slay3rGolem};
 
 const DEFAULT_MNEMONIC: &str = "economy stock theory fatal elder harbor betray wasp final emotion task crumble siren bottom lizard educate guess current outdoor pair theory focus wife stone";
 
-const DEFAULT_TMP_DIR_BASE: &str = "slay3r-tube";
+const DEFAULT_TMP_DIR_BASE: &str = "slay3r-golem";
 
 #[derive(Clone, Debug, Default)]
-pub struct Slay3rTubeBuilder {
+pub struct Slay3rGolemBuilder {
     // set to a default
     mnemonic: Option<String>,
     // make a random temp-dir
@@ -18,7 +18,7 @@ pub struct Slay3rTubeBuilder {
     key_config: KeyConfig,
 }
 
-impl Slay3rTubeBuilder {
+impl Slay3rGolemBuilder {
     pub fn new() -> Self {
         Self::default()
     }
@@ -46,13 +46,13 @@ impl Slay3rTubeBuilder {
         }
     }
 
-    pub fn build(self) -> Slay3rTube {
+    pub fn build(self) -> Slay3rGolem {
         let cache_dir = self.ensure_cache_dir().unwrap();
         let mnemonic = self
             .mnemonic
             .unwrap_or_else(|| DEFAULT_MNEMONIC.to_string());
         let signer = DerivedKey::new(mnemonic, self.key_config);
-        Slay3rTube::new(&cache_dir, signer)
+        Slay3rGolem::new(&cache_dir, signer)
     }
 }
 
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_builder() {
-        let builder = Slay3rTubeBuilder::new();
+        let builder = Slay3rGolemBuilder::new();
         let chain = builder.build();
         assert_eq!(chain.signer.index(), 0);
 

@@ -17,13 +17,13 @@ use cw_orch_core::environment::{
     QueryHandler, WasmQuerier,
 };
 
-use crate::Slay3rTube;
+use crate::Slay3rGolem;
 use bank::Slay3rBank;
 use node::Slay3rNode;
 use wasm::Slay3rWasm;
 
 // More queries can be added here
-impl Slay3rTube {
+impl Slay3rGolem {
     pub fn get_sequence(&self, address: impl Into<String>) -> Result<u64, PulsarError> {
         let app = self.app.borrow();
         let address = AccountId::parse_string(&address.into())?;
@@ -36,7 +36,7 @@ impl Slay3rTube {
     }
 }
 
-impl QueryHandler for Slay3rTube {
+impl QueryHandler for Slay3rGolem {
     type Error = slay3r_app::PulsarError;
 
     /// Wait for an amount of blocks.
@@ -85,36 +85,36 @@ impl QueryHandler for Slay3rTube {
     }
 }
 
-impl DefaultQueriers for Slay3rTube {
+impl DefaultQueriers for Slay3rGolem {
     type Bank = Slay3rBank;
     type Wasm = Slay3rWasm;
     type Node = Slay3rNode;
 }
 
-impl QuerierGetter<Slay3rBank> for Slay3rTube {
+impl QuerierGetter<Slay3rBank> for Slay3rGolem {
     fn querier(&self) -> Slay3rBank {
         Slay3rBank::new(self)
     }
 }
 
-impl QuerierGetter<Slay3rNode> for Slay3rTube {
+impl QuerierGetter<Slay3rNode> for Slay3rGolem {
     fn querier(&self) -> Slay3rNode {
         Slay3rNode::new(self)
     }
 }
 
-impl QuerierGetter<Slay3rWasm> for Slay3rTube {
+impl QuerierGetter<Slay3rWasm> for Slay3rGolem {
     fn querier(&self) -> Slay3rWasm {
         Slay3rWasm::new(self)
     }
 }
 
-impl EnvironmentQuerier for Slay3rTube {
+impl EnvironmentQuerier for Slay3rGolem {
     fn env_info(&self) -> EnvironmentInfo {
         todo!()
     }
 }
 
-impl Querier for Slay3rTube {
+impl Querier for Slay3rGolem {
     type Error = slay3r_app::PulsarError;
 }
