@@ -19,7 +19,7 @@ use slay3r_storage::MemoryStore;
 
 use crate::{DerivedKey, OrchRegistry};
 
-/// Mock Chain info for osmosis test tube. This is used to get the right wasm
+/// Mock Chain info for the golem. This is used to get the right wasm
 pub const MOCK_CHAIN_INFO: ChainInfo = ChainInfo {
     chain_id: "slay3r-orch",
     gas_denom: "uslay",
@@ -36,8 +36,8 @@ pub const MOCK_CHAIN_INFO: ChainInfo = ChainInfo {
 };
 
 #[derive(Clone)]
-pub struct Slay3rTube {
-    pub(crate) config: TubeConfig,
+pub struct Slay3rGolem {
+    pub(crate) config: GolemConfig,
     /// Key used for the operations.
     pub(crate) signer: Rc<DerivedKey>,
     /// Inner mutable state storage for contract addresses and code-ids
@@ -47,7 +47,7 @@ pub struct Slay3rTube {
 }
 
 #[derive(Debug, Clone)]
-pub struct TubeConfig {
+pub struct GolemConfig {
     /// Block time in milliseconds.
     pub block_time_ms: u64,
     /// Default gas price
@@ -57,7 +57,7 @@ pub struct TubeConfig {
     pub chain_id: String,
 }
 
-impl Default for TubeConfig {
+impl Default for GolemConfig {
     fn default() -> Self {
         // FIXME: can we configure this along with the MOCK_CHAIN_INFO somehow?
         Self {
@@ -73,11 +73,11 @@ fn wrap<T>(val: T) -> Rc<RefCell<T>> {
     Rc::new(RefCell::new(val))
 }
 
-impl Slay3rTube {
+impl Slay3rGolem {
     pub(crate) fn new(cache_dir: &str, signer: DerivedKey) -> Self {
         let sm = StateMachine::new(&AppConfig::new(cache_dir));
         let app = App::new(MemoryStore::new(), sm);
-        let config = TubeConfig::default();
+        let config = GolemConfig::default();
         let output = Self {
             signer: Rc::new(signer),
             state: wrap(OrchRegistry::new(MOCK_CHAIN_INFO.chain_id)),
@@ -131,8 +131,13 @@ impl Slay3rTube {
     // This clones the daemon but uses a different index for the key
     pub fn with_index(&self, index: u32) -> Self {
         let mut out = self.clone();
-        out.signer = self.signer.with_index(index).into();
+        out.signer = self.signer_with_index(index).into();
         out
+    }
+
+    // This clones the daemon but uses a different index for the key
+    pub fn signer_with_index(&self, index: u32) -> DerivedKey {
+        self.signer.with_index(index)
     }
 
     pub fn account(&self) -> AccountId {
@@ -234,7 +239,7 @@ impl Slay3rTube {
     }
 }
 
-impl ChainState for Slay3rTube {
+impl ChainState for Slay3rGolem {
     type Out = Rc<RefCell<OrchRegistry>>;
 
     fn state(&self) -> Self::Out {
@@ -242,7 +247,7 @@ impl ChainState for Slay3rTube {
     }
 }
 
-impl TxHandler for Slay3rTube {
+impl TxHandler for Slay3rGolem {
     type Response = AppResponse;
 
     type Error = slay3r_app::PulsarError;
@@ -416,7 +421,7 @@ mod tests {
     use cosmwasm_std::{coins, Uint128};
     use cw_orch_core::environment::{BankQuerier, DefaultQueriers, TxHandler};
 
-    use crate::Slay3rTubeBuilder;
+    use crate::Slay3rGolemBuilder;
 
     // for testing contract uploads... let's see if we can limit so many dependencies...
     use abstract_cw20::{msg::Cw20ExecuteMsgFns, Cw20Coin};
@@ -426,7 +431,7 @@ mod tests {
 
     #[test]
     fn chain_supports_bank() {
-        let builder = Slay3rTubeBuilder::new();
+        let builder = Slay3rGolemBuilder::new();
         let chain = builder.build();
         assert_eq!(chain.signer.index(), 0);
 
@@ -464,7 +469,7 @@ mod tests {
 
     #[test]
     fn chain_supports_wasm_contract() {
-        let chain = Slay3rTubeBuilder::new().build();
+        let chain = Slay3rGolemBuilder::new().build();
         let sender = chain.sender();
         let recipient = chain.with_index(2).sender();
         let init_amount = Uint128::new(55_000_000);

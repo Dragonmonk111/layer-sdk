@@ -10,15 +10,17 @@ use cw_orch_core::CwEnvError;
 use slay3r_std::response::{QueryResponse, WasmQueryResponse};
 use slay3r_std::{AccountId, WasmQuery};
 
-use crate::Slay3rTube;
+use crate::Slay3rGolem;
 
 pub struct Slay3rWasm {
-    tube: Slay3rTube,
+    golem: Slay3rGolem,
 }
 
 impl Slay3rWasm {
-    pub fn new(tube: &Slay3rTube) -> Self {
-        Self { tube: tube.clone() }
+    pub fn new(golem: &Slay3rGolem) -> Self {
+        Self {
+            golem: golem.clone(),
+        }
     }
 }
 
@@ -27,7 +29,7 @@ impl Querier for Slay3rWasm {
 }
 
 impl WasmQuerier for Slay3rWasm {
-    type Chain = Slay3rTube;
+    type Chain = Slay3rGolem;
 
     fn code_id_hash(&self, code_id: u64) -> Result<HexBinary, Self::Error> {
         let info = self.code(code_id)?;
@@ -38,7 +40,7 @@ impl WasmQuerier for Slay3rWasm {
         &self,
         address: impl Into<String>,
     ) -> Result<ContractInfoResponse, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app = self.golem.app.borrow();
         let contract_addr = AccountId::parse_string(&address.into())?;
         let query = WasmQuery::ContractInfo { contract_addr };
         let res = app.query(query.into())?;
@@ -53,7 +55,7 @@ impl WasmQuerier for Slay3rWasm {
         address: impl Into<String>,
         query_keys: Vec<u8>,
     ) -> Result<Vec<u8>, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app = self.golem.app.borrow();
         let contract_addr = AccountId::parse_string(&address.into())?;
         let query = WasmQuery::Raw {
             contract_addr,
@@ -72,7 +74,7 @@ impl WasmQuerier for Slay3rWasm {
         query_msg: &Q,
     ) -> Result<T, Self::Error> {
         let app: std::cell::Ref<slay3r_app::App<slay3r_storage::MemoryStore>> =
-            self.tube.app.borrow();
+            self.golem.app.borrow();
         let contract_addr = AccountId::parse_string(&address.into())?;
         let msg = to_json_binary(query_msg)?;
         let query = WasmQuery::Smart { contract_addr, msg };
@@ -84,7 +86,7 @@ impl WasmQuerier for Slay3rWasm {
     }
 
     fn code(&self, code_id: u64) -> Result<CodeInfoResponse, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app = self.golem.app.borrow();
         let query = WasmQuery::CodeInfo {
             code_id,
             include_wasm: false,

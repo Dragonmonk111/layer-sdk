@@ -7,15 +7,17 @@ use slay3r_std::{
     AccountId, BankQuery,
 };
 
-use crate::Slay3rTube;
+use crate::Slay3rGolem;
 
 pub struct Slay3rBank {
-    tube: Slay3rTube,
+    golem: Slay3rGolem,
 }
 
 impl Slay3rBank {
-    pub fn new(tube: &Slay3rTube) -> Self {
-        Self { tube: tube.clone() }
+    pub fn new(golem: &Slay3rGolem) -> Self {
+        Self {
+            golem: golem.clone(),
+        }
     }
 }
 
@@ -30,7 +32,7 @@ impl BankQuerier for Slay3rBank {
         address: impl Into<String>,
         denom: Option<String>,
     ) -> Result<Vec<Coin>, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app = self.golem.app.borrow();
         let address = AccountId::parse_string(&address.into())?;
 
         if let Some(denom) = denom {
@@ -51,7 +53,7 @@ impl BankQuerier for Slay3rBank {
     }
 
     fn total_supply(&self) -> Result<Vec<Coin>, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app = self.golem.app.borrow();
         let query = BankQuery::TotalSupply {};
         let res = app.query(query.into())?;
         match res {
@@ -61,7 +63,7 @@ impl BankQuerier for Slay3rBank {
     }
 
     fn supply_of(&self, denom: impl Into<String>) -> Result<Coin, Self::Error> {
-        let app = self.tube.app.borrow();
+        let app = self.golem.app.borrow();
         let query = BankQuery::Supply {
             denom: denom.into(),
         };
