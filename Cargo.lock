@@ -3755,6 +3755,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "slay3r-golem"
+version = "0.2.1"
+dependencies = [
+ "abstract-cw-multi-test",
+ "abstract-cw-plus-interface",
+ "abstract-cw20",
+ "abstract-cw20-base",
+ "bip32",
+ "cosmwasm-std",
+ "cw-orch-core",
+ "k256",
+ "serde",
+ "sha2 0.10.8",
+ "slay3r-app",
+ "slay3r-cosmos",
+ "slay3r-std",
+ "slay3r-storage",
+]
+
+[[package]]
 name = "slay3r-proto"
 version = "0.2.1"
 dependencies = [
@@ -3799,26 +3819,6 @@ dependencies = [
  "slay3r-std",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "slay3r-tube"
-version = "0.2.1"
-dependencies = [
- "abstract-cw-multi-test",
- "abstract-cw-plus-interface",
- "abstract-cw20",
- "abstract-cw20-base",
- "bip32",
- "cosmwasm-std",
- "cw-orch-core",
- "k256",
- "serde",
- "sha2 0.10.8",
- "slay3r-app",
- "slay3r-cosmos",
- "slay3r-std",
- "slay3r-storage",
 ]
 
 [[package]]

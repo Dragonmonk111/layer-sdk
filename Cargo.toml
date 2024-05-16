@@ -41,10 +41,10 @@ anyhow = "1"
 slay3r-abci = { path = "./packages/abci" }
 slay3r-app = { path = "./packages/app" }
 slay3r-cosmos = { path = "./packages/cosmos" }
+slay3r-golem = { path = "./packages/golem" }
 slay3r-proto = { path = "./packages/proto" }
 slay3r-std = { path = "./packages/std" }
 slay3r-storage = { path = "./packages/storage" }
-slay3r-tube = { path = "./packages/tube" }
 
 tc-echo = { path = "./contracts/echo" }
 tc-caller = { path = "./contracts/caller" }

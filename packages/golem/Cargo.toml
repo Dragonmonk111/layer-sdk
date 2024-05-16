@@ -1,10 +1,10 @@
 [package]
-name = "slay3r-tube"
+name = "slay3r-golem"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 exclude.workspace = true
-description = "Like Osmosis Test Tube for Slay3r, implements CwEnv for cw-orch to allow local node testing"
+description = "An artificial creature, taking the shape of the sly3r chain. Provides bindings to cw-orch to experiment rapidly"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
