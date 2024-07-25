@@ -110,6 +110,16 @@ impl TestApp {
         }
     }
 
+    pub fn supply(&self, denom: &str) -> PulsarResult<Uint128> {
+        let res = self.query(BankQuery::Supply {
+            denom: denom.to_string(),
+        })?;
+        match res {
+            QueryResponse::Bank(BankQueryResponse::Supply(supply)) => Ok(supply.amount.amount),
+            _ => panic!("unexpected response"),
+        }
+    }
+
     pub fn sequence(&self, account: &AccountId) -> PulsarResult<u64> {
         let res = self.query(AuthQuery::Account {
             address: account.clone(),
