@@ -1,6 +1,8 @@
 use bytes::Bytes;
 use cosmwasm_schema::serde::{de::DeserializeOwned, Serialize};
-use cosmwasm_std::{from_json, testing::mock_env, to_json_binary, Binary, Coin, Event, Uint128};
+use cosmwasm_std::{
+    coins, from_json, testing::mock_env, to_json_binary, Binary, Coin, Event, Uint128,
+};
 use hex_literal::hex;
 use itertools::enumerate;
 use slay3r_std::{
@@ -148,6 +150,31 @@ impl TestApp {
             e => panic!("Unexpected query result: {:?}", e),
         };
         Ok(from_json(res)?)
+    }
+
+    pub fn transfer(
+        &mut self,
+        from: &PrivateKey,
+        to: &AccountId,
+        amount: u128,
+        denom: &str,
+    ) -> PulsarResult<()> {
+        let sender = from.account_id();
+        let seq = self.sequence(&sender).unwrap();
+        let tx = TxBuilder::new()
+            .with_msg(slay3r_std::BankMsg::Send {
+                sender,
+                recipient: to.clone(),
+                amount: coins(amount, denom),
+            })
+            .with_signer(from, seq);
+        // submit tx
+        let res = self.block(&[tx]);
+        // error if any fail
+        for r in res {
+            r.result?;
+        }
+        Ok(())
     }
 }
 

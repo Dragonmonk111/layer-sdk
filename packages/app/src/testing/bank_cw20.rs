@@ -4,6 +4,7 @@ use slay3r_std::{AccountId, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
+use crate::PulsarResult;
 
 // v1.2.6
 const CW20: &[u8] = include_bytes!("../../fixtures/cw20_base.wasm");
@@ -109,6 +110,17 @@ fn query_cw20_supply_as_native(app: &TestApp, contract: &AccountId) -> Uint128 {
     app.supply(&denom).unwrap()
 }
 
+fn transfer_cw20_as_native(
+    app: &mut TestApp,
+    contract: &AccountId,
+    from: &PrivateKey,
+    to: &AccountId,
+    amount: u128,
+) -> PulsarResult<()> {
+    let denom = format!("cw20:{}", contract);
+    app.transfer(from, to, amount, &denom)
+}
+
 // This will instantiate a new cw20 instance from the given code, using the provided denom
 // It will make signer the minter and provide the given initial balance.
 // This returns the contract address. Will panic on error
@@ -179,7 +191,8 @@ fn basic_bank_queries() {
     let sender = signer.account_id();
 
     // create contract instance with 20_000_000 tokens
-    let contract = init_token(&mut app, code_id, "DEMO", &signer, 20_000_000);
+    let init_tokens = 20_000_000u128;
+    let contract = init_token(&mut app, code_id, "DEMO", &signer, init_tokens);
 
     // verify gov has native tokens (no gas fees deducted)
     let native = app.balance(&gov_key.account_id(), DENOM).unwrap();
@@ -196,13 +209,55 @@ fn basic_bank_queries() {
 
     // verify signer has cw20 tokens with wasm query
     let cw20 = query_cw20_balance(&app, &contract, &sender);
-    assert_eq!(cw20.u128(), 20_000_000);
+    assert_eq!(cw20.u128(), init_tokens);
     let cw20 = query_cw20_supply(&app, &contract);
-    assert_eq!(cw20.u128(), 20_000_000);
+    assert_eq!(cw20.u128(), init_tokens);
 
     // verify signer has cw20 tokens with bank query
     let cw20 = query_cw20_balance_as_native(&app, &contract, &sender);
-    assert_eq!(cw20.u128(), 20_000_000);
+    assert_eq!(cw20.u128(), init_tokens);
     let cw20 = query_cw20_supply_as_native(&app, &contract);
-    assert_eq!(cw20.u128(), 20_000_000);
+    assert_eq!(cw20.u128(), init_tokens);
+}
+
+#[test]
+fn basic_bank_messages() {
+    let SetupData {
+        mut app,
+        signer,
+        code_id,
+        gov_key,
+    } = setup("/tmp/slay3r/basic-bank-messages");
+    let sender = signer.account_id();
+    let gov = gov_key.account_id();
+
+    // create contract instance with 20_000_000 tokens
+    let init_tokens = 20_000_000u128;
+    let contract = init_token(&mut app, code_id, "SEND", &signer, init_tokens);
+
+    // transfer native funds
+    let transfer_amount = 3_000_000u128;
+    app.transfer(&signer, &gov, transfer_amount, DENOM).unwrap();
+
+    // ensure it works
+    let native = app.balance(&gov, DENOM).unwrap();
+    assert_eq!(native.u128(), INIT_BAL_GOV + transfer_amount);
+    let gas_fees = 50_000u128;
+    let native = app.balance(&sender, DENOM).unwrap();
+    assert_eq!(native.u128(), INIT_BAL_SENDER - transfer_amount - gas_fees);
+
+    // transfer cw20 funds via bank msg
+    transfer_cw20_as_native(&mut app, &contract, &signer, &gov, transfer_amount).unwrap();
+
+    // verify cw20 balances
+    let cw20 = query_cw20_supply_as_native(&app, &contract);
+    assert_eq!(cw20.u128(), init_tokens);
+    let cw20 = query_cw20_balance_as_native(&app, &contract, &sender);
+    assert_eq!(cw20.u128(), 20_000_000 - transfer_amount);
+    let cw20 = query_cw20_balance_as_native(&app, &contract, &gov);
+    assert_eq!(cw20.u128(), transfer_amount);
+
+    // TODO: burn some funds
+
+    // TODO: check new balances
 }
