@@ -173,6 +173,32 @@ impl Wasm {
         signer: &AccountId,
         msg: WasmMsg,
     ) -> PulsarResult<MsgResponse> {
+        self._process_msg(storage, meter, block, sm, signer, msg, true)
+    }
+
+    pub fn process_msg_no_submsg(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        signer: &AccountId,
+        msg: WasmMsg,
+    ) -> PulsarResult<MsgResponse> {
+        self._process_msg(storage, meter, block, sm, signer, msg, false)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn _process_msg(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        signer: &AccountId,
+        msg: WasmMsg,
+        allow_submsg: bool,
+    ) -> PulsarResult<MsgResponse> {
         let resp = match msg {
             WasmMsg::StoreCode { sender, code } => {
                 ensure_eq!(signer, &sender, WasmError::Unauthorized);
@@ -217,6 +243,7 @@ impl Wasm {
                     msg,
                     funds,
                     label,
+                    allow_submsg,
                 );
             }
             WasmMsg::Instantiate2 {
@@ -249,6 +276,7 @@ impl Wasm {
                     msg,
                     funds,
                     label,
+                    allow_submsg,
                 );
             }
             WasmMsg::Execute {
@@ -312,6 +340,7 @@ impl Wasm {
                     &checksum,
                     result.messages,
                     &mut response,
+                    allow_submsg,
                 )?;
                 response
             }
@@ -363,6 +392,7 @@ impl Wasm {
                     &checksum,
                     result.messages,
                     &mut response,
+                    allow_submsg,
                 )?;
                 response
             }
@@ -439,6 +469,7 @@ impl Wasm {
                     &checksum,
                     result.messages,
                     &mut response,
+                    allow_submsg,
                 )?;
                 response
             }
@@ -507,6 +538,7 @@ impl Wasm {
         msg: Binary,
         funds: Vec<Coin>,
         label: String,
+        allow_submsg: bool,
     ) -> PulsarResult<MsgResponse> {
         let sender = signer;
 
@@ -575,6 +607,7 @@ impl Wasm {
             &checksum,
             result.messages,
             &mut response,
+            allow_submsg,
         )?;
         Ok(response)
     }
@@ -592,7 +625,13 @@ impl Wasm {
         msgs: Vec<SubMsg<super::vm::CustomMsg>>,
         // we append events to this (later maybe overwrite the data)
         parent_response: &mut MsgResponse,
+        // if set, we error if msgs is not empty
+        allow_submsg: bool,
     ) -> PulsarResult<()> {
+        if !allow_submsg && !msgs.is_empty() {
+            return Err(WasmError::SubMsgNotSupported.into());
+        }
+
         for msg in msgs {
             // if there is a limit, and it is less than what we have left, use a sub-meter
             let sub_meter = match (msg.gas_limit, meter.remaining()) {
@@ -677,6 +716,7 @@ impl Wasm {
                         checksum,
                         reply_result.messages,
                         parent_response,
+                        allow_submsg,
                     )?;
                 }
             } else {
@@ -1108,6 +1148,11 @@ fn set_data_field(parent_data: &mut MsgData, new_data: Binary) {
 
 #[cfg(test)]
 mod tests {
+    use cosmwasm_std::{coin, coins, testing::mock_env, to_json_binary, Event};
+    use slay3r_storage::{MemoryStore, PersistentStorage};
+
+    use crate::AppConfig;
+
     use super::*;
 
     #[test]
@@ -1122,5 +1167,192 @@ mod tests {
                 data: b"updated".into()
             })
         );
+    }
+
+    const HACKATOM: &[u8] = include_bytes!("../../fixtures/hackatom.wasm");
+
+    // copied from testing/utils.rs cuz issue importing
+    fn event_value<'a>(events: &'a [Event], ty: &str, key: &str) -> Option<&'a str> {
+        events.iter().find(|a| a.ty == ty).and_then(|evt| {
+            evt.attributes
+                .iter()
+                .find(|a| a.key == key)
+                .map(|attr| attr.value.as_str())
+        })
+    }
+
+    // FIXME: similar test for instantiate, migrate (but they call same dispatch_msgs, so not essential)
+
+    #[test]
+    fn process_msg_enforces_allow_submsg() {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let block = mock_env().block;
+        let meter = GasMeter::new(1_000_000);
+        let sm = StateMachine::new(&AppConfig::new(
+            "/tmp/slay3r/process_msg_enforces_allow_submsg",
+        ));
+
+        let sender = AccountId::unchecked("sender");
+        let verifier = AccountId::unchecked("verifier");
+        let beneficiary = AccountId::unchecked("beneficiary");
+        let init_funds = vec![coin(20, "btc"), coin(100, "eth")];
+
+        // set money
+        sm.bank
+            .init_balance(&mut store, &meter, &sender, init_funds)
+            .unwrap();
+
+        // store hackatom wasm
+        let msg = WasmMsg::StoreCode {
+            sender: sender.clone(),
+            code: HACKATOM.into(),
+        };
+        let resp = sm
+            .wasm
+            .process_msg(&mut store, &meter, &block, &sm, &sender, msg)
+            .unwrap();
+        let code_id: u64 = event_value(&resp.events, "store_code", "code_id")
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        // init hackatom contract
+        let init_msg = hackatom_msgs::InstantiateMsg {
+            verifier: verifier.to_string(),
+            beneficiary: beneficiary.to_string(),
+        };
+        let msg = WasmMsg::Instantiate {
+            sender: sender.clone(),
+            admin: None,
+            code_id,
+            msg: to_json_binary(&init_msg).unwrap(),
+            funds: coins(45, "eth"),
+            label: "Hackatom Contract".into(),
+        };
+        let resp = sm
+            .wasm
+            .process_msg(&mut store, &meter, &block, &sm, &sender, msg)
+            .unwrap();
+        let event = event_value(&resp.events, "instantiate", "_contract_address").unwrap();
+        let contract_addr = AccountId::parse_string(event).unwrap();
+
+        // prepare proper release
+        let exec_msg = hackatom_msgs::ExecuteMsg::Release {};
+        let msg = WasmMsg::Execute {
+            sender: verifier.clone(),
+            contract_addr,
+            msg: to_json_binary(&exec_msg).unwrap(),
+            funds: vec![],
+        };
+
+        // execute fails with no_submsgs set
+        let err = sm
+            .wasm
+            .process_msg_no_submsg(&mut store, &meter, &block, &sm, &verifier, msg.clone())
+            .unwrap_err();
+        assert_eq!(err, PulsarError::Wasm(WasmError::SubMsgNotSupported));
+
+        // make a normal call that uses subnmessages, succeeds
+        let _resp = sm
+            .wasm
+            .process_msg(&mut store, &meter, &block, &sm, &verifier, msg.clone())
+            .unwrap();
+    }
+
+    /// This is copied from https://github.com/CosmWasm/cosmwasm/blob/v1.2.6/contracts/hackatom/src/msg.rs
+    pub mod hackatom_msgs {
+        use cosmwasm_schema::{cw_serde, QueryResponses};
+
+        use cosmwasm_std::{Binary, Coin};
+
+        #[cw_serde]
+        pub struct InstantiateMsg {
+            pub verifier: String,
+            pub beneficiary: String,
+        }
+
+        /// MigrateMsg allows a privileged contract administrator to run
+        /// a migration on the contract. In this (demo) case it is just migrating
+        /// from one hackatom code to the same code, but taking advantage of the
+        /// migration step to set a new validator.
+        ///
+        /// Note that the contract doesn't enforce permissions here, this is done
+        /// by blockchain logic (in the future by blockchain governance)
+        #[cw_serde]
+        pub struct MigrateMsg {
+            pub verifier: String,
+        }
+
+        /// SudoMsg is only exposed for internal Cosmos SDK modules to call.
+        /// This is showing how we can expose "admin" functionality than can not be called by
+        /// external users or contracts, but only trusted (native/Go) code in the blockchain
+        #[cw_serde]
+        pub enum SudoMsg {
+            StealFunds {
+                recipient: String,
+                amount: Vec<Coin>,
+            },
+        }
+
+        // failure modes to help test wasmd, based on this comment
+        // https://github.com/cosmwasm/wasmd/issues/8#issuecomment-576146751
+        #[cw_serde]
+        pub enum ExecuteMsg {
+            /// Releasing all funds in the contract to the beneficiary. This is the only "proper" action of this demo contract.
+            Release {},
+            /// Infinite loop to burn cpu cycles (only run when metering is enabled)
+            CpuLoop {},
+            /// Infinite loop making storage calls (to test when their limit hits)
+            StorageLoop {},
+            /// Infinite loop reading and writing memory
+            MemoryLoop {},
+            /// Infinite loop sending message to itself
+            MessageLoop {},
+            /// Allocate large amounts of memory without consuming much gas
+            AllocateLargeMemory { pages: u32 },
+            /// Trigger a panic to ensure framework handles gracefully
+            Panic {},
+            /// Starting with CosmWasm 0.10, some API calls return user errors back to the contract.
+            /// This triggers such user errors, ensuring the transaction does not fail in the backend.
+            UserErrorsInApiCalls {},
+        }
+
+        #[cw_serde]
+        #[derive(QueryResponses)]
+        pub enum QueryMsg {
+            /// returns a human-readable representation of the verifier
+            /// use to ensure query path works in integration tests
+            #[returns(VerifierResponse)]
+            Verifier {},
+            /// This returns cosmwasm_std::AllBalanceResponse to demo use of the querier
+            #[returns(cosmwasm_std::AllBalanceResponse)]
+            OtherBalance { address: String },
+            /// Recurse will execute a query into itself up to depth-times and return
+            /// Each step of the recursion may perform some extra work to test gas metering
+            /// (`work` rounds of sha256 on contract).
+            /// Now that we have Env, we can auto-calculate the address to recurse into
+            #[returns(RecurseResponse)]
+            Recurse { depth: u32, work: u32 },
+            /// GetInt returns a hardcoded u32 value
+            #[returns(IntResponse)]
+            GetInt {},
+        }
+
+        #[cw_serde]
+        pub struct VerifierResponse {
+            pub verifier: String,
+        }
+
+        #[cw_serde]
+        pub struct RecurseResponse {
+            /// hashed is the result of running sha256 "work+1" times on the contract's human address
+            pub hashed: Binary,
+        }
+
+        #[cw_serde]
+        pub struct IntResponse {
+            pub int: u32,
+        }
     }
 }

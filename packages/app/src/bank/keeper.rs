@@ -249,7 +249,7 @@ impl Bank {
             funds: vec![],
         };
         sm.wasm
-            .process_msg(storage, meter, block, sm, from_address, msg)?;
+            .process_msg_no_submsg(storage, meter, block, sm, from_address, msg)?;
         Ok(())
     }
 
@@ -319,7 +319,7 @@ impl Bank {
             funds: vec![],
         };
         sm.wasm
-            .process_msg(storage, meter, block, sm, from_address, msg)?;
+            .process_msg_no_submsg(storage, meter, block, sm, from_address, msg)?;
         Ok(())
     }
 }
