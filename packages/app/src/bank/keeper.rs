@@ -2,13 +2,17 @@ use itertools::Itertools;
 use std::collections::HashMap;
 use tracing::debug_span;
 
-use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event, Uint128};
+use cosmwasm_std::{ensure_eq, from_json, to_json_binary, BlockInfo, Coin, Event, Uint128};
 
 use slay3r_std::api::MsgResponse;
 use slay3r_std::response::{
     AllBalanceResponse, BalanceResponse, QueryResponse, SupplyResponse, TotalSupplyResponse,
+    WasmQueryResponse,
 };
-use slay3r_std::{AccountId, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter};
+use slay3r_std::{
+    AccountId, AccountIdError, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter, QueryError,
+    WasmQuery,
+};
 use slay3r_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
 };
@@ -24,6 +28,35 @@ const SUPPLY: Map<&str, Uint128> = Map::new("supply");
 const BALANCES: Map<(&AccountId, &str), Uint128> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
+
+enum TypedDenom {
+    Native(String),
+    Cw20(AccountId),
+}
+
+impl TypedDenom {
+    fn from_denom(denom: &str) -> Result<Self, AccountIdError> {
+        if denom.starts_with("cw20:") {
+            let contract = AccountId::parse_string(&denom[5..])?;
+            Ok(TypedDenom::Cw20(contract))
+        } else {
+            Ok(TypedDenom::Native(denom.into()))
+        }
+    }
+
+    // This is pulled out from to_denom for simpler use in some cases
+    fn cw20_denom(contract: &AccountId) -> String {
+        format!("cw20:{}", contract)
+    }
+
+    #[allow(dead_code)]
+    fn to_denom(&self) -> String {
+        match self {
+            TypedDenom::Native(denom) => denom.clone(),
+            TypedDenom::Cw20(contract) => Self::cw20_denom(contract),
+        }
+    }
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct Bank {}
@@ -93,11 +126,42 @@ impl Bank {
         account: &AccountId,
         denom: &str,
     ) -> PulsarResult<Coin> {
-        let val = BALANCES.may_load(bank_storage, meter, (account, denom))?;
+        let amount = BALANCES
+            .may_load(bank_storage, meter, (account, &denom))?
+            .unwrap_or_default();
         Ok(Coin {
-            amount: val.unwrap_or_default(),
+            amount,
             denom: denom.to_string(),
         })
+    }
+
+    fn get_cw20_balance(
+        &self,
+        storage: &dyn ReadonlyStorage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        account: &AccountId,
+        contract_addr: AccountId,
+    ) -> PulsarResult<Coin> {
+        let denom = TypedDenom::cw20_denom(&contract_addr);
+        let request = WasmQuery::Smart {
+            contract_addr,
+            msg: to_json_binary(&cw20::Cw20QueryMsg::Balance {
+                address: account.to_string(),
+            })?,
+        };
+        let res = sm.wasm.query(storage, meter, block, sm, request)?;
+        match res {
+            QueryResponse::Wasm(WasmQueryResponse::Smart(res)) => {
+                let cw20::BalanceResponse { balance } = from_json(&res)?;
+                Ok(Coin {
+                    amount: balance,
+                    denom,
+                })
+            }
+            _ => Err(QueryError::ParseError("unexpected response".into()).into()),
+        }
     }
 
     fn get_supply(
@@ -108,6 +172,28 @@ impl Bank {
     ) -> PulsarResult<Uint128> {
         let val = SUPPLY.may_load(bank_storage, meter, denom)?;
         Ok(val.unwrap_or_default())
+    }
+
+    fn get_cw20_supply(
+        &self,
+        storage: &dyn ReadonlyStorage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        contract_addr: AccountId,
+    ) -> PulsarResult<Uint128> {
+        let request = WasmQuery::Smart {
+            contract_addr,
+            msg: to_json_binary(&cw20::Cw20QueryMsg::TokenInfo {})?,
+        };
+        let res = sm.wasm.query(storage, meter, block, sm, request)?;
+        match res {
+            QueryResponse::Wasm(WasmQueryResponse::Smart(res)) => {
+                let cw20::TokenInfoResponse { total_supply, .. } = from_json(&res)?;
+                Ok(total_supply)
+            }
+            _ => Err(QueryError::ParseError("unexpected response".into()).into()),
+        }
     }
 
     fn send(
@@ -287,7 +373,14 @@ impl Bank {
                 Ok(res.into())
             }
             BankQuery::Balance { address, denom } => {
-                let amount = self.get_balance(&bank_storage, meter, &address, &denom)?;
+                let amount = match TypedDenom::from_denom(&denom)? {
+                    TypedDenom::Native(denom) => {
+                        self.get_balance(&bank_storage, meter, &address, &denom)?
+                    }
+                    TypedDenom::Cw20(contract) => {
+                        self.get_cw20_balance(storage, meter, _block, _sm, &address, contract)?
+                    }
+                };
                 let res = BalanceResponse { amount };
                 Ok(res.into())
             }
@@ -312,7 +405,12 @@ impl Bank {
                 Ok(res.into())
             }
             BankQuery::Supply { denom } => {
-                let amount = self.get_supply(&bank_storage, meter, &denom)?;
+                let amount = match TypedDenom::from_denom(&denom)? {
+                    TypedDenom::Native(denom) => self.get_supply(&bank_storage, meter, &denom)?,
+                    TypedDenom::Cw20(contract) => {
+                        self.get_cw20_supply(storage, meter, _block, _sm, contract)?
+                    }
+                };
                 let res = SupplyResponse {
                     amount: Coin { denom, amount },
                 };
