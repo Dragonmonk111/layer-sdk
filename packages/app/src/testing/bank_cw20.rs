@@ -121,6 +121,16 @@ fn transfer_cw20_as_native(
     app.transfer(from, to, amount, &denom)
 }
 
+fn burn_cw20_as_native(
+    app: &mut TestApp,
+    contract: &AccountId,
+    from: &PrivateKey,
+    amount: u128,
+) -> PulsarResult<()> {
+    let denom = format!("cw20:{}", contract);
+    app.burn(from, amount, &denom)
+}
+
 // This will instantiate a new cw20 instance from the given code, using the provided denom
 // It will make signer the minter and provide the given initial balance.
 // This returns the contract address. Will panic on error
@@ -235,16 +245,21 @@ fn basic_bank_messages() {
     let init_tokens = 20_000_000u128;
     let contract = init_token(&mut app, code_id, "SEND", &signer, init_tokens);
 
-    // transfer native funds
+    // transfer and burn native funds
     let transfer_amount = 3_000_000u128;
+    let burn_amount = 1_500_000u128;
     app.transfer(&signer, &gov, transfer_amount, DENOM).unwrap();
+    app.burn(&signer, burn_amount, DENOM).unwrap();
 
     // ensure it works
     let native = app.balance(&gov, DENOM).unwrap();
     assert_eq!(native.u128(), INIT_BAL_GOV + transfer_amount);
     let gas_fees = 50_000u128;
     let native = app.balance(&sender, DENOM).unwrap();
-    assert_eq!(native.u128(), INIT_BAL_SENDER - transfer_amount - gas_fees);
+    assert_eq!(
+        native.u128(),
+        INIT_BAL_SENDER - transfer_amount - burn_amount - gas_fees
+    );
 
     // transfer cw20 funds via bank msg
     transfer_cw20_as_native(&mut app, &contract, &signer, &gov, transfer_amount).unwrap();
@@ -253,11 +268,16 @@ fn basic_bank_messages() {
     let cw20 = query_cw20_supply_as_native(&app, &contract);
     assert_eq!(cw20.u128(), init_tokens);
     let cw20 = query_cw20_balance_as_native(&app, &contract, &sender);
-    assert_eq!(cw20.u128(), 20_000_000 - transfer_amount);
+    assert_eq!(cw20.u128(), init_tokens - transfer_amount);
     let cw20 = query_cw20_balance_as_native(&app, &contract, &gov);
     assert_eq!(cw20.u128(), transfer_amount);
 
-    // TODO: burn some funds
+    // burn some funds
+    burn_cw20_as_native(&mut app, &contract, &signer, burn_amount).unwrap();
 
-    // TODO: check new balances
+    // check new balances
+    let cw20 = query_cw20_supply_as_native(&app, &contract);
+    assert_eq!(cw20.u128(), init_tokens - burn_amount);
+    let cw20 = query_cw20_balance_as_native(&app, &contract, &sender);
+    assert_eq!(cw20.u128(), init_tokens - transfer_amount - burn_amount);
 }

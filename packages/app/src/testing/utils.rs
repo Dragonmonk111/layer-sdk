@@ -176,6 +176,24 @@ impl TestApp {
         }
         Ok(())
     }
+
+    pub fn burn(&mut self, from: &PrivateKey, amount: u128, denom: &str) -> PulsarResult<()> {
+        let sender = from.account_id();
+        let seq = self.sequence(&sender).unwrap();
+        let tx = TxBuilder::new()
+            .with_msg(slay3r_std::BankMsg::Burn {
+                sender,
+                amount: coins(amount, denom),
+            })
+            .with_signer(from, seq);
+        // submit tx
+        let res = self.block(&[tx]);
+        // error if any fail
+        for r in res {
+            r.result?;
+        }
+        Ok(())
+    }
 }
 
 pub fn prepare_cache(path: &'_ str) -> &'_ str {
