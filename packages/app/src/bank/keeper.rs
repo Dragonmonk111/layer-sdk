@@ -11,7 +11,7 @@ use slay3r_std::response::{
 };
 use slay3r_std::{
     AccountId, AccountIdError, BankMsg, BankMsgData, BankQuery, CoinEncode, GasMeter, QueryError,
-    WasmQuery,
+    WasmMsg, WasmQuery,
 };
 use slay3r_storage::{
     prefixed, prefixed_read, Map, PlusError, PlusResult, ReadonlyStorage, Storage,
@@ -196,33 +196,56 @@ impl Bank {
         }
     }
 
-    fn send(
+    fn send_native(
         &self,
         bank_storage: &mut dyn Storage,
         meter: &GasMeter,
-        from_address: AccountId,
-        to_address: AccountId,
-        amount: Vec<Coin>,
+        from_address: &AccountId,
+        to_address: &AccountId,
+        coin: &Coin,
     ) -> PulsarResult<()> {
-        for coin in ValidCoins::new(&amount) {
-            let coin = coin?;
-            // remove from old account account balance
-            BALANCES
-                .update::<_, PlusError>(
-                    bank_storage,
-                    meter,
-                    (&from_address, &coin.denom),
-                    |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
-                )
-                .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
-            // add to new account balance
-            BALANCES.update::<_, PulsarError>(
+        // remove from old account account balance
+        BALANCES
+            .update::<_, PlusError>(
                 bank_storage,
                 meter,
-                (&to_address, &coin.denom),
-                |balance| Ok(balance.unwrap_or_default() + coin.amount),
-            )?;
-        }
+                (&from_address, &coin.denom),
+                |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
+            )
+            .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
+        // add to new account balance
+        BALANCES.update::<_, PulsarError>(
+            bank_storage,
+            meter,
+            (&to_address, &coin.denom),
+            |balance| Ok(balance.unwrap_or_default() + coin.amount),
+        )?;
+        Ok(())
+    }
+
+    fn send_cw20(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        from_address: &AccountId,
+        to_address: &AccountId,
+        contract_addr: AccountId,
+        amount: Uint128,
+    ) -> PulsarResult<()> {
+        let msg = to_json_binary(&cw20::Cw20ExecuteMsg::Transfer {
+            recipient: to_address.to_string(),
+            amount,
+        })?;
+        let msg = WasmMsg::Execute {
+            sender: from_address.clone(),
+            contract_addr,
+            msg,
+            funds: vec![],
+        };
+        sm.wasm
+            .process_msg(storage, meter, block, sm, &from_address, msg)?;
         Ok(())
     }
 
@@ -283,6 +306,8 @@ impl Bank {
         &self,
         storage: &mut dyn Storage,
         meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
         from_address: AccountId,
         to_address: AccountId,
         amount: Vec<Coin>,
@@ -290,8 +315,28 @@ impl Bank {
         let _span =
             debug_span!("transfer", %from_address, %to_address, amount = %CoinEncode(&amount))
                 .entered();
-        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
-        self.send(&mut bank_storage, meter, from_address, to_address, amount)
+        for coin in ValidCoins::new(&amount) {
+            let coin = coin?;
+            match TypedDenom::from_denom(&coin.denom)? {
+                TypedDenom::Native(_) => {
+                    let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+                    self.send_native(&mut bank_storage, meter, &from_address, &to_address, coin)?;
+                }
+                TypedDenom::Cw20(contract) => {
+                    self.send_cw20(
+                        storage,
+                        meter,
+                        block,
+                        sm,
+                        &from_address,
+                        &to_address,
+                        contract,
+                        coin.amount,
+                    )?;
+                }
+            }
+        }
+        Ok(())
     }
 
     // helper to move funds when called from another module
@@ -327,8 +372,8 @@ impl Bank {
         &self,
         storage: &mut dyn Storage,
         meter: &GasMeter,
-        _block: &BlockInfo,
-        _sm: &StateMachine,
+        block: &BlockInfo,
+        sm: &StateMachine,
         signer: &AccountId,
         msg: BankMsg,
     ) -> PulsarResult<MsgResponse> {
@@ -343,7 +388,7 @@ impl Bank {
                     .add_attribute("recipient", &recipient)
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
-                self.transfer(storage, meter, sender, recipient, amount)?;
+                self.transfer(storage, meter, block, sm, sender, recipient, amount)?;
                 Ok(MsgResponse::new(events, BankMsgData::Send {}))
             }
             BankMsg::Burn { sender, amount } => {
@@ -764,9 +809,15 @@ mod test {
         assert_eq!(eth.u128(), 100);
 
         // send some tokens will not modify supply
+        // TODO: use transfer here, but needs block and sm which we didn't set up
         let to_send = vec![coin(30, "eth"), coin(5, "btc")];
-        bank.transfer(&mut store, &meter, owner.clone(), rcpt.clone(), to_send)
-            .unwrap();
+        {
+            let mut bank_store = prefixed(&mut store, NAMESPACE_BANK);
+            bank.send_native(&mut bank_store, &meter, &owner, &rcpt, &to_send[0])
+                .unwrap();
+            bank.send_native(&mut bank_store, &meter, &owner, &rcpt, &to_send[1])
+                .unwrap();
+        }
         // check balance properly updated (already covered above)
         let rich = query_balance(&bank, &store, &owner);
         assert_eq!(vec![coin(15, "btc"), coin(70, "eth")], rich);

@@ -263,9 +263,12 @@ impl Wasm {
 
                 // send funds
                 if !funds.is_empty() {
+                    // TODO: this needs to update to handle cw20 as well
                     sm.bank.transfer(
                         storage,
                         meter,
+                        block,
+                        sm,
                         sender.clone(),
                         contract_addr.clone(),
                         funds.clone(),
@@ -527,6 +530,8 @@ impl Wasm {
             sm.bank.transfer(
                 storage,
                 meter,
+                block,
+                sm,
                 sender.clone(),
                 contract_addr.clone(),
                 funds.clone(),
