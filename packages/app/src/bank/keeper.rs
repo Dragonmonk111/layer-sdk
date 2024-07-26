@@ -35,18 +35,21 @@ enum TypedDenom {
 }
 
 impl TypedDenom {
+    const PREFIX: &'static str = "cw20:";
+
     fn from_denom(denom: &str) -> Result<Self, AccountIdError> {
-        if denom.starts_with("cw20:") {
-            let contract = AccountId::parse_string(&denom[5..])?;
-            Ok(TypedDenom::Cw20(contract))
-        } else {
-            Ok(TypedDenom::Native(denom.into()))
+        match denom.strip_prefix(Self::PREFIX) {
+            None => Ok(TypedDenom::Native(denom.into())),
+            Some(contract) => {
+                let contract = AccountId::parse_string(contract)?;
+                Ok(TypedDenom::Cw20(contract))
+            }
         }
     }
 
     // This is pulled out from to_denom for simpler use in some cases
     fn cw20_denom(contract: &AccountId) -> String {
-        format!("cw20:{}", contract)
+        format!("{}{}", Self::PREFIX, contract)
     }
 
     #[allow(dead_code)]
@@ -154,7 +157,7 @@ impl Bank {
         let res = sm.wasm.query(storage, meter, block, sm, request)?;
         match res {
             QueryResponse::Wasm(WasmQueryResponse::Smart(res)) => {
-                let cw20::BalanceResponse { balance } = from_json(&res)?;
+                let cw20::BalanceResponse { balance } = from_json(res)?;
                 Ok(Coin {
                     amount: balance,
                     denom,
@@ -189,7 +192,7 @@ impl Bank {
         let res = sm.wasm.query(storage, meter, block, sm, request)?;
         match res {
             QueryResponse::Wasm(WasmQueryResponse::Smart(res)) => {
-                let cw20::TokenInfoResponse { total_supply, .. } = from_json(&res)?;
+                let cw20::TokenInfoResponse { total_supply, .. } = from_json(res)?;
                 Ok(total_supply)
             }
             _ => Err(QueryError::ParseError("unexpected response".into()).into()),
@@ -223,6 +226,7 @@ impl Bank {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn send_cw20(
         &self,
         storage: &mut dyn Storage,
@@ -245,7 +249,7 @@ impl Bank {
             funds: vec![],
         };
         sm.wasm
-            .process_msg(storage, meter, block, sm, &from_address, msg)?;
+            .process_msg(storage, meter, block, sm, from_address, msg)?;
         Ok(())
     }
 
@@ -273,35 +277,56 @@ impl Bank {
         Ok(())
     }
 
-    fn burn_tokens(
+    fn burn_native(
         &self,
         bank_storage: &mut dyn Storage,
         meter: &GasMeter,
-        from_address: AccountId,
-        amount: Vec<Coin>,
+        from_address: &AccountId,
+        coin: &Coin,
     ) -> PulsarResult<()> {
-        for coin in ValidCoins::new(&amount) {
-            let coin = coin?;
-            // remove from the supply
-            SUPPLY.update::<_, PlusError>(bank_storage, meter, &coin.denom, |supply| {
-                Ok(supply.unwrap_or_default().checked_sub(coin.amount)?)
-            })?;
-            // and to the account balance
-            BALANCES
-                .update::<_, PlusError>(
-                    bank_storage,
-                    meter,
-                    (&from_address, &coin.denom),
-                    |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
-                )
-                .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
-        }
+        // remove from the supply
+        SUPPLY.update::<_, PlusError>(bank_storage, meter, &coin.denom, |supply| {
+            Ok(supply.unwrap_or_default().checked_sub(coin.amount)?)
+        })?;
+        // and to the account balance
+        BALANCES
+            .update::<_, PlusError>(
+                bank_storage,
+                meter,
+                (&from_address, &coin.denom),
+                |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
+            )
+            .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn burn_cw20(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        from_address: &AccountId,
+        contract_addr: AccountId,
+        amount: Uint128,
+    ) -> PulsarResult<()> {
+        let msg = to_json_binary(&cw20::Cw20ExecuteMsg::Burn { amount })?;
+        let msg = WasmMsg::Execute {
+            sender: from_address.clone(),
+            contract_addr,
+            msg,
+            funds: vec![],
+        };
+        sm.wasm
+            .process_msg(storage, meter, block, sm, from_address, msg)?;
         Ok(())
     }
 }
 
 impl Bank {
     // helper to move funds when called from another module
+    #[allow(clippy::too_many_arguments)]
     pub fn transfer(
         &self,
         storage: &mut dyn Storage,
@@ -344,12 +369,33 @@ impl Bank {
         &self,
         storage: &mut dyn Storage,
         meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
         from_address: AccountId,
         amount: Vec<Coin>,
     ) -> PulsarResult<()> {
         let _span = debug_span!("burn", %from_address, amount = %CoinEncode(&amount)).entered();
-        let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
-        self.burn_tokens(&mut bank_storage, meter, from_address, amount)
+        for coin in ValidCoins::new(&amount) {
+            let coin = coin?;
+            match TypedDenom::from_denom(&coin.denom)? {
+                TypedDenom::Native(_) => {
+                    let mut bank_storage = prefixed(storage, NAMESPACE_BANK);
+                    self.burn_native(&mut bank_storage, meter, &from_address, coin)?;
+                }
+                TypedDenom::Cw20(contract) => {
+                    self.burn_cw20(
+                        storage,
+                        meter,
+                        block,
+                        sm,
+                        &from_address,
+                        contract,
+                        coin.amount,
+                    )?;
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn init(
@@ -396,7 +442,7 @@ impl Bank {
                 let events = vec![Event::new("burn")
                     .add_attribute("sender", &sender)
                     .add_attribute("amount", coins_to_string(&amount))];
-                self.burn(storage, meter, sender, amount)?;
+                self.burn(storage, meter, block, sm, sender, amount)?;
                 Ok(MsgResponse::new(events, BankMsgData::Burn {}))
             }
         }
@@ -828,8 +874,11 @@ mod test {
         assert_eq!(eth.u128(), 100);
 
         // burn tokens will reduce supply
-        bank.burn(&mut store, &meter, owner.clone(), coins(7, "btc"))
-            .unwrap();
+        {
+            let mut bank_store = prefixed(&mut store, NAMESPACE_BANK);
+            bank.burn_native(&mut bank_store, &meter, &owner, &coin(7, "btc"))
+                .unwrap();
+        }
         let rich = query_balance(&bank, &store, &owner);
         assert_eq!(vec![coin(8, "btc"), coin(70, "eth")], rich);
         let btc = query_supply(&bank, &store, "btc");
