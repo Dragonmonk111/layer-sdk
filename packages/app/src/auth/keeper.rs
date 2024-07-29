@@ -53,7 +53,7 @@ impl Auth {
         &self,
         storage: &mut dyn Storage,
         meter: &GasMeter,
-        _block: &BlockInfo,
+        block: &BlockInfo,
         sm: &StateMachine,
         tx: Tx,
         // Set to false in simulate only
@@ -143,6 +143,8 @@ impl Auth {
                 sm.bank.transfer(
                     storage,
                     meter,
+                    block,
+                    sm,
                     tx.signer.clone(),
                     fee_collector_account(),
                     vec![fee],

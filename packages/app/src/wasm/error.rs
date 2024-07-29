@@ -21,4 +21,7 @@ pub enum WasmError {
 
     #[error("Invalid Checksum, must be 32 bytes")]
     Checksum,
+
+    #[error("Tried to return SubMsg in sandboxed contract call")]
+    SubMsgNotSupported,
 }
