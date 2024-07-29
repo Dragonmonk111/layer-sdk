@@ -369,7 +369,7 @@ fn init_hackatom(
     };
     let tx = TxBuilder::new()
         .with_msg(msg)
-        .with_signer(&signer, sequence)
+        .with_signer(signer, sequence)
         .with_fee(1_000_000, coin(50_000, DENOM));
     let res = app.block(&[tx]);
     assert_block_success(&res, 1);
