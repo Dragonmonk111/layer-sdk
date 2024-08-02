@@ -3,7 +3,7 @@
 
 ### BUILDING
 
-FROM rust:1.77-bookworm as builder
+FROM rust:1.77-bookworm AS builder
 WORKDIR /myapp
 
 RUN apt update && apt install -y clang
