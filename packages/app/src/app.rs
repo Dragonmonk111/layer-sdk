@@ -189,6 +189,26 @@ impl<T: PersistentStorage + 'static> App<T> {
 // All these require an initialized app and will panic if neither load_from_storage
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
+    // TODO: refactor and move somewhere else. this is for debugging output
+    pub fn demo_db_dump(&self) {
+        // TODO: print out a bunch of stuff
+        // latest sequence
+        let seq = self.storage.latest_sequence();
+        println!("Sequence: {}", seq);
+
+        // get current state
+        for x in self.storage.current_state() {
+            let (key, value) = x;
+            println!("key: {:?}", key);
+            println!("value: {:?}", value);
+        }
+
+        // get changes since 1
+        for change in self.storage.changes_since(1) {
+            println!("change: {}", change);
+        }
+    }
+
     pub fn info(&self) -> Option<&BlockInfo> {
         self.data.as_ref().map(|d| &d.block)
     }

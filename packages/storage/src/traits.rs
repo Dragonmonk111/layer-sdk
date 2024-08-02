@@ -22,6 +22,11 @@ pub trait PersistentStorage {
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8>;
+
+    // TODO: refactor out the sync stuff better...
+    fn latest_sequence(&self) -> u64;
+    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>; // TODO: improve
+    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a>; // TODO: design
 }
 
 /// This is like cosmwasm_std::Storage, but takes GasMeter as extra arg everywhere

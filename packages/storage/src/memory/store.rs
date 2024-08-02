@@ -66,6 +66,22 @@ impl PersistentStorage for MemoryStore {
     fn app_hash(&self) -> Vec<u8> {
         self.0.read().hash.clone()
     }
+
+    // TODO: these are placeholders, do we want to implement these later?
+    fn latest_sequence(&self) -> u64 {
+        2
+    }
+
+    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
+        let inner = self.0.read();
+        let it = inner.data.iter().map(|(k, v)| (k.to_owned(), v.to_owned()));
+        let data: Vec<_> = it.collect();
+        Box::new(data.into_iter())
+    }
+
+    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a> {
+        Box::new([].into_iter())
+    }
 }
 
 pub struct MemoryStorageReader<'a>(RwLockReadGuard<'a, BTreeStorage>);

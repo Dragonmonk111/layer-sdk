@@ -91,6 +91,19 @@ impl PersistentStorage for RockStore {
             .unwrap()
             .unwrap_or_else(|| vec![0; 32])
     }
+
+    // TODO: these are placeholders, do we want to implement these later?
+    fn latest_sequence(&self) -> u64 {
+        2
+    }
+
+    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
+        Box::new([].into_iter())
+    }
+
+    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a> {
+        Box::new([].into_iter())
+    }
 }
 
 pub struct RockReader<'a> {
