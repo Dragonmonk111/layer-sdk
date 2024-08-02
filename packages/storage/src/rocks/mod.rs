@@ -94,15 +94,27 @@ impl PersistentStorage for RockStore {
 
     // TODO: these are placeholders, do we want to implement these later?
     fn latest_sequence(&self) -> u64 {
-        2
+        self.db.latest_sequence_number()
     }
 
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
-        Box::new([].into_iter())
+        // TODO: improve this, make more efficient
+        let items = self.db.iterator(rocksdb::IteratorMode::Start);
+        let it = items.map(|x| {
+            let (k, v) = x.unwrap();
+            (k.into_vec(), v.into_vec())
+        });
+        Box::new(it)
     }
 
-    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a> {
-        Box::new([].into_iter())
+    fn changes_since<'a>(&'a self, sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a> {
+        // TODO: implement properly, not just sequences
+        let changes = self.db.get_updates_since(sequence).unwrap();
+        let it = changes.map(|r| {
+            let (seq, _batch) = r.unwrap();
+            seq
+        });
+        Box::new(it)
     }
 }
 
