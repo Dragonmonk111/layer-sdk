@@ -10,11 +10,6 @@ mod wrap;
 
 pub use memory::MemoryStore;
 
-#[cfg(feature = "lmdb")]
-mod lmdb;
-#[cfg(feature = "lmdb")]
-pub use crate::lmdb::LmdbStore;
-
 #[cfg(feature = "rocksdb")]
 mod rocks;
 #[cfg(feature = "rocksdb")]
