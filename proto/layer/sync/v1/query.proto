@@ -1,0 +1,64 @@
+syntax = "proto3";
+package layer.sync.v1;
+
+import "google/api/annotations.proto";
+
+// Query defines the gRPC querier service.
+service Query {
+  rpc Latestheight(QueryLatestHeightRequest) returns (QueryLatestHeightResponse) {
+    option (google.api.http).get = "/layer/sync/v1/latest_height";
+  }
+
+  rpc CurrentState(StreamCurrentStateRequest) returns (stream WriteData) {
+  }
+
+  rpc ChangesSince(StreamChangesSinceRequest) returns (stream StateUpdate) {
+  }
+}
+
+message QueryLatestHeightRequest {
+}
+
+message QueryLatestHeightResponse {
+    uint64 height = 1;
+}
+
+
+message StreamCurrentStateRequest {
+}
+
+message StreamChangesSinceRequest {
+    uint64 height = 1;
+}
+
+message StateUpdate {
+    oneof event {
+        BlockEvent start_block = 1; 
+        BlockEvent end_block = 2;
+        WriteData write_state = 3; 
+        DeleteData delete_state = 4; 
+    }
+}
+
+message BlockEvent {
+    uint64 height = 1;
+    // TODO: timestamp
+}
+
+message WriteData {
+    string module = 1;
+    string bucket = 2;
+    // this is split from whatever we use internally - [] for item
+    // numbers are stringified. bytes are base64 encoded
+    repeated string keys = 3;
+    // TODO define this type: just JSON? use protobuf for internal types?
+    string value = 4;
+}
+
+message DeleteData {
+    string module = 1;
+    string bucket = 2;
+    // this is split from whatever we use internally - [] for 
+    // numbers are stringified. bytes are base64 encoded
+    repeated string keys = 3;
+}

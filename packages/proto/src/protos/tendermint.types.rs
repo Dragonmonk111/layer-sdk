@@ -289,6 +289,59 @@ impl SignedMsgType {
         }
     }
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Evidence {
+    #[prost(oneof = "evidence::Sum", tags = "1, 2")]
+    pub sum: ::core::option::Option<evidence::Sum>,
+}
+/// Nested message and enum types in `Evidence`.
+pub mod evidence {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Sum {
+        #[prost(message, tag = "1")]
+        DuplicateVoteEvidence(super::DuplicateVoteEvidence),
+        #[prost(message, tag = "2")]
+        LightClientAttackEvidence(super::LightClientAttackEvidence),
+    }
+}
+/// DuplicateVoteEvidence contains evidence of a validator signed two conflicting votes.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DuplicateVoteEvidence {
+    #[prost(message, optional, tag = "1")]
+    pub vote_a: ::core::option::Option<Vote>,
+    #[prost(message, optional, tag = "2")]
+    pub vote_b: ::core::option::Option<Vote>,
+    #[prost(int64, tag = "3")]
+    pub total_voting_power: i64,
+    #[prost(int64, tag = "4")]
+    pub validator_power: i64,
+    #[prost(message, optional, tag = "5")]
+    pub timestamp: ::core::option::Option<super::super::google::protobuf::Timestamp>,
+}
+/// LightClientAttackEvidence contains evidence of a set of validators attempting to mislead a light client.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LightClientAttackEvidence {
+    #[prost(message, optional, tag = "1")]
+    pub conflicting_block: ::core::option::Option<LightBlock>,
+    #[prost(int64, tag = "2")]
+    pub common_height: i64,
+    #[prost(message, repeated, tag = "3")]
+    pub byzantine_validators: ::prost::alloc::vec::Vec<Validator>,
+    #[prost(int64, tag = "4")]
+    pub total_voting_power: i64,
+    #[prost(message, optional, tag = "5")]
+    pub timestamp: ::core::option::Option<super::super::google::protobuf::Timestamp>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EvidenceList {
+    #[prost(message, repeated, tag = "1")]
+    pub evidence: ::prost::alloc::vec::Vec<Evidence>,
+}
 /// ConsensusParams contains consensus critical parameters that determine the
 /// validity of blocks.
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -366,60 +419,6 @@ pub struct HashedParams {
     pub block_max_bytes: i64,
     #[prost(int64, tag = "2")]
     pub block_max_gas: i64,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Evidence {
-    #[prost(oneof = "evidence::Sum", tags = "1, 2")]
-    pub sum: ::core::option::Option<evidence::Sum>,
-}
-/// Nested message and enum types in `Evidence`.
-pub mod evidence {
-    #[allow(clippy::large_enum_variant)]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Sum {
-        #[prost(message, tag = "1")]
-        DuplicateVoteEvidence(super::DuplicateVoteEvidence),
-        #[prost(message, tag = "2")]
-        LightClientAttackEvidence(super::LightClientAttackEvidence),
-    }
-}
-/// DuplicateVoteEvidence contains evidence of a validator signed two conflicting votes.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DuplicateVoteEvidence {
-    #[prost(message, optional, tag = "1")]
-    pub vote_a: ::core::option::Option<Vote>,
-    #[prost(message, optional, tag = "2")]
-    pub vote_b: ::core::option::Option<Vote>,
-    #[prost(int64, tag = "3")]
-    pub total_voting_power: i64,
-    #[prost(int64, tag = "4")]
-    pub validator_power: i64,
-    #[prost(message, optional, tag = "5")]
-    pub timestamp: ::core::option::Option<super::super::google::protobuf::Timestamp>,
-}
-/// LightClientAttackEvidence contains evidence of a set of validators attempting to mislead a light client.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LightClientAttackEvidence {
-    #[prost(message, optional, tag = "1")]
-    pub conflicting_block: ::core::option::Option<LightBlock>,
-    #[prost(int64, tag = "2")]
-    pub common_height: i64,
-    #[prost(message, repeated, tag = "3")]
-    pub byzantine_validators: ::prost::alloc::vec::Vec<Validator>,
-    #[prost(int64, tag = "4")]
-    pub total_voting_power: i64,
-    #[prost(message, optional, tag = "5")]
-    pub timestamp: ::core::option::Option<super::super::google::protobuf::Timestamp>,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EvidenceList {
-    #[prost(message, repeated, tag = "1")]
-    pub evidence: ::prost::alloc::vec::Vec<Evidence>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

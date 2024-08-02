@@ -98,3 +98,11 @@ pub mod tendermint {
         include!("protos/tendermint.version.rs");
     }
 }
+
+pub mod layer {
+    pub mod sync {
+        pub mod v1 {
+            include!("protos/layer.sync.v1.rs");
+        }
+    }
+}
