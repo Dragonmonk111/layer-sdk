@@ -35,13 +35,13 @@ pub(crate) unsafe fn danger_will_robinson(
     block: &BlockInfo,
 ) -> Backend<VmApi, VmStore, VmQuerier> {
     let storage = VmStore {
-        storage: transmute(contract_storage),
+        storage: transmute::<&mut dyn Storage, &mut dyn Storage>(contract_storage),
         meter: &*(meter as *const GasMeter),
         iterators: HashMap::new(),
     };
     let querier = VmQuerier {
         sm: &*(sm as *const StateMachine),
-        storage: transmute(query_storage),
+        storage: transmute::<&dyn ReadonlyStorage, &dyn ReadonlyStorage>(query_storage),
         meter: &*(meter as *const GasMeter),
         block: block.clone(),
     };
