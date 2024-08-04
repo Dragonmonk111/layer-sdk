@@ -207,7 +207,8 @@ impl Slay3rGolem {
         };
 
         // placeholder for signing info
-        let sequence = self.get_sequence(self.sender_addr()).unwrap();
+        #[allow(deprecated)]
+        let sequence = self.get_sequence(self.sender()).unwrap();
         let signing_info = SigningInfo {
             sequence,
             pubkey: Some(self.signer.pub_key()),

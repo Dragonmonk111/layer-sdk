@@ -3670,7 +3670,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-abci"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytes",
  "prost 0.12.6",
@@ -3684,7 +3684,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-app"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3712,7 +3712,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-cosmos"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytes",
  "cosmos-sdk-proto 0.18.0",
@@ -3731,7 +3731,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-golem"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "abstract-cw-multi-test",
  "abstract-cw-plus-interface",
@@ -3751,7 +3751,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-proto"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytes",
  "prost 0.12.6",
@@ -3761,7 +3761,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-std"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bech32 0.9.1",
  "bytes",
@@ -3781,7 +3781,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-storage"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "cosmwasm-std",
  "cw-storage-plus",
@@ -3798,7 +3798,7 @@ dependencies = [
 
 [[package]]
 name = "slay3rd"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytes",
  "clap",
@@ -3985,7 +3985,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tc-caller"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -3998,7 +3998,7 @@ dependencies = [
 
 [[package]]
 name = "tc-echo"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
