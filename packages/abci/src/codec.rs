@@ -21,10 +21,6 @@ pub const MAX_VARINT_LENGTH: usize = 16;
 /// The server receives incoming requests, and sends outgoing responses.
 pub type ServerCodec = Codec<Request, Response>;
 
-#[cfg(feature = "client")]
-/// The client sends outgoing requests, and receives incoming responses.
-pub type ClientCodec = Codec<Response, Request>;
-
 /// Allows for iteration over `S` to produce instances of `I`, as well as
 /// sending instances of `O`.
 pub struct Codec<I, O> {

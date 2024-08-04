@@ -16,7 +16,7 @@ sha2 = { workspace = true }
 serde = { workspace = true }
 cw-orch-core = { workspace = true }
 
-slay3r-app = { workspace = true, default-features = false}
+slay3r-app = { workspace = true }
 slay3r-cosmos = { workspace = true }
 slay3r-std = { workspace = true }
 slay3r-storage = { workspace = true }

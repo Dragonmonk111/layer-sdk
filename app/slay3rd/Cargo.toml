@@ -11,7 +11,7 @@ edition = { workspace = true }
 # default = ["no-trace"]
 # remove any unneeded baggage
 optimize = ["tracing/release_max_level_info"]
-# remove exceessive tracing, we often don't want
+# remove excessive tracing, we often don't want
 no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
