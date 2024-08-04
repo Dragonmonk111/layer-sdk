@@ -67,6 +67,7 @@ pub mod cosmwasm {
 }
 
 pub mod google {
+    #[allow(clippy::doc_lazy_continuation)]
     pub mod api {
         include!("protos/google.api.rs");
     }

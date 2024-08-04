@@ -81,6 +81,7 @@ impl TendermintService {
 #[tonic::async_trait]
 impl Service for TendermintService {
     /// GetNodeInfo queries the current node info.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_node_info(
         &self,
@@ -127,6 +128,7 @@ impl Service for TendermintService {
     }
 
     /// GetSyncing queries node syncing.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_syncing(
         &self,
@@ -140,6 +142,7 @@ impl Service for TendermintService {
     }
 
     /// GetLatestBlock returns the latest block.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_latest_block(
         &self,
@@ -156,6 +159,7 @@ impl Service for TendermintService {
     }
 
     /// GetBlockByHeight queries block for given height.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_block_by_height(
         &self,
@@ -176,6 +180,7 @@ impl Service for TendermintService {
     }
 
     /// GetLatestValidatorSet queries latest validator-set.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_latest_validator_set(
         &self,
@@ -208,6 +213,7 @@ impl Service for TendermintService {
     }
 
     /// GetValidatorSetByHeight queries validator-set at a given height.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_validator_set_by_height(
         &self,
@@ -225,6 +231,7 @@ impl Service for TendermintService {
     /// a valid and supported path, including app, custom, p2p, and store.
     ///
     /// Since: cosmos-sdk 0.46
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn abci_query(
         &self,

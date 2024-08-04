@@ -207,7 +207,7 @@ impl Slay3rGolem {
         };
 
         // placeholder for signing info
-        let sequence = self.get_sequence(self.sender()).unwrap();
+        let sequence = self.get_sequence(self.sender_addr()).unwrap();
         let signing_info = SigningInfo {
             sequence,
             pubkey: Some(self.signer.pub_key()),
@@ -437,14 +437,14 @@ mod tests {
 
         // check we initialized balances properly
         let bank_query = chain.bank_querier();
-        let balance = bank_query.balance(chain.sender(), None).unwrap();
+        let balance = bank_query.balance(chain.sender_addr(), None).unwrap();
         assert_eq!(balance, coins(2_000_000_000u128, "uslay"));
 
         // check we can send a transaction
         let to_send = 123_456_789u128;
         let chain2 = chain.with_index(2);
-        let recipient = chain2.sender();
-        assert_ne!(chain.sender(), recipient);
+        let recipient = chain2.sender_addr();
+        assert_ne!(chain.sender_addr(), recipient);
         chain
             .send_tokens(&recipient, coins(to_send, "uslay"))
             .unwrap();
@@ -454,7 +454,7 @@ mod tests {
         assert_eq!(balance, coins(2_000_000_000u128 + to_send, "uslay"));
 
         // money sent and gas paid
-        let balance = bank_query.balance(chain.sender(), None).unwrap();
+        let balance = bank_query.balance(chain.sender_addr(), None).unwrap();
         let gas_fees = 250_000u128; // 10M gas * 0.025 uslay/gas (defaults)
         assert_eq!(
             balance,
@@ -470,8 +470,8 @@ mod tests {
     #[test]
     fn chain_supports_wasm_contract() {
         let chain = Slay3rGolemBuilder::new().build();
-        let sender = chain.sender();
-        let recipient = chain.with_index(2).sender();
+        let sender = chain.sender_addr();
+        let recipient = chain.with_index(2).sender_addr();
         let init_amount = Uint128::new(55_000_000);
 
         // why do we need contract id here and not on the task contract?

@@ -130,7 +130,7 @@ impl Bank {
         denom: &str,
     ) -> PulsarResult<Coin> {
         let amount = BALANCES
-            .may_load(bank_storage, meter, (account, &denom))?
+            .may_load(bank_storage, meter, (account, denom))?
             .unwrap_or_default();
         Ok(Coin {
             amount,
@@ -212,7 +212,7 @@ impl Bank {
             .update::<_, PlusError>(
                 bank_storage,
                 meter,
-                (&from_address, &coin.denom),
+                (from_address, &coin.denom),
                 |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
             )
             .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
@@ -220,7 +220,7 @@ impl Bank {
         BALANCES.update::<_, PulsarError>(
             bank_storage,
             meter,
-            (&to_address, &coin.denom),
+            (to_address, &coin.denom),
             |balance| Ok(balance.unwrap_or_default() + coin.amount),
         )?;
         Ok(())
@@ -293,7 +293,7 @@ impl Bank {
             .update::<_, PlusError>(
                 bank_storage,
                 meter,
-                (&from_address, &coin.denom),
+                (from_address, &coin.denom),
                 |balance| Ok(balance.unwrap_or_default().checked_sub(coin.amount)?),
             )
             .map_err(|_| BankError::InsufficientFunds(from_address.to_string()))?;
@@ -856,7 +856,7 @@ mod test {
 
         // send some tokens will not modify supply
         // TODO: use transfer here, but needs block and sm which we didn't set up
-        let to_send = vec![coin(30, "eth"), coin(5, "btc")];
+        let to_send = [coin(30, "eth"), coin(5, "btc")];
         {
             let mut bank_store = prefixed(&mut store, NAMESPACE_BANK);
             bank.send_native(&mut bank_store, &meter, &owner, &rcpt, &to_send[0])

@@ -79,7 +79,7 @@ mod tests {
 
         // check we initialized balances properly
         let bank_query = chain.bank_querier();
-        let balance = bank_query.balance(chain.sender(), None).unwrap();
+        let balance = bank_query.balance(chain.sender_addr(), None).unwrap();
         assert_eq!(balance, coins(2_000_000_000u128, "uslay"));
 
         // all further tests are in Slay3rTube... just check setup here

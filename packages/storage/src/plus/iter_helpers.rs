@@ -98,7 +98,8 @@ mod test {
     }
 }
 
-#[cfg(feature = "todo")]
+// TODO: enable this
+/*
 #[cfg(test)]
 mod namespace_test {
     use super::*;
@@ -217,3 +218,4 @@ mod namespace_test {
         assert_eq!(namespace_upper_bound(b"\xffabc"), b"\xffabd".to_vec());
     }
 }
+*/

@@ -11,12 +11,12 @@ edition = { workspace = true }
 # default = ["no-trace"]
 # remove any unneeded baggage
 optimize = ["tracing/release_max_level_info"]
-# remove exceessive tracing, we often don't want
+# remove excessive tracing, we often don't want
 no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
 slay3r-abci = { workspace = true }
-slay3r-app = { workspace = true }
+slay3r-app = { workspace = true, features = ["rocksdb"] }
 slay3r-std = { workspace = true }
 slay3r-cosmos = { workspace = true }
 slay3r-proto = { workspace = true, features = ["server"] }
@@ -26,7 +26,7 @@ cosmwasm-std = { workspace = true }
 clap = { version = "4.2.4", features = ["derive"]}
 figment = { version = "0.10.8", features = ["env", "toml"]}
 serde = { workspace = true }
-pico-args = { version = "0.5.0", default_features = false }
+pico-args = { version = "0.5.0", default-features = false }
 
 tendermint = { workspace = true }
 tendermint-proto = { workspace = true }

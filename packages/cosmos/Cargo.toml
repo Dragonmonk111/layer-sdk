@@ -20,5 +20,5 @@ cosmrs = { workspace = true }
 cosmos-sdk-proto = { workspace = true }
 flate2 = { version = "1.0.26" }
 
-[dev_dependencies]
+[dev-dependencies]
 hex-literal = {workspace = true }

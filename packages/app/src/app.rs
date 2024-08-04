@@ -490,19 +490,6 @@ mod tests {
         transaction_workflow(storage);
     }
 
-    #[cfg(feature = "lmdb")]
-    #[test]
-    fn transaction_workflow_lmdb() {
-        // always delete, ignore "does not exist" error
-        let path = "/tmp/slay3r-test-lmdb";
-        let _ = std::fs::remove_dir_all(path);
-        std::fs::create_dir_all(path).unwrap();
-
-        // create lmdb store and run same tests
-        let storage = slay3r_storage::LmdbStore::new(path, None);
-        transaction_workflow(storage);
-    }
-
     #[cfg(feature = "rocksdb")]
     #[test]
     fn transaction_workflow_rocksdb() {

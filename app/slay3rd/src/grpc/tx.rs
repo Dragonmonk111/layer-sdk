@@ -68,6 +68,7 @@ impl TxService {
 #[tonic::async_trait]
 impl Service for TxService {
     /// Simulate simulates executing a transaction for estimating gas usage.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn simulate(
         &self,
@@ -79,6 +80,7 @@ impl Service for TxService {
     }
 
     /// GetTx fetches a tx by hash.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_tx(
         &self,
@@ -99,6 +101,7 @@ impl Service for TxService {
     }
 
     /// BroadcastTx broadcast transaction.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn broadcast_tx(
         &self,
@@ -151,6 +154,7 @@ impl Service for TxService {
     }
 
     /// GetTxsEvent fetches txs by event.
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_txs_event(
         &self,
@@ -206,6 +210,7 @@ impl Service for TxService {
     /// GetBlockWithTxs fetches a block with decoded txs.
     ///
     /// Since: cosmos-sdk 0.45.2
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn get_block_with_txs(
         &self,
@@ -235,6 +240,7 @@ impl Service for TxService {
     /// TxDecode decodes the transaction.
     ///
     /// Since: cosmos-sdk 0.47
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_decode(
         &self,
@@ -246,6 +252,7 @@ impl Service for TxService {
     /// TxEncode encodes the transaction.
     ///
     /// Since: cosmos-sdk 0.47
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_encode(
         &self,
@@ -257,6 +264,7 @@ impl Service for TxService {
     /// TxEncodeAmino encodes an Amino transaction from JSON to encoded bytes.
     ///
     /// Since: cosmos-sdk 0.47
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_encode_amino(
         &self,
@@ -268,6 +276,7 @@ impl Service for TxService {
     /// TxDecodeAmino decodes an Amino transaction from encoded bytes to JSON.
     ///
     /// Since: cosmos-sdk 0.47
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(skip(self), level = "info", err(Debug))]
     async fn tx_decode_amino(
         &self,

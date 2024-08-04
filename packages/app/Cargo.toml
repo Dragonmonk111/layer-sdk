@@ -6,7 +6,6 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [features]
-lmdb = ["slay3r-storage/lmdb"]
 rocksdb = ["slay3r-storage/rocksdb"]
 
 [dependencies]

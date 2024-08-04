@@ -137,7 +137,8 @@ impl<'b> ReadonlyStorage for ReadonlyPrefixedStorage<'b> {
     fn abort(self) {}
 }
 
-#[cfg(feature = "todo")]
+// TODO: enable this
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,3 +202,4 @@ mod tests {
         assert_eq!(bar.get(b"elsewhere"), None);
     }
 }
+*/
