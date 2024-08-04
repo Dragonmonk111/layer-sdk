@@ -167,12 +167,12 @@ fn tx_result_to_proto(
     }
 }
 
-/// These were pulled from Jaeger fed by CosmJS tests.
-/// That means the input formats are ensured to be compatible with CosmJS and what we can expect.
-/// TODO: update all the proto for the new prefix
-#[cfg(feature = "disabled_tests")]
+// TODO: update all the proto for the new prefix
+/*
 #[cfg(test)]
 mod fixtures {
+    /// These were pulled from Jaeger fed by CosmJS tests.
+    /// That means the input formats are ensured to be compatible with CosmJS and what we can expect.
     use super::*;
 
     use cosmwasm_std::{coin, Binary, Event};
@@ -281,3 +281,4 @@ mod fixtures {
         }
     }
 }
+*/
