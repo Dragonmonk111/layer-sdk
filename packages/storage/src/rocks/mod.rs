@@ -7,7 +7,7 @@ use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 
 use crate::{
-    traits::{BatchChanges, StateChange},
+    traits::{BatchChanges, StateUpdate},
     FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
     DEFAULT_PERSISTED_PRICES,
 };
@@ -128,7 +128,7 @@ impl PersistentStorage for RockStore {
 
 // TODO: completely different implementation to output diffs
 struct CaptureBatch {
-    changes: Vec<StateChange>,
+    changes: Vec<StateUpdate>,
 }
 
 impl CaptureBatch {
@@ -141,7 +141,7 @@ impl CaptureBatch {
 
 impl WriteBatchIterator for CaptureBatch {
     fn put(&mut self, key: Box<[u8]>, value: Box<[u8]>) {
-        let change = StateChange::Write {
+        let change = StateUpdate::Write {
             key: key.into_vec(),
             value: value.into_vec(),
         };
@@ -149,7 +149,7 @@ impl WriteBatchIterator for CaptureBatch {
     }
 
     fn delete(&mut self, key: Box<[u8]>) {
-        let change = StateChange::Delete {
+        let change = StateUpdate::Delete {
             key: key.into_vec(),
         };
         self.changes.push(change);

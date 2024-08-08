@@ -23,7 +23,7 @@ pub struct BlockWrites {
     pub height: u64,
     /// TODO: timestamp? app hash?
     #[prost(message, repeated, tag = "3")]
-    pub event: ::prost::alloc::vec::Vec<StateChange>,
+    pub events: ::prost::alloc::vec::Vec<StateChange>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -54,8 +54,8 @@ pub struct WriteData {
     #[prost(string, repeated, tag = "3")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// TODO define this type: just JSON? use protobuf for internal types?
-    #[prost(string, tag = "4")]
-    pub value: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", tag = "4")]
+    pub value: ::prost::alloc::vec::Vec<u8>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

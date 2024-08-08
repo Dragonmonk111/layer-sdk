@@ -37,7 +37,7 @@ message StreamChangesSinceRequest {
 message BlockWrites {
     uint64 height = 1;
     // TODO: timestamp? app hash?
-    repeated StateChange event = 3;
+    repeated StateChange events = 3;
 }
 
 message StateChange {
@@ -54,7 +54,7 @@ message WriteData {
     // numbers are stringified. bytes are base64 encoded
     repeated string keys = 3;
     // TODO define this type: just JSON? use protobuf for internal types?
-    string value = 4;
+    bytes value = 4;
 }
 
 message DeleteData {

@@ -32,26 +32,26 @@ pub trait PersistentStorage {
 #[derive(Debug, PartialEq)]
 pub struct BatchChanges {
     pub sequence: u64,
-    pub changes: Vec<StateChange>,
+    pub changes: Vec<StateUpdate>,
 }
 
 #[derive(PartialEq)]
-pub enum StateChange {
+pub enum StateUpdate {
     Write { key: Vec<u8>, value: Vec<u8> },
     Delete { key: Vec<u8> },
 }
 
-impl std::fmt::Debug for StateChange {
+impl std::fmt::Debug for StateUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Write { key, value } => f
                 .debug_struct("Write")
-                .field("key", &stringify_or_hex(&key))
-                .field("value", &stringify_or_hex(&value))
+                .field("key", &stringify_or_hex(key))
+                .field("value", &stringify_or_hex(value))
                 .finish(),
             Self::Delete { key } => f
                 .debug_struct("Delete")
-                .field("key", &stringify_or_hex(&key))
+                .field("key", &stringify_or_hex(key))
                 .finish(),
         }
     }

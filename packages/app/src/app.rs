@@ -24,8 +24,8 @@ use slay3r_std::{
 };
 use slay3r_std::{GasMeter, Query, Rfc3339, Tx};
 use slay3r_storage::{
-    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
-    Transaction,
+    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx,
+    StateUpdate, Storage, Transaction,
 };
 
 // FIXME: make this configurable on per-node basis
@@ -216,6 +216,8 @@ pub fn stringify_or_hex(input: &[u8]) -> String {
         .map_or_else(|_| HexEncode::new(&input).to_string(), |x| x.to_string())
 }
 
+use slay3r_proto::layer::sync::v1::{self as sync, StateChange};
+
 // Expose lower-level state sync methods by wrapping the persistent storage
 impl<T: PersistentStorage + 'static> App<T> {
     // TODO: refactor and move somewhere else. this is for debugging output
@@ -223,8 +225,12 @@ impl<T: PersistentStorage + 'static> App<T> {
         // print out a bunch of stuff
 
         // latest sequence
-        let seq = self.storage.latest_sequence();
-        println!("\n********* Sequence: {} ***********", seq);
+        println!(
+            "\n********* Sequence: {} ***********",
+            self.latest_sequence()
+        );
+
+        // TODO: use helpers one parsing is mostly working
 
         // get current state
         for x in self.storage.current_state() {
@@ -239,6 +245,64 @@ impl<T: PersistentStorage + 'static> App<T> {
         for change in self.storage.changes_since(1) {
             println!("change: {:?}", change);
         }
+    }
+
+    pub fn latest_sequence(&self) -> u64 {
+        self.storage.latest_sequence()
+    }
+
+    pub fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = sync::WriteData> + 'a> {
+        let it = self.storage.current_state();
+        let it = it.map(|(k, value)| {
+            let parsed = parse_key(k);
+            sync::WriteData {
+                module: parsed.module,
+                bucket: parsed.bucket,
+                keys: parsed.keys,
+                value,
+            }
+        });
+        Box::new(it)
+    }
+
+    pub fn changes_since<'a>(
+        &'a self,
+        sequence: u64,
+    ) -> Box<dyn Iterator<Item = sync::BlockWrites> + 'a> {
+        let it = self.storage.changes_since(sequence);
+        let it = it.map(|batch| {
+            let events = batch
+                .changes
+                .into_iter()
+                .map(|x| {
+                    let event = match x {
+                        StateUpdate::Write { key, value } => {
+                            let parsed = parse_key(key);
+                            let data = sync::WriteData {
+                                module: parsed.module,
+                                bucket: parsed.bucket,
+                                keys: parsed.keys,
+                                value,
+                            };
+                            sync::state_change::Event::WriteState(data)
+                        }
+                        StateUpdate::Delete { key } => {
+                            let parsed = parse_key(key);
+                            let data = sync::DeleteData {
+                                module: parsed.module,
+                                bucket: parsed.bucket,
+                                keys: parsed.keys,
+                            };
+                            sync::state_change::Event::DeleteState(data)
+                        }
+                    };
+                    StateChange { event: Some(event) }
+                })
+                .collect();
+            let height = batch.sequence; // TODO: this is not the height!!!
+            sync::BlockWrites { height, events }
+        });
+        Box::new(it)
     }
 }
 

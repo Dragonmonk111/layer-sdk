@@ -22,5 +22,6 @@ pub use prefixed_storage::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPre
 pub use prices::{
     PriceList, DEFAULT_CACHE_PRICES, DEFAULT_COMMIT_PRICES, DEFAULT_PERSISTED_PRICES,
 };
+pub use traits::{BatchChanges, StateUpdate};
 pub use traits::{PersistentStorage, ReadonlyStorage, Storage, Transaction};
 pub use wrap::{atomic, RepLog, ScratchTx, SubTx, WeakSubTx};
