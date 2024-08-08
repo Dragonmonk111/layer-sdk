@@ -1,3 +1,5 @@
+use core::str;
+
 use thiserror::Error;
 use tracing::{
     debug, debug_span,
@@ -8,8 +10,8 @@ use tracing::{
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
-use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
+use crate::{auth, bank, genesis::GenesisState, wasm};
 use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
@@ -189,6 +191,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 }
 
+/**********************/
+
 // TODO: move this out to own module.
 // Convert from PersistentStorage to the GRPC types
 
@@ -197,18 +201,70 @@ impl<T: PersistentStorage + 'static> App<T> {
 pub struct ParsedKey {
     pub module: String,
     pub bucket: String,
+    // TODO: revisit this, run it in the module
     pub keys: Vec<String>,
 }
 
 // TODO: result here?
-pub fn parse_key(_key: Vec<u8>) -> ParsedKey {
-    // TODO
+pub fn parse_key(key: Vec<u8>) -> ParsedKey {
+    let (module, key) = split_module(key);
+    let (bucket, key) = split_bucket(key);
+
+    let keys = match module.as_bytes() {
+        // internal use, currently only _last_block Item
+        b"" => vec![],
+        // TODO: make this explicit, but only two Items for now, so no key
+        NAMESPACE_APP => vec![],
+
+        // real ones
+        auth::NAMESPACE_AUTH => auth::parse_keys(&bucket, key),
+        bank::NAMESPACE_BANK => bank::parse_keys(&bucket, key),
+        wasm::NAMESPACE_WASM => wasm::parse_keys(&bucket, key),
+        _ => unimplemented!(),
+    };
     ParsedKey {
-        module: "bank".into(),
-        bucket: "demo".into(),
-        keys: vec![],
+        module,
+        bucket,
+        keys,
     }
 }
+
+// This tries to read the cw-storage-plus 2 byte length.
+// It returns the beginning of the next item if valid, otherwise None
+pub fn cut_point(key: &[u8]) -> Option<usize> {
+    // first two bytes are module length
+    let len = u16::from_be_bytes(key[0..2].try_into().ok()?);
+    let end = (2 + len) as usize;
+    if end > key.len() {
+        None
+    } else {
+        Some(end)
+    }
+}
+
+pub fn split_off_str(mut key: Vec<u8>, end: usize) -> (String, Vec<u8>) {
+    let prefix = stringify_or_hex(&key[2..end]);
+    key.splice(0..end, [].into_iter());
+    (prefix, key)
+}
+
+// If we can't split, we return empty module
+pub fn split_module(key: Vec<u8>) -> (String, Vec<u8>) {
+    // If no cut point, we use "" as module
+    match cut_point(&key) {
+        Some(end) => split_off_str(key, end),
+        None => ("".to_string(), key),
+    }
+}
+
+pub fn split_bucket(key: Vec<u8>) -> (String, Vec<u8>) {
+    match cut_point(&key) {
+        Some(end) => split_off_str(key, end),
+        None => (String::from_utf8(key).unwrap(), vec![]),
+    }
+}
+
+/**********************/
 
 // TODO: move this to standard utils (also in storage/src/traits.rs)
 pub fn stringify_or_hex(input: &[u8]) -> String {
@@ -233,17 +289,22 @@ impl<T: PersistentStorage + 'static> App<T> {
         // TODO: use helpers one parsing is mostly working
 
         // get current state
+        /*
         for x in self.storage.current_state() {
             let (key, value) = x;
             println!("raw key: {:?}", stringify_or_hex(&key));
+            println!("value: {:?}", stringify_or_hex(&value));
             let parsed = parse_key(key);
             println!("parsed key: {:?}", parsed);
-            println!("value: {:?}", stringify_or_hex(&value));
+        }
+        */
+        for item in self.current_state() {
+            println!("  {:?}", item);
         }
 
         // get changes since 1
-        for change in self.storage.changes_since(1) {
-            println!("change: {:?}", change);
+        for change in self.changes_since(0) {
+            println!("* : {:?}", change);
         }
     }
 

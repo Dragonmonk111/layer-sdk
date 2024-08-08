@@ -31,6 +31,7 @@ cosmos-sdk-proto = { workspace = true }
 
 cw-orch-core = { workspace = true }
 anyhow = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 hex-literal = { workspace = true }

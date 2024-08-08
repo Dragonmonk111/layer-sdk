@@ -2,6 +2,7 @@ use tracing::debug_span;
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
+use cw_storage_plus::KeyDeserialize;
 
 use slay3r_std::{
     response::{AccountResponse, QueryResponse},
@@ -16,6 +17,14 @@ use super::AuthError;
 
 pub const NAMESPACE_AUTH: &[u8] = b"auth";
 const ACCOUNTS: Map<&AccountId, Account> = Map::new("accounts");
+
+pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
+    match bucket {
+        "accounts" => vec![AccountId::from_vec(key).unwrap().to_string()],
+        // FIXME: make robust for production, but this helps debug
+        _ => panic!("unknown bucket {}", bucket),
+    }
+}
 
 // Store magic accounts here
 // TODO: Initialize with InternalAccount on startup
