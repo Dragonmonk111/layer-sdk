@@ -22,3 +22,7 @@ In order to test this works with the real database, we can try the following:
 cd packages/app
 cargo test --tests transaction_workflow_rocksdb --features rocksdb -- --nocapture
 ```
+
+## Notes:
+
+AccountId encodes nicer in JSON (at least hex rather than [84,188,124,191,71,229,153,47,39,153,73,21,75,241,30,202,240,242,177,9], maybe slayer1... address)

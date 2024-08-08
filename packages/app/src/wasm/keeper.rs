@@ -52,6 +52,8 @@ const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
 
 const PARAMS: Item<WasmParams> = Item::new("params");
 
+// TODO: ideally we can derive these from the actual buckets for no typos.
+// But for now, this is easier to write than building some auto-magic framework
 pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
     match bucket {
         "codes" => vec![u64::from_vec(key).unwrap().to_string()],
@@ -62,7 +64,7 @@ pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
         }
         "pinned" => vec![u64::from_vec(key).unwrap().to_string()],
         "code_id" => vec![],
-        "contract_counter" => vec![],
+        "contract_count" => vec![],
         "params" => vec![],
         // anything else will be a contracts internal storage, we cannot parse more.
         // we just hex-encode the remainder of the key (TODO: review this)

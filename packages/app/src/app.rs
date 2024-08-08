@@ -299,12 +299,12 @@ impl<T: PersistentStorage + 'static> App<T> {
         }
         */
         for item in self.current_state() {
-            println!("  {:?}", item);
+            println!("  {}", item);
         }
 
         // get changes since 1
         for change in self.changes_since(0) {
-            println!("* : {:?}", change);
+            println!("{}", change);
         }
     }
 
