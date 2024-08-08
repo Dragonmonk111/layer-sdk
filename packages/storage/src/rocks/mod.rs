@@ -141,7 +141,6 @@ impl CaptureBatch {
 
 impl WriteBatchIterator for CaptureBatch {
     fn put(&mut self, key: Box<[u8]>, value: Box<[u8]>) {
-        println!("Put key={:?} value={:?}", key, value);
         let change = StateChange::Write {
             key: key.into_vec(),
             value: value.into_vec(),
@@ -150,7 +149,6 @@ impl WriteBatchIterator for CaptureBatch {
     }
 
     fn delete(&mut self, key: Box<[u8]>) {
-        println!("Delete key={:?}", key);
         let change = StateChange::Delete {
             key: key.into_vec(),
         };

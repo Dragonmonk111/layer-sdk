@@ -1,5 +1,3 @@
-use std::fmt::UpperHex;
-
 use thiserror::Error;
 use tracing::{
     debug, debug_span,
@@ -212,12 +210,18 @@ pub fn parse_key(_key: Vec<u8>) -> ParsedKey {
     }
 }
 
-// All these require an initialized app and will panic if neither load_from_storage
-// nor init have been successfully called before.
+// TODO: move this to standard utils (also in storage/src/traits.rs)
+pub fn stringify_or_hex(input: &[u8]) -> String {
+    std::str::from_utf8(input)
+        .map_or_else(|_| HexEncode::new(&input).to_string(), |x| x.to_string())
+}
+
+// Expose lower-level state sync methods by wrapping the persistent storage
 impl<T: PersistentStorage + 'static> App<T> {
     // TODO: refactor and move somewhere else. this is for debugging output
     pub fn demo_db_dump(&self) {
-        // TODO: print out a bunch of stuff
+        // print out a bunch of stuff
+
         // latest sequence
         let seq = self.storage.latest_sequence();
         println!("\n********* Sequence: {} ***********", seq);
@@ -225,12 +229,10 @@ impl<T: PersistentStorage + 'static> App<T> {
         // get current state
         for x in self.storage.current_state() {
             let (key, value) = x;
-            println!("raw key: {:?}", key);
+            println!("raw key: {:?}", stringify_or_hex(&key));
             let parsed = parse_key(key);
             println!("parsed key: {:?}", parsed);
-            let str_val = std::str::from_utf8(&value)
-                .map_or_else(|_| HexEncode::new(&value).to_string(), |x| x.to_string());
-            println!("value: {:?}", str_val);
+            println!("value: {:?}", stringify_or_hex(&value));
         }
 
         // get changes since 1
@@ -238,7 +240,11 @@ impl<T: PersistentStorage + 'static> App<T> {
             println!("change: {:?}", change);
         }
     }
+}
 
+// All these require an initialized app and will panic if neither load_from_storage
+// nor init have been successfully called before.
+impl<T: PersistentStorage + 'static> App<T> {
     pub fn info(&self) -> Option<&BlockInfo> {
         self.data.as_ref().map(|d| &d.block)
     }

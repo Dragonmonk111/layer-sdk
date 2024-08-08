@@ -1,5 +1,5 @@
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult, HexEncode};
 
 /// This is the lowest level of the storage, which can be implemented by MemoryStorage
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,
@@ -35,10 +35,32 @@ pub struct BatchChanges {
     pub changes: Vec<StateChange>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum StateChange {
     Write { key: Vec<u8>, value: Vec<u8> },
     Delete { key: Vec<u8> },
+}
+
+impl std::fmt::Debug for StateChange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Write { key, value } => f
+                .debug_struct("Write")
+                .field("key", &stringify_or_hex(&key))
+                .field("value", &stringify_or_hex(&value))
+                .finish(),
+            Self::Delete { key } => f
+                .debug_struct("Delete")
+                .field("key", &stringify_or_hex(&key))
+                .finish(),
+        }
+    }
+}
+
+// TODO: move this to standard utils
+pub fn stringify_or_hex(input: &[u8]) -> String {
+    std::str::from_utf8(input)
+        .map_or_else(|_| HexEncode::new(&input).to_string(), |x| x.to_string())
 }
 
 /// This is like cosmwasm_std::Storage, but takes GasMeter as extra arg everywhere
