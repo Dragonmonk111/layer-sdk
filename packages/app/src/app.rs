@@ -1,3 +1,5 @@
+use std::fmt::UpperHex;
+
 use thiserror::Error;
 use tracing::{
     debug, debug_span,
@@ -14,11 +16,14 @@ use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
 };
-use slay3r_std::api::{
-    Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
-    TxResponse, TxResult,
-};
 use slay3r_std::response::QueryResponse;
+use slay3r_std::{
+    api::{
+        Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
+        TxResponse, TxResult,
+    },
+    HexEncode,
+};
 use slay3r_std::{GasMeter, Query, Rfc3339, Tx};
 use slay3r_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
@@ -186,6 +191,27 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 }
 
+// TODO: move this out to own module.
+// Convert from PersistentStorage to the GRPC types
+
+// TODO: parse key out
+#[derive(Debug)]
+pub struct ParsedKey {
+    pub module: String,
+    pub bucket: String,
+    pub keys: Vec<String>,
+}
+
+// TODO: result here?
+pub fn parse_key(_key: Vec<u8>) -> ParsedKey {
+    // TODO
+    ParsedKey {
+        module: "bank".into(),
+        bucket: "demo".into(),
+        keys: vec![],
+    }
+}
+
 // All these require an initialized app and will panic if neither load_from_storage
 // nor init have been successfully called before.
 impl<T: PersistentStorage + 'static> App<T> {
@@ -194,18 +220,22 @@ impl<T: PersistentStorage + 'static> App<T> {
         // TODO: print out a bunch of stuff
         // latest sequence
         let seq = self.storage.latest_sequence();
-        println!("Sequence: {}", seq);
+        println!("\n********* Sequence: {} ***********", seq);
 
         // get current state
         for x in self.storage.current_state() {
             let (key, value) = x;
-            println!("key: {:?}", key);
-            println!("value: {:?}", value);
+            println!("raw key: {:?}", key);
+            let parsed = parse_key(key);
+            println!("parsed key: {:?}", parsed);
+            let str_val = std::str::from_utf8(&value)
+                .map_or_else(|_| HexEncode::new(&value).to_string(), |x| x.to_string());
+            println!("value: {:?}", str_val);
         }
 
         // get changes since 1
         for change in self.storage.changes_since(1) {
-            println!("change: {}", change);
+            println!("change: {:?}", change);
         }
     }
 
@@ -672,6 +702,9 @@ mod tests {
                 sequence: 1
             }
         );
+
+        // TODO: remove this when testing done
+        app.demo_db_dump();
     }
 
     fn assert_balance<T: PersistentStorage + 'static>(

@@ -18,31 +18,29 @@ pub struct StreamChangesSinceRequest {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct StateUpdate {
-    #[prost(oneof = "state_update::Event", tags = "1, 2, 3, 4")]
-    pub event: ::core::option::Option<state_update::Event>,
+pub struct BlockWrites {
+    #[prost(uint64, tag = "1")]
+    pub height: u64,
+    /// TODO: timestamp? app hash?
+    #[prost(message, repeated, tag = "3")]
+    pub event: ::prost::alloc::vec::Vec<StateChange>,
 }
-/// Nested message and enum types in `StateUpdate`.
-pub mod state_update {
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StateChange {
+    #[prost(oneof = "state_change::Event", tags = "1, 2")]
+    pub event: ::core::option::Option<state_change::Event>,
+}
+/// Nested message and enum types in `StateChange`.
+pub mod state_change {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Event {
         #[prost(message, tag = "1")]
-        StartBlock(super::BlockEvent),
-        #[prost(message, tag = "2")]
-        EndBlock(super::BlockEvent),
-        #[prost(message, tag = "3")]
         WriteState(super::WriteData),
-        #[prost(message, tag = "4")]
+        #[prost(message, tag = "2")]
         DeleteState(super::DeleteData),
     }
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BlockEvent {
-    /// TODO: timestamp
-    #[prost(uint64, tag = "1")]
-    pub height: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -208,11 +206,14 @@ pub mod query_client {
                 .insert(GrpcMethod::new("layer.sync.v1.Query", "CurrentState"));
             self.inner.server_streaming(req, path, codec).await
         }
+        /// TODO: return block by block?
+        /// Then it is one sequence number with a block of write/read requests
+        /// Which will map much nicer to the rocksdb implementation
         pub async fn changes_since(
             &mut self,
             request: impl tonic::IntoRequest<super::StreamChangesSinceRequest>,
         ) -> std::result::Result<
-            tonic::Response<tonic::codec::Streaming<super::StateUpdate>>,
+            tonic::Response<tonic::codec::Streaming<super::BlockWrites>>,
             tonic::Status,
         > {
             self.inner
@@ -265,10 +266,13 @@ pub mod query_server {
         >;
         /// Server streaming response type for the ChangesSince method.
         type ChangesSinceStream: tonic::codegen::tokio_stream::Stream<
-                Item = std::result::Result<super::StateUpdate, tonic::Status>,
+                Item = std::result::Result<super::BlockWrites, tonic::Status>,
             >
             + Send
             + 'static;
+        /// TODO: return block by block?
+        /// Then it is one sequence number with a block of write/read requests
+        /// Which will map much nicer to the rocksdb implementation
         async fn changes_since(
             &self,
             request: tonic::Request<super::StreamChangesSinceRequest>,
@@ -459,7 +463,7 @@ pub mod query_server {
                     > tonic::server::ServerStreamingService<
                         super::StreamChangesSinceRequest,
                     > for ChangesSinceSvc<T> {
-                        type Response = super::StateUpdate;
+                        type Response = super::BlockWrites;
                         type ResponseStream = T::ChangesSinceStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,

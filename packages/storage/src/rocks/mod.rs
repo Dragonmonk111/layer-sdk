@@ -1,12 +1,13 @@
 use std::fmt;
 use std::path::Path;
 
-use rocksdb::{DBAccess, OptimisticTransactionDB, Options};
+use rocksdb::{DBAccess, OptimisticTransactionDB, Options, WriteBatchIterator};
 
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 
 use crate::{
+    traits::{BatchChanges, StateChange},
     FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
     DEFAULT_PERSISTED_PRICES,
 };
@@ -99,6 +100,7 @@ impl PersistentStorage for RockStore {
 
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
         // TODO: improve this, make more efficient
+        // we can use raw_iterator, and return (&'a [u8], &'a [u8])  to make much more efficient
         let items = self.db.iterator(rocksdb::IteratorMode::Start);
         let it = items.map(|x| {
             let (k, v) = x.unwrap();
@@ -107,14 +109,52 @@ impl PersistentStorage for RockStore {
         Box::new(it)
     }
 
-    fn changes_since<'a>(&'a self, sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a> {
-        // TODO: implement properly, not just sequences
+    fn changes_since<'a>(&'a self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + 'a> {
+        // TODO: result not unwrap!
         let changes = self.db.get_updates_since(sequence).unwrap();
         let it = changes.map(|r| {
-            let (seq, _batch) = r.unwrap();
-            seq
+            // TODO: result not unwrap!
+            let (sequence, batch) = r.unwrap();
+            let mut capture = CaptureBatch::new(batch.len());
+            batch.iterate(&mut capture);
+            BatchChanges {
+                sequence,
+                changes: capture.changes,
+            }
         });
         Box::new(it)
+    }
+}
+
+// TODO: completely different implementation to output diffs
+struct CaptureBatch {
+    changes: Vec<StateChange>,
+}
+
+impl CaptureBatch {
+    pub fn new(len: usize) -> Self {
+        CaptureBatch {
+            changes: Vec::with_capacity(len),
+        }
+    }
+}
+
+impl WriteBatchIterator for CaptureBatch {
+    fn put(&mut self, key: Box<[u8]>, value: Box<[u8]>) {
+        println!("Put key={:?} value={:?}", key, value);
+        let change = StateChange::Write {
+            key: key.into_vec(),
+            value: value.into_vec(),
+        };
+        self.changes.push(change);
+    }
+
+    fn delete(&mut self, key: Box<[u8]>) {
+        println!("Delete key={:?}", key);
+        let change = StateChange::Delete {
+            key: key.into_vec(),
+        };
+        self.changes.push(change);
     }
 }
 

@@ -25,8 +25,20 @@ pub trait PersistentStorage {
 
     // TODO: refactor out the sync stuff better...
     fn latest_sequence(&self) -> u64;
-    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>; // TODO: improve
-    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a>; // TODO: design
+    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
+    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + 'a>;
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BatchChanges {
+    pub sequence: u64,
+    pub changes: Vec<StateChange>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum StateChange {
+    Write { key: Vec<u8>, value: Vec<u8> },
+    Delete { key: Vec<u8> },
 }
 
 /// This is like cosmwasm_std::Storage, but takes GasMeter as extra arg everywhere

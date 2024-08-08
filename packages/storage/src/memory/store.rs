@@ -10,6 +10,7 @@ use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 
 use crate::prices::PriceList;
+use crate::traits::BatchChanges;
 use crate::traits::Transaction;
 use crate::wrap::{Op, ReaderWrapper};
 use crate::DEFAULT_PERSISTED_PRICES;
@@ -79,7 +80,7 @@ impl PersistentStorage for MemoryStore {
         Box::new(data.into_iter())
     }
 
-    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = u64> + 'a> {
+    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + 'a> {
         Box::new([].into_iter())
     }
 }

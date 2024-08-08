@@ -12,7 +12,10 @@ service Query {
   rpc CurrentState(StreamCurrentStateRequest) returns (stream WriteData) {
   }
 
-  rpc ChangesSince(StreamChangesSinceRequest) returns (stream StateUpdate) {
+  // TODO: return block by block?
+  // Then it is one sequence number with a block of write/read requests
+  // Which will map much nicer to the rocksdb implementation
+  rpc ChangesSince(StreamChangesSinceRequest) returns (stream BlockWrites) {
   }
 }
 
@@ -31,18 +34,17 @@ message StreamChangesSinceRequest {
     uint64 height = 1;
 }
 
-message StateUpdate {
-    oneof event {
-        BlockEvent start_block = 1; 
-        BlockEvent end_block = 2;
-        WriteData write_state = 3; 
-        DeleteData delete_state = 4; 
-    }
+message BlockWrites {
+    uint64 height = 1;
+    // TODO: timestamp? app hash?
+    repeated StateChange event = 3;
 }
 
-message BlockEvent {
-    uint64 height = 1;
-    // TODO: timestamp
+message StateChange {
+    oneof event {
+        WriteData write_state = 1; 
+        DeleteData delete_state = 2; 
+    }
 }
 
 message WriteData {

@@ -76,7 +76,9 @@ impl TestApp {
             proposer_address: vec![1u8; 32],
             last_votes: vec![],
         };
-        self.app.finalize_block(block).unwrap().tx_results
+        let res = self.app.finalize_block(block).unwrap().tx_results;
+        self.app.demo_db_dump();
+        res
     }
 
     pub fn query(&self, query: impl Into<Query>) -> PulsarResult<QueryResponse<PulsarError>> {
