@@ -78,6 +78,7 @@ pub mod google {
 }
 
 pub mod tendermint {
+    #[allow(clippy::large_enum_variant)]
     pub mod abci {
         include!("protos/tendermint.abci.rs");
     }
@@ -90,6 +91,7 @@ pub mod tendermint {
         include!("protos/tendermint.p2p.rs");
     }
 
+    #[allow(clippy::large_enum_variant)]
     pub mod types {
         include!("protos/tendermint.types.rs");
     }

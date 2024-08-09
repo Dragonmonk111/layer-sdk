@@ -67,8 +67,11 @@ pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
         "contract_count" => vec![],
         "params" => vec![],
         // anything else will be a contracts internal storage, we cannot parse more.
-        // we just hex-encode the remainder of the key (TODO: review this)
-        _ => vec![hex::encode_upper(&key)],
+        // try to convert it to an AccountId, otherwise, just hex-encode it
+        _ => match AccountId::new(&key) {
+            Ok(account) => vec![account.to_string()],
+            Err(_) => vec![hex::encode(&key)],
+        },
     }
 }
 

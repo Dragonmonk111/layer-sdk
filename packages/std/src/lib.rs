@@ -20,7 +20,7 @@ pub use pubkey::PubKey;
 pub use query::{AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 pub use time::{format_timestamp_rfc3339, Duration, Rfc3339, Timestamp};
 pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};
-pub use utils::stringify_or_hex;
+pub use utils::{string_account_or_hex, stringify_or_hex};
 
 pub mod response {
     pub use crate::query::{

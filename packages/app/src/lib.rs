@@ -4,6 +4,7 @@ mod bank;
 mod error;
 pub mod genesis;
 mod sm;
+mod sync;
 pub(crate) mod testing;
 mod wasm;
 

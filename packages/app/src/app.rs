@@ -10,24 +10,21 @@ use tracing::{
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 
+use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
-use crate::{auth, bank, genesis::GenesisState, wasm};
 use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
 };
-use slay3r_std::response::QueryResponse;
-use slay3r_std::{
-    api::{
-        Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
-        TxResponse, TxResult,
-    },
-    HexEncode,
+use slay3r_std::api::{
+    Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
+    TxResponse, TxResult,
 };
+use slay3r_std::response::QueryResponse;
 use slay3r_std::{GasMeter, Query, Rfc3339, Tx};
 use slay3r_storage::{
-    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx,
-    StateUpdate, Storage, Transaction,
+    atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
+    Transaction,
 };
 
 // FIXME: make this configurable on per-node basis
@@ -54,10 +51,10 @@ pub const GAS_COST_TX_BYTE: u64 = 10;
 #[derive(Debug)]
 pub struct App<T: PersistentStorage> {
     // State
-    storage: T,
+    pub(crate) storage: T,
 
     // State Machine Logic
-    logic: StateMachine,
+    pub(crate) logic: StateMachine,
 
     data: Option<InnerData>,
 }
@@ -188,182 +185,6 @@ impl<T: PersistentStorage + 'static> App<T> {
             validators: request.validators,
             app_hash: self.storage.app_hash(),
         })
-    }
-}
-
-/**********************/
-
-// TODO: move this out to own module.
-// Convert from PersistentStorage to the GRPC types
-
-// TODO: parse key out
-#[derive(Debug)]
-pub struct ParsedKey {
-    pub module: String,
-    pub bucket: String,
-    // TODO: revisit this, run it in the module
-    pub keys: Vec<String>,
-}
-
-// TODO: result here?
-pub fn parse_key(key: Vec<u8>) -> ParsedKey {
-    let (module, key) = split_module(key);
-    let (bucket, key) = split_bucket(key);
-
-    let keys = match module.as_bytes() {
-        // internal use, currently only _last_block Item
-        b"" => vec![],
-        // TODO: make this explicit, but only two Items for now, so no key
-        NAMESPACE_APP => vec![],
-
-        // real ones
-        auth::NAMESPACE_AUTH => auth::parse_keys(&bucket, key),
-        bank::NAMESPACE_BANK => bank::parse_keys(&bucket, key),
-        wasm::NAMESPACE_WASM => wasm::parse_keys(&bucket, key),
-        _ => unimplemented!(),
-    };
-    ParsedKey {
-        module,
-        bucket,
-        keys,
-    }
-}
-
-// This tries to read the cw-storage-plus 2 byte length.
-// It returns the beginning of the next item if valid, otherwise None
-pub fn cut_point(key: &[u8]) -> Option<usize> {
-    // first two bytes are module length
-    let len = u16::from_be_bytes(key[0..2].try_into().ok()?);
-    let end = (2 + len) as usize;
-    if end > key.len() {
-        None
-    } else {
-        Some(end)
-    }
-}
-
-pub fn split_off_str(mut key: Vec<u8>, end: usize) -> (String, Vec<u8>) {
-    let prefix = stringify_or_hex(&key[2..end]);
-    key.splice(0..end, [].into_iter());
-    (prefix, key)
-}
-
-// If we can't split, we return empty module
-pub fn split_module(key: Vec<u8>) -> (String, Vec<u8>) {
-    // If no cut point, we use "" as module
-    match cut_point(&key) {
-        Some(end) => split_off_str(key, end),
-        None => ("".to_string(), key),
-    }
-}
-
-pub fn split_bucket(key: Vec<u8>) -> (String, Vec<u8>) {
-    match cut_point(&key) {
-        Some(end) => split_off_str(key, end),
-        None => (String::from_utf8(key).unwrap(), vec![]),
-    }
-}
-
-/**********************/
-
-// TODO: move this to standard utils (also in storage/src/traits.rs)
-pub fn stringify_or_hex(input: &[u8]) -> String {
-    std::str::from_utf8(input)
-        .map_or_else(|_| HexEncode::new(&input).to_string(), |x| x.to_string())
-}
-
-use slay3r_proto::layer::sync::v1::{self as sync, StateChange};
-
-// Expose lower-level state sync methods by wrapping the persistent storage
-impl<T: PersistentStorage + 'static> App<T> {
-    // TODO: refactor and move somewhere else. this is for debugging output
-    pub fn demo_db_dump(&self) {
-        // print out a bunch of stuff
-
-        // latest sequence
-        println!(
-            "\n********* Sequence: {} ***********",
-            self.latest_sequence()
-        );
-
-        // TODO: use helpers one parsing is mostly working
-
-        // get current state
-        /*
-        for x in self.storage.current_state() {
-            let (key, value) = x;
-            println!("raw key: {:?}", stringify_or_hex(&key));
-            println!("value: {:?}", stringify_or_hex(&value));
-            let parsed = parse_key(key);
-            println!("parsed key: {:?}", parsed);
-        }
-        */
-        for item in self.current_state() {
-            println!("  {}", item);
-        }
-
-        // get changes since 1
-        for change in self.changes_since(0) {
-            println!("{}", change);
-        }
-    }
-
-    pub fn latest_sequence(&self) -> u64 {
-        self.storage.latest_sequence()
-    }
-
-    pub fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = sync::WriteData> + 'a> {
-        let it = self.storage.current_state();
-        let it = it.map(|(k, value)| {
-            let parsed = parse_key(k);
-            sync::WriteData {
-                module: parsed.module,
-                bucket: parsed.bucket,
-                keys: parsed.keys,
-                value,
-            }
-        });
-        Box::new(it)
-    }
-
-    pub fn changes_since<'a>(
-        &'a self,
-        sequence: u64,
-    ) -> Box<dyn Iterator<Item = sync::BlockWrites> + 'a> {
-        let it = self.storage.changes_since(sequence);
-        let it = it.map(|batch| {
-            let events = batch
-                .changes
-                .into_iter()
-                .map(|x| {
-                    let event = match x {
-                        StateUpdate::Write { key, value } => {
-                            let parsed = parse_key(key);
-                            let data = sync::WriteData {
-                                module: parsed.module,
-                                bucket: parsed.bucket,
-                                keys: parsed.keys,
-                                value,
-                            };
-                            sync::state_change::Event::WriteState(data)
-                        }
-                        StateUpdate::Delete { key } => {
-                            let parsed = parse_key(key);
-                            let data = sync::DeleteData {
-                                module: parsed.module,
-                                bucket: parsed.bucket,
-                                keys: parsed.keys,
-                            };
-                            sync::state_change::Event::DeleteState(data)
-                        }
-                    };
-                    StateChange { event: Some(event) }
-                })
-                .collect();
-            let height = batch.sequence; // TODO: this is not the height!!!
-            sync::BlockWrites { height, events }
-        });
-        Box::new(it)
     }
 }
 
@@ -632,7 +453,6 @@ mod tests {
     use super::*;
 
     use bytes::Bytes;
-    use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
     use hex_literal::hex;
 
@@ -651,10 +471,9 @@ mod tests {
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_json_binary(genesis).unwrap();
-        let env = mock_env();
         InitChainRequest {
-            time: env.block.time,
-            chain_id: env.block.chain_id,
+            time: Timestamp::from_nanos(1_673_194_026_078_305_426),
+            chain_id: "slay3r-testnet-1".into(),
             consensus_params: Default::default(),
             validators: vec![ValidatorUpdate {
                 pub_key: TmPubKey::Ed25519(vec![123u8; 32]),
