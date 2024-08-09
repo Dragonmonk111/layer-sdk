@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
+use ::cosmwasm_schema::serde;
 use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
 use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
@@ -17,13 +18,7 @@ fn bech32_prefix() -> &'static str {
 }
 
 // Note: this is expanded cw_serde macro minus the Debug implementation, as we want to use Display there
-#[derive(
-    ::cosmwasm_schema::serde::Serialize,
-    ::cosmwasm_schema::serde::Deserialize,
-    ::std::clone::Clone,
-    ::std::cmp::PartialEq,
-    ::cosmwasm_schema::schemars::JsonSchema,
-)]
+#[derive(::std::clone::Clone, ::std::cmp::PartialEq, ::cosmwasm_schema::schemars::JsonSchema)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[serde(deny_unknown_fields, crate = "::cosmwasm_schema::serde")]
 #[schemars(crate = "::cosmwasm_schema::schemars")]
@@ -69,6 +64,40 @@ impl Display for AccountId {
 impl Debug for AccountId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
+    }
+}
+
+impl serde::Serialize for AccountId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+// Helper to parse both formats - we need this for backwards state compatibility chains <= 0.3.2
+// TODO: This can be removed in the future with a new devnet
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged, crate = "::cosmwasm_schema::serde")]
+enum StringOrBytes {
+    String(String),
+    Vec(Vec<u8>),
+}
+
+impl<'de> serde::Deserialize<'de> for AccountId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        match StringOrBytes::deserialize(deserializer)? {
+            StringOrBytes::String(s) => {
+                AccountId::parse_string(&s).map_err(|e| serde::de::Error::custom(e.to_string()))
+            }
+            StringOrBytes::Vec(raw) => {
+                AccountId::new(&raw).map_err(|e| serde::de::Error::custom(e.to_string()))
+            }
+        }
     }
 }
 
