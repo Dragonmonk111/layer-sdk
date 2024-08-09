@@ -3759,6 +3759,7 @@ dependencies = [
  "hex",
  "prost 0.12.6",
  "prost-types 0.12.6",
+ "slay3r-std",
  "tonic 0.10.2",
 ]
 

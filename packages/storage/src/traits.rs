@@ -1,5 +1,5 @@
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult, HexEncode};
+use slay3r_std::{stringify_or_hex, GasMeter, GasResult};
 
 /// This is the lowest level of the storage, which can be implemented by MemoryStorage
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,
@@ -55,12 +55,6 @@ impl std::fmt::Debug for StateUpdate {
                 .finish(),
         }
     }
-}
-
-// TODO: move this to standard utils
-pub fn stringify_or_hex(input: &[u8]) -> String {
-    std::str::from_utf8(input)
-        .map_or_else(|_| HexEncode::new(&input).to_string(), |x| x.to_string())
 }
 
 /// This is like cosmwasm_std::Storage, but takes GasMeter as extra arg everywhere
