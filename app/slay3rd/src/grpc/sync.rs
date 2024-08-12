@@ -31,20 +31,6 @@ impl<T: PersistentStorage + 'static + Send + Sync> SyncService<T> {
     }
 }
 
-// // TODO: implement
-// pub struct CurrentStateStream;
-
-// impl tonic::codegen::tokio_stream::Stream for CurrentStateStream {
-//     type Item = Result<WriteData, Status>;
-
-//     fn poll_next(
-//         self: std::pin::Pin<&mut Self>,
-//         _cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Option<Self::Item>> {
-//         std::task::Poll::Ready(None)
-//     }
-// }
-
 pub struct ChangesSinceStream(Box<dyn Iterator<Item = BlockWrites> + Send>);
 
 use std::ops::DerefMut;
@@ -89,9 +75,6 @@ impl<T: PersistentStorage + 'static + Send + Sync> Query for SyncService<T> {
         Ok(Response::new(stream))
     }
 
-    /// TODO: return block by block?
-    /// Then it is one sequence number with a block of write/read requests
-    /// Which will map much nicer to the rocksdb implementation
     #[tracing::instrument(skip(self), level = "info")]
     async fn changes_since(
         &self,

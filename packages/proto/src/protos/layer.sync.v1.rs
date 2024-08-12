@@ -20,8 +20,7 @@ pub struct StreamChangesSinceRequest {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BlockWrites {
     #[prost(uint64, tag = "1")]
-    pub height: u64,
-    /// TODO: timestamp? app hash?
+    pub sequence: u64,
     #[prost(message, repeated, tag = "3")]
     pub events: ::prost::alloc::vec::Vec<StateChange>,
 }
@@ -50,10 +49,10 @@ pub struct WriteData {
     #[prost(string, tag = "2")]
     pub bucket: ::prost::alloc::string::String,
     /// this is split from whatever we use internally - \[\] for item
-    /// numbers are stringified. bytes are base64 encoded
+    /// numbers are stringified, addresses in bech32, bytes are hex encoded
     #[prost(string, repeated, tag = "3")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// TODO define this type: just JSON? use protobuf for internal types?
+    /// This is the raw data stored at that key - JSON for now
     #[prost(bytes = "vec", tag = "4")]
     pub value: ::prost::alloc::vec::Vec<u8>,
 }
@@ -65,7 +64,7 @@ pub struct DeleteData {
     #[prost(string, tag = "2")]
     pub bucket: ::prost::alloc::string::String,
     /// this is split from whatever we use internally - \[\] for
-    /// numbers are stringified. bytes are base64 encoded
+    /// numbers are stringified, addresses in bech32, bytes are hex encoded
     #[prost(string, repeated, tag = "3")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
@@ -206,9 +205,6 @@ pub mod query_client {
                 .insert(GrpcMethod::new("layer.sync.v1.Query", "CurrentState"));
             self.inner.server_streaming(req, path, codec).await
         }
-        /// TODO: return block by block?
-        /// Then it is one sequence number with a block of write/read requests
-        /// Which will map much nicer to the rocksdb implementation
         pub async fn changes_since(
             &mut self,
             request: impl tonic::IntoRequest<super::StreamChangesSinceRequest>,
@@ -270,9 +266,6 @@ pub mod query_server {
             >
             + Send
             + 'static;
-        /// TODO: return block by block?
-        /// Then it is one sequence number with a block of write/read requests
-        /// Which will map much nicer to the rocksdb implementation
         async fn changes_since(
             &self,
             request: tonic::Request<super::StreamChangesSinceRequest>,

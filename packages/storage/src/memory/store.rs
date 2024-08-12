@@ -13,6 +13,7 @@ use crate::prices::PriceList;
 use crate::traits::BatchChanges;
 use crate::traits::Transaction;
 use crate::wrap::{Op, ReaderWrapper};
+use crate::SyncableStorage;
 use crate::DEFAULT_PERSISTED_PRICES;
 use crate::{FastHasher, PersistentStorage, ReadonlyStorage, Storage};
 
@@ -67,12 +68,15 @@ impl PersistentStorage for MemoryStore {
     fn app_hash(&self) -> Vec<u8> {
         self.0.read().hash.clone()
     }
+}
 
-    // TODO: these are placeholders, do we want to implement these later?
+impl SyncableStorage for MemoryStore {
+    // TODO: This one is not implemented. Only needed for state sync
     fn latest_sequence(&self) -> u64 {
         2
     }
 
+    // This one is implemented
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
         let inner = self.0.read();
         let it = inner.data.iter().map(|(k, v)| (k.to_owned(), v.to_owned()));
@@ -80,6 +84,7 @@ impl PersistentStorage for MemoryStore {
         Box::new(data.into_iter())
     }
 
+    // TODO: This one is not implemented. Only needed for state sync
     fn changes_since(&self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send> {
         Box::new([].into_iter())
     }

@@ -17,7 +17,7 @@ impl std::fmt::Display for WriteData {
 
 impl std::fmt::Display for BlockWrites {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BlockWrites( {} )", self.height)?;
+        write!(f, "BlockWrites( {} )", self.sequence)?;
         for evt in self.events.iter() {
             write!(f, "\n{}", evt)?;
         }

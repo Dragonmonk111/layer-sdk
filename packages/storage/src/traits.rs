@@ -4,7 +4,7 @@ use slay3r_std::{stringify_or_hex, GasMeter, GasResult};
 /// This is the lowest level of the storage, which can be implemented by MemoryStorage
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,
 /// but one method for bulk write, that will commit a new version and return the app hash (stored internally)
-pub trait PersistentStorage {
+pub trait PersistentStorage: SyncableStorage {
     type Reader<'x>: ReadonlyStorage
     where
         Self: 'x;
@@ -22,8 +22,9 @@ pub trait PersistentStorage {
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8>;
+}
 
-    // TODO: refactor out the sync stuff better...
+pub trait SyncableStorage {
     fn latest_sequence(&self) -> u64;
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
     fn changes_since(&self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send>;

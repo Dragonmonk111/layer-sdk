@@ -8,8 +8,8 @@ use slay3r_std::{GasMeter, GasResult};
 
 use crate::{
     traits::{BatchChanges, StateUpdate},
-    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
-    DEFAULT_PERSISTED_PRICES,
+    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, SyncableStorage,
+    Transaction, DEFAULT_PERSISTED_PRICES,
 };
 
 pub struct RockStore {
@@ -92,15 +92,16 @@ impl PersistentStorage for RockStore {
             .unwrap()
             .unwrap_or_else(|| vec![0; 32])
     }
+}
 
-    // TODO: these are placeholders, do we want to implement these later?
+impl SyncableStorage for RockStore {
     fn latest_sequence(&self) -> u64 {
         self.db.latest_sequence_number()
     }
 
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
         // TODO: improve this, make more efficient
-        // we can use raw_iterator, and return (&'a [u8], &'a [u8])  to make much more efficient
+        // we can use raw_iterator, and return (&'a [u8], &'a [u8]) to make it more efficient
         let items = self.db.iterator(rocksdb::IteratorMode::Start);
         let it = items.map(|x| {
             let (k, v) = x.unwrap();

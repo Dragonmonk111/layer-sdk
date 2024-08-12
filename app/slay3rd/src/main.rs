@@ -112,8 +112,6 @@ async fn main() {
     // Create the app
     let server_config = ServerConfig::new().with_read_buf(config.read_buf_size as usize);
 
-    // TODO: figure out how to get eg Arc<App<T>> here so we can pass it into the sync_service
-
     // Create ABCI server
     match config.rocksdb {
         Some(path) => {

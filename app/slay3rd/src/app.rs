@@ -83,7 +83,6 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
         }
     }
 
-    // TODO: App<T> ?
     pub fn sync(&self) -> RwLockReadGuard<impl SyncProvider> {
         self.app.as_ref().read()
     }
@@ -203,11 +202,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         let request = finalize_request_from_proto(request, chain_id);
 
         // FIXME: crash node on finalize block error?
-        println!("Process block {}", request.height); // TODO: remove
         let res = app.finalize_block(request).unwrap();
-
-        // TODO: remove this!
-        app.demo_db_dump();
 
         finalize_response_to_proto(res)
     }

@@ -12,9 +12,6 @@ service Query {
   rpc CurrentState(StreamCurrentStateRequest) returns (stream WriteData) {
   }
 
-  // TODO: return block by block?
-  // Then it is one sequence number with a block of write/read requests
-  // Which will map much nicer to the rocksdb implementation
   rpc ChangesSince(StreamChangesSinceRequest) returns (stream BlockWrites) {
   }
 }
@@ -35,8 +32,7 @@ message StreamChangesSinceRequest {
 }
 
 message BlockWrites {
-    uint64 height = 1;
-    // TODO: timestamp? app hash?
+    uint64 sequence = 1;
     repeated StateChange events = 3;
 }
 
@@ -51,9 +47,9 @@ message WriteData {
     string module = 1;
     string bucket = 2;
     // this is split from whatever we use internally - [] for item
-    // numbers are stringified. bytes are base64 encoded
+    // numbers are stringified, addresses in bech32, bytes are hex encoded
     repeated string keys = 3;
-    // TODO define this type: just JSON? use protobuf for internal types?
+    // This is the raw data stored at that key - JSON for now
     bytes value = 4;
 }
 
@@ -61,6 +57,6 @@ message DeleteData {
     string module = 1;
     string bucket = 2;
     // this is split from whatever we use internally - [] for 
-    // numbers are stringified. bytes are base64 encoded
+    // numbers are stringified, addresses in bech32, bytes are hex encoded
     repeated string keys = 3;
 }

@@ -652,9 +652,6 @@ mod tests {
                 sequence: 1
             }
         );
-
-        // TODO: remove this when testing done
-        app.demo_db_dump();
     }
 
     fn assert_balance<T: PersistentStorage + 'static>(

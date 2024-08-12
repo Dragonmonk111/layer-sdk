@@ -21,31 +21,18 @@ pub trait SyncProvider {
 impl<T: PersistentStorage + 'static> App<T> {
     // TODO: refactor and move somewhere else. this is for debugging output
     pub fn demo_db_dump(&self) {
-        // print out a bunch of stuff
-
         // latest sequence
         println!(
             "\n********* Sequence: {} ***********",
             self.latest_sequence()
         );
 
-        // TODO: use helpers one parsing is mostly working
-
-        // get current state
-        /*
-        for x in self.storage.current_state() {
-            let (key, value) = x;
-            println!("raw key: {:?}", stringify_or_hex(&key));
-            println!("value: {:?}", stringify_or_hex(&value));
-            let parsed = parse_key(key);
-            println!("parsed key: {:?}", parsed);
-        }
-        */
+        // print all state
         for item in self.current_state() {
             println!("  {}", item);
         }
 
-        // get changes since 1
+        // print all changes
         for change in self.changes_since(0) {
             println!("{}", change);
         }
@@ -103,8 +90,8 @@ impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
                     StateChange { event: Some(event) }
                 })
                 .collect();
-            let height = batch.sequence; // TODO: this is not the height!!!
-            BlockWrites { height, events }
+            let sequence = batch.sequence;
+            BlockWrites { sequence, events }
         });
         Box::new(it)
     }
@@ -121,7 +108,6 @@ pub struct ParsedKey {
     pub keys: Vec<String>,
 }
 
-// TODO: result here?
 pub fn parse_key(key: Vec<u8>) -> ParsedKey {
     let (module, key) = split_module(key);
     let (bucket, key) = split_bucket(key);
