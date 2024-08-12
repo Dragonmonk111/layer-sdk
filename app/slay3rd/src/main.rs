@@ -131,6 +131,7 @@ async fn main() {
         .layer(grpc::LogLayer::new("grpc"))
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
+        .add_service(grpc::sync_service(query.clone()))
         .add_service(grpc::tx_service(query.clone(), &config.rpc_url))
         .add_service(grpc::tendermint_service(query.clone(), &config.rpc_url))
         .add_service(grpc::cosmwasm_service(query));
