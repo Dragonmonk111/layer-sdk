@@ -61,10 +61,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         Box::new(it)
     }
 
-    pub fn changes_since<'a>(
-        &'a self,
-        sequence: u64,
-    ) -> Box<dyn Iterator<Item = BlockWrites> + 'a> {
+    pub fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BlockWrites>> {
         let it = self.storage.changes_since(sequence);
         let it = it.map(|batch| {
             let events = batch

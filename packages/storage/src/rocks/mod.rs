@@ -109,7 +109,7 @@ impl PersistentStorage for RockStore {
         Box::new(it)
     }
 
-    fn changes_since<'a>(&'a self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + 'a> {
+    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges>> {
         // TODO: result not unwrap!
         let changes = self.db.get_updates_since(sequence).unwrap();
         let it = changes.map(|r| {

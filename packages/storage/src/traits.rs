@@ -26,7 +26,7 @@ pub trait PersistentStorage {
     // TODO: refactor out the sync stuff better...
     fn latest_sequence(&self) -> u64;
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
-    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + 'a>;
+    fn changes_since(&self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges>>;
 }
 
 #[derive(Debug, PartialEq)]

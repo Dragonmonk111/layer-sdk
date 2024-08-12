@@ -80,7 +80,7 @@ impl PersistentStorage for MemoryStore {
         Box::new(data.into_iter())
     }
 
-    fn changes_since<'a>(&'a self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + 'a> {
+    fn changes_since(&self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges>> {
         Box::new([].into_iter())
     }
 }
