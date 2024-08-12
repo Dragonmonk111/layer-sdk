@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use core::panic;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{
@@ -20,7 +20,7 @@ use tendermint_proto::abci::{
     ResponseProcessProposal, ResponseQuery,
 };
 
-use slay3r_app::{App, AppConfig, AppLoadError, StateMachine};
+use slay3r_app::{App, AppConfig, AppLoadError, StateMachine, SyncProvider};
 use slay3r_std::{api::TxResult, HexEncode};
 use slay3r_storage::PersistentStorage;
 
@@ -81,6 +81,11 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
             app: Arc::new(RwLock::new(app)),
             mempool: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    // TODO: App<T> ?
+    pub fn sync(&self) -> RwLockReadGuard<impl SyncProvider> {
+        self.app.as_ref().read()
     }
 }
 

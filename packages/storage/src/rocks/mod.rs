@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::Path;
 
-use rocksdb::{DBAccess, OptimisticTransactionDB, Options, WriteBatchIterator};
+use rocksdb::{DBAccess, DBWALIterator, OptimisticTransactionDB, Options, WriteBatchIterator};
 
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
@@ -109,10 +109,11 @@ impl PersistentStorage for RockStore {
         Box::new(it)
     }
 
-    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges>> {
+    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send> {
         // TODO: result not unwrap!
         let changes = self.db.get_updates_since(sequence).unwrap();
-        let it = changes.map(|r| {
+        let safer = DangerousSendWalIterator(changes);
+        let it = safer.map(|r| {
             // TODO: result not unwrap!
             let (sequence, batch) = r.unwrap();
             let mut capture = CaptureBatch::new(batch.len());
@@ -126,7 +127,20 @@ impl PersistentStorage for RockStore {
     }
 }
 
-// TODO: completely different implementation to output diffs
+pub struct DangerousSendWalIterator(DBWALIterator);
+
+impl Iterator for DangerousSendWalIterator {
+    type Item = Result<(u64, rocksdb::WriteBatch), rocksdb::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+unsafe impl Send for DangerousSendWalIterator {}
+
+unsafe impl Sync for DangerousSendWalIterator {}
+
 struct CaptureBatch {
     changes: Vec<StateUpdate>,
 }

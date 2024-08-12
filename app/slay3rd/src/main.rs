@@ -2,10 +2,12 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use config::ServerData;
 use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
+use slay3r_storage::PersistentStorage;
 use tonic::transport::Server;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
@@ -66,6 +68,7 @@ async fn main() {
     // We print this out for debugging before the logger is set up
     println!("{:?}", config);
     let config = config.validate().unwrap();
+    let data = config.extract_data();
 
     // add open telemetry
     if let Some(collector) = config.jaeger.as_ref() {
@@ -108,45 +111,55 @@ async fn main() {
 
     // Create the app
     let server_config = ServerConfig::new().with_read_buf(config.read_buf_size as usize);
-    let server_port = format!("{}:{}", config.host, config.port);
 
     // TODO: figure out how to get eg Arc<App<T>> here so we can pass it into the sync_service
 
     // Create ABCI server
-    let server = match config.rocksdb {
+    match config.rocksdb {
         Some(path) => {
             info!("using rocks db at {}", path);
             let storage = slay3r_storage::RockStore::open(&path);
             let app = Pulsarium::new(storage, app_config);
-            server_config.bind(server_port, app).await.unwrap()
+            run_server(app, data, server_config).await
         }
         None => {
             info!("using in-memory database");
             let storage = slay3r_storage::MemoryStore::new();
             let app = Pulsarium::new(storage, app_config);
-            server_config.bind(server_port, app).await.unwrap()
+            run_server(app, data, server_config).await
         }
     };
+}
+
+async fn run_server<T: PersistentStorage + 'static + Send + Sync>(
+    app: Pulsarium<T>,
+    data: ServerData,
+    server_config: ServerConfig,
+) {
+    let server = server_config
+        .bind(data.server_port, app.clone())
+        .await
+        .unwrap();
 
     let query = server.query_dispatcher();
     let grpc_server = Server::builder()
         .layer(grpc::LogLayer::new("grpc"))
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
-        .add_service(grpc::sync_service(query.clone()))
-        .add_service(grpc::tx_service(query.clone(), &config.rpc_url))
-        .add_service(grpc::tendermint_service(query.clone(), &config.rpc_url))
+        .add_service(grpc::sync_service(app))
+        .add_service(grpc::tx_service(query.clone(), &data.rpc_url))
+        .add_service(grpc::tendermint_service(query.clone(), &data.rpc_url))
         .add_service(grpc::cosmwasm_service(query));
 
     let grpc_result =
-        tokio::task::spawn(async move { grpc_server.serve(config.grpc.parse().unwrap()).await });
+        tokio::task::spawn(async move { grpc_server.serve(data.grpc.parse().unwrap()).await });
 
     // we run as long as the abci server is up.
     server.listen().await.unwrap();
 
     // kill async tasks (grpc server, jaeger agent) when main task is done
     grpc_result.abort();
-    if config.jaeger.is_some() {
+    if data.has_jaeger {
         opentelemetry::global::shutdown_tracer_provider();
     }
 }

@@ -9,7 +9,15 @@ use slay3r_storage::{PersistentStorage, StateUpdate};
 use crate::app::App;
 use crate::{app, auth, bank, wasm};
 
-// Expose lower-level state sync methods by wrapping the persistent storage
+pub trait SyncProvider {
+    fn latest_sequence(&self) -> u64;
+
+    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = WriteData> + 'a>;
+
+    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BlockWrites> + Send>;
+}
+
+// just debug
 impl<T: PersistentStorage + 'static> App<T> {
     // TODO: refactor and move somewhere else. this is for debugging output
     pub fn demo_db_dump(&self) {
@@ -42,12 +50,15 @@ impl<T: PersistentStorage + 'static> App<T> {
             println!("{}", change);
         }
     }
+}
 
-    pub fn latest_sequence(&self) -> u64 {
+// Expose lower-level state sync methods by wrapping the persistent storage
+impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
+    fn latest_sequence(&self) -> u64 {
         self.storage.latest_sequence()
     }
 
-    pub fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = WriteData> + 'a> {
+    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = WriteData> + 'a> {
         let it = self.storage.current_state();
         let it = it.map(|(k, value)| {
             let parsed = parse_key(k);
@@ -61,7 +72,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         Box::new(it)
     }
 
-    pub fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BlockWrites>> {
+    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BlockWrites> + Send> {
         let it = self.storage.changes_since(sequence);
         let it = it.map(|batch| {
             let events = batch

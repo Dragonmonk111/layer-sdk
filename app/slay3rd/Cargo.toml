@@ -44,6 +44,7 @@ opentelemetry-jaeger = { workspace = true, features = ["collector_client", "isah
 tracing-opentelemetry = {workspace = true}
 
 tokio = { version = "1.28.0", features = ["full"] }
+tokio-stream = { version = "0.1.15" }
 bytes = {workspace = true}
 prost = { workspace = true }
 tonic = { workspace = true }
