@@ -85,7 +85,10 @@ impl SyncableStorage for MemoryStore {
     }
 
     // TODO: This one is not implemented. Only needed for state sync
-    fn changes_since(&self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send> {
+    fn changes_since(
+        &self,
+        _sequence: u64,
+    ) -> Box<dyn Iterator<Item = Result<BatchChanges, String>> + Send> {
         Box::new([].into_iter())
     }
 }

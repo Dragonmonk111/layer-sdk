@@ -14,7 +14,10 @@ pub trait SyncProvider {
 
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = WriteData> + 'a>;
 
-    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BlockWrites> + Send>;
+    fn changes_since(
+        &self,
+        sequence: u64,
+    ) -> Box<dyn Iterator<Item = Result<BlockWrites, String>> + Send>;
 }
 
 // just debug
@@ -34,7 +37,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // print all changes
         for change in self.changes_since(0) {
-            println!("{}", change);
+            println!("{}", change.unwrap());
         }
     }
 }
@@ -59,39 +62,44 @@ impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
         Box::new(it)
     }
 
-    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BlockWrites> + Send> {
+    fn changes_since(
+        &self,
+        sequence: u64,
+    ) -> Box<dyn Iterator<Item = Result<BlockWrites, String>> + Send> {
         let it = self.storage.changes_since(sequence);
         let it = it.map(|batch| {
-            let events = batch
-                .changes
-                .into_iter()
-                .map(|x| {
-                    let event = match x {
-                        StateUpdate::Write { key, value } => {
-                            let parsed = parse_key(key);
-                            let data = WriteData {
-                                module: parsed.module,
-                                bucket: parsed.bucket,
-                                keys: parsed.keys,
-                                value,
-                            };
-                            Event::WriteState(data)
-                        }
-                        StateUpdate::Delete { key } => {
-                            let parsed = parse_key(key);
-                            let data = DeleteData {
-                                module: parsed.module,
-                                bucket: parsed.bucket,
-                                keys: parsed.keys,
-                            };
-                            Event::DeleteState(data)
-                        }
-                    };
-                    StateChange { event: Some(event) }
-                })
-                .collect();
-            let sequence = batch.sequence;
-            BlockWrites { sequence, events }
+            batch.map(|b| {
+                let events = b
+                    .changes
+                    .into_iter()
+                    .map(|x| {
+                        let event = match x {
+                            StateUpdate::Write { key, value } => {
+                                let parsed = parse_key(key);
+                                let data = WriteData {
+                                    module: parsed.module,
+                                    bucket: parsed.bucket,
+                                    keys: parsed.keys,
+                                    value,
+                                };
+                                Event::WriteState(data)
+                            }
+                            StateUpdate::Delete { key } => {
+                                let parsed = parse_key(key);
+                                let data = DeleteData {
+                                    module: parsed.module,
+                                    bucket: parsed.bucket,
+                                    keys: parsed.keys,
+                                };
+                                Event::DeleteState(data)
+                            }
+                        };
+                        StateChange { event: Some(event) }
+                    })
+                    .collect();
+                let sequence = b.sequence;
+                BlockWrites { sequence, events }
+            })
         });
         Box::new(it)
     }

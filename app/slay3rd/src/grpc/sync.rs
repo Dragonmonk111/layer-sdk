@@ -31,7 +31,7 @@ impl<T: PersistentStorage + 'static + Send + Sync> SyncService<T> {
     }
 }
 
-pub struct ChangesSinceStream(Box<dyn Iterator<Item = BlockWrites> + Send>);
+pub struct ChangesSinceStream(Box<dyn Iterator<Item = Result<BlockWrites, String>> + Send>);
 
 use std::ops::DerefMut;
 
@@ -43,7 +43,9 @@ impl tonic::codegen::tokio_stream::Stream for ChangesSinceStream {
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         let item = self.deref_mut().0.next();
-        std::task::Poll::Ready(item.map(Ok))
+        // change the error type from string to tonic::Status
+        let out = item.map(|x| x.map_err(Status::internal));
+        std::task::Poll::Ready(out)
     }
 }
 

@@ -105,52 +105,62 @@ impl SyncableStorage for RockStore {
 
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
         // TODO: improve this, make more efficient
-        // we can use raw_iterator, and return (&'a [u8], &'a [u8]) to make it more efficient
+        // maybe we can use raw_iterator, and return (&'a [u8], &'a [u8]) to make it more efficient
+        // we also need to use pagination to break into chunks that can be aggregated in memory
         let items = self.db.iterator(rocksdb::IteratorMode::Start);
         let it = items.map(|x| {
+            // TODO: remove unwrap, return results
             let (k, v) = x.unwrap();
             (k.into_vec(), v.into_vec())
         });
         Box::new(it)
     }
 
-    fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send> {
+    fn changes_since(
+        &self,
+        sequence: u64,
+    ) -> Box<dyn Iterator<Item = Result<BatchChanges, String>> + Send> {
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let db = self.db.clone();
         thread::spawn(move || {
-            // TODO: result not unwrap!
-            let changes = db.get_updates_since(sequence).unwrap();
+            let changes = match db.get_updates_since(sequence) {
+                Ok(c) => c,
+                Err(e) => {
+                    // explicitly ignore errors here
+                    let _ = sender.blocking_send(Err(e.to_string()));
+                    return;
+                }
+            };
             for item in changes {
-                // TODO: result not unwrap!
-                let (sequence, batch) = item.unwrap();
-                let mut capture = CaptureBatch::new(batch.len());
-                batch.iterate(&mut capture);
-                let val = BatchChanges {
-                    sequence,
-                    changes: capture.changes,
-                };
-                sender.blocking_send(val).unwrap();
+                match item {
+                    Ok((sequence, batch)) => {
+                        let mut capture = CaptureBatch::new(batch.len());
+                        batch.iterate(&mut capture);
+                        let val = BatchChanges {
+                            sequence,
+                            changes: capture.changes,
+                        };
+                        // don't error if channel dropped, just exit early
+                        if sender.blocking_send(Ok(val)).is_err() {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        // explicitly ignore errors here
+                        let _ = sender.blocking_send(Err(e.to_string()));
+                        return;
+                    }
+                }
             }
-            // let safer = DangerousSendWalIterator(changes);
-            // let it = safer.map(|r| {
-            //     // TODO: result not unwrap!
-            //     let (sequence, batch) = r.unwrap();
-            //     let mut capture = CaptureBatch::new(batch.len());
-            //     batch.iterate(&mut capture);
-            //     BatchChanges {
-            //         sequence,
-            //         changes: capture.changes,
-            //     }
-            // });
         });
         Box::new(ChannelIterator(receiver))
     }
 }
 
-pub struct ChannelIterator(Receiver<BatchChanges>);
+pub struct ChannelIterator(Receiver<Result<BatchChanges, String>>);
 
 impl Iterator for ChannelIterator {
-    type Item = BatchChanges;
+    type Item = Result<BatchChanges, String>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.blocking_recv()

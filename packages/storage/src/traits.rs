@@ -27,7 +27,10 @@ pub trait PersistentStorage: SyncableStorage {
 pub trait SyncableStorage {
     fn latest_sequence(&self) -> u64;
     fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
-    fn changes_since(&self, _sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send>;
+    fn changes_since(
+        &self,
+        _sequence: u64,
+    ) -> Box<dyn Iterator<Item = Result<BatchChanges, String>> + Send>;
 }
 
 #[derive(Debug, PartialEq)]
