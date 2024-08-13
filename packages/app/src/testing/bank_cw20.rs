@@ -291,7 +291,7 @@ fn contracts_send_receive_cw20_as_native() {
         signer,
         code_id,
         gov_key,
-    } = setup("/tmp/slay3r/basic-bank-messages");
+    } = setup("/tmp/slay3r/contracts_send_receive_cw20_as_native");
     let sender = signer.account_id();
     let gov = gov_key.account_id();
 

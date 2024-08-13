@@ -1,7 +1,9 @@
-use std::{fmt, thread};
+use std::marker::PhantomData;
 use std::path::Path;
+use std::sync::Arc;
+use std::{fmt, thread};
 
-use rocksdb::{DBAccess, DBWALIterator, OptimisticTransactionDB, Options, WriteBatchIterator};
+use rocksdb::{DBAccess, OptimisticTransactionDB, Options, WriteBatchIterator};
 
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
@@ -14,7 +16,7 @@ use crate::{
 };
 
 pub struct RockStore {
-    pub db: OptimisticTransactionDB,
+    pub db: Arc<OptimisticTransactionDB>,
 }
 
 // TODO: tune dynamically
@@ -33,7 +35,7 @@ impl RockStore {
 
     pub fn open_opts<P: AsRef<Path>>(path: P, opts: Options) -> RockStore {
         let db = OptimisticTransactionDB::open(&opts, path).unwrap();
-        RockStore { db }
+        RockStore { db: Arc::new(db) }
     }
 
     fn default_db_opts() -> Options {
@@ -70,8 +72,9 @@ impl PersistentStorage for RockStore {
     // open a read-only view of the storage. should abort it to free space for write
     fn reader(&self) -> RockReader<'_> {
         RockReader {
-            db: &self.db,
+            db: self.db.clone(),
             price_list: DEFAULT_PERSISTED_PRICES,
+            lifetime: PhantomData,
         }
     }
 
@@ -112,11 +115,11 @@ impl SyncableStorage for RockStore {
     }
 
     fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send> {
-        // TODO: result not unwrap!
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
-        let foo = &self.db;
+        let db = self.db.clone();
         thread::spawn(move || {
-            let changes = foo.get_updates_since(sequence).unwrap();
+            // TODO: result not unwrap!
+            let changes = db.get_updates_since(sequence).unwrap();
             for item in changes {
                 // TODO: result not unwrap!
                 let (sequence, batch) = item.unwrap();
@@ -139,7 +142,6 @@ impl SyncableStorage for RockStore {
             //         changes: capture.changes,
             //     }
             // });
-            
         });
         Box::new(ChannelIterator(receiver))
     }
@@ -154,22 +156,6 @@ impl Iterator for ChannelIterator {
         self.0.blocking_recv()
     }
 }
-
-
-// TODO: replace this with a proper implementation
-pub struct DangerousSendWalIterator(DBWALIterator);
-
-impl Iterator for DangerousSendWalIterator {
-    type Item = Result<(u64, rocksdb::WriteBatch), rocksdb::Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-}
-
-unsafe impl Send for DangerousSendWalIterator {}
-
-unsafe impl Sync for DangerousSendWalIterator {}
 
 struct CaptureBatch {
     changes: Vec<StateUpdate>,
@@ -201,8 +187,9 @@ impl WriteBatchIterator for CaptureBatch {
 }
 
 pub struct RockReader<'a> {
-    db: &'a OptimisticTransactionDB,
+    db: Arc<OptimisticTransactionDB>,
     price_list: PriceList,
+    lifetime: PhantomData<&'a ()>,
 }
 
 impl<'a> ReadonlyStorage for RockReader<'a> {
