@@ -12,7 +12,7 @@ use crate::{app, auth, bank, wasm};
 pub trait SyncProvider {
     fn latest_sequence(&self) -> u64;
 
-    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = WriteData> + 'a>;
+    fn current_state(&self) -> Box<dyn Iterator<Item = Result<WriteData, String>> + Send>;
 
     fn changes_since(
         &self,
@@ -32,7 +32,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // print all state
         for item in self.current_state() {
-            println!("  {}", item);
+            println!("  {}", item.unwrap());
         }
 
         // print all changes
@@ -48,16 +48,18 @@ impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
         self.storage.latest_sequence()
     }
 
-    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = WriteData> + 'a> {
+    fn current_state(&self) -> Box<dyn Iterator<Item = Result<WriteData, String>> + Send> {
         let it = self.storage.current_state();
-        let it = it.map(|(k, value)| {
-            let parsed = parse_key(k);
-            WriteData {
-                module: parsed.module,
-                bucket: parsed.bucket,
-                keys: parsed.keys,
-                value,
-            }
+        let it = it.map(|r| {
+            r.map(|(k, value)| {
+                let parsed = parse_key(k);
+                WriteData {
+                    module: parsed.module,
+                    bucket: parsed.bucket,
+                    keys: parsed.keys,
+                    value,
+                }
+            })
         });
         Box::new(it)
     }

@@ -24,9 +24,11 @@ pub trait PersistentStorage: SyncableStorage {
     fn app_hash(&self) -> Vec<u8>;
 }
 
+pub type KV = (Vec<u8>, Vec<u8>);
+
 pub trait SyncableStorage {
     fn latest_sequence(&self) -> u64;
-    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
+    fn current_state(&self) -> Box<dyn Iterator<Item = Result<KV, String>> + Send>;
     fn changes_since(
         &self,
         _sequence: u64,

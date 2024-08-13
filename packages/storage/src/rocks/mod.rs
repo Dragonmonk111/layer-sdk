@@ -9,6 +9,7 @@ use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 use tokio::sync::mpsc::Receiver;
 
+use crate::traits::KV;
 use crate::{
     traits::{BatchChanges, StateUpdate},
     FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, SyncableStorage,
@@ -103,17 +104,28 @@ impl SyncableStorage for RockStore {
         self.db.latest_sequence_number()
     }
 
-    fn current_state<'a>(&'a self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
-        // TODO: improve this, make more efficient
-        // maybe we can use raw_iterator, and return (&'a [u8], &'a [u8]) to make it more efficient
-        // we also need to use pagination to break into chunks that can be aggregated in memory
-        let items = self.db.iterator(rocksdb::IteratorMode::Start);
-        let it = items.map(|x| {
-            // TODO: remove unwrap, return results
-            let (k, v) = x.unwrap();
-            (k.into_vec(), v.into_vec())
+    // This uses a thread in order to hold no references to the DB.
+    fn current_state(&self) -> Box<dyn Iterator<Item = Result<KV, String>> + Send> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(32);
+        let db = self.db.clone();
+        thread::spawn(move || {
+            let items = db.iterator(rocksdb::IteratorMode::Start);
+            for item in items {
+                let (k, v) = match item {
+                    Ok(x) => x,
+                    Err(e) => {
+                        let _ = sender.blocking_send(Err(e.to_string()));
+                        return;
+                    }
+                };
+                let out = (k.into_vec(), v.into_vec());
+                // don't error if channel dropped, just exit early
+                if sender.blocking_send(Ok(out)).is_err() {
+                    return;
+                }
+            }
         });
-        Box::new(it)
+        Box::new(ReceiverIterator(receiver))
     }
 
     fn changes_since(
@@ -153,14 +165,13 @@ impl SyncableStorage for RockStore {
                 }
             }
         });
-        Box::new(ChannelIterator(receiver))
+        Box::new(ReceiverIterator(receiver))
     }
 }
+pub struct ReceiverIterator<T>(Receiver<Result<T, String>>);
 
-pub struct ChannelIterator(Receiver<Result<BatchChanges, String>>);
-
-impl Iterator for ChannelIterator {
-    type Item = Result<BatchChanges, String>;
+impl<T> Iterator for ReceiverIterator<T> {
+    type Item = Result<T, String>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.blocking_recv()
