@@ -8,7 +8,7 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-rocksdb = ["dep:rocksdb"]
+rocksdb = ["dep:rocksdb", "tokio"]
 
 [dependencies]
 slay3r-std = { workspace = true }
@@ -22,4 +22,5 @@ tracing = {workspace = true}
 
 lmdb = { version = "0.8.0", optional = true }
 libc = { version = "0.2.100", optional = true }
-rocksdb = { version = "0.22.0", optional = true }
+rocksdb = { version = "0.22.0", optional = true, features = ["multi-threaded-cf"] }
+tokio = { workspace=true, optional = true, features = ["sync"]  }

@@ -63,6 +63,9 @@ opentelemetry = "0.19.0"
 opentelemetry-jaeger = "0.18.0"
 tracing-opentelemetry = "0.19.0"
 
+tokio = { version = "1.28.0" }
+tokio-stream = { version = "0.1.15" }
+
 cosmrs = {version = "0.13.0", default-features = false, features = ["cosmwasm"] }
 cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }
 cw-orch-core = { version = "1"}

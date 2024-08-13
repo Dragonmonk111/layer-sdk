@@ -1,10 +1,11 @@
-use std::fmt;
+use std::{fmt, thread};
 use std::path::Path;
 
 use rocksdb::{DBAccess, DBWALIterator, OptimisticTransactionDB, Options, WriteBatchIterator};
 
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
+use tokio::sync::mpsc::Receiver;
 
 use crate::{
     traits::{BatchChanges, StateUpdate},
@@ -112,22 +113,50 @@ impl SyncableStorage for RockStore {
 
     fn changes_since(&self, sequence: u64) -> Box<dyn Iterator<Item = BatchChanges> + Send> {
         // TODO: result not unwrap!
-        let changes = self.db.get_updates_since(sequence).unwrap();
-        let safer = DangerousSendWalIterator(changes);
-        let it = safer.map(|r| {
-            // TODO: result not unwrap!
-            let (sequence, batch) = r.unwrap();
-            let mut capture = CaptureBatch::new(batch.len());
-            batch.iterate(&mut capture);
-            BatchChanges {
-                sequence,
-                changes: capture.changes,
+        let (sender, receiver) = tokio::sync::mpsc::channel(32);
+        let foo = &self.db;
+        thread::spawn(move || {
+            let changes = foo.get_updates_since(sequence).unwrap();
+            for item in changes {
+                // TODO: result not unwrap!
+                let (sequence, batch) = item.unwrap();
+                let mut capture = CaptureBatch::new(batch.len());
+                batch.iterate(&mut capture);
+                let val = BatchChanges {
+                    sequence,
+                    changes: capture.changes,
+                };
+                sender.blocking_send(val).unwrap();
             }
+            // let safer = DangerousSendWalIterator(changes);
+            // let it = safer.map(|r| {
+            //     // TODO: result not unwrap!
+            //     let (sequence, batch) = r.unwrap();
+            //     let mut capture = CaptureBatch::new(batch.len());
+            //     batch.iterate(&mut capture);
+            //     BatchChanges {
+            //         sequence,
+            //         changes: capture.changes,
+            //     }
+            // });
+            
         });
-        Box::new(it)
+        Box::new(ChannelIterator(receiver))
     }
 }
 
+pub struct ChannelIterator(Receiver<BatchChanges>);
+
+impl Iterator for ChannelIterator {
+    type Item = BatchChanges;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.blocking_recv()
+    }
+}
+
+
+// TODO: replace this with a proper implementation
 pub struct DangerousSendWalIterator(DBWALIterator);
 
 impl Iterator for DangerousSendWalIterator {
