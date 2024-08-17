@@ -137,35 +137,45 @@ impl SyncableStorage for RockStore {
     ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let db = self.db.clone();
+
+        // This should go forever, until the channel is dropped
         thread::spawn(move || {
-            let changes = match db.get_updates_since(sequence) {
-                Ok(c) => c,
-                Err(e) => {
-                    // explicitly ignore errors here
-                    let _ = sender.blocking_send(Err(e.to_string()));
-                    return;
-                }
-            };
-            for item in changes {
-                match item {
-                    Ok((sequence, batch)) => {
-                        let mut capture = CaptureBatch::new(batch.len());
-                        batch.iterate(&mut capture);
-                        let val = BatchChanges {
-                            sequence,
-                            changes: capture.changes,
-                        };
-                        // don't error if channel dropped, just exit early
-                        if sender.blocking_send(Ok(val)).is_err() {
-                            return;
-                        }
-                    }
+            let mut start_from = sequence;
+            loop {
+                println!("Query for changes since {}", start_from);
+                let changes = match db.get_updates_since(start_from) {
+                    Ok(c) => c,
                     Err(e) => {
                         // explicitly ignore errors here
                         let _ = sender.blocking_send(Err(e.to_string()));
                         return;
                     }
+                };
+                for item in changes {
+                    match item {
+                        Ok((sequence, batch)) => {
+                            let mut capture = CaptureBatch::new(batch.len());
+                            batch.iterate(&mut capture);
+                            let val = BatchChanges {
+                                sequence,
+                                changes: capture.changes,
+                            };
+                            // don't error if channel dropped, just exit early
+                            if sender.blocking_send(Ok(val)).is_err() {
+                                return;
+                            }
+                            start_from = sequence + 1;
+                        }
+                        Err(e) => {
+                            // explicitly ignore errors here
+                            let _ = sender.blocking_send(Err(e.to_string()));
+                            return;
+                        }
+                    }
                 }
+                // add a small pause here to avoid crazy load. once we hit the end of changelog, we wait 300ms to check again
+                // TODO: make configurable
+                thread::sleep(std::time::Duration::from_millis(300));
             }
         });
         Box::pin(ReceiverStream(receiver))
