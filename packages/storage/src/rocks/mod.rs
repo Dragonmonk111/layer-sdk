@@ -1,13 +1,16 @@
-use std::marker::PhantomData;
-use std::path::Path;
-use std::sync::Arc;
-use std::{fmt, thread};
-
+use futures::Stream;
 use rocksdb::{DBAccess, OptimisticTransactionDB, Options, WriteBatchIterator};
+use std::marker::PhantomData;
+use std::ops::DerefMut;
+use std::path::Path;
+use std::pin::{pin, Pin};
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::{fmt, thread};
+use tokio::sync::mpsc::Receiver;
 
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
-use tokio::sync::mpsc::Receiver;
 
 use crate::traits::KV;
 use crate::{
@@ -105,7 +108,7 @@ impl SyncableStorage for RockStore {
     }
 
     // This uses a thread in order to hold no references to the DB.
-    fn current_state(&self) -> Box<dyn Iterator<Item = Result<KV, String>> + Send> {
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<KV, String>> + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let db = self.db.clone();
         thread::spawn(move || {
@@ -125,13 +128,13 @@ impl SyncableStorage for RockStore {
                 }
             }
         });
-        Box::new(ReceiverIterator(receiver))
+        Box::pin(ReceiverStream(receiver))
     }
 
     fn changes_since(
         &self,
         sequence: u64,
-    ) -> Box<dyn Iterator<Item = Result<BatchChanges, String>> + Send> {
+    ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let db = self.db.clone();
         thread::spawn(move || {
@@ -165,16 +168,18 @@ impl SyncableStorage for RockStore {
                 }
             }
         });
-        Box::new(ReceiverIterator(receiver))
+        Box::pin(ReceiverStream(receiver))
     }
 }
-pub struct ReceiverIterator<T>(Receiver<Result<T, String>>);
+pub struct ReceiverStream<T>(Receiver<Result<T, String>>);
 
-impl<T> Iterator for ReceiverIterator<T> {
+impl<T> Stream for ReceiverStream<T> {
     type Item = Result<T, String>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.blocking_recv()
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let fut = self.deref_mut().0.recv();
+        let fut = pin!(fut);
+        std::future::Future::poll(fut, cx)
     }
 }
 

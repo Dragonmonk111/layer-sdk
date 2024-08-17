@@ -1,5 +1,9 @@
 // Helper code around state sync
 
+use std::pin::Pin;
+
+use futures::{Stream, StreamExt};
+
 use slay3r_proto::layer::sync::v1::{
     state_change::Event, BlockWrites, DeleteData, StateChange, WriteData,
 };
@@ -12,12 +16,12 @@ use crate::{app, auth, bank, wasm};
 pub trait SyncProvider {
     fn latest_sequence(&self) -> u64;
 
-    fn current_state(&self) -> Box<dyn Iterator<Item = Result<WriteData, String>> + Send>;
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<WriteData, String>> + Send>>;
 
     fn changes_since(
         &self,
         sequence: u64,
-    ) -> Box<dyn Iterator<Item = Result<BlockWrites, String>> + Send>;
+    ) -> Pin<Box<dyn Stream<Item = Result<BlockWrites, String>> + Send>>;
 }
 
 // just debug
@@ -30,15 +34,16 @@ impl<T: PersistentStorage + 'static> App<T> {
             self.latest_sequence()
         );
 
-        // print all state
-        for item in self.current_state() {
-            println!("  {}", item.unwrap());
-        }
+        // TODO: see how to work if needed for debug
+        // // print all state
+        // for item in self.current_state() {
+        //     println!("  {}", item.unwrap());
+        // }
 
-        // print all changes
-        for change in self.changes_since(0) {
-            println!("{}", change.unwrap());
-        }
+        // // print all changes
+        // for change in self.changes_since(0) {
+        //     println!("{}", change.unwrap());
+        // }
     }
 }
 
@@ -48,7 +53,7 @@ impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
         self.storage.latest_sequence()
     }
 
-    fn current_state(&self) -> Box<dyn Iterator<Item = Result<WriteData, String>> + Send> {
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<WriteData, String>> + Send>> {
         let it = self.storage.current_state();
         let it = it.map(|r| {
             r.map(|(k, value)| {
@@ -61,13 +66,13 @@ impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
                 }
             })
         });
-        Box::new(it)
+        Box::pin(it)
     }
 
     fn changes_since(
         &self,
         sequence: u64,
-    ) -> Box<dyn Iterator<Item = Result<BlockWrites, String>> + Send> {
+    ) -> Pin<Box<dyn Stream<Item = Result<BlockWrites, String>> + Send>> {
         let it = self.storage.changes_since(sequence);
         let it = it.map(|batch| {
             batch.map(|b| {
@@ -103,7 +108,7 @@ impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
                 BlockWrites { sequence, events }
             })
         });
-        Box::new(it)
+        Box::pin(it)
     }
 }
 

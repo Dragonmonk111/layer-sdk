@@ -1,4 +1,6 @@
-use std::ops::Deref;
+use futures::stream::{Map, StreamExt};
+use std::{ops::Deref, pin::Pin};
+use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 
 use slay3r_app::SyncProvider;
@@ -27,23 +29,13 @@ impl<T: PersistentStorage + 'static + Send + Sync> SyncService<T> {
     }
 }
 
-pub struct SyncStream<T>(Box<dyn Iterator<Item = Result<T, String>> + Send>);
+pub type MapType<T> = fn(Result<T, String>) -> Result<T, Status>;
 
-use std::ops::DerefMut;
-
-impl<T> tonic::codegen::tokio_stream::Stream for SyncStream<T> {
-    type Item = Result<T, Status>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let item = self.deref_mut().0.next();
-        // change the error type from string to tonic::Status
-        let out = item.map(|x| x.map_err(Status::internal));
-        std::task::Poll::Ready(out)
-    }
+pub fn internal_err<T>(x: Result<T, String>) -> Result<T, Status> {
+    x.map_err(Status::internal)
 }
+
+pub type SyncStream<T> = Map<Pin<Box<dyn Stream<Item = Result<T, String>> + Send>>, MapType<T>>;
 
 #[tonic::async_trait]
 impl<T: PersistentStorage + 'static + Send + Sync> Query for SyncService<T> {
@@ -66,10 +58,8 @@ impl<T: PersistentStorage + 'static + Send + Sync> Query for SyncService<T> {
         _request: Request<StreamCurrentStateRequest>,
     ) -> Result<Response<Self::CurrentStateStream>, Status> {
         let lock = self.app.sync();
-        // TODO: don't read all into memory, but we cannot hold a ref to the DB
-        // Most obvious solution is paginaton
         let stream = lock.deref().current_state();
-        Ok(Response::new(SyncStream(stream)))
+        Ok(Response::new(stream.map(internal_err)))
     }
 
     #[tracing::instrument(skip(self), level = "info")]
@@ -79,6 +69,6 @@ impl<T: PersistentStorage + 'static + Send + Sync> Query for SyncService<T> {
     ) -> Result<Response<Self::ChangesSinceStream>, Status> {
         let lock = self.app.sync();
         let stream = lock.deref().changes_since(request.get_ref().height);
-        Ok(Response::new(SyncStream(stream)))
+        Ok(Response::new(stream.map(internal_err)))
     }
 }

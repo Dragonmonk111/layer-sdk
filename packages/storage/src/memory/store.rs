@@ -1,13 +1,14 @@
+use futures::stream::{iter, Stream};
 use parking_lot::{RwLock, RwLockReadGuard};
-use slay3r_std::HexEncode;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::iter;
 use std::ops::{Bound, RangeBounds};
+use std::pin::Pin;
 use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult};
+use slay3r_std::{GasMeter, GasResult, HexEncode};
 
 use crate::prices::PriceList;
 use crate::traits::BatchChanges;
@@ -71,6 +72,10 @@ impl PersistentStorage for MemoryStore {
     }
 }
 
+fn iter_stream<I: Iterator + Send + 'static>(it: I) -> Pin<Box<dyn Stream<Item = I::Item> + Send>> {
+    Box::pin(iter(it))
+}
+
 impl SyncableStorage for MemoryStore {
     // TODO: This one is not implemented. Only needed for state sync
     fn latest_sequence(&self) -> u64 {
@@ -78,19 +83,19 @@ impl SyncableStorage for MemoryStore {
     }
 
     // This one is implemented
-    fn current_state(&self) -> Box<dyn Iterator<Item = Result<KV, String>> + Send> {
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<KV, String>> + Send>> {
         let inner = self.0.read();
         let it = inner.data.iter().map(|(k, v)| (k.to_owned(), v.to_owned()));
         let data: Vec<_> = it.collect();
-        Box::new(data.into_iter().map(Ok))
+        iter_stream(data.into_iter().map(Ok))
     }
 
     // TODO: This one is not implemented. Only needed for state sync
     fn changes_since(
         &self,
         _sequence: u64,
-    ) -> Box<dyn Iterator<Item = Result<BatchChanges, String>> + Send> {
-        Box::new([].into_iter())
+    ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>> {
+        iter_stream([].into_iter())
     }
 }
 

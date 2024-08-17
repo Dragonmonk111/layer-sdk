@@ -27,6 +27,8 @@ services:
     command: ["slay3rd"]
     depends_on:
       - jaeger
+    environment:
+      - RUST_BACKTRACE=1
   cometbft:
     image: "cometbft/cometbft:v0.38.7"
     expose:

@@ -65,6 +65,8 @@ tracing-opentelemetry = "0.19.0"
 
 tokio = { version = "1.28.0" }
 tokio-stream = { version = "0.1.15" }
+# This must stay in sync with what tokio-stream uses
+futures = "0.3.30"
 
 cosmrs = {version = "0.13.0", default-features = false, features = ["cosmwasm"] }
 cosmos-sdk-proto = { version = "0.18.0",  features = ["cosmwasm"] }

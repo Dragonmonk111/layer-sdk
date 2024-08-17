@@ -1,3 +1,7 @@
+use std::pin::Pin;
+
+use futures::Stream;
+
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{stringify_or_hex, GasMeter, GasResult};
 
@@ -28,11 +32,11 @@ pub type KV = (Vec<u8>, Vec<u8>);
 
 pub trait SyncableStorage {
     fn latest_sequence(&self) -> u64;
-    fn current_state(&self) -> Box<dyn Iterator<Item = Result<KV, String>> + Send>;
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<KV, String>> + Send>>;
     fn changes_since(
         &self,
         _sequence: u64,
-    ) -> Box<dyn Iterator<Item = Result<BatchChanges, String>> + Send>;
+    ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>>;
 }
 
 #[derive(Debug, PartialEq)]
