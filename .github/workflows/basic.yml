@@ -10,6 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      # rocksdb takes up a bunch of space... this should help
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          # can try enabling these if above not enough
+          tool-cache: false
+          large-packages: false
+          swap-storage: false
+
       - name: Checkout sources
         uses: actions/checkout@v2
 
