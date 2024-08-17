@@ -5,6 +5,11 @@ set -eux
 # https://github.com/settings/tokens
 # docker login -u USERNAME --password-stdin ghcr.io
 
-docker push ghcr.io/lay3rlabs/gateway:latest
-docker push ghcr.io/lay3rlabs/slay3rd:latest
-docker push ghcr.io/lay3rlabs/faucet:latest
+SUDO="sudo"
+if groups | grep -q docker; then
+  SUDO=""
+fi
+
+$SUDO docker push ghcr.io/lay3rlabs/gateway:latest
+$SUDO docker push ghcr.io/lay3rlabs/slay3rd:latest
+$SUDO docker push ghcr.io/lay3rlabs/faucet:latest

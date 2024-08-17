@@ -10,8 +10,13 @@ case $(uname -m) in
     *) echo "Unknown architecture "; uname -m ; exit 1;;
 esac
 
+SUDO="sudo"
+if groups | grep -q docker; then
+  SUDO=""
+fi
+
 # compile all files in contracts directory
-sudo docker run --rm -v "$(pwd)":/code \
+$SUDO docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="pulsar_contracts_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
   "cosmwasm/workspace-optimizer${ARCH}:0.12.13"
