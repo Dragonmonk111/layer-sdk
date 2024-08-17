@@ -17,11 +17,11 @@ cosmwasm-schema = { workspace = true }
 cosmwasm-std = { workspace = true }
 cw20 = { workspace = true }
 cw-storage-plus = { workspace = true }
-cw-utils = { workspace = true }
+# cw-utils = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 itertools = { workspace = true }
-parking_lot = {workspace = true}
+# parking_lot = {workspace = true}
 bytes = {workspace = true}
 sha2 = {workspace = true}
 
