@@ -24,29 +24,6 @@ pub trait SyncProvider {
     ) -> Pin<Box<dyn Stream<Item = Result<BlockWrites, String>> + Send>>;
 }
 
-// just debug
-impl<T: PersistentStorage + 'static> App<T> {
-    // TODO: refactor and move somewhere else. this is for debugging output
-    pub fn demo_db_dump(&self) {
-        // latest sequence
-        println!(
-            "\n********* Sequence: {} ***********",
-            self.latest_sequence()
-        );
-
-        // TODO: see how to work if needed for debug
-        // // print all state
-        // for item in self.current_state() {
-        //     println!("  {}", item.unwrap());
-        // }
-
-        // // print all changes
-        // for change in self.changes_since(0) {
-        //     println!("{}", change.unwrap());
-        // }
-    }
-}
-
 // Expose lower-level state sync methods by wrapping the persistent storage
 impl<T: PersistentStorage + 'static> SyncProvider for App<T> {
     fn latest_sequence(&self) -> u64 {

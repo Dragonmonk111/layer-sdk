@@ -21,7 +21,11 @@ use crate::{
 
 pub struct RockStore {
     pub db: Arc<OptimisticTransactionDB>,
+    /// How many ms to wait before trying to check for new wal changeset
+    pub changes_retry_ms: u64,
 }
+
+const DEFAULT_CHANGES_RETRY_MS: u64 = 200;
 
 // TODO: tune dynamically
 const NUM_CPUS: i32 = 8;
@@ -39,7 +43,11 @@ impl RockStore {
 
     pub fn open_opts<P: AsRef<Path>>(path: P, opts: Options) -> RockStore {
         let db = OptimisticTransactionDB::open(&opts, path).unwrap();
-        RockStore { db: Arc::new(db) }
+        // TODO: make this configurable
+        RockStore {
+            db: Arc::new(db),
+            changes_retry_ms: DEFAULT_CHANGES_RETRY_MS,
+        }
     }
 
     fn default_db_opts() -> Options {
@@ -137,6 +145,7 @@ impl SyncableStorage for RockStore {
     ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(32);
         let db = self.db.clone();
+        let retry_ms = self.changes_retry_ms;
 
         // This should go forever, until the channel is dropped
         thread::spawn(move || {
@@ -174,8 +183,7 @@ impl SyncableStorage for RockStore {
                     }
                 }
                 // add a small pause here to avoid crazy load. once we hit the end of changelog, we wait 300ms to check again
-                // TODO: make configurable
-                thread::sleep(std::time::Duration::from_millis(300));
+                thread::sleep(std::time::Duration::from_millis(retry_ms));
             }
         });
         Box::pin(ReceiverStream(receiver))
