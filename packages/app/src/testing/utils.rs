@@ -364,9 +364,11 @@ mod test {
 
     use super::*;
 
+    const DENOM: &str = "uslay";
+
     // FIXME: use genesis building pattern?
     fn sample_genesis(account: &AccountId) -> GenesisState {
-        let balance = vec![coin(1_000_000, "upulsar"), coin(2_000_000, "umagic")];
+        let balance = vec![coin(1_000_000, DENOM), coin(2_000_000, "umagic")];
         GenesisState {
             bank: vec![BankAccount {
                 address: account.to_string(),
@@ -387,11 +389,11 @@ mod test {
         let mut app = TestApp::new(wasm_dir);
         app.init(&genesis, "super-chain");
 
-        let bal = app.balance(&account, "upulsar").unwrap();
+        let bal = app.balance(&account, DENOM).unwrap();
         assert_eq!(bal.u128(), 1_000_000);
 
         let bals = app.all_balances(&account).unwrap();
-        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, "upulsar")];
+        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, DENOM)];
         assert_eq!(bals, expected);
 
         // copy data and try load_from_store
@@ -402,11 +404,11 @@ mod test {
         let new_app = TestApp { app: app2 };
 
         // make sure same data here
-        let bal = new_app.balance(&account, "upulsar").unwrap();
+        let bal = new_app.balance(&account, DENOM).unwrap();
         assert_eq!(bal.u128(), 1_000_000);
 
         let bals = new_app.all_balances(&account).unwrap();
-        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, "upulsar")];
+        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, DENOM)];
         assert_eq!(bals, expected);
     }
 
@@ -423,7 +425,7 @@ mod test {
         app.block(&[]);
 
         // query works
-        let bal = app.balance(&account, "upulsar").unwrap();
+        let bal = app.balance(&account, DENOM).unwrap();
         assert_eq!(bal.u128(), 1_000_000);
 
         // height is 4
@@ -446,7 +448,7 @@ mod test {
             .with_msg(BankMsg::Send {
                 sender: acct.clone(),
                 recipient: rcpt.clone(),
-                amount: vec![coin(123_000, "upulsar")],
+                amount: vec![coin(123_000, DENOM)],
             })
             .with_signer(&pk, 0);
 
@@ -458,9 +460,9 @@ mod test {
             .with_msg(BankMsg::Send {
                 sender: rcpt,
                 recipient: acct,
-                amount: vec![coin(123_000, "upulsar")],
+                amount: vec![coin(123_000, DENOM)],
             })
-            .with_fee(100_000, coin(300_000, "upulsar"))
+            .with_fee(100_000, coin(300_000, DENOM))
             .with_signer(&pk, 0);
 
         // make sure it succeeds
@@ -483,9 +485,9 @@ mod test {
             .with_msg(BankMsg::Send {
                 sender: acct.clone(),
                 recipient: rcpt.clone(),
-                amount: vec![coin(123_000, "upulsar")],
+                amount: vec![coin(123_000, DENOM)],
             })
-            .with_fee(100_000, coin(3_000_000, "upulsar"))
+            .with_fee(100_000, coin(3_000_000, DENOM))
             .with_signer(&pk, 0);
         app.check_tx(&tx).result.unwrap_err();
 
@@ -494,7 +496,7 @@ mod test {
             .with_msg(BankMsg::Send {
                 sender: acct,
                 recipient: rcpt,
-                amount: vec![coin(123_000, "upulsar")],
+                amount: vec![coin(123_000, DENOM)],
             })
             .with_invalid_sig()
             .with_signer(&pk, 0);
@@ -515,7 +517,7 @@ mod test {
             .with_msg(BankMsg::Send {
                 sender: sender.clone(),
                 recipient: rcpt,
-                amount: vec![coin(123_000, "upulsar")],
+                amount: vec![coin(123_000, DENOM)],
             })
             .with_sender(&sender);
 
@@ -535,18 +537,18 @@ mod test {
         app.init(&genesis, "super-chain");
 
         // query works
-        let bal = app.balance(&acct, "upulsar").unwrap();
+        let bal = app.balance(&acct, DENOM).unwrap();
         assert_eq!(bal.u128(), 1_000_000);
 
         // submit this in a block successfully
         let msg = BankMsg::Send {
             sender: acct.clone(),
             recipient: rcpt.clone(),
-            amount: vec![coin(123_000, "upulsar")],
+            amount: vec![coin(123_000, DENOM)],
         };
         let tx = TxBuilder::new()
             .with_msg(msg.clone())
-            .with_fee(100_000, coin(10_000, "upulsar"))
+            .with_fee(100_000, coin(10_000, DENOM))
             .with_signer(&pk, 0);
 
         let mut res = app.block(&[tx]);
@@ -560,10 +562,10 @@ mod test {
         assert_eq!(app.height(), 2);
 
         // balances updated
-        let bal = app.balance(&acct, "upulsar").unwrap();
+        let bal = app.balance(&acct, DENOM).unwrap();
         assert_eq!(bal.u128(), 1_000_000 - 123_000 - 10_000);
 
-        let bal = app.balance(&rcpt, "upulsar").unwrap();
+        let bal = app.balance(&rcpt, DENOM).unwrap();
         assert_eq!(bal.u128(), 123_000);
 
         // note, we now reject with sequence 0

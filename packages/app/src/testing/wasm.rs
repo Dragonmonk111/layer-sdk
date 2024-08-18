@@ -13,11 +13,13 @@ use crate::{
 // v1.0.1
 const CW20_BASE: &[u8] = include_bytes!("../../fixtures/cw20_base.wasm");
 
+const DENOM: &str = "uslay";
+
 fn cw20_genesis(account: &AccountId) -> GenesisState {
     GenesisState {
         bank: vec![BankAccount {
             address: account.to_string(),
-            balance: coins(100_000_000, "upulsar"),
+            balance: coins(100_000_000, DENOM),
         }],
         wasm: WasmParams {
             gov_account: account.to_string(),
@@ -51,7 +53,7 @@ fn happy_path_cw20() {
     let tx = TxBuilder::new()
         .with_msg(msg)
         .with_signer(&signer, 0)
-        .with_fee(1_000_000, coin(50_000, "upulsar"));
+        .with_fee(1_000_000, coin(50_000, DENOM));
     let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
 
@@ -71,8 +73,8 @@ fn happy_path_cw20() {
     }
 
     let msg = cw20_base::msg::InstantiateMsg {
-        name: "pulsar".to_string(),
-        symbol: "PLS".to_string(),
+        name: "layer".to_string(),
+        symbol: "LAY".to_string(),
         decimals: 6,
         initial_balances: vec![Cw20Coin {
             address: sender.to_string(),
@@ -93,7 +95,7 @@ fn happy_path_cw20() {
     let tx = TxBuilder::new()
         .with_msg(msg)
         .with_signer(&signer, 1)
-        .with_fee(100_000, coin(5_000, "upulsar"));
+        .with_fee(100_000, coin(5_000, DENOM));
 
     let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);

@@ -1,6 +1,6 @@
 {
-  "rpc": "http://rpc.spinner.zone",
-  "rest": "http://lcd.spinner.zone",
+  "rpc": "http://rpc.cav3.net",
+  "rest": "http://lcd.cav3.net",
   "chainId": "slay3r-dev",
   "chainName": "Slay3r DevlNet",
   "stakeCurrency": {

@@ -1,4 +1,4 @@
 version: v1
-name: buf.build/pulsar/pulsariumd
+name: buf.build/lay3rlabs/layer-sdk
 deps:
   - buf.build/grpc-ecosystem/grpc-gateway

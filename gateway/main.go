@@ -14,16 +14,16 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	auth "github.com/pulsar/pulsariumd/gateway/cosmos/auth/v1beta1"
-	bank "github.com/pulsar/pulsariumd/gateway/cosmos/bank/v1beta1"
-	tendermint "github.com/pulsar/pulsariumd/gateway/cosmos/base/tendermint/v1beta1"
-	tx "github.com/pulsar/pulsariumd/gateway/cosmos/tx/v1beta1"
-	cosmwasm "github.com/pulsar/pulsariumd/gateway/cosmwasm/wasm/v1"
-	sync "github.com/pulsar/pulsariumd/gateway/layer/sync/v1"
+	auth "github.com/lay3rlabs/layer-sdk/gateway/cosmos/auth/v1beta1"
+	bank "github.com/lay3rlabs/layer-sdk/gateway/cosmos/bank/v1beta1"
+	tendermint "github.com/lay3rlabs/layer-sdk/gateway/cosmos/base/tendermint/v1beta1"
+	tx "github.com/lay3rlabs/layer-sdk/gateway/cosmos/tx/v1beta1"
+	cosmwasm "github.com/lay3rlabs/layer-sdk/gateway/cosmwasm/wasm/v1"
+	sync "github.com/lay3rlabs/layer-sdk/gateway/layer/sync/v1"
 
 	// to register pubkey any types
-	_ "github.com/pulsar/pulsariumd/gateway/cosmos/crypto/ed25519"
-	_ "github.com/pulsar/pulsariumd/gateway/cosmos/crypto/secp256k1"
+	_ "github.com/lay3rlabs/layer-sdk/gateway/cosmos/crypto/ed25519"
+	_ "github.com/lay3rlabs/layer-sdk/gateway/cosmos/crypto/secp256k1"
 )
 
 var (

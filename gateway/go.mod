@@ -1,4 +1,4 @@
-module github.com/pulsar/pulsariumd/gateway
+module github.com/lay3rlabs/layer-sdk/gateway
 
 go 1.19
 
