@@ -15,14 +15,14 @@ server = ["tonic"]
 doctest = false
 
 [dependencies]
-prost = { workspace = true }
+prost = { workspace = true, features = ["prost-derive"] }
 tonic = { workspace = true, optional = true  }
 
 # needed for util functions. if this causes dependency issues, just pull out utils.rs to own package
 slay3r-std = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true}
+tokio = { workspace = true }
 
 [[example]]
 name = "sync_test"

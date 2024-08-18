@@ -58,7 +58,7 @@ opentelemetry = { version = "0.19.0", default-features = false }
 opentelemetry-jaeger = "0.18.0"
 tracing-opentelemetry = { version = "0.19.0", default-features = false }
 
-tokio = { version = "1.28.0" }
+tokio = { version = "1.28.0", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.15", default-features = false }
 futures = { version = "0.3.30", default-features = false }
 
