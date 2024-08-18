@@ -22,7 +22,7 @@ tonic = { workspace = true, optional = true  }
 slay3r-std = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"]  }
+tokio = { workspace = true}
 
 [[example]]
 name = "sync_test"

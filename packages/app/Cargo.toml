@@ -38,6 +38,6 @@ futures = { workspace = true }
 [dev-dependencies]
 hex-literal = { workspace = true }
 cw20-base = { workspace = true }
-k256 = { version = "0.13", features = ["ecdsa", "sha256"] }
-tc-echo = { workspace = true, features = ["library"]}
+k256 = { version = "0.13", default-features = false }
+tc-echo = { workspace = true}
 tc-caller = { workspace = true, features = ["library"] }
