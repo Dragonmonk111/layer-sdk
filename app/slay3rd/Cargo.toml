@@ -33,7 +33,7 @@ tendermint-rpc = { workspace = true, features = ["http-client"] }
 cosmrs = { workspace = true}
 
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.17", features = ["ansi", "env-filter", "local-time"], default-features = false }
+tracing-subscriber = { version = "0.3.17", features = ["ansi", "env-filter", "local-time", "parking_lot"], default-features = false }
 thiserror = { workspace = true }
 parking_lot = { workspace = true }
 sha2 = { workspace = true }
