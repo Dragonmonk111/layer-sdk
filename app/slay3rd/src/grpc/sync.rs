@@ -6,8 +6,8 @@ use tonic::{Request, Response, Status};
 use slay3r_app::SyncProvider;
 use slay3r_proto::layer::sync::v1::{
     query_server::{Query, QueryServer},
-    BlockWrites, QueryLatestHeightRequest, QueryLatestHeightResponse, StreamChangesSinceRequest,
-    StreamCurrentStateRequest, WriteData,
+    BlockWrites, QueryLatestSequenceRequest, QueryLatestSequenceResponse,
+    StreamChangesSinceRequest, StreamCurrentStateRequest, WriteData,
 };
 use slay3r_storage::PersistentStorage;
 
@@ -43,13 +43,13 @@ impl<T: PersistentStorage + 'static + Send + Sync> Query for SyncService<T> {
     type CurrentStateStream = SyncStream<WriteData>;
 
     #[tracing::instrument(skip(self), level = "info")]
-    async fn latestheight(
+    async fn latest_sequence(
         &self,
-        _request: Request<QueryLatestHeightRequest>,
-    ) -> Result<Response<QueryLatestHeightResponse>, Status> {
+        _request: Request<QueryLatestSequenceRequest>,
+    ) -> Result<Response<QueryLatestSequenceResponse>, Status> {
         let lock = self.app.sync();
-        let seq = lock.deref().latest_sequence();
-        Ok(Response::new(QueryLatestHeightResponse { height: seq }))
+        let sequence = lock.deref().latest_sequence();
+        Ok(Response::new(QueryLatestSequenceResponse { sequence }))
     }
 
     #[tracing::instrument(skip(self), level = "info")]
@@ -68,7 +68,7 @@ impl<T: PersistentStorage + 'static + Send + Sync> Query for SyncService<T> {
         request: Request<StreamChangesSinceRequest>,
     ) -> Result<Response<Self::ChangesSinceStream>, Status> {
         let lock = self.app.sync();
-        let stream = lock.deref().changes_since(request.get_ref().height);
+        let stream = lock.deref().changes_since(request.get_ref().sequence);
         Ok(Response::new(stream.map(internal_err)))
     }
 }

@@ -1,11 +1,11 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct QueryLatestHeightRequest {}
+pub struct QueryLatestSequenceRequest {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct QueryLatestHeightResponse {
+pub struct QueryLatestSequenceResponse {
     #[prost(uint64, tag = "1")]
-    pub height: u64,
+    pub sequence: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -14,7 +14,7 @@ pub struct StreamCurrentStateRequest {}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StreamChangesSinceRequest {
     #[prost(uint64, tag = "1")]
-    pub height: u64,
+    pub sequence: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -155,11 +155,11 @@ pub mod query_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        pub async fn latestheight(
+        pub async fn latest_sequence(
             &mut self,
-            request: impl tonic::IntoRequest<super::QueryLatestHeightRequest>,
+            request: impl tonic::IntoRequest<super::QueryLatestSequenceRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::QueryLatestHeightResponse>,
+            tonic::Response<super::QueryLatestSequenceResponse>,
             tonic::Status,
         > {
             self.inner
@@ -173,11 +173,11 @@ pub mod query_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/layer.sync.v1.Query/Latestheight",
+                "/layer.sync.v1.Query/LatestSequence",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("layer.sync.v1.Query", "Latestheight"));
+                .insert(GrpcMethod::new("layer.sync.v1.Query", "LatestSequence"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn current_state(
@@ -240,11 +240,11 @@ pub mod query_server {
     /// Generated trait containing gRPC methods that should be implemented for use with QueryServer.
     #[async_trait]
     pub trait Query: Send + Sync + 'static {
-        async fn latestheight(
+        async fn latest_sequence(
             &self,
-            request: tonic::Request<super::QueryLatestHeightRequest>,
+            request: tonic::Request<super::QueryLatestSequenceRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::QueryLatestHeightResponse>,
+            tonic::Response<super::QueryLatestSequenceResponse>,
             tonic::Status,
         >;
         /// Server streaming response type for the CurrentState method.
@@ -354,25 +354,25 @@ pub mod query_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/layer.sync.v1.Query/Latestheight" => {
+                "/layer.sync.v1.Query/LatestSequence" => {
                     #[allow(non_camel_case_types)]
-                    struct LatestheightSvc<T: Query>(pub Arc<T>);
+                    struct LatestSequenceSvc<T: Query>(pub Arc<T>);
                     impl<
                         T: Query,
-                    > tonic::server::UnaryService<super::QueryLatestHeightRequest>
-                    for LatestheightSvc<T> {
-                        type Response = super::QueryLatestHeightResponse;
+                    > tonic::server::UnaryService<super::QueryLatestSequenceRequest>
+                    for LatestSequenceSvc<T> {
+                        type Response = super::QueryLatestSequenceResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::QueryLatestHeightRequest>,
+                            request: tonic::Request<super::QueryLatestSequenceRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Query>::latestheight(&inner, request).await
+                                <T as Query>::latest_sequence(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -384,7 +384,7 @@ pub mod query_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = LatestheightSvc(inner);
+                        let method = LatestSequenceSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

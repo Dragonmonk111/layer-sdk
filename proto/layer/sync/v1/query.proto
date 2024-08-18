@@ -5,22 +5,24 @@ import "google/api/annotations.proto";
 
 // Query defines the gRPC querier service.
 service Query {
-  rpc Latestheight(QueryLatestHeightRequest) returns (QueryLatestHeightResponse) {
-    option (google.api.http).get = "/layer/sync/v1/latest_height";
+  rpc LatestSequence(QueryLatestSequenceRequest) returns (QueryLatestSequenceResponse) {
+    option (google.api.http).get = "/layer/sync/v1/latest_sequence";
   }
 
   rpc CurrentState(StreamCurrentStateRequest) returns (stream WriteData) {
+    option (google.api.http).get = "/layer/sync/v1/current_state";
   }
 
   rpc ChangesSince(StreamChangesSinceRequest) returns (stream BlockWrites) {
+    option (google.api.http).get = "/layer/sync/v1/changes_since";
   }
 }
 
-message QueryLatestHeightRequest {
+message QueryLatestSequenceRequest {
 }
 
-message QueryLatestHeightResponse {
-    uint64 height = 1;
+message QueryLatestSequenceResponse {
+    uint64 sequence = 1;
 }
 
 
@@ -28,7 +30,7 @@ message StreamCurrentStateRequest {
 }
 
 message StreamChangesSinceRequest {
-    uint64 height = 1;
+    uint64 sequence = 1;
 }
 
 message BlockWrites {
