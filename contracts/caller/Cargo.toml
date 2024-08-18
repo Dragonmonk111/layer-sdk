@@ -22,4 +22,3 @@ cosmwasm-std = { workspace = true, features = ["cosmwasm_1_4"]}
 cw-storage-plus = { workspace = true }
 cw-utils = { workspace = true }
 thiserror = { workspace = true }
-serde = { version = "1.0.145", default-features = false, features = ["derive"] }

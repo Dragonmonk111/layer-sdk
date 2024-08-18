@@ -16,34 +16,33 @@ no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
 slay3r-abci = { workspace = true }
-slay3r-app = { workspace = true, features = ["rocksdb"] }
+slay3r-app = { workspace = true}
 slay3r-std = { workspace = true }
 slay3r-cosmos = { workspace = true }
 slay3r-proto = { workspace = true, features = ["server"] }
 slay3r-storage = { workspace = true, features = ["rocksdb"] }
 cosmwasm-std = { workspace = true }
-
-clap = { version = "4.2.4", features = ["derive"]}
-figment = { version = "0.10.8", features = ["env", "toml"]}
+clap = { version = "4.2.4", features = ["derive"] }
+figment = { version = "0.10.8", features = ["env", "toml"] }
 serde = { workspace = true }
 pico-args = { version = "0.5.0", default-features = false }
 
 tendermint = { workspace = true }
 tendermint-proto = { workspace = true }
-tendermint-rpc = { workspace = true, features = ["http-client"]}
+tendermint-rpc = { workspace = true, features = ["http-client"] }
 cosmrs = { workspace = true}
 
 tracing = { workspace = true }
-tracing-subscriber = { version="0.3.17", features = ["time", "local-time", "ansi", "parking_lot", "env-filter"]}
+tracing-subscriber = { version = "0.3.17", features = ["ansi", "env-filter", "local-time", "parking_lot"], default-features = false }
 thiserror = { workspace = true }
 parking_lot = { workspace = true }
 sha2 = { workspace = true }
 
-opentelemetry = { workspace = true, features = ["rt-tokio"] }
+opentelemetry = { workspace = true}
 opentelemetry-jaeger = { workspace = true, features = ["collector_client", "isahc_collector_client", "rt-tokio"] }
 tracing-opentelemetry = {workspace = true}
 
-tokio = { workspace = true, features = ["full"]  }
+tokio = { workspace = true}
 tokio-stream = { workspace = true }
 futures = { workspace = true }
 
@@ -51,8 +50,8 @@ bytes = {workspace = true}
 prost = { workspace = true }
 tonic = { workspace = true }
 serde_json = { workspace = true }
-tower = "0.4.13"
-hex = "0.4.3"
+tower = { version = "0.4.13", default-features = false }
+hex = { version = "0.4.3", default-features = false }
 
 [dev-dependencies]
 hex-literal = {workspace = true }

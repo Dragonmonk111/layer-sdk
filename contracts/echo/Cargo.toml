@@ -19,4 +19,3 @@ cosmwasm-schema = { workspace = true }
 cosmwasm-std = { workspace = true }
 cw-storage-plus = { workspace = true }
 thiserror = { workspace = true }
-serde = { version = "1.0.145", default-features = false, features = ["derive"] }

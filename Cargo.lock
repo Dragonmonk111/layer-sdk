@@ -834,7 +834,6 @@ dependencies = [
  "prost 0.11.9",
  "prost-types 0.11.9",
  "tendermint-proto 0.31.1",
- "tonic 0.9.2",
 ]
 
 [[package]]
@@ -2307,8 +2306,6 @@ dependencies = [
  "glob",
  "libc",
  "libz-sys",
- "lz4-sys",
- "zstd-sys",
 ]
 
 [[package]]
@@ -2321,28 +2318,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "lmdb"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b0908efb5d6496aa977d96f91413da2635a902e5e31dbef0bfb88986c248539"
-dependencies = [
- "bitflags 1.3.2",
- "libc",
- "lmdb-sys",
-]
-
-[[package]]
-name = "lmdb-sys"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5b392838cfe8858e86fac37cf97a0e8c55cc60ba0a18365cadc33092f128ce9"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
 ]
 
 [[package]]
@@ -2360,16 +2335,6 @@ name = "log"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
-
-[[package]]
-name = "lz4-sys"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "109de74d5d2353660401699a4174a4ff23fcc649caf553df71933c7fb45ad868"
-dependencies = [
- "cc",
- "libc",
-]
 
 [[package]]
 name = "mach"
@@ -2649,7 +2614,6 @@ version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed41783a5bf567688eb38372f2b7a8530f5a607a4b49d38dd7573236c23ca7e2"
 dependencies = [
- "fnv",
  "futures-channel",
  "futures-util",
  "indexmap 1.9.3",
@@ -2667,8 +2631,6 @@ checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "dashmap",
- "fnv",
  "futures-channel",
  "futures-executor",
  "futures-util",
@@ -3635,15 +3597,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "signal-hook-registry"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9e9e0b4211b72e7b8b6e85c807d36c212bdb33ea8587f7569562a84df5465b1"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "signature"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3670,7 +3623,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-abci"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "prost 0.12.6",
@@ -3684,7 +3637,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-app"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3694,7 +3647,6 @@ dependencies = [
  "cosmwasm-vm",
  "cw-orch-core",
  "cw-storage-plus",
- "cw-utils",
  "cw20",
  "cw20-base",
  "futures",
@@ -3702,7 +3654,6 @@ dependencies = [
  "hex-literal",
  "itertools 0.11.0",
  "k256",
- "parking_lot",
  "sha2 0.10.8",
  "slay3r-proto",
  "slay3r-std",
@@ -3715,7 +3666,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-cosmos"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "cosmos-sdk-proto 0.18.0",
@@ -3734,7 +3685,7 @@ dependencies = [
 
 [[package]]
 name = "slay3r-golem"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "abstract-cw-multi-test",
  "abstract-cw-plus-interface",
@@ -3754,20 +3705,17 @@ dependencies = [
 
 [[package]]
 name = "slay3r-proto"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
- "bytes",
- "hex",
  "prost 0.12.6",
- "prost-types 0.12.6",
  "slay3r-std",
  "tokio",
- "tonic 0.10.2",
+ "tonic",
 ]
 
 [[package]]
 name = "slay3r-std"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bech32 0.9.1",
  "bytes",
@@ -3787,13 +3735,11 @@ dependencies = [
 
 [[package]]
 name = "slay3r-storage"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "cosmwasm-std",
  "cw-storage-plus",
  "futures",
- "libc",
- "lmdb",
  "parking_lot",
  "rocksdb",
  "serde",
@@ -3806,7 +3752,7 @@ dependencies = [
 
 [[package]]
 name = "slay3rd"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "clap",
@@ -3836,7 +3782,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "tonic 0.10.2",
+ "tonic",
  "tower",
  "tracing",
  "tracing-opentelemetry",
@@ -3994,25 +3940,23 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tc-caller"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus",
  "cw-utils",
- "serde",
  "tc-echo",
  "thiserror",
 ]
 
 [[package]]
 name = "tc-echo"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus",
- "serde",
  "thiserror",
 ]
 
@@ -4285,9 +4229,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",
@@ -4394,34 +4336,6 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3082666a3a6433f7f511c7192923fa1fe07c69332d3c6a2e6bb040b569199d5a"
-dependencies = [
- "async-trait",
- "axum",
- "base64",
- "bytes",
- "futures-core",
- "futures-util",
- "h2",
- "http",
- "http-body",
- "hyper",
- "hyper-timeout",
- "percent-encoding",
- "pin-project",
- "prost 0.11.9",
- "tokio",
- "tokio-stream",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tonic"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d560933a0de61cf715926b9cac824d4c883c2c43142f787595e48280c40a1d0e"
@@ -4523,28 +4437,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-log"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f751112709b4e791d8ce53e32c4ed2d353565a795ce84da2285393f41557bdf2"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-log"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
 name = "tracing-opentelemetry"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4554,7 +4446,6 @@ dependencies = [
  "opentelemetry",
  "tracing",
  "tracing-core",
- "tracing-log 0.1.4",
  "tracing-subscriber",
 ]
 
@@ -4570,12 +4461,10 @@ dependencies = [
  "parking_lot",
  "regex",
  "sharded-slab",
- "smallvec",
  "thread_local",
  "time",
  "tracing",
  "tracing-core",
- "tracing-log 0.2.0",
 ]
 
 [[package]]
@@ -5275,14 +5164,4 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.72",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "2.0.13+zstd.1.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38ff0f21cfee8f97d94cef41359e0c89aa6113028ab0291aa8ca0038995a95aa"
-dependencies = [
- "cc",
- "pkg-config",
 ]

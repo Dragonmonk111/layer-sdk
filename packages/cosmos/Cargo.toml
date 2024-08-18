@@ -14,11 +14,11 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 bytes = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, features = ["raw_value"] }
+serde_json = { workspace = true}
 
 cosmrs = { workspace = true }
 cosmos-sdk-proto = { workspace = true }
-flate2 = { version = "1.0.26" }
+flate2 = { version = "1.0.26", features = ["any_impl", "miniz_oxide"], default-features = false }
 
 [dev-dependencies]
 hex-literal = {workspace = true }
