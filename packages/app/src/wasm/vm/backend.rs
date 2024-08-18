@@ -174,13 +174,13 @@ impl VmQuerier {
                 error: e.to_string(),
                 request: Binary::from(request),
             })?;
-        let query = cosmwasm_query_to_pulsar(cosmos)?;
+        let query = cosmwasm_query_to_layer(cosmos)?;
         let response = self.sm.query(self.storage, meter, &self.block, query)?;
-        slay3r_response_to_cosmwasm(response)
+        layer_response_to_cosmwasm(response)
     }
 }
 
-fn cosmwasm_query_to_pulsar(
+fn cosmwasm_query_to_layer(
     query: QueryRequest<CustomQuery>,
 ) -> Result<slay3r_std::Query, QueryError> {
     match query {
@@ -235,7 +235,7 @@ fn unsupported_request<T, U: fmt::Debug>(kind: &U) -> Result<T, QueryError> {
     .into())
 }
 
-fn slay3r_response_to_cosmwasm(
+fn layer_response_to_cosmwasm(
     response: slay3r_std::response::QueryResponse<PulsarError>,
 ) -> Result<Binary, QueryError> {
     use slay3r_std::response::BankQueryResponse;

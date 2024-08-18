@@ -32,12 +32,12 @@ those reponses to the CosmWasm responses.
 The location of this transition should probably be refactored sometime, but you can find the 
 query-related calls in `slay3r_app::wasm::vm::backend`:
 
-* [`cosmwasm_query_to_pulsar`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/wasm/vm/backend.rs#L170-L211)
-* [`slay3r_response_to_cosmwasm`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/wasm/vm/backend.rs#L220-L260)
+* [`cosmwasm_query_to_layer`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/wasm/vm/backend.rs#L170-L211)
+* [`layer_response_to_cosmwasm`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/wasm/vm/backend.rs#L220-L260)
 
 The messages are dispatched in `WasmKeeper::dispatch_response_messages` and the calls are at:
 
-* [`cosmwasm_msg_to_pulsar`](./packages/app/src/wasm/keeper.rs#L846-L923)
+* [`cosmwasm_msg_to_layer`](./packages/app/src/wasm/keeper.rs#L846-L923)
 * [`encode_cosmwasm_response`](./packages/app/src/wasm/keeper.rs#L927-L988)
 
 ## Conversion to SDK Msg

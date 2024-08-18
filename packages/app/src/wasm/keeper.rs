@@ -661,7 +661,7 @@ impl Wasm {
                 (Some(limit), left) if limit < left => GasMeter::new(limit),
                 (_, left) => GasMeter::new(left),
             };
-            let slay3r_msg = cosmwasm_msg_to_pulsar(msg.msg, contract)?;
+            let slay3r_msg = cosmwasm_msg_to_layer(msg.msg, contract)?;
 
             // ensure we charge if there is a limit_meter, even on error
             let msg_result = sm.process_msg(storage, &sub_meter, contract, block, slay3r_msg);
@@ -971,7 +971,7 @@ fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, 
     result.map_err(map_vm_error)?.map_err(map_contract_error)
 }
 
-fn cosmwasm_msg_to_pulsar(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
+fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
     let res = match msg {
         CosmosMsg::Bank(bank) => match bank {
             cosmwasm_std::BankMsg::Send { to_address, amount } => slay3r_std::BankMsg::Send {
