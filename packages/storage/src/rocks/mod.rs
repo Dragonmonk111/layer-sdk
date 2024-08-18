@@ -151,7 +151,6 @@ impl SyncableStorage for RockStore {
         thread::spawn(move || {
             let mut start_from = sequence;
             loop {
-                println!("Query for changes since {}", start_from);
                 let changes = match db.get_updates_since(start_from) {
                     Ok(c) => c,
                     Err(e) => {
