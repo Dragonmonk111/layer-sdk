@@ -107,3 +107,24 @@ pub struct Config {
     // /// The directory we read all files from (default $HOME/.slay3r)
     // pub basedir: String,
 }
+
+/// The global configuration for Slay3r
+#[derive(Debug)]
+pub struct ServerData {
+    pub server_port: String,
+    pub grpc: String,
+    pub rpc_url: String,
+    pub has_jaeger: bool,
+}
+
+impl Config {
+    pub fn extract_data(&self) -> ServerData {
+        let server_port = format!("{}:{}", self.host, self.port);
+        ServerData {
+            server_port,
+            grpc: self.grpc.clone(),
+            rpc_url: self.rpc_url.clone(),
+            has_jaeger: self.jaeger.is_some(),
+        }
+    }
+}

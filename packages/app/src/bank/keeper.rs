@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use tracing::debug_span;
 
 use cosmwasm_std::{ensure_eq, from_json, to_json_binary, BlockInfo, Coin, Event, Uint128};
+use cw_storage_plus::KeyDeserialize;
 
 use slay3r_std::api::MsgResponse;
 use slay3r_std::response::{
@@ -28,6 +29,18 @@ const SUPPLY: Map<&str, Uint128> = Map::new("supply");
 const BALANCES: Map<(&AccountId, &str), Uint128> = Map::new("balances");
 
 pub const NAMESPACE_BANK: &[u8] = b"bank";
+
+pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
+    match bucket {
+        "supply" => vec![String::from_vec(key).unwrap()],
+        "balances" => {
+            let (acct, denom) = <(AccountId, String)>::from_vec(key).unwrap();
+            vec![acct.to_string(), denom]
+        }
+        // FIXME: make robust for production, but this helps debug
+        _ => panic!("unknown bucket {}", bucket),
+    }
+}
 
 enum TypedDenom {
     Native(String),

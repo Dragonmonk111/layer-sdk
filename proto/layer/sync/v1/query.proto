@@ -1,0 +1,64 @@
+syntax = "proto3";
+package layer.sync.v1;
+
+import "google/api/annotations.proto";
+
+// Query defines the gRPC querier service.
+service Query {
+  rpc LatestSequence(QueryLatestSequenceRequest) returns (QueryLatestSequenceResponse) {
+    option (google.api.http).get = "/layer/sync/v1/latest_sequence";
+  }
+
+  rpc CurrentState(StreamCurrentStateRequest) returns (stream WriteData) {
+    option (google.api.http).get = "/layer/sync/v1/current_state";
+  }
+
+  rpc ChangesSince(StreamChangesSinceRequest) returns (stream BlockWrites) {
+    option (google.api.http).get = "/layer/sync/v1/changes_since";
+  }
+}
+
+message QueryLatestSequenceRequest {
+}
+
+message QueryLatestSequenceResponse {
+    uint64 sequence = 1;
+}
+
+
+message StreamCurrentStateRequest {
+}
+
+message StreamChangesSinceRequest {
+    uint64 sequence = 1;
+}
+
+message BlockWrites {
+    uint64 sequence = 1;
+    repeated StateChange events = 3;
+}
+
+message StateChange {
+    oneof event {
+        WriteData write_state = 1; 
+        DeleteData delete_state = 2; 
+    }
+}
+
+message WriteData {
+    string module = 1;
+    string bucket = 2;
+    // this is split from whatever we use internally - [] for item
+    // numbers are stringified, addresses in bech32, bytes are hex encoded
+    repeated string keys = 3;
+    // This is the raw data stored at that key - JSON for now
+    bytes value = 4;
+}
+
+message DeleteData {
+    string module = 1;
+    string bucket = 2;
+    // this is split from whatever we use internally - [] for 
+    // numbers are stringified, addresses in bech32, bytes are hex encoded
+    repeated string keys = 3;
+}

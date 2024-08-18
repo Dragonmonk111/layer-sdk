@@ -1,10 +1,14 @@
+use std::pin::Pin;
+
+use futures::Stream;
+
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult};
+use slay3r_std::{stringify_or_hex, GasMeter, GasResult};
 
 /// This is the lowest level of the storage, which can be implemented by MemoryStorage
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,
 /// but one method for bulk write, that will commit a new version and return the app hash (stored internally)
-pub trait PersistentStorage {
+pub trait PersistentStorage: SyncableStorage {
     type Reader<'x>: ReadonlyStorage
     where
         Self: 'x;
@@ -22,6 +26,45 @@ pub trait PersistentStorage {
 
     /// Returns app hash of last commit
     fn app_hash(&self) -> Vec<u8>;
+}
+
+pub type KV = (Vec<u8>, Vec<u8>);
+
+pub trait SyncableStorage {
+    fn latest_sequence(&self) -> u64;
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<KV, String>> + Send>>;
+    fn changes_since(
+        &self,
+        _sequence: u64,
+    ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>>;
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BatchChanges {
+    pub sequence: u64,
+    pub changes: Vec<StateUpdate>,
+}
+
+#[derive(PartialEq)]
+pub enum StateUpdate {
+    Write { key: Vec<u8>, value: Vec<u8> },
+    Delete { key: Vec<u8> },
+}
+
+impl std::fmt::Debug for StateUpdate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Write { key, value } => f
+                .debug_struct("Write")
+                .field("key", &stringify_or_hex(key))
+                .field("value", &stringify_or_hex(value))
+                .finish(),
+            Self::Delete { key } => f
+                .debug_struct("Delete")
+                .field("key", &stringify_or_hex(key))
+                .finish(),
+        }
+    }
 }
 
 /// This is like cosmwasm_std::Storage, but takes GasMeter as extra arg everywhere

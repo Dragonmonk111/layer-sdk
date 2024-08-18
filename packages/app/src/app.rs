@@ -1,3 +1,5 @@
+use core::str;
+
 use thiserror::Error;
 use tracing::{
     debug, debug_span,
@@ -49,10 +51,10 @@ pub const GAS_COST_TX_BYTE: u64 = 10;
 #[derive(Debug)]
 pub struct App<T: PersistentStorage> {
     // State
-    storage: T,
+    pub(crate) storage: T,
 
     // State Machine Logic
-    logic: StateMachine,
+    pub(crate) logic: StateMachine,
 
     data: Option<InnerData>,
 }
@@ -451,7 +453,6 @@ mod tests {
     use super::*;
 
     use bytes::Bytes;
-    use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
     use hex_literal::hex;
 
@@ -470,10 +471,9 @@ mod tests {
 
     fn mock_init(genesis: &GenesisState) -> InitChainRequest {
         let app_state = to_json_binary(genesis).unwrap();
-        let env = mock_env();
         InitChainRequest {
-            time: env.block.time,
-            chain_id: env.block.chain_id,
+            time: Timestamp::from_nanos(1_673_194_026_078_305_426),
+            chain_id: "slay3r-testnet-1".into(),
             consensus_params: Default::default(),
             validators: vec![ValidatorUpdate {
                 pub_key: TmPubKey::Ed25519(vec![123u8; 32]),

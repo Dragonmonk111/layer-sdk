@@ -6,5 +6,5 @@ mod vm;
 
 pub use error::WasmError;
 pub use keeper::encode_cosmwasm_response;
-pub use keeper::{Wasm, WasmConfig};
+pub use keeper::{parse_keys, Wasm, WasmConfig, NAMESPACE_WASM};
 pub use utils::build_instantiate_2_address;

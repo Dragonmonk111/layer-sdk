@@ -3,7 +3,7 @@
 
 ### BUILDING
 
-FROM rust:1.77-bookworm as builder
+FROM rust:1.77-bookworm AS builder
 WORKDIR /myapp
 
 RUN apt update && apt install -y clang
@@ -24,6 +24,7 @@ COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
 COPY dummy.rs /myapp/packages/cosmos/src/lib.rs
 COPY packages/proto/Cargo.toml /myapp/packages/proto/Cargo.toml
 COPY dummy.rs /myapp/packages/proto/src/lib.rs
+COPY dummy.rs /myapp/packages/proto/examples/sync_test.rs
 COPY packages/std/Cargo.toml /myapp/packages/std/Cargo.toml
 COPY dummy.rs /myapp/packages/std/src/lib.rs
 COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml

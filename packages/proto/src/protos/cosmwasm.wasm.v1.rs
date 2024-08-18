@@ -1087,6 +1087,80 @@ pub mod msg_server {
         const NAME: &'static str = "cosmwasm.wasm.v1.Msg";
     }
 }
+/// MsgIBCSend
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MsgIbcSend {
+    /// the channel by which the packet will be sent
+    #[prost(string, tag = "2")]
+    pub channel: ::prost::alloc::string::String,
+    /// Timeout height relative to the current block height.
+    /// The timeout is disabled when set to 0.
+    #[prost(uint64, tag = "4")]
+    pub timeout_height: u64,
+    /// Timeout timestamp (in nanoseconds) relative to the current block timestamp.
+    /// The timeout is disabled when set to 0.
+    #[prost(uint64, tag = "5")]
+    pub timeout_timestamp: u64,
+    /// Data is the payload to transfer. We must not make assumption what format or
+    /// content is in here.
+    #[prost(bytes = "vec", tag = "6")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// MsgIBCCloseChannel port and channel need to be owned by the contract
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MsgIbcCloseChannel {
+    #[prost(string, tag = "2")]
+    pub channel: ::prost::alloc::string::String,
+}
+/// GenesisState - genesis state of x/wasm
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GenesisState {
+    #[prost(message, optional, tag = "1")]
+    pub params: ::core::option::Option<Params>,
+    #[prost(message, repeated, tag = "2")]
+    pub codes: ::prost::alloc::vec::Vec<Code>,
+    #[prost(message, repeated, tag = "3")]
+    pub contracts: ::prost::alloc::vec::Vec<Contract>,
+    #[prost(message, repeated, tag = "4")]
+    pub sequences: ::prost::alloc::vec::Vec<Sequence>,
+}
+/// Code struct encompasses CodeInfo and CodeBytes
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Code {
+    #[prost(uint64, tag = "1")]
+    pub code_id: u64,
+    #[prost(message, optional, tag = "2")]
+    pub code_info: ::core::option::Option<CodeInfo>,
+    #[prost(bytes = "vec", tag = "3")]
+    pub code_bytes: ::prost::alloc::vec::Vec<u8>,
+    /// Pinned to wasmvm cache
+    #[prost(bool, tag = "4")]
+    pub pinned: bool,
+}
+/// Contract struct encompasses ContractAddress, ContractInfo, and ContractState
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Contract {
+    #[prost(string, tag = "1")]
+    pub contract_address: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub contract_info: ::core::option::Option<ContractInfo>,
+    #[prost(message, repeated, tag = "3")]
+    pub contract_state: ::prost::alloc::vec::Vec<Model>,
+}
+/// Sequence key and value of an id generation counter
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Sequence {
+    #[prost(bytes = "vec", tag = "1")]
+    pub id_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "2")]
+    pub value: u64,
+}
 /// QueryContractInfoRequest is the request type for the Query/ContractInfo RPC
 /// method
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2330,78 +2404,4 @@ pub mod query_server {
     impl<T: Query> tonic::server::NamedService for QueryServer<T> {
         const NAME: &'static str = "cosmwasm.wasm.v1.Query";
     }
-}
-/// GenesisState - genesis state of x/wasm
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GenesisState {
-    #[prost(message, optional, tag = "1")]
-    pub params: ::core::option::Option<Params>,
-    #[prost(message, repeated, tag = "2")]
-    pub codes: ::prost::alloc::vec::Vec<Code>,
-    #[prost(message, repeated, tag = "3")]
-    pub contracts: ::prost::alloc::vec::Vec<Contract>,
-    #[prost(message, repeated, tag = "4")]
-    pub sequences: ::prost::alloc::vec::Vec<Sequence>,
-}
-/// Code struct encompasses CodeInfo and CodeBytes
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Code {
-    #[prost(uint64, tag = "1")]
-    pub code_id: u64,
-    #[prost(message, optional, tag = "2")]
-    pub code_info: ::core::option::Option<CodeInfo>,
-    #[prost(bytes = "vec", tag = "3")]
-    pub code_bytes: ::prost::alloc::vec::Vec<u8>,
-    /// Pinned to wasmvm cache
-    #[prost(bool, tag = "4")]
-    pub pinned: bool,
-}
-/// Contract struct encompasses ContractAddress, ContractInfo, and ContractState
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Contract {
-    #[prost(string, tag = "1")]
-    pub contract_address: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "2")]
-    pub contract_info: ::core::option::Option<ContractInfo>,
-    #[prost(message, repeated, tag = "3")]
-    pub contract_state: ::prost::alloc::vec::Vec<Model>,
-}
-/// Sequence key and value of an id generation counter
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Sequence {
-    #[prost(bytes = "vec", tag = "1")]
-    pub id_key: ::prost::alloc::vec::Vec<u8>,
-    #[prost(uint64, tag = "2")]
-    pub value: u64,
-}
-/// MsgIBCSend
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MsgIbcSend {
-    /// the channel by which the packet will be sent
-    #[prost(string, tag = "2")]
-    pub channel: ::prost::alloc::string::String,
-    /// Timeout height relative to the current block height.
-    /// The timeout is disabled when set to 0.
-    #[prost(uint64, tag = "4")]
-    pub timeout_height: u64,
-    /// Timeout timestamp (in nanoseconds) relative to the current block timestamp.
-    /// The timeout is disabled when set to 0.
-    #[prost(uint64, tag = "5")]
-    pub timeout_timestamp: u64,
-    /// Data is the payload to transfer. We must not make assumption what format or
-    /// content is in here.
-    #[prost(bytes = "vec", tag = "6")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-/// MsgIBCCloseChannel port and channel need to be owned by the contract
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MsgIbcCloseChannel {
-    #[prost(string, tag = "2")]
-    pub channel: ::prost::alloc::string::String,
 }

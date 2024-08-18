@@ -19,6 +19,7 @@ import (
 	tendermint "github.com/pulsar/pulsariumd/gateway/cosmos/base/tendermint/v1beta1"
 	tx "github.com/pulsar/pulsariumd/gateway/cosmos/tx/v1beta1"
 	cosmwasm "github.com/pulsar/pulsariumd/gateway/cosmwasm/wasm/v1"
+	sync "github.com/pulsar/pulsariumd/gateway/layer/sync/v1"
 
 	// to register pubkey any types
 	_ "github.com/pulsar/pulsariumd/gateway/cosmos/crypto/ed25519"
@@ -98,6 +99,10 @@ func run() error {
 		return err
 	}
 	err = cosmwasm.RegisterQueryHandler(ctx, mux, conn)
+	if err != nil {
+		return err
+	}
+	err = sync.RegisterQueryHandler(ctx, mux, conn)
 	if err != nil {
 		return err
 	}

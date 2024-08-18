@@ -1,19 +1,31 @@
-use std::fmt;
+use futures::Stream;
+use rocksdb::{DBAccess, OptimisticTransactionDB, Options, WriteBatchIterator};
+use std::marker::PhantomData;
+use std::ops::DerefMut;
 use std::path::Path;
-
-use rocksdb::{DBAccess, OptimisticTransactionDB, Options};
+use std::pin::{pin, Pin};
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::{fmt, thread};
+use tokio::sync::mpsc::Receiver;
 
 use cosmwasm_std::{Order, Record};
 use slay3r_std::{GasMeter, GasResult};
 
+use crate::traits::KV;
 use crate::{
-    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, Transaction,
-    DEFAULT_PERSISTED_PRICES,
+    traits::{BatchChanges, StateUpdate},
+    FastHasher, PersistentStorage, PriceList, ReadonlyStorage, Storage, SyncableStorage,
+    Transaction, DEFAULT_PERSISTED_PRICES,
 };
 
 pub struct RockStore {
-    pub db: OptimisticTransactionDB,
+    pub db: Arc<OptimisticTransactionDB>,
+    /// How many ms to wait before trying to check for new wal changeset
+    pub changes_retry_ms: u64,
 }
+
+const DEFAULT_CHANGES_RETRY_MS: u64 = 200;
 
 // TODO: tune dynamically
 const NUM_CPUS: i32 = 8;
@@ -31,7 +43,11 @@ impl RockStore {
 
     pub fn open_opts<P: AsRef<Path>>(path: P, opts: Options) -> RockStore {
         let db = OptimisticTransactionDB::open(&opts, path).unwrap();
-        RockStore { db }
+        // TODO: make this configurable
+        RockStore {
+            db: Arc::new(db),
+            changes_retry_ms: DEFAULT_CHANGES_RETRY_MS,
+        }
     }
 
     fn default_db_opts() -> Options {
@@ -68,8 +84,9 @@ impl PersistentStorage for RockStore {
     // open a read-only view of the storage. should abort it to free space for write
     fn reader(&self) -> RockReader<'_> {
         RockReader {
-            db: &self.db,
+            db: self.db.clone(),
             price_list: DEFAULT_PERSISTED_PRICES,
+            lifetime: PhantomData,
         }
     }
 
@@ -93,9 +110,129 @@ impl PersistentStorage for RockStore {
     }
 }
 
+impl SyncableStorage for RockStore {
+    fn latest_sequence(&self) -> u64 {
+        self.db.latest_sequence_number()
+    }
+
+    // This uses a thread in order to hold no references to the DB.
+    fn current_state(&self) -> Pin<Box<dyn Stream<Item = Result<KV, String>> + Send>> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(32);
+        let db = self.db.clone();
+        thread::spawn(move || {
+            let items = db.iterator(rocksdb::IteratorMode::Start);
+            for item in items {
+                let (k, v) = match item {
+                    Ok(x) => x,
+                    Err(e) => {
+                        let _ = sender.blocking_send(Err(e.to_string()));
+                        return;
+                    }
+                };
+                let out = (k.into_vec(), v.into_vec());
+                // don't error if channel dropped, just exit early
+                if sender.blocking_send(Ok(out)).is_err() {
+                    return;
+                }
+            }
+        });
+        Box::pin(ReceiverStream(receiver))
+    }
+
+    fn changes_since(
+        &self,
+        sequence: u64,
+    ) -> Pin<Box<dyn Stream<Item = Result<BatchChanges, String>> + Send>> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(32);
+        let db = self.db.clone();
+        let retry_ms = self.changes_retry_ms;
+
+        // This should go forever, until the channel is dropped
+        thread::spawn(move || {
+            let mut start_from = sequence;
+            loop {
+                let changes = match db.get_updates_since(start_from) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        // explicitly ignore errors here
+                        let _ = sender.blocking_send(Err(e.to_string()));
+                        return;
+                    }
+                };
+                for item in changes {
+                    match item {
+                        Ok((sequence, batch)) => {
+                            let mut capture = CaptureBatch::new(batch.len());
+                            batch.iterate(&mut capture);
+                            let val = BatchChanges {
+                                sequence,
+                                changes: capture.changes,
+                            };
+                            // don't error if channel dropped, just exit early
+                            if sender.blocking_send(Ok(val)).is_err() {
+                                return;
+                            }
+                            start_from = sequence + 1;
+                        }
+                        Err(e) => {
+                            // explicitly ignore errors here
+                            let _ = sender.blocking_send(Err(e.to_string()));
+                            return;
+                        }
+                    }
+                }
+                // add a small pause here to avoid crazy load. once we hit the end of changelog, we wait 300ms to check again
+                thread::sleep(std::time::Duration::from_millis(retry_ms));
+            }
+        });
+        Box::pin(ReceiverStream(receiver))
+    }
+}
+pub struct ReceiverStream<T>(Receiver<Result<T, String>>);
+
+impl<T> Stream for ReceiverStream<T> {
+    type Item = Result<T, String>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let fut = self.deref_mut().0.recv();
+        let fut = pin!(fut);
+        std::future::Future::poll(fut, cx)
+    }
+}
+
+struct CaptureBatch {
+    changes: Vec<StateUpdate>,
+}
+
+impl CaptureBatch {
+    pub fn new(len: usize) -> Self {
+        CaptureBatch {
+            changes: Vec::with_capacity(len),
+        }
+    }
+}
+
+impl WriteBatchIterator for CaptureBatch {
+    fn put(&mut self, key: Box<[u8]>, value: Box<[u8]>) {
+        let change = StateUpdate::Write {
+            key: key.into_vec(),
+            value: value.into_vec(),
+        };
+        self.changes.push(change);
+    }
+
+    fn delete(&mut self, key: Box<[u8]>) {
+        let change = StateUpdate::Delete {
+            key: key.into_vec(),
+        };
+        self.changes.push(change);
+    }
+}
+
 pub struct RockReader<'a> {
-    db: &'a OptimisticTransactionDB,
+    db: Arc<OptimisticTransactionDB>,
     price_list: PriceList,
+    lifetime: PhantomData<&'a ()>,
 }
 
 impl<'a> ReadonlyStorage for RockReader<'a> {

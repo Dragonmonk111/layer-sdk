@@ -8,7 +8,20 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
+      # rocksdb takes up a bunch of space... this should help
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          # can try enabling these if above not enough
+          tool-cache: false
+          large-packages: false
+          swap-storage: false
+
       - name: Checkout sources
         uses: actions/checkout@v2
 
@@ -28,29 +41,36 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
+            ~/.cargo/registry/src/**/librocksdb-sys-*
             target/            
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
           
-      - name: Run build
+      - name: Check compilation
         uses: actions-rs/cargo@v1
-        with:
-          toolchain: 1.80.0
-          command: build
-          args: --all --all-features
-
-      - name: Run tests
-        uses: actions-rs/cargo@v1
+        timeout-minutes: 40
         with:
           toolchain: 1.80.0
           command: test
-          args: --all-features
+          args: --all-features --locked --no-run
+        env:
+          CARGO_INCREMENTAL: 0
+  
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 20
+        with:
+          toolchain: 1.80.0
+          command: test
+          args: --all-features --locked
         env:
           RUST_BACKTRACE: 1
+          CARGO_INCREMENTAL: 0
 
   lints:
     name: Lints
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -72,6 +92,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
+            ~/.cargo/registry/src/**/librocksdb-sys-*
             target/            
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-lint-
@@ -85,6 +106,7 @@ jobs:
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
+        timeout-minutes: 30
         with:
           toolchain: 1.80.0
           command: clippy

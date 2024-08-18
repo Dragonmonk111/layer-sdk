@@ -456,37 +456,6 @@ pub mod service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// GetLatestBlock returns the latest block.
-        pub async fn get_latest_block(
-            &mut self,
-            request: impl tonic::IntoRequest<super::GetLatestBlockRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetLatestBlockResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/cosmos.base.tendermint.v1beta1.Service/GetLatestBlock",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "cosmos.base.tendermint.v1beta1.Service",
-                        "GetLatestBlock",
-                    ),
-                );
-            self.inner.unary(req, path, codec).await
-        }
         /// GetBlockByHeight queries block for given height.
         pub async fn get_block_by_height(
             &mut self,
@@ -518,12 +487,12 @@ pub mod service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// GetLatestValidatorSet queries latest validator-set.
-        pub async fn get_latest_validator_set(
+        /// GetLatestBlock returns the latest block.
+        pub async fn get_latest_block(
             &mut self,
-            request: impl tonic::IntoRequest<super::GetLatestValidatorSetRequest>,
+            request: impl tonic::IntoRequest<super::GetLatestBlockRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestValidatorSetResponse>,
+            tonic::Response<super::GetLatestBlockResponse>,
             tonic::Status,
         > {
             self.inner
@@ -537,14 +506,14 @@ pub mod service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/cosmos.base.tendermint.v1beta1.Service/GetLatestValidatorSet",
+                "/cosmos.base.tendermint.v1beta1.Service/GetLatestBlock",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         "cosmos.base.tendermint.v1beta1.Service",
-                        "GetLatestValidatorSet",
+                        "GetLatestBlock",
                     ),
                 );
             self.inner.unary(req, path, codec).await
@@ -576,6 +545,37 @@ pub mod service_client {
                     GrpcMethod::new(
                         "cosmos.base.tendermint.v1beta1.Service",
                         "GetValidatorSetByHeight",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        /// GetLatestValidatorSet queries latest validator-set.
+        pub async fn get_latest_validator_set(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetLatestValidatorSetRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetLatestValidatorSetResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/cosmos.base.tendermint.v1beta1.Service/GetLatestValidatorSet",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "cosmos.base.tendermint.v1beta1.Service",
+                        "GetLatestValidatorSet",
                     ),
                 );
             self.inner.unary(req, path, codec).await
@@ -641,14 +641,6 @@ pub mod service_server {
             tonic::Response<super::GetSyncingResponse>,
             tonic::Status,
         >;
-        /// GetLatestBlock returns the latest block.
-        async fn get_latest_block(
-            &self,
-            request: tonic::Request<super::GetLatestBlockRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetLatestBlockResponse>,
-            tonic::Status,
-        >;
         /// GetBlockByHeight queries block for given height.
         async fn get_block_by_height(
             &self,
@@ -657,12 +649,12 @@ pub mod service_server {
             tonic::Response<super::GetBlockByHeightResponse>,
             tonic::Status,
         >;
-        /// GetLatestValidatorSet queries latest validator-set.
-        async fn get_latest_validator_set(
+        /// GetLatestBlock returns the latest block.
+        async fn get_latest_block(
             &self,
-            request: tonic::Request<super::GetLatestValidatorSetRequest>,
+            request: tonic::Request<super::GetLatestBlockRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetLatestValidatorSetResponse>,
+            tonic::Response<super::GetLatestBlockResponse>,
             tonic::Status,
         >;
         /// GetValidatorSetByHeight queries validator-set at a given height.
@@ -671,6 +663,14 @@ pub mod service_server {
             request: tonic::Request<super::GetValidatorSetByHeightRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetValidatorSetByHeightResponse>,
+            tonic::Status,
+        >;
+        /// GetLatestValidatorSet queries latest validator-set.
+        async fn get_latest_validator_set(
+            &self,
+            request: tonic::Request<super::GetLatestValidatorSetRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetLatestValidatorSetResponse>,
             tonic::Status,
         >;
         /// ABCIQuery defines a query handler that supports ABCI queries directly to the
@@ -858,52 +858,6 @@ pub mod service_server {
                     };
                     Box::pin(fut)
                 }
-                "/cosmos.base.tendermint.v1beta1.Service/GetLatestBlock" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetLatestBlockSvc<T: Service>(pub Arc<T>);
-                    impl<
-                        T: Service,
-                    > tonic::server::UnaryService<super::GetLatestBlockRequest>
-                    for GetLatestBlockSvc<T> {
-                        type Response = super::GetLatestBlockResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetLatestBlockRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Service>::get_latest_block(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = GetLatestBlockSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
                 "/cosmos.base.tendermint.v1beta1.Service/GetBlockByHeight" => {
                     #[allow(non_camel_case_types)]
                     struct GetBlockByHeightSvc<T: Service>(pub Arc<T>);
@@ -950,26 +904,25 @@ pub mod service_server {
                     };
                     Box::pin(fut)
                 }
-                "/cosmos.base.tendermint.v1beta1.Service/GetLatestValidatorSet" => {
+                "/cosmos.base.tendermint.v1beta1.Service/GetLatestBlock" => {
                     #[allow(non_camel_case_types)]
-                    struct GetLatestValidatorSetSvc<T: Service>(pub Arc<T>);
+                    struct GetLatestBlockSvc<T: Service>(pub Arc<T>);
                     impl<
                         T: Service,
-                    > tonic::server::UnaryService<super::GetLatestValidatorSetRequest>
-                    for GetLatestValidatorSetSvc<T> {
-                        type Response = super::GetLatestValidatorSetResponse;
+                    > tonic::server::UnaryService<super::GetLatestBlockRequest>
+                    for GetLatestBlockSvc<T> {
+                        type Response = super::GetLatestBlockResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetLatestValidatorSetRequest>,
+                            request: tonic::Request<super::GetLatestBlockRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Service>::get_latest_validator_set(&inner, request)
-                                    .await
+                                <T as Service>::get_latest_block(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -981,7 +934,7 @@ pub mod service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = GetLatestValidatorSetSvc(inner);
+                        let method = GetLatestBlockSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -1031,6 +984,53 @@ pub mod service_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetValidatorSetByHeightSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/cosmos.base.tendermint.v1beta1.Service/GetLatestValidatorSet" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetLatestValidatorSetSvc<T: Service>(pub Arc<T>);
+                    impl<
+                        T: Service,
+                    > tonic::server::UnaryService<super::GetLatestValidatorSetRequest>
+                    for GetLatestValidatorSetSvc<T> {
+                        type Response = super::GetLatestValidatorSetResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetLatestValidatorSetRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Service>::get_latest_validator_set(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetLatestValidatorSetSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

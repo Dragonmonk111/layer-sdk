@@ -18,8 +18,8 @@ sha2 = { workspace = true }
 ripemd = { workspace = true }
 tracing = { workspace = true }
 bytes = { workspace = true }
+hex = { workspace = true }
 
 bech32 = "0.9.1"
 chrono = { version = "0.4.19", default-features = false, features = ["std"] }
-hex = "0.4.3"
 derivative = "2.2.0"

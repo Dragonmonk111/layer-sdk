@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use core::panic;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{
@@ -20,7 +20,7 @@ use tendermint_proto::abci::{
     ResponseProcessProposal, ResponseQuery,
 };
 
-use slay3r_app::{App, AppConfig, AppLoadError, StateMachine};
+use slay3r_app::{App, AppConfig, AppLoadError, StateMachine, SyncProvider};
 use slay3r_std::{api::TxResult, HexEncode};
 use slay3r_storage::PersistentStorage;
 
@@ -81,6 +81,10 @@ impl<T: PersistentStorage + 'static> Pulsarium<T> {
             app: Arc::new(RwLock::new(app)),
             mempool: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    pub fn sync(&self) -> RwLockReadGuard<impl SyncProvider> {
+        self.app.as_ref().read()
     }
 }
 
@@ -196,8 +200,10 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         let mut app = self.app.write();
         let chain_id = app.chain_id();
         let request = finalize_request_from_proto(request, chain_id);
+
         // FIXME: crash node on finalize block error?
         let res = app.finalize_block(request).unwrap();
+
         finalize_response_to_proto(res)
     }
 

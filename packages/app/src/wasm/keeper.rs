@@ -5,8 +5,8 @@ use cosmwasm_std::{
 };
 // 2.0: use cosmwasm_std::Checksum
 use cosmwasm_vm::{Checksum, VmError};
+use cw_storage_plus::{Bound, KeyDeserialize};
 
-use cw_storage_plus::Bound;
 use slay3r_std::api::MsgResponse;
 use slay3r_std::response::{
     CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, ListCodesResponse,
@@ -51,6 +51,29 @@ const CODE_ID: Item<u64> = Item::new("code_id");
 const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
 
 const PARAMS: Item<WasmParams> = Item::new("params");
+
+// TODO: ideally we can derive these from the actual buckets for no typos.
+// But for now, this is easier to write than building some auto-magic framework
+pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
+    match bucket {
+        "codes" => vec![u64::from_vec(key).unwrap().to_string()],
+        "contracts" => vec![AccountId::from_vec(key).unwrap().to_string()],
+        "contracts_by_code" => {
+            let (id, contract) = <(u64, AccountId)>::from_vec(key).unwrap();
+            vec![id.to_string(), contract.to_string()]
+        }
+        "pinned" => vec![u64::from_vec(key).unwrap().to_string()],
+        "code_id" => vec![],
+        "contract_count" => vec![],
+        "params" => vec![],
+        // anything else will be a contracts internal storage, we cannot parse more.
+        // try to convert it to an AccountId, otherwise, just hex-encode it
+        _ => match AccountId::new(&key) {
+            Ok(account) => vec![account.to_string()],
+            Err(_) => vec![hex::encode(&key)],
+        },
+    }
+}
 
 #[cw_serde]
 pub struct WasmParams {

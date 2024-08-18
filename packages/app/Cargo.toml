@@ -11,6 +11,7 @@ rocksdb = ["slay3r-storage/rocksdb"]
 [dependencies]
 slay3r-std = { workspace = true }
 slay3r-storage = { workspace = true }
+slay3r-proto = { workspace = true }
 
 cosmwasm-schema = { workspace = true }
 cosmwasm-std = { workspace = true }
@@ -30,6 +31,9 @@ cosmos-sdk-proto = { workspace = true }
 
 cw-orch-core = { workspace = true }
 anyhow = { workspace = true }
+hex = { workspace = true }
+
+futures = { workspace = true }
 
 [dev-dependencies]
 hex-literal = { workspace = true }

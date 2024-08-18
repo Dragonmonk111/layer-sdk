@@ -375,7 +375,6 @@ pub struct Evidence {
 }
 /// Nested message and enum types in `Evidence`.
 pub mod evidence {
-    #[allow(clippy::large_enum_variant)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Sum {
