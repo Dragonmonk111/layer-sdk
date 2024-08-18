@@ -10,6 +10,6 @@ if groups | grep -q docker; then
   SUDO=""
 fi
 
-$SUDO docker push ghcr.io/lay3rlabs/gateway:latest
-$SUDO docker push ghcr.io/lay3rlabs/slay3rd:latest
-$SUDO docker push ghcr.io/lay3rlabs/faucet:latest
+for img in gateway slay3rd faucet; do
+  $SUDO docker push ghcr.io/lay3rlabs/${img}:latest
+done
