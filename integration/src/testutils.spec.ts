@@ -100,7 +100,7 @@ export const unused = {
   address: "slay3r1cjsxept9rkggzxztslae9ndgpdyt2408gk35w5",
   accountNumber: 0,
   sequence: 0,
-  balanceFee: "1000000000", // 1000 PULSE
+  balanceFee: "1000000000", // 1000 SLAY
 };
 
 export const validator = {

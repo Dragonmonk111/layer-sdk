@@ -42,8 +42,8 @@ fn get_home() -> PathBuf {
     }
 
     // check SLAY_HOME
-    if let Ok(pulse) = env::var("SLAY_HOME") {
-        return PathBuf::from(pulse);
+    if let Ok(home) = env::var("SLAY_HOME") {
+        return PathBuf::from(home);
     }
 
     // default to $HOME/.slay3r
