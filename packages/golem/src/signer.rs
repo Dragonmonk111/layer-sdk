@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use bip32::{DerivationPath, Mnemonic, PrivateKey, XPrv};
 use k256::ecdsa::{signature::hazmat::PrehashSigner, Signature, SigningKey};
-use slay3r_std::AccountId;
+use layer_std::AccountId;
 
 use super::core::MOCK_CHAIN_INFO;
 
@@ -64,10 +64,10 @@ impl DerivedKey {
         self.index
     }
 
-    pub fn pub_key(&self) -> slay3r_std::PubKey {
+    pub fn pub_key(&self) -> layer_std::PubKey {
         let pk = self.key.public_key();
         let raw_point = pk.to_encoded_point(true);
-        slay3r_std::PubKey::secp256k1(raw_point.as_bytes())
+        layer_std::PubKey::secp256k1(raw_point.as_bytes())
     }
 
     pub fn account(&self) -> AccountId {

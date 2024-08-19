@@ -5,7 +5,7 @@ use cosmwasm_std::{
 };
 use hex_literal::hex;
 use itertools::enumerate;
-use slay3r_std::{
+use layer_std::{
     api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate},
     response::{
         AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
@@ -13,7 +13,7 @@ use slay3r_std::{
     AccountId, AuthQuery, BankQuery, FeeInfo, Msg, PubKey, Query, SignedTx, SigningInfo, Tx,
     WasmQuery,
 };
-use slay3r_storage::MemoryStore;
+use layer_storage::MemoryStore;
 
 use crate::{app::App, genesis::GenesisState, AppConfig, PulsarError, PulsarResult, StateMachine};
 
@@ -162,7 +162,7 @@ impl TestApp {
         let sender = from.account_id();
         let seq = self.sequence(&sender).unwrap();
         let tx = TxBuilder::new()
-            .with_msg(slay3r_std::BankMsg::Send {
+            .with_msg(layer_std::BankMsg::Send {
                 sender,
                 recipient: to.clone(),
                 amount: coins(amount, denom),
@@ -181,7 +181,7 @@ impl TestApp {
         let sender = from.account_id();
         let seq = self.sequence(&sender).unwrap();
         let tx = TxBuilder::new()
-            .with_msg(slay3r_std::BankMsg::Burn {
+            .with_msg(layer_std::BankMsg::Burn {
                 sender,
                 amount: coins(amount, denom),
             })
@@ -358,7 +358,7 @@ pub fn assert_block_success(res: &[TxResult<PulsarError>], count: usize) {
 #[cfg(test)]
 mod test {
     use cosmwasm_std::coin;
-    use slay3r_std::{BankMsg, MsgData};
+    use layer_std::{BankMsg, MsgData};
 
     use crate::genesis::{BankAccount, WasmParams};
 
@@ -555,7 +555,7 @@ mod test {
         assert_block_success(&res, 1);
         assert_eq!(
             res.remove(0).result.unwrap().data,
-            vec![MsgData::Bank(slay3r_std::BankMsgData::Send {})]
+            vec![MsgData::Bank(layer_std::BankMsgData::Send {})]
         );
 
         // height is 2

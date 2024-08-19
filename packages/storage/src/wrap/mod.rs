@@ -3,9 +3,9 @@ mod scratch_tx;
 mod sub_tx;
 mod weak_sub_tx;
 
+use layer_std::{GasMeter, GasResult};
 pub(crate) use reader_wrap::ReaderWrapper;
 pub use scratch_tx::ScratchTx;
-use slay3r_std::{GasMeter, GasResult};
 pub use sub_tx::{atomic, SubTx};
 pub use weak_sub_tx::{RepLog, WeakSubTx};
 

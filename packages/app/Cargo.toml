@@ -1,17 +1,17 @@
 [package]
-name = "slay3r-app"
+name = "layer-app"
 description = "Entry point to application and state machine logic for Slay3r"
 version = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
 
 [features]
-rocksdb = ["slay3r-storage/rocksdb"]
+rocksdb = ["layer-storage/rocksdb"]
 
 [dependencies]
-slay3r-std = { workspace = true }
-slay3r-storage = { workspace = true }
-slay3r-proto = { workspace = true }
+layer-std = { workspace = true }
+layer-storage = { workspace = true }
+layer-proto = { workspace = true }
 
 cosmwasm-schema = { workspace = true }
 cosmwasm-std = { workspace = true }

@@ -4,11 +4,11 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::BlockInfo;
 use cw_storage_plus::KeyDeserialize;
 
-use slay3r_std::{
+use layer_std::{
     response::{AccountResponse, QueryResponse},
     AccountId, AuthQuery, GasMeter, Msg, PubKey, Tx, TxError,
 };
-use slay3r_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
+use layer_storage::{prefixed, prefixed_read, Map, ReadonlyStorage, Storage};
 
 use crate::error::{PulsarError, PulsarResult};
 use crate::sm::StateMachine;

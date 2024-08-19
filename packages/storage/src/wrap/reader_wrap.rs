@@ -6,7 +6,7 @@ use std::ops::{Bound, RangeBounds};
 use tracing::trace_span;
 
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult};
+use layer_std::{GasMeter, GasResult};
 
 use super::{BTreeMapPairRef, Delta, Op};
 use crate::ReadonlyStorage;

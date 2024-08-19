@@ -43,7 +43,7 @@ jobs:
             ~/.cargo/git/db/
             ~/.cargo/registry/src/**/librocksdb-sys-*
             target/            
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
           
       - name: Check compilation
@@ -94,7 +94,7 @@ jobs:
             ~/.cargo/git/db/
             ~/.cargo/registry/src/**/librocksdb-sys-*
             target/            
-          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-lint-
 
       - name: Run cargo fmt
@@ -110,4 +110,4 @@ jobs:
         with:
           toolchain: 1.80.0
           command: clippy
-          args: --all-targets --all-features --no-deps -- -D warnings
+          args: --all-targets --all-features --no-deps --locked -- -D warnings

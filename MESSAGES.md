@@ -7,18 +7,18 @@ This is a living document, meant to give some pointers on how we add messages an
 Slay3r uses it's own (unserialized) types to route messages and queries internally to the various modules.
 You can find these types here:
 
-* [`slay3r_std::Msg`](./packages/std/src/msg.rs)
-* [`slay3r_std::QUery`](./packages/std/src/query.rs)
+* [`layer_std::Msg`](./packages/std/src/msg.rs)
+* [`layer_std::QUery`](./packages/std/src/query.rs)
 
 We only create these types internally, and notably they use [`AccountId`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/std/src/account_id.rs), which is a parsed and validated bytes rather than the bech32 string (which this serializes as).
 
-In `slay3r_app::StateMachine`, we route these at 
+In `layer_app::StateMachine`, we route these at 
 [StateMachine::process_message](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/sm.rs#L131-L157) and 
 [StateMachine::query](./packages/app/src/sm.rs#L70-L98) to the proper module.
 We define the set of modules at compile-time, rather than dynamic, extensible hooks,
 so we can be very strictly types here and do exhaustive matches.
 
-The modules then handle them, and return a strictly typed, deep enums: [`slay3r_std::MsgData`](./std/src/msg.rs#L229-L233) and [`slay3r_std::QueryResponse`](./packages/std/src/query.rs#L76-L83)
+The modules then handle them, and return a strictly typed, deep enums: [`layer_std::MsgData`](./std/src/msg.rs#L229-L233) and [`layer_std::QueryResponse`](./packages/std/src/query.rs#L76-L83)
 
 Notably you can already write internal tests here without worrying about auth logic, protobuf encodings or any nasty serialization and setup.
 
@@ -30,7 +30,7 @@ a relatively simple mapping from these object to the equivalent `slay3r::{Msg,Qu
 those reponses to the CosmWasm responses.
 
 The location of this transition should probably be refactored sometime, but you can find the 
-query-related calls in `slay3r_app::wasm::vm::backend`:
+query-related calls in `layer_app::wasm::vm::backend`:
 
 * [`cosmwasm_query_to_layer`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/wasm/vm/backend.rs#L170-L211)
 * [`layer_response_to_cosmwasm`](https://github.com/Lay3rLabs/layer-sdk/blob/main/packages/app/src/wasm/vm/backend.rs#L220-L260)

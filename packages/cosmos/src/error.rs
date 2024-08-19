@@ -1,12 +1,12 @@
 use cosmwasm_std::StdError;
-use slay3r_std::{MsgError, QueryError, TxError};
+use layer_std::{MsgError, QueryError, TxError};
 use thiserror::Error;
 
 use cosmos_sdk_proto::prost::DecodeError;
 use cosmrs::ErrorReport;
 
 /// This just serves as an intermediate between cosmrs and prost level errors.
-/// And the slay3r_std::{MsgError, TxError} types.
+/// And the layer_std::{MsgError, TxError} types.
 ///
 /// We don't just want to wrap them or convert to string, but provide a level
 /// to ensure we don't leak (non-deterministic) internal errors to the rest of the app.

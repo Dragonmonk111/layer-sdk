@@ -1,5 +1,5 @@
 use flate2::read::GzDecoder;
-use slay3r_std::MsgError;
+use layer_std::MsgError;
 use std::io::prelude::*;
 use thiserror::Error;
 

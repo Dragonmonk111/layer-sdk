@@ -1,5 +1,5 @@
 [package]
-name = "slay3r-abci"
+name = "layer-abci"
 description = "Optimized async ABCI application for Tendermint"
 version = { workspace = true }
 license = { workspace = true }

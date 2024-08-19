@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_json_binary, Event};
-use slay3r_std::api::TxResponse;
-use slay3r_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
+use layer_std::api::TxResponse;
+use layer_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;

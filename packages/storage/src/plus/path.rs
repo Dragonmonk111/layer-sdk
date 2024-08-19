@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use cosmwasm_std::to_json_vec;
 use std::ops::Deref;
 
-use slay3r_std::{GasMeter, GasResult};
+use layer_std::{GasMeter, GasResult};
 
 use super::helpers::{may_deserialize, must_deserialize, nested_namespaces_with_key};
 use super::Key;

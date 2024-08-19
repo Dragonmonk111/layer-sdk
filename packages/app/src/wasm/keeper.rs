@@ -7,15 +7,15 @@ use cosmwasm_std::{
 use cosmwasm_vm::{Checksum, VmError};
 use cw_storage_plus::{Bound, KeyDeserialize};
 
-use slay3r_std::api::MsgResponse;
-use slay3r_std::response::{
+use layer_std::api::MsgResponse;
+use layer_std::response::{
     CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, ListCodesResponse,
     QueryResponse, WasmQueryResponse,
 };
-use slay3r_std::{
+use layer_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };
-use slay3r_storage::{
+use layer_storage::{
     prefixed, prefixed_read, Item, Map, PlusError, PrefixedStorage, ReadonlyPrefixedStorage,
     ReadonlyStorage, Storage,
 };
@@ -661,10 +661,10 @@ impl Wasm {
                 (Some(limit), left) if limit < left => GasMeter::new(limit),
                 (_, left) => GasMeter::new(left),
             };
-            let slay3r_msg = cosmwasm_msg_to_layer(msg.msg, contract)?;
+            let layer_msg = cosmwasm_msg_to_layer(msg.msg, contract)?;
 
             // ensure we charge if there is a limit_meter, even on error
-            let msg_result = sm.process_msg(storage, &sub_meter, contract, block, slay3r_msg);
+            let msg_result = sm.process_msg(storage, &sub_meter, contract, block, layer_msg);
             let gas_used = sub_meter.used();
             meter.charge(gas_used)?;
 
@@ -815,7 +815,7 @@ impl Wasm {
                 };
                 let resp = CodeInfoResponse {
                     data: data.into(),
-                    code_info: slay3r_std::response::CodeInfo {
+                    code_info: layer_std::response::CodeInfo {
                         code_id,
                         creator,
                         checksum,
@@ -833,7 +833,7 @@ impl Wasm {
                 let iter = CODES.range(&reader, meter, start, end, Order::Ascending)?;
                 let code_infos = iter
                     .map(|r| {
-                        r.map(|(k, v)| slay3r_std::response::CodeInfo {
+                        r.map(|(k, v)| layer_std::response::CodeInfo {
                             code_id: k,
                             creator: v.creator,
                             checksum: v.checksum,
@@ -974,13 +974,13 @@ fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, 
 fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
     let res = match msg {
         CosmosMsg::Bank(bank) => match bank {
-            cosmwasm_std::BankMsg::Send { to_address, amount } => slay3r_std::BankMsg::Send {
+            cosmwasm_std::BankMsg::Send { to_address, amount } => layer_std::BankMsg::Send {
                 sender: sender.clone(),
                 recipient: AccountId::parse_string(&to_address)?,
                 amount,
             }
             .into(),
-            cosmwasm_std::BankMsg::Burn { amount } => slay3r_std::BankMsg::Burn {
+            cosmwasm_std::BankMsg::Burn { amount } => layer_std::BankMsg::Burn {
                 sender: sender.clone(),
                 amount,
             }
@@ -992,7 +992,7 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
                 contract_addr,
                 msg,
                 funds,
-            } => slay3r_std::WasmMsg::Execute {
+            } => layer_std::WasmMsg::Execute {
                 contract_addr: AccountId::parse_string(&contract_addr)?,
                 msg,
                 sender: sender.clone(),
@@ -1005,7 +1005,7 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
                 msg,
                 funds,
                 label,
-            } => slay3r_std::WasmMsg::Instantiate {
+            } => layer_std::WasmMsg::Instantiate {
                 sender: sender.clone(),
                 admin: admin.map(|x| AccountId::parse_string(&x)).transpose()?,
                 code_id,
@@ -1021,7 +1021,7 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
                 msg,
                 funds,
                 salt,
-            } => slay3r_std::WasmMsg::Instantiate2 {
+            } => layer_std::WasmMsg::Instantiate2 {
                 sender: sender.clone(),
                 admin: admin.map(|x| AccountId::parse_string(&x)).transpose()?,
                 code_id,
@@ -1035,7 +1035,7 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
                 contract_addr,
                 msg,
                 new_code_id,
-            } => slay3r_std::WasmMsg::Migrate {
+            } => layer_std::WasmMsg::Migrate {
                 contract_addr: AccountId::parse_string(&contract_addr)?,
                 msg,
                 sender: sender.clone(),
@@ -1045,19 +1045,17 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
             cosmwasm_std::WasmMsg::UpdateAdmin {
                 contract_addr,
                 admin,
-            } => slay3r_std::WasmMsg::UpdateAdmin {
+            } => layer_std::WasmMsg::UpdateAdmin {
                 sender: sender.clone(),
                 contract_addr: AccountId::parse_string(&contract_addr)?,
                 admin: AccountId::parse_string(&admin)?,
             }
             .into(),
-            cosmwasm_std::WasmMsg::ClearAdmin { contract_addr } => {
-                slay3r_std::WasmMsg::ClearAdmin {
-                    sender: sender.clone(),
-                    contract_addr: AccountId::parse_string(&contract_addr)?,
-                }
-                .into()
+            cosmwasm_std::WasmMsg::ClearAdmin { contract_addr } => layer_std::WasmMsg::ClearAdmin {
+                sender: sender.clone(),
+                contract_addr: AccountId::parse_string(&contract_addr)?,
             }
+            .into(),
             x => unimplemented!("wasm msg {:?}", x),
         },
         _ => todo!(),
@@ -1172,7 +1170,7 @@ fn set_data_field(parent_data: &mut MsgData, new_data: Binary) {
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::{coin, coins, testing::mock_env, to_json_binary, Event};
-    use slay3r_storage::{MemoryStore, PersistentStorage};
+    use layer_storage::{MemoryStore, PersistentStorage};
 
     use crate::AppConfig;
 

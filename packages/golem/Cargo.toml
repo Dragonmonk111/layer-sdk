@@ -1,5 +1,5 @@
 [package]
-name = "slay3r-golem"
+name = "layer-golem"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -16,10 +16,10 @@ sha2 = { workspace = true }
 serde = { workspace = true }
 cw-orch-core = { workspace = true }
 
-slay3r-app = { workspace = true }
-slay3r-cosmos = { workspace = true }
-slay3r-std = { workspace = true }
-slay3r-storage = { workspace = true }
+layer-app = { workspace = true }
+layer-cosmos = { workspace = true }
+layer-std = { workspace = true }
+layer-storage = { workspace = true }
 
 # crypto stuff (from cosmrs... not sure if we need to be so strict
 k256 = { version = "0.13", default-features = false }

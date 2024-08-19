@@ -1,6 +1,6 @@
 // This file is meant to add extra functionality to the generated proto structs.
 
-use slay3r_std::stringify_or_hex;
+use layer_std::stringify_or_hex;
 
 use crate::protos::layer::sync::v1::{state_change::Event, BlockWrites, StateChange, WriteData};
 

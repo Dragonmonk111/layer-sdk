@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Uint128};
 use cw20::Cw20Coin;
-use slay3r_std::{
+use layer_std::{
     response::{AccountResponse, AuthQueryResponse, QueryResponse, WasmQueryResponse},
     AccountId, AuthQuery, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };

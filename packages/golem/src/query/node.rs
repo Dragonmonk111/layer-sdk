@@ -2,7 +2,7 @@ use abstract_cw_multi_test::AppResponse;
 
 use cosmwasm_std::StdError;
 use cw_orch_core::environment::{NodeQuerier, Querier};
-use slay3r_std::{response::QueryResponse, Query, QueryError};
+use layer_std::{response::QueryResponse, Query, QueryError};
 
 use crate::Slay3rGolem;
 
@@ -19,7 +19,7 @@ impl Slay3rNode {
 }
 
 impl Querier for Slay3rNode {
-    type Error = slay3r_app::PulsarError;
+    type Error = layer_app::PulsarError;
 }
 
 impl NodeQuerier for Slay3rNode {
@@ -40,11 +40,11 @@ impl NodeQuerier for Slay3rNode {
     }
 
     fn simulate_tx(&self, tx_bytes: Vec<u8>) -> Result<u64, Self::Error> {
-        let tx = slay3r_cosmos::parse_cosmos_tx(tx_bytes.into(), &self.golem.config.chain_id)
+        let tx = layer_cosmos::parse_cosmos_tx(tx_bytes.into(), &self.golem.config.chain_id)
             .map_err(|e| QueryError::ParseError(e.to_string()))?;
         let query = Query::Simulate(tx);
 
-        let app: std::cell::Ref<slay3r_app::App<slay3r_storage::MemoryStore>> =
+        let app: std::cell::Ref<layer_app::App<layer_storage::MemoryStore>> =
             self.golem.app.borrow();
         let res = app.query(query)?;
         match res {

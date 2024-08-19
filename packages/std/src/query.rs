@@ -231,7 +231,7 @@ pub enum WasmQuery {
     Smart {
         contract_addr: AccountId,
         /// msg is the json-encoded QueryMsg struct
-        #[derivative(Debug(format_with = "slay3r_std::binary_to_string"))]
+        #[derivative(Debug(format_with = "layer_std::binary_to_string"))]
         msg: Binary,
     },
     /// this queries the raw kv-store of the contract.
@@ -256,8 +256,8 @@ pub enum WasmQuery {
 
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
 pub enum WasmQueryResponse {
-    Smart(#[derivative(Debug(format_with = "slay3r_std::binary_to_string"))] Binary),
-    Raw(#[derivative(Debug(format_with = "slay3r_std::binary_to_string"))] Binary),
+    Smart(#[derivative(Debug(format_with = "layer_std::binary_to_string"))] Binary),
+    Raw(#[derivative(Debug(format_with = "layer_std::binary_to_string"))] Binary),
     ContractInfo(ContractInfoResponse),
     CodeInfo(CodeInfoResponse),
     ListCodes(ListCodesResponse),

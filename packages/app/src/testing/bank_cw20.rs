@@ -1,6 +1,6 @@
 use cosmwasm_std::{coin, coins, to_json_binary, Uint128};
 use cw20_base::msg::{InstantiateMsg, QueryMsg};
-use slay3r_std::{AccountId, MsgData, WasmMsg, WasmMsgData};
+use layer_std::{AccountId, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;

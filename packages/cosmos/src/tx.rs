@@ -8,8 +8,8 @@ use cosmwasm_std::{coin, Binary, Coin};
 use sha2::{Digest, Sha256};
 use tracing::trace_span;
 
-use slay3r_std::{required_signer, Msg};
-use slay3r_std::{FeeInfo, SignedTx, SigningInfo, TxError};
+use layer_std::{required_signer, Msg};
+use layer_std::{FeeInfo, SignedTx, SigningInfo, TxError};
 
 use crate::legacy::StdSignDoc;
 use crate::{parse_cosmos_msg, parse_cosmos_pubkey, CosmosError};
@@ -19,7 +19,7 @@ pub const FIXED_ACCOUNT_NUMBER: u64 = 17;
 // This is parsed from cosmrs::Raw and cosmrs::Tx
 /// Parses the raw cosmos tx encoding and calculate the expected sign bytes.
 /// Extracts all useful info from the Tx in a simpler format for us
-pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<slay3r_std::Tx, TxError> {
+pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<layer_std::Tx, TxError> {
     let _span = trace_span!("parse_cosmos_tx").entered();
     let (tx, hashable) = parse_raw_tx(&bytes, chain_id)?;
 
@@ -48,7 +48,7 @@ pub fn parse_cosmos_tx(bytes: Bytes, chain_id: &str) -> Result<slay3r_std::Tx, T
         timeout_height,
         raw_tx: bytes,
     };
-    Ok(slay3r_std::Tx::Signed(tx))
+    Ok(layer_std::Tx::Signed(tx))
 }
 
 struct HashableMessage {
@@ -185,7 +185,7 @@ mod test {
         Coin,
     };
 
-    use slay3r_std::{AccountId, BankMsg, PubKey, DEFAULT_BECH32_PREFIX};
+    use layer_std::{AccountId, BankMsg, PubKey, DEFAULT_BECH32_PREFIX};
 
     #[test]
     fn happy_path_tx_parsing() {
@@ -233,7 +233,7 @@ mod test {
         let tx = parse_cosmos_tx(tx_bytes.into(), chain_id.as_str()).unwrap();
 
         // validate we have the expected values
-        let slay3r_std::Tx::Signed(tx) = tx;
+        let layer_std::Tx::Signed(tx) = tx;
         assert_eq!(tx.timeout_height, Some(timeout_height as u64));
         assert_eq!(tx.fee.fee, Some(cosmwasm_std::coin(200_000u128, "uatom")));
         assert_eq!(tx.fee.gas_limit, gas);
@@ -242,7 +242,7 @@ mod test {
         let sender_addr = AccountId::parse_string(sender_account_id.as_ref()).unwrap();
         let rcpt_addr = AccountId::parse_string(rcpt_account_id.as_ref()).unwrap();
         match &tx.msgs[0] {
-            slay3r_std::Msg::Bank(BankMsg::Send {
+            layer_std::Msg::Bank(BankMsg::Send {
                 sender,
                 amount,
                 recipient,

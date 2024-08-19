@@ -1,6 +1,6 @@
 use cosmwasm_std::StdError;
-use slay3r_std::{AccountIdError, GasError, QueryError, TxError};
-use slay3r_storage::PlusError;
+use layer_std::{AccountIdError, GasError, QueryError, TxError};
+use layer_storage::PlusError;
 use thiserror::Error;
 
 use crate::auth::AuthError;
