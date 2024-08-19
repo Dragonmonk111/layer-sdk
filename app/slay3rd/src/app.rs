@@ -9,7 +9,7 @@ use tracing::{
     info, info_span, trace,
 };
 
-use slay3r_abci::Application;
+use layer_abci::Application;
 use tendermint_proto::abci::{
     response_process_proposal, RequestApplySnapshotChunk, RequestCheckTx, RequestEcho,
     RequestFinalizeBlock, RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
@@ -20,9 +20,9 @@ use tendermint_proto::abci::{
     ResponseProcessProposal, ResponseQuery,
 };
 
-use slay3r_app::{App, AppConfig, AppLoadError, StateMachine, SyncProvider};
-use slay3r_std::{api::TxResult, HexEncode};
-use slay3r_storage::PersistentStorage;
+use layer_app::{App, AppConfig, AppLoadError, StateMachine, SyncProvider};
+use layer_std::{api::TxResult, HexEncode};
+use layer_storage::PersistentStorage;
 
 use crate::{
     decode::{

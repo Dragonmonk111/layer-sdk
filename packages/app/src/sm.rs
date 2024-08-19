@@ -5,10 +5,10 @@ use tracing::{
 };
 
 use cosmwasm_std::{BlockInfo, Event, StdError};
-use slay3r_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
-use slay3r_std::response::QueryResponse;
-use slay3r_std::{AccountId, GasMeter, Msg, Query, Tx};
-use slay3r_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
+use layer_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
+use layer_std::response::QueryResponse;
+use layer_std::{AccountId, GasMeter, Msg, Query, Tx};
+use layer_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
 
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};

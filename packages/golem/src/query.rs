@@ -2,11 +2,11 @@ mod bank;
 mod node;
 mod wasm;
 
-use slay3r_app::PulsarError;
+use layer_app::PulsarError;
 
+use layer_std::response::{AuthQueryResponse, QueryResponse};
+use layer_std::{AccountId, AuthQuery};
 use serde::{de::DeserializeOwned, Serialize};
-use slay3r_std::response::{AuthQueryResponse, QueryResponse};
-use slay3r_std::{AccountId, AuthQuery};
 use std::fmt::Debug;
 
 use cosmwasm_std::{Addr, BlockInfo, Coin, StdError};
@@ -37,7 +37,7 @@ impl Slay3rGolem {
 }
 
 impl QueryHandler for Slay3rGolem {
-    type Error = slay3r_app::PulsarError;
+    type Error = layer_app::PulsarError;
 
     /// Wait for an amount of blocks.
     fn wait_blocks(&self, amount: u64) -> Result<(), Self::Error> {
@@ -116,5 +116,5 @@ impl EnvironmentQuerier for Slay3rGolem {
 }
 
 impl Querier for Slay3rGolem {
-    type Error = slay3r_app::PulsarError;
+    type Error = layer_app::PulsarError;
 }

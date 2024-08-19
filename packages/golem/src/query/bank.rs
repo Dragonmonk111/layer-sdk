@@ -2,7 +2,7 @@ use cosmwasm_std::{Coin, StdError};
 
 use cw_orch_core::environment::{BankQuerier, Querier};
 
-use slay3r_std::{
+use layer_std::{
     response::{BankQueryResponse, QueryResponse},
     AccountId, BankQuery,
 };
@@ -22,7 +22,7 @@ impl Slay3rBank {
 }
 
 impl Querier for Slay3rBank {
-    type Error = slay3r_app::PulsarError;
+    type Error = layer_app::PulsarError;
 }
 
 impl BankQuerier for Slay3rBank {

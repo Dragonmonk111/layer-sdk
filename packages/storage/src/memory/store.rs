@@ -8,7 +8,7 @@ use std::pin::Pin;
 use tracing::{debug_span, trace_span};
 
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult, HexEncode};
+use layer_std::{GasMeter, GasResult, HexEncode};
 
 use crate::prices::PriceList;
 use crate::traits::BatchChanges;
@@ -352,7 +352,7 @@ fn clone_item(item_ref: GasResult<BTreeMapRecordRef>) -> GasResult<Record> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use slay3r_std::GasError;
+    use layer_std::GasError;
 
     #[test]
     fn get_and_set() {

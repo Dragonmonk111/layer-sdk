@@ -3,13 +3,13 @@ use std::{ops::Deref, pin::Pin};
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 
-use slay3r_app::SyncProvider;
-use slay3r_proto::layer::sync::v1::{
+use layer_app::SyncProvider;
+use layer_proto::layer::sync::v1::{
     query_server::{Query, QueryServer},
     BlockWrites, QueryLatestSequenceRequest, QueryLatestSequenceResponse,
     StreamChangesSinceRequest, StreamCurrentStateRequest, WriteData,
 };
-use slay3r_storage::PersistentStorage;
+use layer_storage::PersistentStorage;
 
 use crate::app::Pulsarium;
 

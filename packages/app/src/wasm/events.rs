@@ -1,6 +1,6 @@
 use cosmwasm_std::{Attribute, Event};
 use cosmwasm_vm::AnalysisReport;
-use slay3r_std::AccountId;
+use layer_std::AccountId;
 
 use super::WasmError;
 

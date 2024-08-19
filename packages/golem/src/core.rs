@@ -1,6 +1,6 @@
+use layer_app::genesis::{BankAccount, GenesisState, WasmParams};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use slay3r_app::genesis::{BankAccount, GenesisState, WasmParams};
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -12,10 +12,10 @@ use cosmwasm_std::{to_json_binary, Addr, Binary, BlockInfo, Coin, StdError};
 use cw_orch_core::contract::{interface_traits::Uploadable, WasmPath};
 use cw_orch_core::environment::{ChainInfo, ChainKind, ChainState, NetworkInfo, TxHandler};
 
-use slay3r_app::{App, AppConfig, PulsarError, StateMachine};
-use slay3r_std::api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate};
-use slay3r_std::{AccountId, BankMsg, FeeInfo, Msg, SigningInfo, Timestamp, WasmMsg};
-use slay3r_storage::MemoryStore;
+use layer_app::{App, AppConfig, PulsarError, StateMachine};
+use layer_std::api::{Block, InitChainRequest, TmPubKey, TxResult, ValidatorUpdate};
+use layer_std::{AccountId, BankMsg, FeeInfo, Msg, SigningInfo, Timestamp, WasmMsg};
+use layer_storage::MemoryStore;
 
 use crate::{DerivedKey, OrchRegistry};
 
@@ -167,7 +167,7 @@ impl Slay3rGolem {
 
     pub fn run_block(
         &self,
-        tx: Vec<slay3r_std::Tx>,
+        tx: Vec<layer_std::Tx>,
     ) -> Result<Vec<TxResult<PulsarError>>, PulsarError> {
         let mut app = self.app.borrow_mut();
         let info = app.info().unwrap();
@@ -184,16 +184,12 @@ impl Slay3rGolem {
     }
 
     // simple helper for the usual one msg/one tx case
-    pub(crate) fn prepare_tx(&self, msg: impl Into<Msg>, gas_limit: Option<u64>) -> slay3r_std::Tx {
+    pub(crate) fn prepare_tx(&self, msg: impl Into<Msg>, gas_limit: Option<u64>) -> layer_std::Tx {
         self.prepare_tx_multi(vec![msg.into()], gas_limit)
     }
 
     // Use to create a valid "SignedTx" for the given account
-    pub(crate) fn prepare_tx_multi(
-        &self,
-        msgs: Vec<Msg>,
-        gas_limit: Option<u64>,
-    ) -> slay3r_std::Tx {
+    pub(crate) fn prepare_tx_multi(&self, msgs: Vec<Msg>, gas_limit: Option<u64>) -> layer_std::Tx {
         // FIXME: simulate gas fees? (right now hardcoded)
         // Note: block_gas_limit is set by default to 20M
         let gas_limit = gas_limit.unwrap_or(10_000_000u64);
@@ -218,7 +214,7 @@ impl Slay3rGolem {
         };
 
         // make tx with no real signing info
-        let mut tx = slay3r_std::SignedTx {
+        let mut tx = layer_std::SignedTx {
             msgs,
             signer: self.signer.account(),
             fee,
@@ -236,7 +232,7 @@ impl Slay3rGolem {
         tx.signing_info.message_hash = message_hash.into();
         tx.signing_info.signature = signature.into();
 
-        slay3r_std::Tx::Signed(tx)
+        layer_std::Tx::Signed(tx)
     }
 }
 
@@ -251,7 +247,7 @@ impl ChainState for Slay3rGolem {
 impl TxHandler for Slay3rGolem {
     type Response = AppResponse;
 
-    type Error = slay3r_app::PulsarError;
+    type Error = layer_app::PulsarError;
 
     type ContractSource = WasmPath;
 
@@ -399,7 +395,7 @@ fn tx_to_app_response(tx: TxResult<PulsarError>) -> Result<AppResponse, PulsarEr
     // If the tx was a failure, also return error
     let res = tx.result?;
     let events = res.events.into_iter().flatten().collect();
-    let data = slay3r_cosmos::msg_data_to_proto(res.data);
+    let data = layer_cosmos::msg_data_to_proto(res.data);
 
     let output = AppResponse {
         data: Some(data.into()),

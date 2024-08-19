@@ -1,4 +1,4 @@
-use slay3r_std::{GasMeter, GasResult};
+use layer_std::{GasMeter, GasResult};
 
 use crate::{PriceList, ReadonlyStorage, Storage, DEFAULT_COMMIT_PRICES};
 

@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use slay3r_abci::MultiThreadedDispatcher;
-use slay3r_proto::cosmos::base::tendermint::v1beta1::VersionInfo;
-use slay3r_proto::tendermint::p2p::{DefaultNodeInfo, DefaultNodeInfoOther, ProtocolVersion};
-use slay3r_proto::tendermint::types::{BlockId, Header, PartSetHeader};
-use slay3r_proto::{
+use layer_abci::MultiThreadedDispatcher;
+use layer_proto::cosmos::base::tendermint::v1beta1::VersionInfo;
+use layer_proto::tendermint::p2p::{DefaultNodeInfo, DefaultNodeInfoOther, ProtocolVersion};
+use layer_proto::tendermint::types::{BlockId, Header, PartSetHeader};
+use layer_proto::{
     cosmos::base::tendermint::v1beta1::{
         service_server::{Service, ServiceServer},
         AbciQueryRequest, AbciQueryResponse, GetBlockByHeightRequest, GetBlockByHeightResponse,
@@ -60,7 +60,7 @@ impl TendermintService {
             .validators
             .into_iter()
             .map(
-                |v| slay3r_proto::cosmos::base::tendermint::v1beta1::Validator {
+                |v| layer_proto::cosmos::base::tendermint::v1beta1::Validator {
                     address: v.address.to_string(),
                     pub_key: pub_key_to_any(v.pub_key),
                     voting_power: v.power.into(),
@@ -245,18 +245,18 @@ impl Service for TendermintService {
 
 pub(crate) fn convert_tendermint_block(
     b: &tendermint::block::Block,
-) -> slay3r_proto::tendermint::types::Block {
+) -> layer_proto::tendermint::types::Block {
     let evidence = if b.evidence.as_ref().is_empty() {
         None
     } else {
-        Some(slay3r_proto::tendermint::types::EvidenceList {
+        Some(layer_proto::tendermint::types::EvidenceList {
             evidence: b.evidence.iter().map(convert_evidence).collect(),
         })
     };
 
     Block {
         header: Some(convert_tendermint_header(&b.header)),
-        data: Some(slay3r_proto::tendermint::types::Data {
+        data: Some(layer_proto::tendermint::types::Data {
             txs: b.data.clone(),
         }),
         evidence,
@@ -264,16 +264,16 @@ pub(crate) fn convert_tendermint_block(
     }
 }
 
-fn time_to_timestamp(t: tendermint::Time) -> slay3r_proto::google::protobuf::Timestamp {
+fn time_to_timestamp(t: tendermint::Time) -> layer_proto::google::protobuf::Timestamp {
     let t2: tendermint_proto::google::protobuf::Timestamp = t.into();
-    slay3r_proto::google::protobuf::Timestamp {
+    layer_proto::google::protobuf::Timestamp {
         seconds: t2.seconds,
         nanos: t2.nanos,
     }
 }
 
-fn vote_to_vote(v: &tendermint::Vote) -> slay3r_proto::tendermint::types::Vote {
-    slay3r_proto::tendermint::types::Vote {
+fn vote_to_vote(v: &tendermint::Vote) -> layer_proto::tendermint::types::Vote {
+    layer_proto::tendermint::types::Vote {
         r#type: v.vote_type.into(),
         height: v.height.into(),
         round: v.round.into(),
@@ -291,11 +291,11 @@ fn maybe_sig_to_bytes(s: Option<&tendermint::signature::Signature>) -> Vec<u8> {
 
 fn commit_sig_to_sig(
     s: &tendermint::block::CommitSig,
-) -> slay3r_proto::tendermint::types::CommitSig {
+) -> layer_proto::tendermint::types::CommitSig {
     match s {
         tendermint::block::CommitSig::BlockIdFlagAbsent => {
-            slay3r_proto::tendermint::types::CommitSig {
-                block_id_flag: slay3r_proto::tendermint::types::BlockIdFlag::Absent as i32,
+            layer_proto::tendermint::types::CommitSig {
+                block_id_flag: layer_proto::tendermint::types::BlockIdFlag::Absent as i32,
                 validator_address: vec![],
                 timestamp: None,
                 signature: vec![],
@@ -305,8 +305,8 @@ fn commit_sig_to_sig(
             validator_address,
             timestamp,
             signature,
-        } => slay3r_proto::tendermint::types::CommitSig {
-            block_id_flag: slay3r_proto::tendermint::types::BlockIdFlag::Commit as i32,
+        } => layer_proto::tendermint::types::CommitSig {
+            block_id_flag: layer_proto::tendermint::types::BlockIdFlag::Commit as i32,
             validator_address: (*validator_address).into(),
             timestamp: Some(time_to_timestamp(*timestamp)),
             signature: maybe_sig_to_bytes(signature.as_ref()),
@@ -315,8 +315,8 @@ fn commit_sig_to_sig(
             validator_address,
             timestamp,
             signature,
-        } => slay3r_proto::tendermint::types::CommitSig {
-            block_id_flag: slay3r_proto::tendermint::types::BlockIdFlag::Nil as i32,
+        } => layer_proto::tendermint::types::CommitSig {
+            block_id_flag: layer_proto::tendermint::types::BlockIdFlag::Nil as i32,
             validator_address: (*validator_address).into(),
             timestamp: Some(time_to_timestamp(*timestamp)),
             signature: maybe_sig_to_bytes(signature.as_ref()),
@@ -326,11 +326,11 @@ fn commit_sig_to_sig(
 
 fn convert_evidence(
     ev: &tendermint::evidence::Evidence,
-) -> slay3r_proto::tendermint::types::Evidence {
+) -> layer_proto::tendermint::types::Evidence {
     let sum = match ev {
         tendermint::evidence::Evidence::DuplicateVote(e) => {
-            slay3r_proto::tendermint::types::evidence::Sum::DuplicateVoteEvidence(
-                slay3r_proto::tendermint::types::DuplicateVoteEvidence {
+            layer_proto::tendermint::types::evidence::Sum::DuplicateVoteEvidence(
+                layer_proto::tendermint::types::DuplicateVoteEvidence {
                     vote_a: Some(vote_to_vote(&e.vote_a)),
                     vote_b: Some(vote_to_vote(&e.vote_b)),
                     total_voting_power: e.total_voting_power.into(),
@@ -340,9 +340,9 @@ fn convert_evidence(
             )
         }
         tendermint::evidence::Evidence::LightClientAttack(_e) => {
-            slay3r_proto::tendermint::types::evidence::Sum::LightClientAttackEvidence(
+            layer_proto::tendermint::types::evidence::Sum::LightClientAttackEvidence(
                 #[allow(unreachable_code)]
-                slay3r_proto::tendermint::types::LightClientAttackEvidence {
+                layer_proto::tendermint::types::LightClientAttackEvidence {
                     conflicting_block: todo!(),
                     common_height: todo!(),
                     byzantine_validators: todo!(),
@@ -352,21 +352,21 @@ fn convert_evidence(
             )
         }
     };
-    slay3r_proto::tendermint::types::Evidence { sum: Some(sum) }
+    layer_proto::tendermint::types::Evidence { sum: Some(sum) }
 }
 
 fn convert_tendermint_header(
     h: &tendermint::block::Header,
-) -> slay3r_proto::tendermint::types::Header {
+) -> layer_proto::tendermint::types::Header {
     let block_time: tendermint_proto::google::protobuf::Timestamp = h.time.into();
     Header {
-        version: Some(slay3r_proto::tendermint::version::Consensus {
+        version: Some(layer_proto::tendermint::version::Consensus {
             block: h.version.block,
             app: h.version.app,
         }),
         chain_id: h.chain_id.to_string(),
         height: u64::from(h.height) as i64,
-        time: Some(slay3r_proto::google::protobuf::Timestamp {
+        time: Some(layer_proto::google::protobuf::Timestamp {
             seconds: block_time.seconds,
             nanos: block_time.nanos,
         }),
@@ -385,8 +385,8 @@ fn convert_tendermint_header(
 
 fn convert_tendermint_commit(
     c: &tendermint::block::Commit,
-) -> slay3r_proto::tendermint::types::Commit {
-    slay3r_proto::tendermint::types::Commit {
+) -> layer_proto::tendermint::types::Commit {
+    layer_proto::tendermint::types::Commit {
         height: u64::from(c.height) as i64,
         round: c.round.into(),
         block_id: Some(convert_block_id(&c.block_id)),
@@ -418,7 +418,7 @@ fn hash_to_vec(h: tendermint::Hash) -> Vec<u8> {
     }
 }
 
-fn pub_key_to_any(p: tendermint::PublicKey) -> Option<slay3r_proto::google::protobuf::Any> {
+fn pub_key_to_any(p: tendermint::PublicKey) -> Option<layer_proto::google::protobuf::Any> {
     let (type_url, value) = match p {
         // TODO: verify which types we use... the same file defines two (for JSON and for Protobuf...)
         tendermint::PublicKey::Ed25519(pk) => (
@@ -433,5 +433,5 @@ fn pub_key_to_any(p: tendermint::PublicKey) -> Option<slay3r_proto::google::prot
         // ),
         _ => return None,
     };
-    Some(slay3r_proto::google::protobuf::Any { type_url, value })
+    Some(layer_proto::google::protobuf::Any { type_url, value })
 }

@@ -1,5 +1,5 @@
 [package]
-name = "slay3r-proto"
+name = "layer-proto"
 description = "Protobuf types for Slay3r"
 version = { workspace = true }
 license = { workspace = true }
@@ -19,7 +19,7 @@ prost = { workspace = true, features = ["prost-derive"] }
 tonic = { workspace = true, optional = true  }
 
 # needed for util functions. if this causes dependency issues, just pull out utils.rs to own package
-slay3r-std = { workspace = true }
+layer-std = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

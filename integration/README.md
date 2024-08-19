@@ -19,26 +19,26 @@ Using Docker may also make this simpler / more reproducable.
 Copy over startup files
 
 ```shell
-rm -rf ~/.pulse-test
-cp -r ./etc ~/.pulse-test
-# mkdir -p ~/.pulse-test/lmdb-1
+rm -rf ~/.layer-test
+cp -r ./etc ~/.layer-test
+# mkdir -p ~/.layer-test/lmdb-1
 ```
 
 Run in one terminal:
 
 ```shell
-slay3rd --home ~/.pulse-test
+slay3rd --home ~/.layer-test
 
 # or dev mode
 cd ../app/slay3rd
-cargo run -- --home ~/.pulse-test
+cargo run -- --home ~/.layer-test
 ```
 
 Run in another terminal:
 
 
 ```shell
-cometbft start --home ~/.pulse-test --proxy_app tcp://localhost:26658
+cometbft start --home ~/.layer-test --proxy_app tcp://localhost:26658
 ```
 
 You should see blocks being produced. Now you are ready to run the tests
@@ -46,7 +46,7 @@ You should see blocks being produced. Now you are ready to run the tests
 ### Run Tests
 
 Some tests may succeed running multiple times on the same node. Others may fail.
-If you have any surprising failures, wipe out `~/.pulse-test` and repeat the above
+If you have any surprising failures, wipe out `~/.layer-test` and repeat the above
 steps to get a fresh node to test against.
 
 ```shell

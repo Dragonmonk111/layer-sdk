@@ -1,5 +1,5 @@
 [package]
-name = "slay3r-storage"
+name = "layer-storage"
 description = "Storage helpers for Slay3r"
 version = { workspace = true }
 license = { workspace = true }
@@ -11,7 +11,7 @@ edition = { workspace = true }
 rocksdb = ["dep:rocksdb", "tokio"]
 
 [dependencies]
-slay3r-std = { workspace = true }
+layer-std = { workspace = true }
 cosmwasm-std = { workspace = true }
 cw-storage-plus = { workspace = true }
 thiserror = { workspace = true }

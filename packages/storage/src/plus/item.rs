@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use cosmwasm_std::{to_json_vec, Addr, CustomQuery, QuerierWrapper, StdResult, WasmQuery};
 
 use crate::{PlusError, PlusResult, ReadonlyStorage, Storage};
-use slay3r_std::{GasMeter, GasResult};
+use layer_std::{GasMeter, GasResult};
 
 use super::helpers::{may_deserialize, must_deserialize};
 

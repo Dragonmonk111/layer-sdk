@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use slay3r_abci::MultiThreadedDispatcher;
-use slay3r_proto::cosmos::bank::v1beta1::{
+use layer_abci::MultiThreadedDispatcher;
+use layer_proto::cosmos::bank::v1beta1::{
     query_server::{Query, QueryServer},
     QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse,
     QueryDenomMetadataRequest, QueryDenomMetadataResponse, QueryDenomsMetadataRequest,

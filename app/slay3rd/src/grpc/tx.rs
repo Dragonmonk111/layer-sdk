@@ -2,8 +2,7 @@ use futures::future::try_join_all;
 use std::sync::Arc;
 
 use cosmwasm_std::Binary;
-use serde::Deserialize;
-use slay3r_proto::cosmos::tx::v1beta1::{
+use layer_proto::cosmos::tx::v1beta1::{
     service_server::{Service, ServiceServer},
     BroadcastTxRequest, BroadcastTxResponse, GetBlockWithTxsRequest, GetBlockWithTxsResponse,
     GetTxRequest, GetTxResponse, GetTxsEventRequest, GetTxsEventResponse, SimulateRequest,
@@ -11,9 +10,10 @@ use slay3r_proto::cosmos::tx::v1beta1::{
     TxDecodeResponse, TxEncodeAminoRequest, TxEncodeAminoResponse, TxEncodeRequest,
     TxEncodeResponse,
 };
-use slay3r_std::HexEncode;
+use layer_std::HexEncode;
+use serde::Deserialize;
 
-use slay3r_abci::MultiThreadedDispatcher;
+use layer_abci::MultiThreadedDispatcher;
 use tendermint_rpc::{Client, HttpClient};
 use tonic::{Request, Response, Status};
 
@@ -297,7 +297,7 @@ fn not_gonna_do_it(msg: &str) -> Status {
 fn convert_tx_response(
     tx: tendermint_rpc::endpoint::tx::Response,
     timestamp: String, // This  must be queried separately from tendermint rpc
-) -> slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
+) -> layer_proto::cosmos::base::abci::v1beta1::TxResponse {
     let exec_tx = tx.tx_result;
 
     let _span = tracing::info_span!(
@@ -309,7 +309,7 @@ fn convert_tx_response(
     .entered();
 
     let logs = parse_log_structs(&exec_tx.log);
-    slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
+    layer_proto::cosmos::base::abci::v1beta1::TxResponse {
         height: tx.height.into(),
         txhash: hex::encode(tx.hash),
         codespace: exec_tx.codespace,
@@ -320,7 +320,7 @@ fn convert_tx_response(
         info: exec_tx.info,
         gas_wanted: exec_tx.gas_wanted,
         gas_used: exec_tx.gas_used,
-        tx: Some(slay3r_proto::google::protobuf::Any {
+        tx: Some(layer_proto::google::protobuf::Any {
             // TODO: what type_url is this supposed to be?? Any????
             type_url: "/cosmos.tx.v1beta1.Tx".to_string(),
             value: tx.tx,
@@ -330,13 +330,13 @@ fn convert_tx_response(
     }
 }
 
-fn convert_event(event: tendermint::abci::Event) -> slay3r_proto::tendermint::abci::Event {
-    slay3r_proto::tendermint::abci::Event {
+fn convert_event(event: tendermint::abci::Event) -> layer_proto::tendermint::abci::Event {
+    layer_proto::tendermint::abci::Event {
         r#type: event.kind,
         attributes: event
             .attributes
             .iter()
-            .map(|attr| slay3r_proto::tendermint::abci::EventAttribute {
+            .map(|attr| layer_proto::tendermint::abci::EventAttribute {
                 key: attr.key_str().unwrap().to_string(),
                 value: attr.value_str().unwrap().to_string(),
                 index: attr.index(),
@@ -353,8 +353,8 @@ fn convert_tx_broadcast_response(
     data: bytes::Bytes,
     log: String,
     hash: tendermint::hash::Hash,
-) -> slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
-    slay3r_proto::cosmos::base::abci::v1beta1::TxResponse {
+) -> layer_proto::cosmos::base::abci::v1beta1::TxResponse {
+    layer_proto::cosmos::base::abci::v1beta1::TxResponse {
         height: 0,
         // hex encoding
         txhash: hex::encode(hash),
@@ -400,28 +400,26 @@ pub struct Attribute {
     pub value: String,
 }
 
-fn parse_log_structs(log: &str) -> Vec<slay3r_proto::cosmos::base::abci::v1beta1::AbciMessageLog> {
+fn parse_log_structs(log: &str) -> Vec<layer_proto::cosmos::base::abci::v1beta1::AbciMessageLog> {
     let ours: Vec<AbciMessageLog> = serde_json::from_str(log).unwrap_or_else(|_| vec![]);
     ours.into_iter()
         .map(
-            |log| slay3r_proto::cosmos::base::abci::v1beta1::AbciMessageLog {
+            |log| layer_proto::cosmos::base::abci::v1beta1::AbciMessageLog {
                 msg_index: log.msg_index,
                 log: log.log,
                 events: log
                     .events
                     .into_iter()
                     .map(
-                        |event| slay3r_proto::cosmos::base::abci::v1beta1::StringEvent {
+                        |event| layer_proto::cosmos::base::abci::v1beta1::StringEvent {
                             r#type: event.r#type,
                             attributes: event
                                 .attributes
                                 .into_iter()
-                                .map(
-                                    |attr| slay3r_proto::cosmos::base::abci::v1beta1::Attribute {
-                                        key: attr.key,
-                                        value: attr.value,
-                                    },
-                                )
+                                .map(|attr| layer_proto::cosmos::base::abci::v1beta1::Attribute {
+                                    key: attr.key,
+                                    value: attr.value,
+                                })
                                 .collect(),
                         },
                     )
@@ -433,24 +431,24 @@ fn parse_log_structs(log: &str) -> Vec<slay3r_proto::cosmos::base::abci::v1beta1
 
 // Again, cosmrs and different proto types...
 
-fn parse_cosmos_tx(bytes: &[u8]) -> Option<slay3r_proto::cosmos::tx::v1beta1::Tx> {
+fn parse_cosmos_tx(bytes: &[u8]) -> Option<layer_proto::cosmos::tx::v1beta1::Tx> {
     let tx = cosmrs::Tx::from_bytes(bytes).ok()?;
-    let res = slay3r_proto::cosmos::tx::v1beta1::Tx {
-        body: Some(slay3r_proto::cosmos::tx::v1beta1::TxBody {
+    let res = layer_proto::cosmos::tx::v1beta1::Tx {
+        body: Some(layer_proto::cosmos::tx::v1beta1::TxBody {
             messages: tx.body.messages.into_iter().map(any_to_any).collect(),
             memo: tx.body.memo,
             timeout_height: tx.body.timeout_height.into(),
             extension_options: vec![],
             non_critical_extension_options: vec![],
         }),
-        auth_info: Some(slay3r_proto::cosmos::tx::v1beta1::AuthInfo {
+        auth_info: Some(layer_proto::cosmos::tx::v1beta1::AuthInfo {
             signer_infos: tx
                 .auth_info
                 .signer_infos
                 .into_iter()
                 .map(signer_to_signer)
                 .collect(),
-            fee: Some(slay3r_proto::cosmos::tx::v1beta1::Fee {
+            fee: Some(layer_proto::cosmos::tx::v1beta1::Fee {
                 amount: tx.auth_info.fee.amount.iter().map(coin_to_coin).collect(),
                 gas_limit: tx.auth_info.fee.gas_limit,
                 payer: tx
@@ -473,15 +471,15 @@ fn parse_cosmos_tx(bytes: &[u8]) -> Option<slay3r_proto::cosmos::tx::v1beta1::Tx
     Some(res)
 }
 
-fn any_to_any(any: cosmrs::Any) -> slay3r_proto::google::protobuf::Any {
-    slay3r_proto::google::protobuf::Any {
+fn any_to_any(any: cosmrs::Any) -> layer_proto::google::protobuf::Any {
+    layer_proto::google::protobuf::Any {
         type_url: any.type_url,
         value: any.value,
     }
 }
 
-fn coin_to_coin(coin: &cosmrs::Coin) -> slay3r_proto::cosmos::base::v1beta1::Coin {
-    slay3r_proto::cosmos::base::v1beta1::Coin {
+fn coin_to_coin(coin: &cosmrs::Coin) -> layer_proto::cosmos::base::v1beta1::Coin {
+    layer_proto::cosmos::base::v1beta1::Coin {
         denom: coin.denom.to_string(),
         amount: coin.amount.to_string(),
     }
@@ -489,22 +487,22 @@ fn coin_to_coin(coin: &cosmrs::Coin) -> slay3r_proto::cosmos::base::v1beta1::Coi
 
 fn signer_to_signer(
     signer: cosmrs::tx::SignerInfo,
-) -> slay3r_proto::cosmos::tx::v1beta1::SignerInfo {
+) -> layer_proto::cosmos::tx::v1beta1::SignerInfo {
     let single = match signer.mode_info {
-        cosmrs::tx::ModeInfo::Single(s) => slay3r_proto::cosmos::tx::v1beta1::mode_info::Single {
+        cosmrs::tx::ModeInfo::Single(s) => layer_proto::cosmos::tx::v1beta1::mode_info::Single {
             mode: s.mode.into(),
         },
         // Safe to panic as this is tx we stored, we would have rejected anything else
         _ => panic!("Only single mode supported"),
     };
 
-    let mi = slay3r_proto::cosmos::tx::v1beta1::ModeInfo {
-        sum: Some(slay3r_proto::cosmos::tx::v1beta1::mode_info::Sum::Single(
+    let mi = layer_proto::cosmos::tx::v1beta1::ModeInfo {
+        sum: Some(layer_proto::cosmos::tx::v1beta1::mode_info::Sum::Single(
             single,
         )),
     };
 
-    slay3r_proto::cosmos::tx::v1beta1::SignerInfo {
+    layer_proto::cosmos::tx::v1beta1::SignerInfo {
         public_key: signer.public_key.map(|s| any_to_any(s.into())),
         mode_info: Some(mi),
         sequence: signer.sequence,

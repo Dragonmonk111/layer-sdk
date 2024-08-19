@@ -7,8 +7,8 @@ use cosmwasm_std::{
 use cw_orch_core::contract::interface_traits::{ContractInstance, Uploadable};
 use cw_orch_core::environment::{Querier, WasmQuerier};
 use cw_orch_core::CwEnvError;
-use slay3r_std::response::{QueryResponse, WasmQueryResponse};
-use slay3r_std::{AccountId, WasmQuery};
+use layer_std::response::{QueryResponse, WasmQueryResponse};
+use layer_std::{AccountId, WasmQuery};
 
 use crate::Slay3rGolem;
 
@@ -25,7 +25,7 @@ impl Slay3rWasm {
 }
 
 impl Querier for Slay3rWasm {
-    type Error = slay3r_app::PulsarError;
+    type Error = layer_app::PulsarError;
 }
 
 impl WasmQuerier for Slay3rWasm {
@@ -73,7 +73,7 @@ impl WasmQuerier for Slay3rWasm {
         address: impl Into<String>,
         query_msg: &Q,
     ) -> Result<T, Self::Error> {
-        let app: std::cell::Ref<slay3r_app::App<slay3r_storage::MemoryStore>> =
+        let app: std::cell::Ref<layer_app::App<layer_storage::MemoryStore>> =
             self.golem.app.borrow();
         let contract_addr = AccountId::parse_string(&address.into())?;
         let msg = to_json_binary(query_msg)?;
@@ -121,7 +121,7 @@ impl WasmQuerier for Slay3rWasm {
         // https://github.com/CosmWasm/cosmwasm/blob/v1.5.5/packages/std/src/addresses.rs#L349-L358
         // https://medium.com/cosmwasm/dev-note-3-limitations-of-instantiate2-and-how-to-deal-with-them-a3f946874230
         // Slay3r also does this inside WasmKeeper::process_msg (WasmMsg::Instantiate2 branch)
-        let addr = slay3r_app::build_instantiate_2_address(&checksum, &creator, &salt, b"")?;
+        let addr = layer_app::build_instantiate_2_address(&checksum, &creator, &salt, b"")?;
         Ok(addr.to_string())
     }
 }

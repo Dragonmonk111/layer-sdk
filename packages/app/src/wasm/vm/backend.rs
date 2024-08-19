@@ -10,8 +10,8 @@ use cosmwasm_vm::{
     Storage as BackendStorage,
 };
 
-use slay3r_std::{response::CodeInfo, AccountId, AccountIdError, GasError, GasMeter};
-use slay3r_storage::{ReadonlyStorage, Storage};
+use layer_std::{response::CodeInfo, AccountId, AccountIdError, GasError, GasMeter};
+use layer_storage::{ReadonlyStorage, Storage};
 
 use crate::{PulsarError, StateMachine};
 
@@ -174,29 +174,29 @@ impl VmQuerier {
                 error: e.to_string(),
                 request: Binary::from(request),
             })?;
-        let query = cosmwasm_query_to_pulsar(cosmos)?;
+        let query = cosmwasm_query_to_layer(cosmos)?;
         let response = self.sm.query(self.storage, meter, &self.block, query)?;
-        slay3r_response_to_cosmwasm(response)
+        layer_response_to_cosmwasm(response)
     }
 }
 
-fn cosmwasm_query_to_pulsar(
+fn cosmwasm_query_to_layer(
     query: QueryRequest<CustomQuery>,
-) -> Result<slay3r_std::Query, QueryError> {
+) -> Result<layer_std::Query, QueryError> {
     match query {
         QueryRequest::Bank(bank) => match bank {
             cosmwasm_std::BankQuery::Balance { address, denom } => {
                 let address =
                     AccountId::parse_string(&address).map_err(account_error_to_backend)?;
-                Ok(slay3r_std::BankQuery::Balance { address, denom }.into())
+                Ok(layer_std::BankQuery::Balance { address, denom }.into())
             }
             cosmwasm_std::BankQuery::AllBalances { address } => {
                 let address =
                     AccountId::parse_string(&address).map_err(account_error_to_backend)?;
-                Ok(slay3r_std::BankQuery::AllBalances { address }.into())
+                Ok(layer_std::BankQuery::AllBalances { address }.into())
             }
             cosmwasm_std::BankQuery::Supply { denom } => {
-                Ok(slay3r_std::BankQuery::Supply { denom }.into())
+                Ok(layer_std::BankQuery::Supply { denom }.into())
             }
             // TODO: BankQuery::DenomMetadata, AllDenomMetadata
             x => unsupported_request(&x),
@@ -205,19 +205,19 @@ fn cosmwasm_query_to_pulsar(
             cosmwasm_std::WasmQuery::Smart { contract_addr, msg } => {
                 let contract_addr =
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
-                Ok(slay3r_std::WasmQuery::Smart { contract_addr, msg }.into())
+                Ok(layer_std::WasmQuery::Smart { contract_addr, msg }.into())
             }
             cosmwasm_std::WasmQuery::Raw { contract_addr, key } => {
                 let contract_addr =
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
-                Ok(slay3r_std::WasmQuery::Raw { contract_addr, key }.into())
+                Ok(layer_std::WasmQuery::Raw { contract_addr, key }.into())
             }
             cosmwasm_std::WasmQuery::ContractInfo { contract_addr } => {
                 let contract_addr =
                     AccountId::parse_string(&contract_addr).map_err(account_error_to_backend)?;
-                Ok(slay3r_std::WasmQuery::ContractInfo { contract_addr }.into())
+                Ok(layer_std::WasmQuery::ContractInfo { contract_addr }.into())
             }
-            cosmwasm_std::WasmQuery::CodeInfo { code_id } => Ok(slay3r_std::WasmQuery::CodeInfo {
+            cosmwasm_std::WasmQuery::CodeInfo { code_id } => Ok(layer_std::WasmQuery::CodeInfo {
                 code_id,
                 include_wasm: false,
             }
@@ -235,11 +235,11 @@ fn unsupported_request<T, U: fmt::Debug>(kind: &U) -> Result<T, QueryError> {
     .into())
 }
 
-fn slay3r_response_to_cosmwasm(
-    response: slay3r_std::response::QueryResponse<PulsarError>,
+fn layer_response_to_cosmwasm(
+    response: layer_std::response::QueryResponse<PulsarError>,
 ) -> Result<Binary, QueryError> {
-    use slay3r_std::response::BankQueryResponse;
-    use slay3r_std::response::QueryResponse::*;
+    use layer_std::response::BankQueryResponse;
+    use layer_std::response::QueryResponse::*;
     match response {
         Bank(bank) => match bank {
             BankQueryResponse::AllBalances(balances) => {
@@ -257,9 +257,9 @@ fn slay3r_response_to_cosmwasm(
             x => unsupported_response(&x),
         },
         Wasm(wasm) => match wasm {
-            slay3r_std::response::WasmQueryResponse::Smart(data) => Ok(data),
-            slay3r_std::response::WasmQueryResponse::Raw(value) => Ok(value),
-            slay3r_std::response::WasmQueryResponse::ContractInfo(info) => {
+            layer_std::response::WasmQueryResponse::Smart(data) => Ok(data),
+            layer_std::response::WasmQueryResponse::Raw(value) => Ok(value),
+            layer_std::response::WasmQueryResponse::ContractInfo(info) => {
                 // 2.0:
                 // let res = cosmwasm_std::ContractInfoResponse::new(
                 //     info.code_id,
@@ -276,7 +276,7 @@ fn slay3r_response_to_cosmwasm(
                 res.ibc_port = info.ibc_port;
                 Ok(to_json_binary(&res).unwrap())
             }
-            slay3r_std::response::WasmQueryResponse::CodeInfo(info) => {
+            layer_std::response::WasmQueryResponse::CodeInfo(info) => {
                 let CodeInfo {
                     code_id,
                     creator,

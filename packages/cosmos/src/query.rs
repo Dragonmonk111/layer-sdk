@@ -1,11 +1,11 @@
 use bytes::Bytes;
 use cosmwasm_std::Event;
-use slay3r_app::encode_cosmwasm_response;
-use slay3r_std::api::{GasInfo, TxResponse, TxResult};
-use slay3r_std::response::{
+use layer_app::encode_cosmwasm_response;
+use layer_std::api::{GasInfo, TxResponse, TxResult};
+use layer_std::response::{
     AccountResponse, AuthQueryResponse, BankQueryResponse, QueryResponse, WasmQueryResponse,
 };
-use slay3r_std::{AccountId, AuthQuery, BankQuery, Query, QueryError, WasmQuery};
+use layer_std::{AccountId, AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 
 use cosmos_sdk_proto::cosmos::auth::v1beta1::{
     BaseAccount, QueryAccountRequest, QueryAccountResponse,
@@ -369,7 +369,7 @@ pub fn encode_tx_result(
     }
 }
 
-pub fn msg_data_to_proto(data: Vec<slay3r_std::MsgData>) -> Vec<u8> {
+pub fn msg_data_to_proto(data: Vec<layer_std::MsgData>) -> Vec<u8> {
     let data = data
         .into_iter()
         .map(|m| {

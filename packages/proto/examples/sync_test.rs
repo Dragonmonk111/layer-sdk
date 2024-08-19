@@ -1,7 +1,7 @@
 use tonic::transport::Channel;
 
-use slay3r_proto::layer::sync::v1::query_client::QueryClient as SyncClient;
-use slay3r_proto::layer::sync::v1::{
+use layer_proto::layer::sync::v1::query_client::QueryClient as SyncClient;
+use layer_proto::layer::sync::v1::{
     QueryLatestSequenceRequest, StreamChangesSinceRequest, StreamCurrentStateRequest,
 };
 

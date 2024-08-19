@@ -10,7 +10,7 @@ use std::{fmt, thread};
 use tokio::sync::mpsc::Receiver;
 
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{GasMeter, GasResult};
+use layer_std::{GasMeter, GasResult};
 
 use crate::traits::KV;
 use crate::{
@@ -438,7 +438,7 @@ impl<'a, T: DBAccess> Iterator for RockIterator<'a, T> {
 mod rock_tests {
     use super::*;
 
-    use slay3r_std::GasError;
+    use layer_std::GasError;
     use std::path::PathBuf;
 
     // prepares the path before calling the function

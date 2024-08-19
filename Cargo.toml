@@ -39,13 +39,13 @@ prost-types = { version = "0.12.1", default-features = false }
 tonic = "0.10.2"
 anyhow = { version = "1", default-features = false }
 
-slay3r-abci = { path = "./packages/abci" }
-slay3r-app = { path = "./packages/app" }
-slay3r-cosmos = { path = "./packages/cosmos" }
-slay3r-golem = { path = "./packages/golem" }
-slay3r-proto = { path = "./packages/proto" }
-slay3r-std = { path = "./packages/std" }
-slay3r-storage = { path = "./packages/storage" }
+layer-abci = { path = "./packages/abci" }
+layer-app = { path = "./packages/app" }
+layer-cosmos = { path = "./packages/cosmos" }
+layer-golem = { path = "./packages/golem" }
+layer-proto = { path = "./packages/proto" }
+layer-std = { path = "./packages/std" }
+layer-storage = { path = "./packages/storage" }
 
 tc-echo = { path = "./contracts/echo" }
 tc-caller = { path = "./contracts/caller" }

@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use cosmwasm_std::{Order, Record, StdResult};
 use std::ops::Deref;
 
-use slay3r_std::{GasMeter, GasResult};
+use layer_std::{GasMeter, GasResult};
 
 use super::error::PlusResult;
 use super::helpers::{namespaces_with_key, nested_namespaces_with_key};

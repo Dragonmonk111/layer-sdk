@@ -17,7 +17,7 @@ fi
 
 # compile all files in contracts directory
 $SUDO docker run --rm -v "$(pwd)":/code \
-  --mount type=volume,source="pulsar_contracts_cache",target=/code/target \
+  --mount type=volume,source="layer_contracts_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
   "cosmwasm/workspace-optimizer${ARCH}:0.12.13"
 

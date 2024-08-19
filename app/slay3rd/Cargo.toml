@@ -15,12 +15,12 @@ optimize = ["tracing/release_max_level_info"]
 no-trace = ["tracing/release_max_level_debug"]
 
 [dependencies]
-slay3r-abci = { workspace = true }
-slay3r-app = { workspace = true}
-slay3r-std = { workspace = true }
-slay3r-cosmos = { workspace = true }
-slay3r-proto = { workspace = true, features = ["server"] }
-slay3r-storage = { workspace = true, features = ["rocksdb"] }
+layer-abci = { workspace = true }
+layer-app = { workspace = true}
+layer-std = { workspace = true }
+layer-cosmos = { workspace = true }
+layer-proto = { workspace = true, features = ["server"] }
+layer-storage = { workspace = true, features = ["rocksdb"] }
 cosmwasm-std = { workspace = true }
 clap = { version = "4.2.4", features = ["derive"] }
 figment = { version = "0.10.8", features = ["env", "toml"] }

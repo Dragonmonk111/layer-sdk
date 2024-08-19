@@ -4,11 +4,11 @@ use std::pin::Pin;
 
 use futures::{Stream, StreamExt};
 
-use slay3r_proto::layer::sync::v1::{
+use layer_proto::layer::sync::v1::{
     state_change::Event, BlockWrites, DeleteData, StateChange, WriteData,
 };
-use slay3r_std::string_account_or_hex;
-use slay3r_storage::{PersistentStorage, StateUpdate};
+use layer_std::string_account_or_hex;
+use layer_storage::{PersistentStorage, StateUpdate};
 
 use crate::app::App;
 use crate::{app, auth, bank, wasm};

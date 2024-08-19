@@ -52,7 +52,7 @@ cat .ssh/id_rsa.pub
 
 **Give access to the github repo to this ssh key:**
 
-Go to https://github.com/ethanfrey/pulsarium/settings/keys
+Go to https://github.com/Lay3rLabs/layer-sdk/settings/keys
 
 "Add Deploy Key" with read-only access
 
@@ -60,8 +60,8 @@ Go to https://github.com/ethanfrey/pulsarium/settings/keys
 
 ```bash
 cd
-git clone git@github.com:ethanfrey/pulsarium.git
-cd pulsarium
+git clone git@github.com:Lay3rLabs/layer-sdk.git
+cd layer-sdk
 
 ./scripts/build_docker.sh
 docker images

@@ -3,7 +3,7 @@ use std::pin::Pin;
 use futures::Stream;
 
 use cosmwasm_std::{Order, Record};
-use slay3r_std::{stringify_or_hex, GasMeter, GasResult};
+use layer_std::{stringify_or_hex, GasMeter, GasResult};
 
 /// This is the lowest level of the storage, which can be implemented by MemoryStorage
 /// or a real on-disk database. It provides ReadAccessors like MeteredStorage,

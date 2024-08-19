@@ -16,13 +16,13 @@ use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
 };
-use slay3r_std::api::{
+use layer_std::api::{
     Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
     TxResponse, TxResult,
 };
-use slay3r_std::response::QueryResponse;
-use slay3r_std::{GasMeter, Query, Rfc3339, Tx};
-use slay3r_storage::{
+use layer_std::response::QueryResponse;
+use layer_std::{GasMeter, Query, Rfc3339, Tx};
+use layer_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
     Transaction,
 };
@@ -443,8 +443,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 
     #[cfg(test)]
-    pub fn copy_storage_to_memory(&self) -> slay3r_storage::MemoryStore {
-        slay3r_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
+    pub fn copy_storage_to_memory(&self) -> layer_storage::MemoryStore {
+        layer_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
     }
 }
 
@@ -456,15 +456,15 @@ mod tests {
     use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
     use hex_literal::hex;
 
-    use slay3r_std::api::{TmPubKey, ValidatorUpdate};
-    use slay3r_std::response::{
+    use layer_std::api::{TmPubKey, ValidatorUpdate};
+    use layer_std::response::{
         AccountResponse, AuthQueryResponse, BalanceResponse, BankQueryResponse,
     };
-    use slay3r_std::{
+    use layer_std::{
         must_id, AccountId, AuthQuery, BankMsg, BankQuery, FeeInfo, Msg, PubKey, SignedTx,
         SigningInfo,
     };
-    use slay3r_storage::MemoryStore;
+    use layer_storage::MemoryStore;
 
     use crate::genesis::{BankAccount, WasmParams};
     use crate::sm::AppConfig;
@@ -499,7 +499,7 @@ mod tests {
         std::fs::create_dir_all(path).unwrap();
 
         // create rocksdb store and run same tests
-        let storage = slay3r_storage::RockStore::open(path);
+        let storage = layer_storage::RockStore::open(path);
         transaction_workflow(storage);
     }
 
@@ -599,7 +599,7 @@ mod tests {
                     },
                 ..
             }) => {
-                assert_eq!(gas_wanted, slay3r_std::api::DEFAULT_BLOCK_GAS);
+                assert_eq!(gas_wanted, layer_std::api::DEFAULT_BLOCK_GAS);
                 gas_used
             }
             x => panic!("Expected SimulateResponse, got {:?}", x),

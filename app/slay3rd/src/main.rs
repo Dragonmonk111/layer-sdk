@@ -7,15 +7,15 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
-use slay3r_storage::PersistentStorage;
+use layer_storage::PersistentStorage;
 use tonic::transport::Server;
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::FmtSubscriber;
 
-use slay3r_abci::ServerConfig;
-use slay3r_app::AppConfig;
+use layer_abci::ServerConfig;
+use layer_app::AppConfig;
 
 mod app;
 mod cli;
@@ -42,8 +42,8 @@ fn get_home() -> PathBuf {
     }
 
     // check SLAY_HOME
-    if let Ok(pulse) = env::var("SLAY_HOME") {
-        return PathBuf::from(pulse);
+    if let Ok(home) = env::var("SLAY_HOME") {
+        return PathBuf::from(home);
     }
 
     // default to $HOME/.slay3r
@@ -116,13 +116,13 @@ async fn main() {
     match config.rocksdb {
         Some(path) => {
             info!("using rocks db at {}", path);
-            let storage = slay3r_storage::RockStore::open(&path);
+            let storage = layer_storage::RockStore::open(&path);
             let app = Pulsarium::new(storage, app_config);
             run_server(app, data, server_config).await
         }
         None => {
             info!("using in-memory database");
-            let storage = slay3r_storage::MemoryStore::new();
+            let storage = layer_storage::MemoryStore::new();
             let app = Pulsarium::new(storage, app_config);
             run_server(app, data, server_config).await
         }
