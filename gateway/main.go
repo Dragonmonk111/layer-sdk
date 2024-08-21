@@ -117,7 +117,8 @@ func run() error {
 
 	// TODO: config via env vars or such
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"https://*.spinner.zone", "http://localhost:*"},
+		// AllowedOrigins:   []string{"https://*.cav3.net", "https://*.dev-cav3.net", "http://localhost:*"},
+		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		// Enable Debugging for testing, consider disabling in production
 		Debug: true,
