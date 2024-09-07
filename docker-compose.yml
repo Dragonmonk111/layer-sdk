@@ -29,6 +29,7 @@ services:
       - jaeger
     environment:
       - RUST_BACKTRACE=1
+
   cometbft:
     image: "cometbft/cometbft:v0.38.7"
     expose:
@@ -42,6 +43,7 @@ services:
       - comet_data:/cometbft
     depends_on:
       - slay3r
+
   jaeger:
     image: jaegertracing/all-in-one:1.46
     expose:
@@ -50,6 +52,7 @@ services:
       - "14268"
     ports:
       - "8080:16686"
+
   gateway:
     image: "ghcr.io/lay3rlabs/gateway:latest"
     ports:
@@ -59,6 +62,7 @@ services:
     command: ["/app", "-grpc-server-endpoint", "slay3r:9090"]
     depends_on:
       - slay3r
+      
   faucet:
     image: "ghcr.io/lay3rlabs/faucet:latest"
     # Setup based on https://github.com/cosmos/cosmjs/tree/main/packages/faucet#working-with-docker
