@@ -5,13 +5,23 @@
 # cd integration && npm ci &&  npm run test
 # open http://localhost:8080
 
-# version: '3.8'
+# http://localhost:26657  - Tendermint RPC
+# http://localhost:9090   - gRPC
+# http://localhost:1317   - "LCD" / "REST"
+# http://localhost:8000   - Faucet
+
+# http://localhost:8080  - Jaeger UI
+# http://localhost:9200  - Elastic Search API
+# http://localhost:9200/_search  - Check for data
+
 
 volumes:
   lay3r_data:
     external: true
   comet_data:
     external: true
+  esdata:
+    driver: local
 
 services:
   slay3r:
@@ -44,6 +54,7 @@ services:
     depends_on:
       - slay3r
 
+  # Default all-memory Jaeger
   jaeger:
     image: jaegertracing/all-in-one:1.46
     expose:
@@ -62,7 +73,7 @@ services:
     command: ["/app", "-grpc-server-endpoint", "slay3r:9090"]
     depends_on:
       - slay3r
-      
+
   faucet:
     image: "ghcr.io/lay3rlabs/faucet:latest"
     # Setup based on https://github.com/cosmos/cosmjs/tree/main/packages/faucet#working-with-docker

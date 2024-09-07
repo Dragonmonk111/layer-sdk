@@ -1,5 +1,5 @@
-# docker compose -f docker-compose.yml -f jaeger-elastic-compose.yml up
-# docker compose -f docker-compose.yml -f jaeger-elastic-compose.yml down
+# docker compose -f docker-compose.yml -f jaeger-compose.yml up
+# docker compose -f docker-compose.yml -f jaeger-compose.yml down
 
 # http://localhost:8080  - Jaeger UI
 # http://localhost:9200  - Elastic Search API
