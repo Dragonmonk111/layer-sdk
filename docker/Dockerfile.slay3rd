@@ -22,6 +22,8 @@ COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
 COPY dummy.rs /myapp/packages/app/src/lib.rs
 COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
 COPY dummy.rs /myapp/packages/cosmos/src/lib.rs
+COPY packages/golem/Cargo.toml /myapp/packages/golem/Cargo.toml
+COPY dummy.rs /myapp/packages/golem/src/lib.rs
 COPY packages/proto/Cargo.toml /myapp/packages/proto/Cargo.toml
 COPY dummy.rs /myapp/packages/proto/src/lib.rs
 COPY dummy.rs /myapp/packages/proto/examples/sync_test.rs
@@ -33,7 +35,7 @@ RUN cargo build --release --bin slay3rd
 
 # clean up these fake local deps so we compile for real later
 RUN rm /myapp/*/*/src/*.rs
-RUN rm -rf target/release/.fingerprint/slay3r*
+RUN rm -rf target/release/.fingerprint/layer-*
 
 # This build step should just compile the local code and be faster
 COPY . .
@@ -43,7 +45,7 @@ RUN cargo build --release --bin slay3rd
 
 # Now, pack up that binary in a nice small image
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get upgrade
+RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4 wget
 COPY --from=builder /myapp/target/release/slay3rd /usr/local/bin/slay3rd
 # COPY --from=builder /myapp/Cargo.toml /usr/local/bin/slay3rd
