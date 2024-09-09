@@ -45,6 +45,9 @@ curl localhost:9200/_search
 sudo docker ps -a
 ```
 
+Note: if you want elastic search but have errors running the faucet locally, try `run_elastic.sh` which serves elastic search at port 9200,
+but doesn't start the faucet at all.
+
 ## Interacting with a Node
 
 There are a few ways you can interact with a localnode.
