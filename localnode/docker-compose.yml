@@ -90,3 +90,4 @@ services:
     depends_on:
       - cometbft
     restart: unless-stopped
+    profiles: [faucet]

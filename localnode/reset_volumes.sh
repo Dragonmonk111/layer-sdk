@@ -9,6 +9,10 @@ if groups | grep -q docker; then
   SUDO=""
 fi
 
+# reset the elastic search data
+ESDATA_VOL=localnode_esdata
+$SUDO docker volume rm -f "$ESDATA_VOL"
+
 ABCI_VOL=lay3r_data
 $SUDO docker volume rm -f "$ABCI_VOL"
 $SUDO docker volume create "$ABCI_VOL"
