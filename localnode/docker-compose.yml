@@ -20,8 +20,6 @@ volumes:
     external: true
   comet_data:
     external: true
-  esdata:
-    driver: local
 
 services:
   slay3r:
@@ -41,7 +39,7 @@ services:
       - RUST_BACKTRACE=1
 
   cometbft:
-    image: "cometbft/cometbft:v0.38.7"
+    image: "cometbft/cometbft:v0.38.12"
     expose:
       # for slay3r grpc callbacks
       - "26657"
@@ -56,7 +54,7 @@ services:
 
   # Default all-memory Jaeger
   jaeger:
-    image: jaegertracing/all-in-one:1.46
+    image: jaegertracing/all-in-one:1.59
     expose:
       - "6831/udp"
       - "6832/udp"
