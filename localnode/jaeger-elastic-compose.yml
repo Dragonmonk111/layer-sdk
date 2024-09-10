@@ -43,7 +43,7 @@ services:
       - "14267"
       - "14250"
       - "9411"
-    ports: !reset
+    ports: !reset []
     restart: on-failure
     environment:
       - SPAN_STORAGE_TYPE=elasticsearch

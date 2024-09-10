@@ -13,6 +13,48 @@ the following command. Without it, we maintain the blockchain state between rest
 ./localnode/reset_volumes.sh
 ```
 
+We also need to build the docker images for the chain (slay3rd and gateway) one
+time before running a localnode, and each time you want to update the codebase.
+
+```bash
+./scripts/build_docker.sh
+```
+
+### Debugging
+
+Sometimes (only on OSX?), it won't automatically pull the missing packages listed
+in the docker compose files and you must manually pull them before running the node, or potentially building the docker images. If you get an error like this:
+
+```
+ERROR: failed to solve: debian:bookworm-slim: failed to resolve source metadata for docker.io/library/debian:bookworm-slim: error getting credentials - err: exit status 1, out: ``
+```
+
+Do the following before building:
+
+```bash
+
+docker pull debian:bookworm-slim
+docker pull rust:1.80-bookworm
+docker pull golang:1.22-bookworm
+docker pull alpine:latest
+```
+
+And the following before running a node (`./localnode/run*.sh`)
+
+```bash
+# This may work?
+docker compose -f ./localnode/docker-compose.yml -f ./localnode/jaeger-elastic-compose.yml pull
+
+# If not, do this manually
+docker pull cometbft/cometbft:v0.38.12
+docker pull jaegertracing/all-in-one:1.59
+docker pull docker.elastic.co/elasticsearch/elasticsearch:8.15.1
+docker pull jaegertracing/jaeger-collector:1.59
+docker pull jaegertracing/jaeger-agent:1.59
+docker pull jaegertracing/jaeger-query:1.59
+```
+
+
 ### Minimal Run
 
 To run without a facuet and just in-memory tracing, run the following:
