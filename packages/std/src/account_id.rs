@@ -2,23 +2,14 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 use ::cosmwasm_schema::serde;
-// use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
 use alloy_primitives::{Address, AddressError};
 
 use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
-// pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("SLAY_BECH32");
-// pub const DEFAULT_BECH32_PREFIX: &str = "slay3r";
-
 /// Valid lengths of decoded addresses
-pub const VALID_ADDR_LENGTH: [usize; 1] = [20usize];
-// pub const VALID_ADDR_LENGTH: [usize; 2] = [20usize, 32usize];
-
-// fn bech32_prefix() -> &'static str {
-//     ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
-// }
+pub const VALID_ADDR_LENGTH: usize = 20;
 
 // Note: this is expanded cw_serde macro minus the Debug implementation, as we want to use Display there
 #[derive(::std::clone::Clone, ::std::cmp::PartialEq, ::cosmwasm_schema::schemars::JsonSchema)]
@@ -117,7 +108,7 @@ pub fn must_id(str: &str) -> AccountId {
 impl AccountId {
     /// This takes
     pub fn new(raw: &[u8]) -> Result<Self, AccountIdError> {
-        if !VALID_ADDR_LENGTH.contains(&raw.len()) {
+        if raw.len() != VALID_ADDR_LENGTH {
             Err(AccountIdError::InvalidLength(raw.len()))
         } else {
             Ok(AccountId(raw.to_vec()))
@@ -134,7 +125,7 @@ impl AccountId {
     pub fn unchecked(name: &str) -> Self {
         // pad to valid length
         let mut v = name.as_bytes().to_vec();
-        v.resize(VALID_ADDR_LENGTH[0], 0u8);
+        v.resize(VALID_ADDR_LENGTH, 0u8);
         AccountId(v)
     }
 

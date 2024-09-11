@@ -2556,7 +2556,6 @@ name = "layer-std"
 version = "0.4.0"
 dependencies = [
  "alloy-primitives",
- "bech32 0.9.1",
  "bytes",
  "chrono",
  "cosmwasm-crypto",

@@ -516,6 +516,7 @@ mod tests {
     // run finalize_block
     // query account + balances for update
     fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
+        // TODO: convert bech32 to 0x checksummed (make script)
         let sender = must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j");
         let recipient = must_id("slay3r1y5hl7x8hxl72dc9gu920eaz6l7vhl0luu6s70h");
         let denom: &str = "uslay";

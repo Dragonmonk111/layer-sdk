@@ -185,7 +185,9 @@ mod test {
         Coin,
     };
 
-    use layer_std::{AccountId, BankMsg, PubKey, DEFAULT_BECH32_PREFIX};
+    use layer_std::{AccountId, BankMsg, PubKey};
+
+    const DEFAULT_BECH32_PREFIX: &str = "slay3r";
 
     #[test]
     fn happy_path_tx_parsing() {
