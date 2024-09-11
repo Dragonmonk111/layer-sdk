@@ -23,6 +23,4 @@ bytes = { workspace = true }
 hex = { workspace = true }
 chrono = { version = "0.4.19", default-features = false, features = ["std"] }
 derivative = "2.2.0"
-
-# TODO: move this up to top level Cargo if it works out
-alloy-primitives = { version = "0.8.2", default-features = false }
+alloy-primitives = { workspace = true }

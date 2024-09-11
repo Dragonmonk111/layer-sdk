@@ -279,6 +279,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "address-converter"
+version = "0.4.0"
+dependencies = [
+ "alloy-primitives",
+ "bech32 0.11.0",
+]
+
+[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
