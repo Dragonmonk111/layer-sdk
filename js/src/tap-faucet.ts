@@ -14,15 +14,23 @@ faucet,
 localNet,
 } from "./testutils.spec";
 
+const DEFAULT_AMOUNT = "1000000";
 const addr = process.argv[2];
+
 if(!addr || addr === "") {
     console.error('Please provide address');
     process.exit(1);
 }
-const amount = Math.round(Number(process.argv[3]));
 
-if(!amount || amount <= 0 || isNaN(amount)) {
-    console.error('Please provide a valid amount as second argument');
+let amountStr = process.argv[3];
+if(!amountStr || amountStr === "") {
+    console.log(`no amount provided, defaulting to ${DEFAULT_AMOUNT}`);
+    amountStr = DEFAULT_AMOUNT;
+}
+const amount = Math.round(Number(amountStr));
+
+if(amount <= 0 || isNaN(amount)) {
+    console.error(`Please provide a valid amount as second argument (or leave it off for default of ${DEFAULT_AMOUNT})`);
     process.exit(1);
 }
 
