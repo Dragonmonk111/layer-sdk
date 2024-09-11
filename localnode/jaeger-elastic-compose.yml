@@ -43,6 +43,7 @@ services:
       - "14267"
       - "14250"
       - "9411"
+      - "4317"
     ports: !reset []
     restart: on-failure
     environment:
