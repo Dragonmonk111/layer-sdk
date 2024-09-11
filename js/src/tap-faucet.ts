@@ -52,7 +52,7 @@ if(!amount || amount <= 0 || isNaN(amount)) {
 })();
 
 async function mnemonicToAddr(mnemonic: string): Promise<string> {
-    return DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {prefix: PREFIX})
-        .then(wallet => wallet.getAccounts())
-        .then((accounts) => accounts[0].address);
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {prefix: PREFIX});
+    const accounts = await wallet.getAccounts();
+    return accounts[0].address;
 }
