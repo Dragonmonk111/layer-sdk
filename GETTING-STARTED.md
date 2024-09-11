@@ -92,8 +92,10 @@ RUST_LOG = "info"
 	3. **Where does this operator addr come from??**
 5. View the latest-and-greatest deploy: `cargo run --bin avs -- --local view`
 
+You'll see output like this:
+
 ```
-Task Code ID: 19
+Task Code ID: {SOME CODE ID}
 Task Contract Address: {SOME ADDR}
 Verifier Contract Address: {SOME ADDR}
 ```
