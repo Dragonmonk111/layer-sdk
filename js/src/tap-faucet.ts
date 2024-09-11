@@ -3,7 +3,7 @@ import {
     assertIsDeliverTxSuccess,
     SigningStargateClient,
   } from "@cosmjs/stargate";
-import { Tendermint37Client } from "@cosmjs/tendermint-rpc";
+import { Comet38Client } from "@cosmjs/tendermint-rpc";
 import { MsgSend } from "cosmjs-types/cosmos/bank/v1beta1/tx";
 import {
 defaultSendFee,
@@ -33,7 +33,7 @@ if(!amount || amount <= 0 || isNaN(amount)) {
     const faucetWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, {prefix: PREFIX});
     const faucetAddr = (await faucetWallet.getAccounts())[0].address;
 
-    const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+    const tendermintClient = await Comet38Client.connect(localNet.tendermintUrl);
     const client = await SigningStargateClient.createWithSigner(
       tendermintClient,
       faucetWallet,
