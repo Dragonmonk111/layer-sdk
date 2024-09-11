@@ -27,6 +27,8 @@ Clone the repo: https://github.com/Lay3rLabs/layer-sdk
 
 The SDK contains the blockchain software and a few additional tools for interacting with it. First, let's get the node up and running:
 
+[_more localnode documentation here_](localnode/README.md)
+
 1. Build the Docker image: `scripts/build_docker.sh`
 2. Reset the Volumes: `localnode/reset_volumes.sh`
 3. Start the node: `localnode/run.sh` 
