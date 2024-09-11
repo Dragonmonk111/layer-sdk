@@ -10,7 +10,8 @@
     "format-text": "prettier --write \"./*.md\"",
     "build": "rm -rf ./build && tsc",
     "ts-test": "ts-node node_modules/jasmine/bin/jasmine",
-    "test": "npm run build && node jasmine-testrunner.js"
+    "test": "npm run build && node jasmine-testrunner.js",
+    "tap-faucet": "ts-node src/tap-faucet.ts"
   },
   "author": "",
   "license": "CC-BY-NC-ND-4.0",
