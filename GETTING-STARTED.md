@@ -112,12 +112,15 @@ This name is going to come up a lot, so for now on, we'll just use the industry 
 
 Our AVS's are executed on Spin, a WASM-based runtime that can run locally and/or on a cloud platform (with a generous free tier). This isn't a hard requirement, we may move to a different host in the future. But for now, it's a prerequisite, so let's get Spin setup:
 
+
 1. Get Spin installed: https://developer.fermyon.com/spin/v2/quickstart
 2. Install the Task Queue Spin plugin
 	1. `cd runners/task-queue`
 	2. `spin plugin install pluginify
 	3. `RUSTFLAGS='-C link-arg=-s' cargo build --releaseA
 	4. `spin pluginify --install`	
+
+[_more details in the plugin documentation_](https://github.com/Lay3rLabs/lay3r-avs-runners/blob/main/runners/task-queue/README.md)
 
 Now that we have spin setup, we can get an example AVS up and running. Let's try out the "demo square" app:
 
