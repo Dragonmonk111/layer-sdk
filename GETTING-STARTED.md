@@ -60,13 +60,13 @@ We're going to need a wallet with some funds. We can go ahead and use the provid
 economy stock theory fatal elder harbor betray wasp final emotion task crumble siren bottom lizard educate guess current outdoor pair theory focus wife stone
 ```
 
-However, it's probably better to use our own wallet. How do we add our wallet, when we don't even know the address? (or send more funds to it when we do). It's easy, just use the `tap-faucet` JS tool.
+However, it's probably better to use our own wallet. We provide a few tools to make this easy:
 
 1. cd to `layer-sdk/js` (same place we ran JS tests above)
-2. `npm run tap-faucet -- "{ADDR OR SEED PHRASE}" {amount}`
-	1. So for example, `npm run tap-faucet -- "hello world ..." 500`
-
-This will send the funds and also let you know the recipient address
+2. Generate a new mnemonic and address: `npm run generate-mnemonic`
+    1. Alternatively, get the address for an existing mnemonic: `npm run show-mnemonic -- "{MNEMONIC HERE}"` 
+3. Tap the faucet `npm run tap-faucet -- {ADDRESS} {amount}`
+    1. The amount is optional, if not set then a default of 1000000uslay will be sent
 
 ## Contracts
 
