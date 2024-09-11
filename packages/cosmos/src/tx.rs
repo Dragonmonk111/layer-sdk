@@ -189,6 +189,8 @@ mod test {
 
     const DEFAULT_BECH32_PREFIX: &str = "slay3r";
 
+    // TODO: this is broken as cosmrs seems to require bech32 - we can otherwise encode the id, but the MsgSend creation below
+    // requires the bech32 objects from cosmrs. Anyway around this? Or alternatives to cosmrs?
     #[test]
     fn happy_path_tx_parsing() {
         let sender_private_key = secp256k1::SigningKey::random();
