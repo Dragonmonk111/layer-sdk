@@ -5,7 +5,7 @@ Let's say Alice the User wants to mint a NFT with an image generated from an off
 Lay3r to the rescue! The process looks like this:
 
 1. Alice submits a task to a special contract with the required work information (image size, AI prompt, etc.). 
-2. Bob's is scanning the chain, looking for on-chain events that encapsulate the work order.
+2. Bob is scanning the chain, looking for on-chain events that encapsulate the work order.
 3. Bob goes off and does the work with his beefy machine (or crayons, no limits!), ultimately writing some metadata such as the IPFS hash back onto the chain. 
 4. Alice notices that the on-chain status has changed to completed work, and she can now go download her image at that IPFS hash.
 
