@@ -76,8 +76,6 @@ async fn main() {
 
     // add open telemetry
     if let Some(endpoint) = config.jaeger.as_ref() {
-        // "http://localhost:4317"
-
         let otlp_exporter = opentelemetry_otlp::new_exporter()
             .tonic()
             .with_endpoint(endpoint)
@@ -93,9 +91,7 @@ async fn main() {
             .with_trace_config(trace_cfg)
             .install_batch(opentelemetry_sdk::runtime::Tokio)
             // .install_simple()
-            // .install_batch(opentelemetry::runtime::Tokio)
             .unwrap();
-        // global::set_tracer_provider(provider);
         let tracer = provider.tracer("layer-sdk");
 
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
