@@ -61,7 +61,7 @@ impl From<AddressError> for AccountIdError {
 impl Display for AccountId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let addr = Address(self.0.as_slice().try_into().unwrap());
-        write!(f, "{:?}", addr)
+        write!(f, "{}", addr)
     }
 }
 
@@ -80,28 +80,13 @@ impl serde::Serialize for AccountId {
     }
 }
 
-// Helper to parse both formats - we need this for backwards state compatibility chains <= 0.3.2
-// TODO: This can be removed in the future with a new devnet
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged, crate = "::cosmwasm_schema::serde")]
-enum StringOrBytes {
-    String(String),
-    Vec(Vec<u8>),
-}
-
 impl<'de> serde::Deserialize<'de> for AccountId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        match StringOrBytes::deserialize(deserializer)? {
-            StringOrBytes::String(s) => {
-                AccountId::parse_string(&s).map_err(|e| serde::de::Error::custom(e.to_string()))
-            }
-            StringOrBytes::Vec(raw) => {
-                AccountId::new(&raw).map_err(|e| serde::de::Error::custom(e.to_string()))
-            }
-        }
+        let s = String::deserialize(deserializer)?;
+        AccountId::parse_string(&s).map_err(|e| serde::de::Error::custom(e.to_string()))
     }
 }
 
@@ -224,13 +209,6 @@ mod tests {
         let as_string = to_json_binary(&id.to_string()).unwrap();
         assert!(as_string.starts_with(br#""0x"#));
 
-        let as_raw = to_json_binary(&raw).unwrap();
-        assert!(as_raw.starts_with(b"[42,42,"));
-
-        // ensure we can decode back to the same value from raw
-        let parsed: AccountId = from_json(&as_raw).unwrap();
-        assert_eq!(parsed, id);
-
         // ensure we can decode back to the same value from string
         let parsed: AccountId = from_json(&as_string).unwrap();
         assert_eq!(parsed, id);
@@ -238,5 +216,10 @@ mod tests {
         // ensure we encode as string
         let encoded = to_json_binary(&id).unwrap();
         assert_eq!(encoded, as_string);
+
+        // we no longer accept raw
+        let as_raw = to_json_binary(&raw).unwrap();
+        assert!(as_raw.starts_with(b"[42,42,"));
+        let _ = from_json::<AccountId>(&as_raw).unwrap_err();
     }
 }
