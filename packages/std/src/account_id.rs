@@ -2,20 +2,23 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 use ::cosmwasm_schema::serde;
-use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
+// use bech32::{self, Error as Bech32Error, FromBase32, ToBase32, Variant};
+use alloy_primitives::{Address, AddressError};
+
 use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
-pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("SLAY_BECH32");
-pub const DEFAULT_BECH32_PREFIX: &str = "slay3r";
+// pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("SLAY_BECH32");
+// pub const DEFAULT_BECH32_PREFIX: &str = "slay3r";
 
 /// Valid lengths of decoded addresses
-pub const VALID_ADDR_LENGTH: [usize; 2] = [20usize, 32usize];
+pub const VALID_ADDR_LENGTH: [usize; 1] = [20usize];
+// pub const VALID_ADDR_LENGTH: [usize; 2] = [20usize, 32usize];
 
-fn bech32_prefix() -> &'static str {
-    ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
-}
+// fn bech32_prefix() -> &'static str {
+//     ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
+// }
 
 // Note: this is expanded cw_serde macro minus the Debug implementation, as we want to use Display there
 #[derive(::std::clone::Clone, ::std::cmp::PartialEq, ::cosmwasm_schema::schemars::JsonSchema)]
@@ -36,8 +39,8 @@ impl Deref for AccountId {
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum AccountIdError {
     /// FIXME: normalize this, so we don't have possibly non-deterministic errors from different crate versions
-    #[error("Bech32: {0}")]
-    Bech32(String),
+    #[error("Address: {0}")]
+    Address(String),
 
     #[error("Invalid variant: bech32m")]
     InvalidVariant,
@@ -49,15 +52,16 @@ pub enum AccountIdError {
     InvalidLength(usize),
 }
 
-impl From<Bech32Error> for AccountIdError {
-    fn from(value: Bech32Error) -> Self {
-        AccountIdError::Bech32(value.to_string())
+impl From<AddressError> for AccountIdError {
+    fn from(value: AddressError) -> Self {
+        AccountIdError::Address(value.to_string())
     }
 }
 
 impl Display for AccountId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        bech32::encode_to_fmt(f, bech32_prefix(), self.0.to_base32(), Variant::Bech32).unwrap()
+        let addr = Address(self.0.as_slice().try_into().unwrap());
+        write!(f, "{:?}", addr)
     }
 }
 
@@ -135,23 +139,10 @@ impl AccountId {
         }
     }
 
+    // This requires checksumed....
     pub fn parse_string(encoded: &str) -> Result<Self, AccountIdError> {
-        let (hrp, data, variant) = bech32::decode(encoded)?;
-        // no bech32m
-        if variant != Variant::Bech32 {
-            return Err(AccountIdError::InvalidVariant);
-        }
-        // make sure the proper chain prefix
-        let prefix = bech32_prefix();
-        if hrp != prefix {
-            return Err(AccountIdError::InvalidPrefix(hrp, prefix));
-        }
-        let addr = Vec::<u8>::from_base32(&data).unwrap();
-        // we only support 20 and 32 bytes for the binary version, enforce this for sanity check
-        if !VALID_ADDR_LENGTH.contains(&addr.len()) {
-            return Err(AccountIdError::InvalidLength(addr.len()));
-        }
-        Ok(AccountId(addr))
+        let addr = Address::parse_checksummed(encoded, None)?;
+        Ok(AccountId(addr.0.to_vec()))
     }
 
     // only for use in test
@@ -212,24 +203,17 @@ mod tests {
 
     #[test]
     fn test_creation() {
-        // properly parses and encoded proper size
+        // we can encode and decode valid addresses
         let id = AccountId::new(&[42u8; 20]).unwrap();
-        assert!(id.to_string().starts_with("slay3r1"));
+        assert!(id.to_string().starts_with("0x"));
         let reparse = AccountId::parse_string(&id.to_string()).unwrap();
         assert_eq!(id, reparse);
 
-        // we can encode and decode valid addresses
-        let id = AccountId::new(&[69u8; 32]).unwrap();
-        assert!(id.to_string().starts_with("slay3r1"));
-        let reparse = AccountId::parse_string(&id.to_string()).unwrap();
-        assert_eq!(id, reparse);
+        // enforces valid size (we reject 32 bytes)
+        let _ = AccountId::new(&[69u8; 32]).unwrap_err();
 
         // incorrect raw input fails
         let _ = AccountId::new(&[69u8; 15]).unwrap_err();
-
-        // incorrect bedh32 input fails
-        let bad_addr = id.to_string().replace("q", "k");
-        let _ = AccountId::parse_string(&bad_addr).unwrap_err();
     }
 
     #[test]
@@ -238,7 +222,7 @@ mod tests {
         let id = AccountId::new(&raw).unwrap();
 
         let as_string = to_json_binary(&id.to_string()).unwrap();
-        assert!(as_string.starts_with(br#""slay3r1"#));
+        assert!(as_string.starts_with(br#""0x"#));
 
         let as_raw = to_json_binary(&raw).unwrap();
         assert!(as_raw.starts_with(b"[42,42,"));
