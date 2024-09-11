@@ -6,7 +6,7 @@ import {
   MsgSendEncodeObject,
   SigningStargateClient,
 } from "@cosmjs/stargate";
-import { Tendermint37Client } from "@cosmjs/tendermint-rpc";
+import { Comet38Client } from "@cosmjs/tendermint-rpc";
 import { MsgSend } from "cosmjs-types/cosmos/bank/v1beta1/tx";
 
 import {
@@ -24,9 +24,9 @@ describe("SigningStargateClient", () => {
   describe("simulate", () => {
     it("works", async () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+      const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
-        tendermintClient,
+        cometClient,
         wallet,
         defaultSigningClientOptions
       );
@@ -55,9 +55,9 @@ describe("SigningStargateClient", () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const addr = (await wallet.getAccounts())[0];
       expect(addr.address).toEqual(faucet.address0);
-      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+      const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
-        tendermintClient,
+        cometClient,
         wallet,
         defaultSigningClientOptions
       );
@@ -85,9 +85,9 @@ describe("SigningStargateClient", () => {
 
     it("works with legacy Amino signer", async () => {
       const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+      const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
       const client = await SigningStargateClient.createWithSigner(
-        tendermintClient,
+        cometClient,
         wallet,
         defaultSigningClientOptions
       );
@@ -116,8 +116,8 @@ describe("SigningStargateClient", () => {
 
   it("returns DeliverTxFailure on DeliverTx failure", async () => {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-    const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
-    const client = await SigningStargateClient.createWithSigner(tendermintClient, wallet, defaultSigningClientOptions);
+    const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
+    const client = await SigningStargateClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
     const msg = MsgSend.fromPartial({
       fromAddress: faucet.address0,
@@ -142,8 +142,8 @@ describe("SigningStargateClient", () => {
 
   it("works with auto gas", async () => {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-    const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
-    const client = await SigningStargateClient.createWithSigner(tendermintClient, wallet, {
+    const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
+    const client = await SigningStargateClient.createWithSigner(cometClient, wallet, {
       ...defaultSigningClientOptions,
       gasPrice: defaultGasPrice,
     });

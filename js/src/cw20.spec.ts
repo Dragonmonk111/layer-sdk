@@ -2,7 +2,7 @@ import { Secp256k1HdWallet } from "@cosmjs/amino";
 import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { calculateFee } from "@cosmjs/stargate";
-import { Tendermint37Client } from "@cosmjs/tendermint-rpc";
+import { Comet38Client } from "@cosmjs/tendermint-rpc";
 import fs from "fs";
 
 import {
@@ -19,9 +19,9 @@ describe("Upload Todo List", () => {
     it("uploads", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+      const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
-        tendermintClient,
+        cometClient,
         wallet,
         defaultSigningClientOptions
       );
@@ -44,9 +44,9 @@ describe("Cw20 Test Cases", () => {
     it("works with direct signer", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+      const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
-        tendermintClient,
+        cometClient,
         wallet,
         defaultSigningClientOptions
       );
@@ -109,9 +109,9 @@ describe("Cw20 Test Cases", () => {
     it("works with gas price simulation", async () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
-      const tendermintClient = await Tendermint37Client.connect(localNet.tendermintUrl);
+      const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
       const client = await SigningCosmWasmClient.createWithSigner(
-        tendermintClient,
+        cometClient,
         wallet,
         defaultSigningClientOptions
       );
@@ -171,7 +171,7 @@ describe("Cw20 Test Cases", () => {
       const signer = faucet.address0;
       const directWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const directClient = await SigningCosmWasmClient.createWithSigner(
-        await Tendermint37Client.connect(localNet.tendermintUrl),
+        await Comet38Client.connect(localNet.tendermintUrl),
         directWallet,
         defaultSigningClientOptions
       );
@@ -179,7 +179,7 @@ describe("Cw20 Test Cases", () => {
       // ensure this works for instantiate and execute
       const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const client = await SigningCosmWasmClient.createWithSigner(
-        await Tendermint37Client.connect(localNet.tendermintUrl),
+        await Comet38Client.connect(localNet.tendermintUrl),
         wallet,
         defaultSigningClientOptions
       );
