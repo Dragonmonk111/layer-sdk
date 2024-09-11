@@ -11,7 +11,9 @@
     "build": "rm -rf ./build && tsc",
     "ts-test": "ts-node node_modules/jasmine/bin/jasmine",
     "test": "npm run build && node jasmine-testrunner.js",
-    "tap-faucet": "ts-node src/tap-faucet.ts"
+    "tap-faucet": "ts-node src/tap-faucet.ts",
+    "generate-mnemonic": "ts-node src/generate-mnemonic.ts",
+    "show-mnemonic": "ts-node src/show-mnemonic.ts"
   },
   "author": "",
   "license": "CC-BY-NC-ND-4.0",

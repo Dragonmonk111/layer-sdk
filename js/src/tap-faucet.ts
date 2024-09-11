@@ -14,9 +14,9 @@ faucet,
 localNet,
 } from "./testutils.spec";
 
-const addrOrMnemonic = process.argv[2];
-if(!addrOrMnemonic || addrOrMnemonic === "") {
-    console.error('Please provide address or seed phrase as argument');
+const addr = process.argv[2];
+if(!addr || addr === "") {
+    console.error('Please provide address');
     process.exit(1);
 }
 const amount = Math.round(Number(process.argv[3]));
@@ -27,9 +27,6 @@ if(!amount || amount <= 0 || isNaN(amount)) {
 }
 
 (async () => {
-
-
-    const addr = (addrOrMnemonic.includes(" ") ? await mnemonicToAddr(addrOrMnemonic) : addrOrMnemonic);
     const faucetWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, {prefix: PREFIX});
     const faucetAddr = (await faucetWallet.getAccounts())[0].address;
 
@@ -50,9 +47,3 @@ if(!amount || amount <= 0 || isNaN(amount)) {
     console.log(`Sent ${coin} from ${faucetAddr} to ${addr}`);
     console.log(`current balance: ${balanceAfter.amount}${DENOM}`);
 })();
-
-async function mnemonicToAddr(mnemonic: string): Promise<string> {
-    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {prefix: PREFIX});
-    const accounts = await wallet.getAccounts();
-    return accounts[0].address;
-}
