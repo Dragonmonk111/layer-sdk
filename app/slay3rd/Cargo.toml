@@ -49,6 +49,7 @@ futures = { workspace = true }
 bytes = {workspace = true}
 prost = { workspace = true }
 tonic = { workspace = true }
+tonic-reflection = { workspace = true }
 serde_json = { workspace = true }
 tower = { version = "0.4.13", default-features = false }
 hex = { version = "0.4.3", default-features = false }
