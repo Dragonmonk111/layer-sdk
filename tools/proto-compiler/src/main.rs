@@ -1,8 +1,10 @@
 // OUT_DIR=../../packages/proto/src/protos cargo run
 
+use std::path::PathBuf;
+
 fn main() {
     let includes = "../../proto";
-    let out_dir = "../../packages/proto/src/protos";
+    let out_dir = PathBuf::from("../../packages/proto/src/protos");
 
     let ext = std::ffi::OsStr::new("proto");
     let protos: Vec<_> = walkdir::WalkDir::new(includes)
@@ -17,6 +19,7 @@ fn main() {
     // prost_build::compile_protos(&protos, &[includes]).unwrap();
 
     tonic_build::configure()
+        .file_descriptor_set_path(out_dir.join("service_descriptor.bin")) 
         .build_client(true)
         .compile_well_known_types(true)
         .client_mod_attribute(".", r#"#[cfg(feature = "client")]"#)

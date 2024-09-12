@@ -140,8 +140,15 @@ async fn run_server<T: PersistentStorage + 'static + Send + Sync>(
         .unwrap();
 
     let query = server.query_dispatcher();
+
+    let grpc_reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(include_bytes!("../../../packages/proto/src/protos/service_descriptor.bin"))
+        .build_v1()
+        .unwrap();
+
     let grpc_server = Server::builder()
         .layer(grpc::LogLayer::new("grpc"))
+        .add_service(grpc_reflection)
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
         .add_service(grpc::sync_service(app))
