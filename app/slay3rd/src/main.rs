@@ -142,7 +142,9 @@ async fn run_server<T: PersistentStorage + 'static + Send + Sync>(
     let query = server.query_dispatcher();
 
     let grpc_reflection = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(include_bytes!("../../../packages/proto/src/protos/service_descriptor.bin"))
+        .register_encoded_file_descriptor_set(include_bytes!(
+            "../../../packages/proto/src/protos/service_descriptor.bin"
+        ))
         .build_v1()
         .unwrap();
 
