@@ -88,9 +88,7 @@ RUST_LOG = "info"
 
 
 4. Deploy the contracts: `cargo run --bin avs -- --local deploy {OPERATOR_ADDR}`
-	1. For now, the operator addr is hardcoded at `slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu`
-    2.  **NOTE: USING NON-FAUCET-ADDR FAILS??**
-	3. **Where does this operator addr come from??**
+	1. For testing purposes, the operator here can by any valid address 
 5. View the latest-and-greatest deploy: `cargo run --bin avs -- --local view`
 
 You'll see output like this:
@@ -139,8 +137,6 @@ TEST_MNEMONIC = "YOUR-TESTNET-MNEMONIC"
 LOCAL_MNEMONIC = "YOUR-LOCAL-DOCKER-MNEMONIC"```
 ```
 5. `spin up --test`
-
-**ISN'T WORKING WITH CUSTOM MNEMONIC??**
 
 If all went well you'll see a result like:
 
