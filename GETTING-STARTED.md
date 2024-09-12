@@ -34,8 +34,7 @@ The SDK contains the blockchain software and a few additional tools for interact
 3. Start the node: `localnode/run.sh` 
 4. Health checks
 	1. Check RPC status: `curl http://localhost:26657/status | jq`
-	2. Check gRPC status: FIXME
-		1. `grpcurl -plaintext localhost:9090 layer.sync.v1.QueryLatestSequenceRequest`
+	2. Check gRPC status: `grpcurl -plaintext localhost:9090 list`
 	3. Run JS tests
 		1. cd `js`
 		2. `npm install`
