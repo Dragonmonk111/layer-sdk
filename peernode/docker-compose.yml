@@ -35,8 +35,8 @@ services:
   cometbft:
     image: "cometbft/cometbft:v0.38.12"
     ports:
-      - "36656:26656"
-      - "36657:26657"
+      - "36656:36656"
+      - "36657:36657"
     command: ["start", "--proxy_app", "tcp://slay3r:36658"]
     volumes:
       - peer_comet_data:/cometbft

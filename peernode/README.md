@@ -55,7 +55,10 @@ There are a few ways you can interact with a peernode.
 ### Javascript Tests
 
 The [`js`](../js/) directory contains some integration tests for peernode, writing in CosmJS.
-Make sure to enable the faucet to run them all, which means `run_all.sh` above. Then:
+However, they are targeting the localnode. First, we need to edit [`testutils.spec.ts`](../js/src/testutils.spec.ts)
+and replace all the `:26657` in `localNet` with `:36657`.
+
+Now, you can execute them against the local node
 
 ```bash
 npm ci
