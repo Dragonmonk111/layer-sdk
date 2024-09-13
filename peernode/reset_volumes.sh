@@ -39,7 +39,7 @@ $SUDO docker volume create "$COMET_VOL"
 $SUDO docker run --rm -d -v "$COMET_VOL:/cometbft" "$COMET" init
 
 # download the genesis here (requires curl and jq locally...)
-curl -s "$RPC/genesis" | jq .result.genesis > genesis.json 
+curl -s "$RPC/genesis" | jq .result.genesis > "$SCRIPT_DIR/genesis.json" 
 PEER=$(curl -s "$RPC/status" | jq -r .result.node_info.id)
 cat genesis.json
 
