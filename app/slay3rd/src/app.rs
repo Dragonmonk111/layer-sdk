@@ -195,7 +195,8 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
     }
 
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
-        let _span = info_span!("abci_finalize_block", height = request.height, hash = %HexEncode::new(&request.hash)).entered();
+        // Abel: here we add the height and the block hash
+        let _span = info_span!("abci_finalize_block", height = request.height, block_hash = %HexEncode::new(&request.hash)).entered();
         info!("Finalize Block");
         let mut app = self.app.write();
         let chain_id = app.chain_id();

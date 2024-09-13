@@ -16,11 +16,14 @@ use crate::{
     auth::TxData,
     error::{PulsarError, PulsarResult},
 };
-use layer_std::api::{
-    Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
-    TxResponse, TxResult,
-};
 use layer_std::response::QueryResponse;
+use layer_std::{
+    api::{
+        Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
+        TxResponse, TxResult,
+    },
+    HexEncode,
+};
 use layer_std::{GasMeter, Query, Rfc3339, Tx};
 use layer_storage::{
     atomic, prefixed, prefixed_read, Item, PersistentStorage, ReadonlyStorage, ScratchTx, Storage,
@@ -284,7 +287,10 @@ impl<T: PersistentStorage + 'static> App<T> {
         block: &BlockInfo,
         tx: Tx,
     ) -> TxResult<PulsarError> {
-        let _span = debug_span!("execute_tx", ?tx, height = block.height).entered();
+        // Abel: here is where we record execute_tx. Note that BlockInfo doesn't have block hash, but does have height.
+        // I just added the tx_hash here
+        let tx_hash = tx.tx_hash();
+        let _span = debug_span!("execute_tx", ?tx, tx_hash = %HexEncode::new(&tx_hash), height = block.height).entered();
         // validate the transaction. if this passes, we commit the auth info (sequence / fee)
         // even if messages fail and are reverted
         let val_meter = GasMeter::new(MAX_VALIDATE_GAS);
