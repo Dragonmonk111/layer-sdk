@@ -187,6 +187,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
             self.mempool.write().push(tx);
         }
         let out = check_response_to_proto(res);
+        println!("{:?}", out);
         span.record("gas_wanted", out.gas_wanted);
         span.record("gas_used", out.gas_used);
         span.record("code", out.code);

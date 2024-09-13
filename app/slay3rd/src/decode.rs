@@ -82,7 +82,7 @@ pub fn check_response_to_proto(
         gas_wanted,
         gas_used,
         events,
-        codespace: "".to_string(),
+        codespace: "sdk".to_string(),
     }
 }
 
