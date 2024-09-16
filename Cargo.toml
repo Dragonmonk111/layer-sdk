@@ -64,7 +64,7 @@ tokio-stream = { version = "0.1.15", default-features = false }
 futures = { version = "0.3.30", default-features = false }
 
 cosmrs = { version = "0.13.0", default-features = false, features = ["cosmwasm"] }
-cosmos-sdk-proto = { version = "0.18.0", default-features = false }
+cosmos-sdk-proto = { version = "0.18.0", default-features = false, features = ["cosmwasm"] }
 cw-orch-core = { version = "1"}
 abstract-cw-multi-test = { version = "1", default-features = false }
 

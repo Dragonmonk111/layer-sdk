@@ -34,6 +34,12 @@ use crate::wasm::utils::build_instantiate_2_address;
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
 
+pub const ROOT_ADDR: [u8; 20] = hex_literal::hex!("0da01da02da03da04da05da06da07da08da09da0");
+
+pub fn root_account() -> AccountId {
+    AccountId::new(&ROOT_ADDR).unwrap()
+}
+
 // Numbers taken from wasmd, we should benchmark better
 pub(crate) const LOAD_WASM_GAS: u64 = 60_000;
 pub(crate) const LOAD_PINNED_WASM_GAS: u64 = 2_000;
