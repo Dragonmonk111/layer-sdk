@@ -184,3 +184,50 @@ Request body:
   }
 }
 ```
+
+# Match traces by combining top-level fields and tags
+
+This example query would return spans with `operationName = execute_tx` and `height = 176`. 
+
+Request URL: `http://localhost:9200/jaeger-span-2024-09-12/_search`
+
+Request body:
+
+```json
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "operationName": {
+              "query": "execute_tx"
+            }
+          }
+        },
+        {
+          "nested": {
+            "path": "tags",
+            "query": {
+              "bool": {
+                "must": [
+                  {
+                    "match": {
+                      "tags.key": "height"
+                    }
+                  },
+                  {
+                    "match": {
+                      "tags.value": "176"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
