@@ -1,9 +1,7 @@
 import { Secp256k1HdWallet } from "@cosmjs/amino";
 import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
-import { setupWasmExtension } from "@cosmjs/cosmwasm-stargate";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { calculateFee } from "@cosmjs/stargate";
-import { QueryClient, setupAuthExtension, setupBankExtension } from "@cosmjs/stargate";
 import { Comet38Client } from "@cosmjs/tendermint-rpc";
 import fs from "fs";
 
@@ -12,8 +10,8 @@ import {
   defaultSigningClientOptions,
   defaultWalletOptions,
   faucet,
-  makeRandomAddress,
   localNet,
+  makeRandomAddress,
 } from "./testutils.spec";
 
 describe("Upload Todo List", () => {
@@ -22,11 +20,7 @@ describe("Upload Todo List", () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
-      const client = await SigningCosmWasmClient.createWithSigner(
-        cometClient,
-        wallet,
-        defaultSigningClientOptions
-      );
+      const client = await SigningCosmWasmClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
       // store code
       const wasmBuf = fs.readFileSync(__dirname + "/../testdata/todo_list.wasm");
@@ -47,11 +41,7 @@ describe("Cw20 Test Cases", () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
-      const client = await SigningCosmWasmClient.createWithSigner(
-        cometClient,
-        wallet,
-        defaultSigningClientOptions
-      );
+      const client = await SigningCosmWasmClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
       // store code
       const wasmBuf = fs.readFileSync(__dirname + "/../../packages/app/fixtures/cw20_base.wasm");
@@ -112,11 +102,7 @@ describe("Cw20 Test Cases", () => {
       const signer = faucet.address0;
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
-      const client = await SigningCosmWasmClient.createWithSigner(
-        cometClient,
-        wallet,
-        defaultSigningClientOptions
-      );
+      const client = await SigningCosmWasmClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
       // store code
       const wasmBuf = fs.readFileSync(__dirname + "/../../packages/app/fixtures/cw20_base.wasm");
@@ -239,7 +225,7 @@ describe("Cw20 Test Cases", () => {
 });
 
 describe("Contract Migrate", () => {
-  it("migrate new contract code", async () => {
+  fit("migrate new contract code", async () => {
     const signer = faucet.address0;
     const directWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
     const directClient = await SigningCosmWasmClient.createWithSigner(
@@ -260,8 +246,9 @@ describe("Contract Migrate", () => {
     // store another code
     const uploadReceipt2 = await directClient.upload(signer, wasm, "auto");
     expect(uploadReceipt2).toBeTruthy();
-    const { codeId: codeId2 } = uploadReceipt;
+    const { codeId: codeId2 } = uploadReceipt2;
     expect(codeId2).toBeTruthy();
+    expect(codeId1).not.toEqual(codeId2);
 
     // instantiate contract
     const initMsg = {
@@ -282,18 +269,18 @@ describe("Contract Migrate", () => {
     });
     expect(contractAddress).toBeTruthy();
 
-    const cmClient = await Comet38Client.connect(localNet.tendermintUrl);
-    const wasmClient = QueryClient.withExtensions(cmClient, setupAuthExtension, setupBankExtension, setupWasmExtension);
-    const { contractInfo: contractInfo1 } = await wasmClient.wasm.getContractInfo(contractAddress);
-    console.info(`contractInfo1 admin is same as faucet address0: ${contractInfo1.admin === faucet.address0}`);
+    const contractInfo1 = await directClient.getContract(contractAddress);
+    console.info(contractInfo1);
+    console.info(`contractInfo1 admin is same as faucet address0: ${contractInfo1.admin === signer}`);
     expect(contractInfo1.admin).toEqual(signer);
 
     // execute migrate msg
     const newVerifier = makeRandomAddress();
+    // I don't think this is a valid migrate message for cw20, only hackatom
     const migrateMsg = { admin: newVerifier };
 
     const { logs, events, height, gasUsed, gasWanted } = await directClient.migrate(
-      faucet.address0,
+      signer,
       contractAddress,
       codeId2,
       migrateMsg,
@@ -303,22 +290,22 @@ describe("Contract Migrate", () => {
     console.info(`gasUsed: ${gasUsed}`);
     console.info(`gasWanted: ${gasWanted}`);
 
-    // Custom serializer for BigInt
-    const customSerializer = (key: string, value: any): any => {
-      return typeof value === "bigint" ? value.toString() : value;
-    };
-
     // logs and events
     console.info(`logs: ${JSON.stringify(logs)}`);
     console.info(`events: ${JSON.stringify(events)}`);
 
-    const { contractInfo: contractInfo2 } = await wasmClient.wasm.getContractInfo(contractAddress);
-    console.info(`contractInfo2: ${JSON.stringify(contractInfo2, customSerializer)}`);
-    expect(contractInfo2.admin).toEqual(newVerifier);
-    console.info(
-      `contractInfo2 admin is same as newVerifier: ${contractInfo2.admin === newVerifier}, ${newVerifier}, ${
-        contractInfo2.admin
-      }`
-    );
+    const contractInfo2 = await directClient.getContract(contractAddress);
+    console.info(contractInfo2);
+    // we change the code ID, not the admin
+    expect(contractInfo2.codeId).toEqual(codeId2);
+    expect(contractInfo2.admin).toEqual(signer);
+
+    // Let's change the admin now
+    await directClient.updateAdmin(signer, contractAddress, newVerifier, "auto");
+    const contractInfo3 = await directClient.getContract(contractAddress);
+    console.info(contractInfo3);
+    // we change the admin, not the code ID
+    expect(contractInfo3.codeId).toEqual(codeId2);
+    expect(contractInfo3.admin).toEqual(newVerifier);
   });
 });
