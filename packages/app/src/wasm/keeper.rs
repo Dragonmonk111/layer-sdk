@@ -12,6 +12,7 @@ use layer_std::response::{
     CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, ListCodesResponse,
     QueryResponse, WasmQueryResponse,
 };
+use layer_std::root::CustomRootMsg;
 use layer_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };
@@ -977,7 +978,10 @@ fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, 
     result.map_err(map_vm_error)?.map_err(map_contract_error)
 }
 
-fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
+fn cosmwasm_msg_to_layer(
+    msg: CosmosMsg<super::vm::CustomMsg>,
+    sender: &AccountId,
+) -> Result<Msg, PulsarError> {
     let res = match msg {
         CosmosMsg::Bank(bank) => match bank {
             cosmwasm_std::BankMsg::Send { to_address, amount } => layer_std::BankMsg::Send {
@@ -1064,6 +1068,53 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
             .into(),
             x => unimplemented!("wasm msg {:?}", x),
         },
+        CosmosMsg::Custom(custom) => {
+            let root = root_account();
+            ensure_eq!(sender, &root, WasmError::NotRoot);
+            match custom {
+                CustomRootMsg::Sudo { contract_addr, msg } => layer_std::WasmMsg::Sudo {
+                    sender: root,
+                    contract_addr,
+                    msg,
+                }
+                .into(),
+                CustomRootMsg::ClearAdmin { contract_addr } => layer_std::WasmMsg::ClearAdmin {
+                    sender: root,
+                    contract_addr,
+                }
+                .into(),
+                CustomRootMsg::UpdateAdmin {
+                    contract_addr,
+                    admin,
+                } => layer_std::WasmMsg::UpdateAdmin {
+                    sender: root,
+                    contract_addr,
+                    admin,
+                }
+                .into(),
+                CustomRootMsg::Pin { code_id } => layer_std::WasmMsg::Pin {
+                    sender: root,
+                    code_id,
+                }
+                .into(),
+                CustomRootMsg::Unpin { code_id } => layer_std::WasmMsg::Unpin {
+                    sender: root,
+                    code_id,
+                }
+                .into(),
+                CustomRootMsg::Migrate {
+                    contract_addr,
+                    new_code_id,
+                    msg,
+                } => layer_std::WasmMsg::Migrate {
+                    sender: root,
+                    contract_addr,
+                    new_code_id,
+                    msg,
+                }
+                .into(),
+            }
+        }
         _ => todo!(),
     };
     Ok(res)

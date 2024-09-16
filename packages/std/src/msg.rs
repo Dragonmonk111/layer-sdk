@@ -54,6 +54,11 @@ impl Display for BankMsg {
 #[derive(Derivative, Clone, PartialEq, Eq)]
 #[derivative(Debug)]
 pub enum WasmMsg {
+    StoreCode {
+        sender: AccountId,
+        #[derivative(Debug(format_with = "crate::wasm_summary"))]
+        code: Binary,
+    },
     /// Dispatches a call to another contract at a known address (with known ABI).
     ///
     /// This is translated to a [MsgExecuteContract](https://github.com/CosmWasm/wasmd/blob/v0.14.0/x/wasm/internal/types/tx.proto#L68-L78).
@@ -131,7 +136,7 @@ pub enum WasmMsg {
         sender: AccountId,
         contract_addr: AccountId,
     },
-    /// Only the gov address can call sudo.
+    /// Only the root address can call sudo.
     /// Once slay3r checks the permissions, it should be trusted as root by the contract.
     Sudo {
         sender: AccountId,
@@ -139,11 +144,6 @@ pub enum WasmMsg {
         /// msg is the json-encoded SudoMsg struct that will be passed to the new code
         #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
-    },
-    StoreCode {
-        sender: AccountId,
-        #[derivative(Debug(format_with = "crate::wasm_summary"))]
-        code: Binary,
     },
     Pin {
         sender: AccountId,

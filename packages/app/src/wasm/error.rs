@@ -24,4 +24,7 @@ pub enum WasmError {
 
     #[error("Tried to return SubMsg in sandboxed contract call")]
     SubMsgNotSupported,
+
+    #[error("Only root contract call call custom messages")]
+    NotRoot,
 }
