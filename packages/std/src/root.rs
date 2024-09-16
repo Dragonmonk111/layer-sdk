@@ -59,3 +59,56 @@ pub enum LayerSudoMsg {
     BeginBlock {},
     EndBlock {},
 }
+
+#[cw_serde]
+pub struct InstantiateMsg {
+    /// This address is given the super power to assign privileges to other contracts.
+    pub gov_address: String,
+}
+
+/// These are the valid execute messages on the layer contract
+#[cw_serde]
+pub enum ExecuteMsg {
+    #[serde(untagged)]
+    Gov(GovMsg),
+    /// These are the ExecuteMsg variants that can be called by "system contracts"
+    /// once "promoted" by the governance contract
+    /// (which may also include the gov contract itself)
+    #[serde(untagged)]
+    System(SystemMsg),
+}
+
+pub type SystemMsg = CustomRootMsg;
+
+/// These are the ExecuteMsg variants that can only be called by the gov address
+#[cw_serde]
+pub enum GovMsg {
+    /// Hand off governance power to a new address
+    ChangeGov { gov_address: String },
+    PromoteContract {
+        // TODO: we also want to provide partial priviledges
+        contract_address: String,
+    },
+    DemoteContract {
+        // TODO: we also want to provide partial priviledges
+        contract_address: String,
+    },
+    SetBeginBlocker {
+        contract_address: String,
+        // TODO: gas limit
+        // TODO: bool, halt on error (if true, chain halts on error result)
+    },
+    SetEndBlocker {
+        contract_address: String,
+        // TODO: gas limit
+        // TODO: bool, halt on error (if true, chain halts on error result)
+    },
+}
+
+/// TODO: these are the queries served by the root contract itself
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    // #[returns(Result)]
+    // Request {}
+}

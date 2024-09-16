@@ -22,9 +22,11 @@ cosmwasm-crypto = "1.5.4"
 cosmwasm-vm = { version = "1.5.4", default-features = false, features = ["iterator"] }
 cw-storage-plus = { version = "1.2.0", default-features = false }
 cw-utils = "1.0.1"
-
+cw-multi-test = "1.0.1"
+cw2 = { version = "1" }
 cw20 = { version = "1" }
 cw20-base = { version = "1" }
+
 serde = { version = "1.0.160", default-features = false }
 serde_json = "1.0.116"
 itertools = { version = "0.11.0", features = ["use_alloc"], default-features = false }
@@ -48,8 +50,10 @@ layer-proto = { path = "./packages/proto" }
 layer-std = { path = "./packages/std" }
 layer-storage = { path = "./packages/storage" }
 
+layer-root = { path = "./contracts/root" }
 tc-echo = { path = "./contracts/echo" }
 tc-caller = { path = "./contracts/caller" }
+
 tendermint = { version = "0.39.1", default-features = false }
 tendermint-abci = "0.39.1"
 tendermint-proto = "0.39.1"
