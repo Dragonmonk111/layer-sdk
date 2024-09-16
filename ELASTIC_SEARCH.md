@@ -55,14 +55,132 @@ Request body:
 
 ```json
 {
-    "query": {
-        "match": {
-            "traceID": {
-                "query": "3872e1704986f71e0fd51a5d4b7c3be6"
-            }
-        }
+  "query": {
+    "match": {
+      "traceID": {
+        "query": "3872e1704986f71e0fd51a5d4b7c3be6"
+      }
     }
+  }
 }
 ```
 
 The returned response would be an array with all of the spans that belong to the queried `traceID`.
+
+# Match traces by top-level fields
+
+These fields can be queried the same as `traceID`. For example, `operationName`:
+
+Request URL: `http://localhost:9200/jaeger-span-2024-09-12/_search`
+
+Request body:
+
+```json
+{
+  "query": {
+    "match": {
+      "operationName": {
+        "query": "abci_query"
+      }
+    }
+  }
+}
+```
+
+# Match traces by tags
+
+## Get traces on a given `height`
+
+Request URL: `http://localhost:9200/jaeger-span-2024-09-12/_search`
+
+Request body:
+
+```json
+{
+  "query": {
+    "nested": {
+      "path": "tags",
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "match": {
+                "tags.key": "height"
+              }
+            },
+            {
+              "match": {
+                "tags.value": "772"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+## Get traces with a given `tx_hash`
+
+Request URL: `http://localhost:9200/jaeger-span-2024-09-12/_search`
+
+Request body:
+
+```json
+{
+  "query": {
+    "nested": {
+      "path": "tags",
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "match": {
+                "tags.key": "tx_hash"
+              }
+            },
+            {
+              "match": {
+                "tags.value": "51B60C806E4F685C8A7FC79CBB72BF860B566B354F2C57B023407DD7AD633CB7"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+## Get traces where a concrete `signer` appears, using wildcards
+
+Request URL: `http://localhost:9200/jaeger-span-2024-09-12/_search`
+
+Request body:
+
+```json
+{
+  "query": {
+    "nested": {
+      "path": "tags",
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "match": {
+                "tags.key": "tx"
+              }
+            },
+            {
+              "wildcard": {
+                "tags.value": "*signer: slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j*"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
