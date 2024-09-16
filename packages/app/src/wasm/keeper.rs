@@ -231,7 +231,7 @@ impl Wasm {
     ) -> PulsarResult<MsgResponse> {
         let resp = match msg {
             WasmMsg::StoreCode { sender, code } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let (checksum, analysis) = self.cache.store_code(&code).map_err(map_vm_error)?;
                 let info = CodeInfo {
                     creator: sender,
@@ -257,7 +257,7 @@ impl Wasm {
                 funds,
                 label,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = self.generate_address(storage, meter, &sender, code_id)?;
                 return self.do_instantiate(
@@ -285,7 +285,7 @@ impl Wasm {
                 funds,
                 salt,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = build_instantiate_2_address(
                     &code.checksum,
@@ -315,7 +315,7 @@ impl Wasm {
                 msg,
                 funds,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
@@ -380,12 +380,16 @@ impl Wasm {
                 new_code_id,
                 msg,
             } => {
-                // only admin can migrate
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
+                let root = root_account();
+                // Only admin or root can call
                 let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 match &contract.admin {
                     Some(admin) if admin == &sender => Ok(()),
+                    _ if sender == root => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
+
                 // update the code and get the new code info
                 self.remove_contract_by_code(storage, meter, &contract_addr, &contract)?;
                 let code = self.load_code(storage.as_ref(), meter, new_code_id)?;
@@ -430,10 +434,13 @@ impl Wasm {
                 sender,
                 contract_addr,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
+                let root = root_account();
                 let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                // Only admin or root can call
                 match &contract.admin {
                     Some(admin) if admin == &sender => Ok(()),
+                    _ if sender == root => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
                 contract.admin = None;
@@ -446,10 +453,13 @@ impl Wasm {
                 contract_addr,
                 admin,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
+                let root = root_account();
+                // Only admin or root can call
                 let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 match &contract.admin {
                     Some(admin) if admin == &sender => Ok(()),
+                    _ if sender == root => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
                 let event = update_admin_event(&contract_addr, &admin);
@@ -462,15 +472,14 @@ impl Wasm {
                 contract_addr,
                 msg,
             } => {
-                // only special sender can do this - stored as param
-                let WasmParams { gov_account } =
-                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
-                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+                // Only root can call
+                let root = root_account();
+                ensure_eq!(sender, root, WasmError::NotRoot);
 
                 let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
-                // call migrate on vm
+                // call sudo on vm
                 let env = build_env(block, &contract_addr);
                 let checksum = code.get_checksum_to_execute(meter)?;
                 let (result, gas) =
@@ -504,10 +513,9 @@ impl Wasm {
                 response
             }
             WasmMsg::Pin { sender, code_id } => {
-                // only special sender can do this - stored as param
-                let WasmParams { gov_account } =
-                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
-                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+                // Only root can call
+                let root = root_account();
+                ensure_eq!(sender, root, WasmError::NotRoot);
 
                 let mut code = self.load_code(storage.as_ref(), meter, code_id)?;
                 if !code.pinned {
@@ -528,10 +536,9 @@ impl Wasm {
                 MsgResponse::new(vec![event], WasmMsgData::PinCode {})
             }
             WasmMsg::Unpin { sender, code_id } => {
-                // only special sender can do this - stored as param
-                let WasmParams { gov_account } =
-                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
-                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+                // Only root can call
+                let root = root_account();
+                ensure_eq!(sender, root, WasmError::NotRoot);
 
                 let mut code = self.load_code(storage.as_ref(), meter, code_id)?;
                 if code.pinned {
