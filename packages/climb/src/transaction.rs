@@ -1,0 +1,458 @@
+// This is typically created from SigningClient.inner_tx()
+
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64},
+    Arc,
+};
+
+use anyhow::{anyhow, bail, Context, Result};
+use cosmrs::{
+    crypto::{secp256k1::SigningKey, PublicKey},
+    tx::{Fee, SignDoc, SignerInfo},
+    Coin,
+};
+
+use crate::{
+    querier::QueryClient,
+    signing::middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp},
+    AddrString, ChainConfig,
+};
+
+pub struct TxBuilder<'a> {
+    pub querier: &'a QueryClient,
+    pub signing_key: &'a SigningKey,
+
+    /// Must be set if not providing a `sequence` or `account_number`
+    pub sender: Option<AddrString>,
+
+    /// Probably want to always set this
+    pub public_key: Option<PublicKey>,
+    /// how many blocks until a tx is considered invalid
+    /// if not set, the default is 10 blocks
+    pub tx_timeout_blocks: Option<u64>,
+    /// for manually overriding the sequence number, e.g. parallel transactions (multiple *messages* in a tx do not need this)
+    pub sequence_strategy: Option<Arc<SequenceStrategy>>,
+
+    /// The account number of the sender. If not set, it will be derived from the sender's account
+    pub account_number: Option<u64>,
+
+    /// The gas coin to use. Gas price (in gas_coin.denom) = gas_coin.amount * gas_units
+    /// If not set, it will be derived from querier.chain_config (without hitting the network)
+    pub gas_coin: Option<Coin>,
+
+    /// The maximum gas units. Gas price (in gas_coin.denom) = gas_coin.amount * gas_units
+    /// If not set, it will be derived from running an on-chain simulation multiplied by `gas_multiplier`
+    pub gas_units_or_simulate: Option<u64>,
+
+    /// A multiplier to use for simulated gas units.
+    /// If not set, a default of 1.5 will be used.
+    pub gas_simulate_multiplier: Option<f32>,
+
+    /// The broadcast mode to use. If not set, the default is `Sync`
+    pub broadcast_mode: Option<cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode>,
+
+    /// Whether broadcasting should poll for the tx landing on chain before returning
+    /// default is true
+    pub broadcast_poll: bool,
+
+    /// The duration to sleep between polling for the tx landing on chain
+    /// If not set, the default is 1 second
+    pub broadcast_poll_sleep_duration: Option<std::time::Duration>,
+
+    /// The duration to wait before giving up on polling for the tx landing on chain
+    /// If not set, the default is 30 seconds
+    pub broadcast_poll_timeout_duration: Option<std::time::Duration>,
+
+    /// Middleware to run before the tx is broadcast
+    pub middleware_map_body: Option<Arc<Vec<SigningMiddlewareMapBody>>>,
+
+    /// Middleware to run after the tx is broadcast
+    pub middleware_map_resp: Option<Arc<Vec<SigningMiddlewareMapResp>>>,
+}
+
+impl<'a> TxBuilder<'a> {
+    const DEFAULT_TX_TIMEOUT_BLOCKS: u64 = 10;
+    const DEFAULT_GAS_MULTIPLIER: f32 = 1.5;
+    const DEFAULT_BROADCAST_MODE: cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode =
+        cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode::Sync;
+    const DEFAULT_BROADCAST_POLL_SLEEP_DURATION: std::time::Duration =
+        std::time::Duration::from_secs(1);
+    const DEFAULT_BROADCAST_POLL_TIMEOUT_DURATION: std::time::Duration =
+        std::time::Duration::from_secs(30);
+
+    pub fn new(querier: &'a QueryClient, signing_key: &'a SigningKey) -> Self {
+        Self {
+            querier,
+            signing_key,
+            public_key: None,
+            gas_coin: None,
+            sender: None,
+            tx_timeout_blocks: None,
+            sequence_strategy: None,
+            gas_units_or_simulate: None,
+            gas_simulate_multiplier: None,
+            account_number: None,
+            broadcast_mode: None,
+            broadcast_poll: true,
+            broadcast_poll_sleep_duration: None,
+            broadcast_poll_timeout_duration: None,
+            middleware_map_body: None,
+            middleware_map_resp: None,
+        }
+    }
+
+    pub fn set_tx_timeout_blocks(&mut self, tx_timeout_blocks: u64) -> &mut Self {
+        self.tx_timeout_blocks = Some(tx_timeout_blocks);
+        self
+    }
+
+    pub fn set_sequence_strategy(&mut self, sequence_strategy: Arc<SequenceStrategy>) -> &mut Self {
+        self.sequence_strategy = Some(sequence_strategy);
+        self
+    }
+
+    pub fn set_sender(&mut self, sender: AddrString) -> &mut Self {
+        self.sender = Some(sender);
+        self
+    }
+
+    pub fn set_public_key(&mut self, public_key: PublicKey) -> &mut Self {
+        self.public_key = Some(public_key);
+        self
+    }
+
+    pub fn set_gas_coin(&mut self, gas_coin: Coin) -> &mut Self {
+        self.gas_coin = Some(gas_coin);
+        self
+    }
+
+    pub fn set_gas_units_or_simulate(&mut self, gas_units: Option<u64>) -> &mut Self {
+        self.gas_units_or_simulate = gas_units;
+        self
+    }
+
+    pub fn set_gas_simulate_multiplier(&mut self, gas_multiplier: f32) -> &mut Self {
+        self.gas_simulate_multiplier = Some(gas_multiplier);
+        self
+    }
+
+    pub fn set_account_number(&mut self, account_number: u64) -> &mut Self {
+        self.account_number = Some(account_number);
+        self
+    }
+
+    pub fn set_broadcast_mode(
+        &mut self,
+        broadcast_mode: cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode,
+    ) -> &mut Self {
+        self.broadcast_mode = Some(broadcast_mode);
+        self
+    }
+
+    pub fn set_broadcast_poll(&mut self, broadcast_poll: bool) -> &mut Self {
+        self.broadcast_poll = broadcast_poll;
+        self
+    }
+
+    pub fn set_broadcast_poll_sleep_duration(
+        &mut self,
+        broadcast_poll_sleep_duration: std::time::Duration,
+    ) -> &mut Self {
+        self.broadcast_poll_sleep_duration = Some(broadcast_poll_sleep_duration);
+        self
+    }
+
+    pub fn set_broadcast_poll_timeout_duration(
+        &mut self,
+        broadcast_poll_timeout_duration: std::time::Duration,
+    ) -> &mut Self {
+        self.broadcast_poll_timeout_duration = Some(broadcast_poll_timeout_duration);
+        self
+    }
+
+    pub fn set_middleware_map_body(
+        &mut self,
+        middleware_map_body: Arc<Vec<SigningMiddlewareMapBody>>,
+    ) -> &mut Self {
+        self.middleware_map_body = Some(middleware_map_body);
+        self
+    }
+
+    pub fn set_middleware_map_resp(
+        &mut self,
+        middleware_map_resp: Arc<Vec<SigningMiddlewareMapResp>>,
+    ) -> &mut Self {
+        self.middleware_map_resp = Some(middleware_map_resp);
+        self
+    }
+
+    async fn query_base_account(
+        &self,
+    ) -> Result<cosmrs::proto::cosmos::auth::v1beta1::BaseAccount> {
+        self.querier
+            .base_account(
+                self.sender
+                    .as_ref()
+                    .with_context(|| "must provide a sender if no sequence")?,
+            )
+            .await
+    }
+
+    pub async fn broadcast(
+        self,
+        messages: impl IntoIterator<Item = cosmrs::Any>,
+    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+        let block_height = self.querier.block_height().await?;
+        let tx_timeout_blocks = self
+            .tx_timeout_blocks
+            .unwrap_or(Self::DEFAULT_TX_TIMEOUT_BLOCKS);
+        let timeout_height =
+            cosmrs::tendermint::block::Height::try_from(block_height + tx_timeout_blocks)?;
+        let mut body = cosmrs::tx::Body::new(messages, "", timeout_height);
+
+        if let Some(middleware) = self.middleware_map_body.as_ref() {
+            for middleware in middleware.iter() {
+                body = match middleware.map_body(body).await {
+                    Ok(req) => req,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        let mut base_account: Option<cosmrs::proto::cosmos::auth::v1beta1::BaseAccount> = None;
+
+        let sequence = match &self.sequence_strategy {
+            Some(sequence_strategy) => match sequence_strategy.kind {
+                SequenceStrategyKind::Query => {
+                    base_account = Some(self.query_base_account().await?);
+                    base_account.as_ref().unwrap().sequence
+                }
+                SequenceStrategyKind::QueryAndIncrement => {
+                    if !sequence_strategy
+                        .has_queried
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                    {
+                        base_account = Some(self.query_base_account().await?);
+                        sequence_strategy
+                            .has_queried
+                            .store(true, std::sync::atomic::Ordering::SeqCst);
+                        sequence_strategy.value.store(
+                            base_account.as_ref().unwrap().sequence,
+                            std::sync::atomic::Ordering::SeqCst,
+                        );
+                        base_account.as_ref().unwrap().sequence
+                    } else {
+                        sequence_strategy
+                            .value
+                            .load(std::sync::atomic::Ordering::SeqCst)
+                    }
+                }
+                SequenceStrategyKind::SetAndIncrement(_) => sequence_strategy
+                    .value
+                    .load(std::sync::atomic::Ordering::SeqCst),
+                SequenceStrategyKind::Constant(n) => n,
+            },
+            None => {
+                base_account = Some(self.query_base_account().await?);
+                base_account.as_ref().unwrap().sequence
+            }
+        };
+
+        let account_number = match self.account_number {
+            Some(account_number) => account_number,
+            None => match base_account {
+                Some(base_account) => base_account.account_number,
+                None => self.query_base_account().await?.account_number,
+            },
+        };
+
+        let sign_tx = |fee: Fee| -> Result<Vec<u8>> {
+            let signer_info = SignerInfo::single_direct(self.public_key, sequence);
+            let auth_info = signer_info.auth_info(fee);
+            let sign_doc = SignDoc::new(
+                &body,
+                &auth_info,
+                &self.querier.chain_config.chain_id.as_str().try_into()?,
+                account_number,
+            )
+            .map_err(|err| anyhow!("{}", err))?;
+            let tx_raw = sign_doc
+                .sign(self.signing_key)
+                .map_err(|err| anyhow!("{}", err))?;
+            let tx_bytes = tx_raw.to_bytes().map_err(|err| anyhow!("{}", err))?;
+
+            Ok(tx_bytes)
+        };
+
+        let gas_units = match self.gas_units_or_simulate {
+            Some(gas_units) => gas_units,
+            None => {
+                let gas_multiplier = self
+                    .gas_simulate_multiplier
+                    .unwrap_or(Self::DEFAULT_GAS_MULTIPLIER);
+                let fee = FeeCalculation::Simulation {
+                    chain_config: &self.querier.chain_config,
+                }
+                .calculate()?;
+                let simulate_tx_resp = self.querier.simulate_tx(sign_tx(fee)?).await?;
+                let gas_info = simulate_tx_resp
+                    .gas_info
+                    .context("unable to get gas from simulation")?;
+                (gas_info.gas_used as f32 * gas_multiplier).ceil() as u64
+            }
+        };
+
+        let fee = match self.gas_coin.clone() {
+            Some(gas_coin) => FeeCalculation::RealCoin {
+                gas_coin,
+                gas_units,
+            }
+            .calculate()?,
+            None => FeeCalculation::RealNetwork {
+                chain_config: &self.querier.chain_config,
+                gas_units,
+            }
+            .calculate()?,
+        };
+
+        let tx_bytes = sign_tx(fee)?;
+        let broadcast_mode = self.broadcast_mode.unwrap_or(Self::DEFAULT_BROADCAST_MODE);
+
+        let tx_response = self
+            .querier
+            .broadcast_tx_bytes(tx_bytes, broadcast_mode)
+            .await?;
+
+        // TODO not sure about this... only increase on success? how does this interact with simulations?
+        if let Some(sequence) = self.sequence_strategy {
+            match sequence.kind {
+                SequenceStrategyKind::QueryAndIncrement => {
+                    sequence
+                        .value
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
+                SequenceStrategyKind::SetAndIncrement(_) => {
+                    sequence
+                        .value
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
+                _ => {}
+            }
+        }
+
+        let mut tx_response = if self.broadcast_poll {
+            let sleep_duration = self
+                .broadcast_poll_sleep_duration
+                .unwrap_or(Self::DEFAULT_BROADCAST_POLL_SLEEP_DURATION);
+            let timeout_duration = self
+                .broadcast_poll_timeout_duration
+                .unwrap_or(Self::DEFAULT_BROADCAST_POLL_TIMEOUT_DURATION);
+
+            self.querier
+                .poll_until_tx_ready(tx_response.txhash, sleep_duration, timeout_duration)
+                .await?
+                .tx_response
+        } else {
+            tx_response
+        };
+
+        if let Some(middleware) = self.middleware_map_resp.as_ref() {
+            for middleware in middleware.iter() {
+                tx_response = match middleware.map_resp(tx_response).await {
+                    Ok(req) => req,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        if tx_response.code != 0 {
+            bail!(
+                "tx failed with code: {}, codespace: {}, raw_log: {}",
+                tx_response.code,
+                tx_response.codespace,
+                tx_response.raw_log
+            );
+        }
+
+        Ok(tx_response)
+    }
+}
+
+#[derive(Debug)]
+pub struct SequenceStrategy {
+    pub kind: SequenceStrategyKind,
+    pub value: AtomicU64,
+    pub has_queried: AtomicBool,
+}
+
+impl SequenceStrategy {
+    pub fn new(kind: SequenceStrategyKind) -> Self {
+        Self {
+            value: AtomicU64::new(match kind {
+                SequenceStrategyKind::Query => 0,             // will be ignored
+                SequenceStrategyKind::QueryAndIncrement => 0, // will be ignored
+                SequenceStrategyKind::SetAndIncrement(n) => n,
+                SequenceStrategyKind::Constant(n) => n,
+            }),
+            kind,
+            has_queried: AtomicBool::new(false),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum SequenceStrategyKind {
+    /// Always query
+    Query,
+    /// Query the first time, and then increment each successful tx
+    QueryAndIncrement,
+    /// Set to this the first time, and then increment each successful tx
+    SetAndIncrement(u64),
+    /// Set to this each time
+    Constant(u64),
+}
+
+pub enum FeeCalculation<'a> {
+    Simulation {
+        chain_config: &'a ChainConfig,
+    },
+    RealNetwork {
+        chain_config: &'a ChainConfig,
+        gas_units: u64,
+    },
+    RealCoin {
+        gas_coin: Coin,
+        gas_units: u64,
+    },
+}
+
+impl<'a> FeeCalculation<'a> {
+    pub fn calculate(&self) -> Result<Fee> {
+        let (gas_coin, gas_units) = match self {
+            Self::Simulation { chain_config } => (
+                Coin::new(0, &chain_config.gas_denom).map_err(|e| anyhow!("{}", e))?,
+                0,
+            ),
+            Self::RealNetwork {
+                chain_config,
+                gas_units,
+            } => {
+                let price = chain_config
+                    .gas_amount
+                    .parse::<f32>()
+                    .map_err(|e| anyhow!("{}", e))?;
+                let amount = (price * *gas_units as f32).ceil() as u128;
+                (
+                    Coin::new(amount, &chain_config.gas_denom).map_err(|e| anyhow!("{}", e))?,
+                    *gas_units,
+                )
+            }
+            Self::RealCoin {
+                gas_coin,
+                gas_units,
+            } => (gas_coin.clone(), *gas_units),
+        };
+
+        Ok(Fee::from_amount_and_gas(gas_coin, gas_units))
+    }
+}

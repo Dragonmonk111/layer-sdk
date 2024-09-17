@@ -1,0 +1,52 @@
+#![allow(warnings)]
+mod opt;
+
+use std::{fs, os::unix::net};
+use layer_climb::signing::{key::cosmos_signing_key, SigningClient};
+use tracing;
+use tracing_subscriber;
+use anyhow::{anyhow, bail, Context, Result};
+use cosmwasm_std::{Addr, Coin};
+use opt::{Command, Opt};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    dotenvy::dotenv().context("couldn't find dotenv file")?;
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_target(false)
+        .init();
+
+    let opt = Opt::parse().await?;
+
+    match opt.command {
+        Command::WalletShow {} => {
+            let signing_client = opt.signing_client().await?;
+            tracing::info!("address: {}", signing_client.addr); 
+            let balances = signing_client.querier.all_balances(signing_client.addr, None).await?;
+            if balances.is_empty() {
+                tracing::info!("No balance found");
+            } else {
+                tracing::info!("Balances:");
+                for balance in balances {
+                    tracing::info!("{}: {}", balance.denom, balance.amount);
+                }
+            }
+        },
+        Command::TapFaucet { amount } => {
+
+            let faucet = opt.faucet_client().await?;
+            let addr = opt.address()?;
+            let amount = amount.unwrap_or(1_000_000);
+
+            tracing::info!("Balance before: {}", faucet.querier.balance(addr.clone(), None).await?.unwrap_or_default());
+            tracing::info!("Sending {} to {}", amount, addr);
+            let mut tx_builder = faucet.tx_builder();
+            tx_builder.set_gas_simulate_multiplier(2.0);
+            faucet.transfer(None, amount, addr.clone(), Some(tx_builder)).await?;
+            tracing::info!("Balance after: {}", faucet.querier.balance(addr, None).await?.unwrap_or_default());
+        }
+    }
+
+    Ok(())
+}

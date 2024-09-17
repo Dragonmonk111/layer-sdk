@@ -1,6 +1,6 @@
 [workspace]
 members = ["app/*", "contracts/*", "packages/*"]
-exclude = ["tools/proto-compiler"]
+exclude = ["tools/proto-compiler", "tools/climb-cli"]
 resolver = "2"
 
 [workspace.package]
