@@ -15,7 +15,8 @@ use middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
 
 use super::TxBuilder;
 use crate::{
-    msg_into_cosmrs_any, msg_layer_into_cosmrs_any, querier::QueryClient, AddrString, ChainConfig, ChainId, SequenceStrategy, SequenceStrategyKind
+    msg_into_cosmrs_any, msg_layer_into_cosmrs_any, querier::QueryClient, AddrString, ChainConfig,
+    ChainId, SequenceStrategy, SequenceStrategyKind,
 };
 
 // Each combo of chain and seed phrase gets a single signing client
@@ -133,7 +134,7 @@ impl SigningClient {
         tx_builder
     }
 
-    // FIXME! doesn't work on Lay3r 
+    // FIXME! doesn't work on Lay3r
     pub async fn transfer(
         &self,
         denom: Option<String>,
@@ -141,14 +142,12 @@ impl SigningClient {
         recipient: AddrString,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        let orig = msg_into_cosmrs_any(&self.transfer_msg(denom.clone(), amount, recipient.clone())?)?;
-
-        println!("orig: {}", orig.type_url);
-
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            //.broadcast([msg_into_cosmrs_any(&self.transfer_msg(denom, amount, recipient)?)?])
-            .broadcast([msg_layer_into_cosmrs_any("/cosmos.bank.v1beta1.MsgSend".to_string(), &self.transfer_msg_layer(denom, amount, recipient)?)?])
+            .broadcast([msg_into_cosmrs_any(
+                &self.transfer_msg(denom, amount, recipient)?,
+            )?])
+            //.broadcast([msg_layer_into_cosmrs_any("/cosmos.bank.v1beta1.MsgSend".to_string(), &self.transfer_msg_layer(denom, amount, recipient)?)?])
             .await
     }
 

@@ -340,6 +340,15 @@ impl<'a> TxBuilder<'a> {
             }
         }
 
+        if tx_response.code != 0 {
+            bail!(
+                "tx failed with code: {}, codespace: {}, raw_log: {}",
+                tx_response.code,
+                tx_response.codespace,
+                tx_response.raw_log
+            );
+        }
+
         let mut tx_response = if self.broadcast_poll {
             let sleep_duration = self
                 .broadcast_poll_sleep_duration
@@ -363,15 +372,6 @@ impl<'a> TxBuilder<'a> {
                     Err(e) => return Err(e),
                 }
             }
-        }
-
-        if tx_response.code != 0 {
-            bail!(
-                "tx failed with code: {}, codespace: {}, raw_log: {}",
-                tx_response.code,
-                tx_response.codespace,
-                tx_response.raw_log
-            );
         }
 
         Ok(tx_response)

@@ -53,12 +53,15 @@ impl AddrString {
         match &self.kind {
             AddrKind::Cosmos { .. } => Ok(Self {
                 value: self.value.clone(),
-                kind: AddrKind::Cosmos { prefix: prefix.as_ref().to_string() },
+                kind: AddrKind::Cosmos {
+                    prefix: prefix.as_ref().to_string(),
+                },
             }),
             AddrKind::Eth => {
-                let eth_addr:AddrEth = self.try_into()?;
+                let eth_addr: AddrEth = self.try_into()?;
                 let bytes = eth_addr.as_bytes();
-                let account_id = cosmrs::AccountId::new(prefix.as_ref(), &bytes).map_err(|e| anyhow!("{e:?}"))?;
+                let account_id = cosmrs::AccountId::new(prefix.as_ref(), &bytes)
+                    .map_err(|e| anyhow!("{e:?}"))?;
                 Ok(account_id.into())
             }
         }
@@ -68,7 +71,7 @@ impl AddrString {
     pub fn convert_into_eth(&self) -> Result<Self> {
         match &self.kind {
             AddrKind::Cosmos { .. } => {
-                let account_id:AccountId = self.try_into()?;
+                let account_id: AccountId = self.try_into()?;
                 let bytes = account_id.to_bytes();
                 println!("byte length: {}", bytes.len());
                 let addr_eth = AddrEth::try_from(bytes)?;
