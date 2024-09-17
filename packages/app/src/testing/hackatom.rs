@@ -31,6 +31,7 @@ fn hackatom_genesis(account: &AccountId, gov_key: &AccountId) -> GenesisState {
 struct SetupData {
     app: TestApp,
     signer: PrivateKey,
+    #[allow(dead_code)]
     gov_key: PrivateKey,
     code_id: u64,
 }

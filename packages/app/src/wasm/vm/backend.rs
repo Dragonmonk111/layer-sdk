@@ -2,8 +2,8 @@ use std::{collections::HashMap, fmt, mem::transmute};
 use thiserror::Error;
 
 use cosmwasm_std::{
-    from_json, to_json_binary, Binary, BlockInfo, ContractResult, Order, QueryRequest,
-    SystemError, SystemResult,
+    from_json, to_json_binary, Binary, BlockInfo, ContractResult, Order, QueryRequest, SystemError,
+    SystemResult,
 };
 use cosmwasm_vm::{
     Backend, BackendApi, BackendError, BackendResult, GasInfo, Querier as BackendQuerier,

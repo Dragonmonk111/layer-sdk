@@ -59,14 +59,15 @@ pub fn execute(
                 }
             }
         }
-        ExecuteMsg::System(system_msg) => {
+        ExecuteMsg::System(_system_msg) => {
             let _system = SYSTEM
                 .may_load(deps.storage, &info.sender)?
                 .ok_or(ContractError::Unauthorized)?;
             // TODO: later we may check per-call permissions using this system info
-            match system_msg {
-                _ => todo!(),
-            }
+            todo!();
+            // match system_msg {
+            //     _ => todo!(),
+            // }
         }
     }
 }
