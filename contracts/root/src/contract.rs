@@ -2,10 +2,9 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{ensure_eq, to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, StdResult};
 use cw2::set_contract_version;
-use layer_std::root::{CustomRootMsg, GovMsg, SystemMsg};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
+use crate::msg::{CustomRootMsg, ExecuteMsg, GovMsg, InstantiateMsg, QueryMsg, SudoMsg, SystemMsg};
 use crate::state::{CallBackInfo, BEGIN_BLOCKERS, END_BLOCKERS, GOV, SYSTEM};
 
 // version info for migration info

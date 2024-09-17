@@ -12,6 +12,8 @@ cosmwasm-std = { workspace = true }
 cosmwasm-schema = { workspace = true }
 cosmwasm-crypto = { workspace = true }
 cw-storage-plus = { workspace = true }
+layer-root = { workspace = true, features = ["library"]}
+
 thiserror = { workspace = true }
 itertools = { workspace = true }
 sha2 = { workspace = true }
