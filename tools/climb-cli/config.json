@@ -2,7 +2,7 @@
     "chains": {
         "local": {
             "bech32_prefix": "slay3r",
-            "chain_id": "slay3rd",
+            "chain_id": "slay3r-local",
             "rpc_endpoint": "http://localhost:26657",
             "grpc_endpoint": "http://localhost:9090",
             "grpc_web_endpoint": "http://localhost:9091",
