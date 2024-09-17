@@ -1,7 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Binary, CustomMsg, CustomQuery};
-
-use crate::AccountId;
+use cosmwasm_std::{Binary, CosmosMsg, CustomMsg, CustomQuery};
 
 /// This is a CustomMsg implementation for the layer-sdk chains
 /// Can only be called by root contact
@@ -9,14 +7,14 @@ use crate::AccountId;
 pub enum CustomRootMsg {
     /// Call Sudo on any contract
     Sudo {
-        contract_addr: AccountId,
+        contract_addr: String,
         /// msg is the json-encoded SudoMsg struct that will be passed to the new code
         // #[derivative(Debug(format_with = "crate::binary_to_string"))]
         msg: Binary,
     },
     /// Migrate any contract
     Migrate {
-        contract_addr: AccountId,
+        contract_addr: String,
         /// the code_id of the new logic to place in the given contract
         new_code_id: u64,
         /// msg is the json-encoded MigrateMsg struct that will be passed to the new code
@@ -25,12 +23,12 @@ pub enum CustomRootMsg {
     },
     /// Sets a new admin (for migrate) on the given contract.
     UpdateAdmin {
-        contract_addr: AccountId,
-        admin: AccountId,
+        contract_addr: String,
+        admin: String,
     },
     /// Clears the admin on the given contract, so no more migration possible.
     ClearAdmin {
-        contract_addr: AccountId,
+        contract_addr: String,
     },
     Pin {
         code_id: u64,
@@ -42,6 +40,12 @@ pub enum CustomRootMsg {
 }
 
 impl CustomMsg for CustomRootMsg {}
+
+impl From<CustomRootMsg> for CosmosMsg<CustomRootMsg> {
+    fn from(msg: CustomRootMsg) -> Self {
+        CosmosMsg::Custom(msg)
+    }
+}
 
 /// This is a CustomQuery implementation for the layer-sdk chains.
 #[cw_serde]
@@ -55,7 +59,7 @@ impl CustomQuery for CustomRootQuery {}
 
 /// This is sudo message that gets called on the root contract at various points in it's life cycle
 #[cw_serde]
-pub enum LayerSudoMsg {
+pub enum SudoMsg {
     BeginBlock {},
     EndBlock {},
 }

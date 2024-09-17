@@ -1,12 +1,12 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{ensure_eq, Binary, Deps, DepsMut, Env, MessageInfo, StdResult};
+use cosmwasm_std::{ensure_eq, to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, StdResult};
 use cw2::set_contract_version;
-use layer_std::root::{CustomRootMsg, GovMsg};
+use layer_std::root::{CustomRootMsg, GovMsg, SystemMsg};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{GOV, SYSTEM};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, SudoMsg};
+use crate::state::{CallBackInfo, BEGIN_BLOCKERS, END_BLOCKERS, GOV, SYSTEM};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:layer-root";
@@ -59,15 +59,56 @@ pub fn execute(
                 }
             }
         }
-        ExecuteMsg::System(_system_msg) => {
+        ExecuteMsg::System(system_msg) => {
             let _system = SYSTEM
                 .may_load(deps.storage, &info.sender)?
                 .ok_or(ContractError::Unauthorized)?;
             // TODO: later we may check per-call permissions using this system info
-            todo!();
-            // match system_msg {
-            //     _ => todo!(),
-            // }
+            match system_msg {
+                SystemMsg::ClearAdmin { contract_addr } => {
+                    let _ = deps.api.addr_validate(&contract_addr)?;
+                    let msg = CustomRootMsg::ClearAdmin { contract_addr };
+                    Ok(Response::new().add_message(msg))
+                }
+                SystemMsg::UpdateAdmin {
+                    contract_addr,
+                    admin,
+                } => {
+                    let _ = deps.api.addr_validate(&contract_addr)?;
+                    let _ = deps.api.addr_validate(&admin)?;
+                    let msg = CustomRootMsg::UpdateAdmin {
+                        contract_addr,
+                        admin,
+                    };
+                    Ok(Response::new().add_message(msg))
+                }
+                SystemMsg::Pin { code_id } => {
+                    let msg = CustomRootMsg::Pin { code_id };
+                    Ok(Response::new().add_message(msg))
+                }
+                SystemMsg::Unpin { code_id } => {
+                    let msg = CustomRootMsg::Unpin { code_id };
+                    Ok(Response::new().add_message(msg))
+                }
+                SystemMsg::Sudo { contract_addr, msg } => {
+                    let _ = deps.api.addr_validate(&contract_addr)?;
+                    let msg = CustomRootMsg::Sudo { contract_addr, msg };
+                    Ok(Response::new().add_message(msg))
+                }
+                SystemMsg::Migrate {
+                    contract_addr,
+                    new_code_id,
+                    msg,
+                } => {
+                    let _ = deps.api.addr_validate(&contract_addr)?;
+                    let msg = CustomRootMsg::Migrate {
+                        contract_addr,
+                        new_code_id,
+                        msg,
+                    };
+                    Ok(Response::new().add_message(msg))
+                }
+            }
         }
     }
 }
@@ -164,6 +205,40 @@ mod execute_system {}
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
     unimplemented!()
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
+    match msg {
+        SudoMsg::BeginBlock {} => {
+            let msg = SudoMsg::BeginBlock {};
+            let cbs = BEGIN_BLOCKERS.load(deps.storage)?;
+            run_callbacks(deps, env, msg, cbs)
+        }
+        SudoMsg::EndBlock {} => {
+            let msg = SudoMsg::EndBlock {};
+            let cbs = END_BLOCKERS.load(deps.storage)?;
+            run_callbacks(deps, env, msg, cbs)
+        }
+    }
+}
+
+fn run_callbacks(
+    _deps: DepsMut,
+    _env: Env,
+    msg: SudoMsg,
+    cbs: Vec<CallBackInfo>,
+) -> Result<Response, ContractError> {
+    let msg = to_json_binary(&msg)?;
+    let mut res = Response::new();
+    for cb in cbs {
+        let msg = CustomRootMsg::Sudo {
+            contract_addr: cb.contract.to_string(),
+            msg: msg.clone(),
+        };
+        res = res.add_message(msg);
+    }
+    Ok(res)
 }
 
 #[cfg(test)]

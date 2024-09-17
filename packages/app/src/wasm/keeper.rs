@@ -1081,13 +1081,13 @@ fn cosmwasm_msg_to_layer(
             match custom {
                 CustomRootMsg::Sudo { contract_addr, msg } => layer_std::WasmMsg::Sudo {
                     sender: root,
-                    contract_addr,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
                     msg,
                 }
                 .into(),
                 CustomRootMsg::ClearAdmin { contract_addr } => layer_std::WasmMsg::ClearAdmin {
                     sender: root,
-                    contract_addr,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
                 }
                 .into(),
                 CustomRootMsg::UpdateAdmin {
@@ -1095,8 +1095,8 @@ fn cosmwasm_msg_to_layer(
                     admin,
                 } => layer_std::WasmMsg::UpdateAdmin {
                     sender: root,
-                    contract_addr,
-                    admin,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                    admin: AccountId::parse_string(&admin)?,
                 }
                 .into(),
                 CustomRootMsg::Pin { code_id } => layer_std::WasmMsg::Pin {
@@ -1115,7 +1115,7 @@ fn cosmwasm_msg_to_layer(
                     msg,
                 } => layer_std::WasmMsg::Migrate {
                     sender: root,
-                    contract_addr,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
                     new_code_id,
                     msg,
                 }
