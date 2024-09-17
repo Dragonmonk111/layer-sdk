@@ -5,6 +5,7 @@ mod gas;
 mod msg;
 mod pubkey;
 mod query;
+pub mod root;
 mod time;
 mod tx;
 mod utils;

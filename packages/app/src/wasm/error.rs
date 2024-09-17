@@ -4,7 +4,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum WasmError {
-    #[error("Cannot transfer funds from another account")]
+    #[error("Cannot send message as another account")]
+    SenderMismatch,
+
+    #[error("Unauthorized action")]
     Unauthorized,
 
     #[error("Used an invalid key in an event attribute: {0}")]
@@ -24,4 +27,7 @@ pub enum WasmError {
 
     #[error("Tried to return SubMsg in sandboxed contract call")]
     SubMsgNotSupported,
+
+    #[error("Only root contract call call custom messages")]
+    NotRoot,
 }

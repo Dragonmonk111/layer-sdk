@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt};
 
-use cosmwasm_std::{Binary, Empty, Env, MessageInfo, Reply, Response};
+use cosmwasm_std::{Binary, Env, MessageInfo, Reply, Response};
 use cosmwasm_vm::{
     call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
     AnalysisReport, Cache, CacheOptions, Checksum, InstanceOptions, Size, VmError,
@@ -103,7 +103,10 @@ impl VmCache {
         contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
-    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+    ) -> (
+        Result<Result<Response<super::CustomMsg>, String>, VmError>,
+        u64,
+    ) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
@@ -156,7 +159,10 @@ impl VmCache {
         contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
-    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+    ) -> (
+        Result<Result<Response<super::CustomMsg>, String>, VmError>,
+        u64,
+    ) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
@@ -208,7 +214,10 @@ impl VmCache {
         contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
-    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+    ) -> (
+        Result<Result<Response<super::CustomMsg>, String>, VmError>,
+        u64,
+    ) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
@@ -260,7 +269,10 @@ impl VmCache {
         contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
-    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+    ) -> (
+        Result<Result<Response<super::CustomMsg>, String>, VmError>,
+        u64,
+    ) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,
@@ -312,7 +324,10 @@ impl VmCache {
         contract: &AccountId,
         meter: &GasMeter,
         sm: &StateMachine,
-    ) -> (Result<Result<Response<Empty>, String>, VmError>, u64) {
+    ) -> (
+        Result<Result<Response<super::CustomMsg>, String>, VmError>,
+        u64,
+    ) {
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions {
             gas_limit,

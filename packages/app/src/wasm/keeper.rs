@@ -1,7 +1,7 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    ensure_eq, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo, Order, Reply,
-    ReplyOn, SubMsg, SubMsgResponse,
+    ensure_eq, to_json_binary, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo,
+    Order, Reply, ReplyOn, SubMsg, SubMsgResponse,
 };
 // 2.0: use cosmwasm_std::Checksum
 use cosmwasm_vm::{Checksum, VmError};
@@ -12,6 +12,7 @@ use layer_std::response::{
     CodeInfoResponse, ContractInfoResponse, ContractsByCodeResponse, ListCodesResponse,
     QueryResponse, WasmQueryResponse,
 };
+use layer_std::root::CustomRootMsg;
 use layer_std::{
     AccountId, BankMsgData, GasError, GasMeter, Msg, MsgData, WasmMsg, WasmMsgData, WasmQuery,
 };
@@ -34,6 +35,15 @@ use crate::wasm::utils::build_instantiate_2_address;
 
 pub const NAMESPACE_WASM: &[u8] = b"wasm";
 
+pub const ROOT_ADDR: [u8; 20] = hex_literal::hex!("0da01da02da03da04da05da06da07da08da09da0");
+
+// Note: to update this, run ./scripts/build_contracts.sh from workspace root
+const ROOT_WASM: &[u8] = include_bytes!("../../fixtures/layer_root.wasm");
+
+pub fn root_account() -> AccountId {
+    AccountId::new(&ROOT_ADDR).unwrap()
+}
+
 // Numbers taken from wasmd, we should benchmark better
 pub(crate) const LOAD_WASM_GAS: u64 = 60_000;
 pub(crate) const LOAD_PINNED_WASM_GAS: u64 = 2_000;
@@ -49,8 +59,6 @@ const PINNED: Map<u64, Empty> = Map::new("pinned");
 const CODE_ID: Item<u64> = Item::new("code_id");
 // A counter of total contracts created for the v1 instantiate algorithm
 const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
-
-const PARAMS: Item<WasmParams> = Item::new("params");
 
 // TODO: ideally we can derive these from the actual buckets for no typos.
 // But for now, this is easier to write than building some auto-magic framework
@@ -73,11 +81,6 @@ pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
             Err(_) => vec![hex::encode(&key)],
         },
     }
-}
-
-#[cw_serde]
-pub struct WasmParams {
-    pub gov_account: AccountId,
 }
 
 /// Contract Data includes information about contract, equivalent of `ContractInfo` in wasmd
@@ -144,20 +147,58 @@ impl Wasm {
         }
     }
 
-    // This sets constant params used
+    /// This does storage-dependent initialization...
+    /// In particular, it installs the root contract and initializes it at the predefined address.
     pub fn init(
         &self,
         storage: &mut dyn Storage,
         meter: &GasMeter,
-        _block: &BlockInfo,
+        block: &BlockInfo,
         params: crate::genesis::WasmParams,
-        _sm: &StateMachine,
+        sm: &StateMachine,
     ) -> PulsarResult<()> {
-        let mut wasm_storage = prefixed(storage, NAMESPACE_WASM);
-        let validated = WasmParams {
-            gov_account: AccountId::parse_string(&params.gov_account)?,
+        let gov_account = AccountId::parse_string(&params.gov_account)?;
+
+        // store the root code (copied code from _process_msg / WasmMsg::StoreCode)
+        let (code_id, code) = {
+            let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
+            let (checksum, _) = self.cache.store_code(ROOT_WASM).map_err(map_vm_error)?;
+            let info = CodeInfo {
+                creator: gov_account.clone(),
+                checksum: Vec::<u8>::from(checksum).into(),
+                pinned: true,
+            };
+            let id = self.next_id(&mut wasm_store, meter)?;
+            CODES.save(&mut wasm_store, meter, id, &info)?;
+
+            // now, pin it (copied code from _process_msg / WasmMsg::Pin)
+            self.cache
+                .pin(&info.get_checksum_not_executing())
+                .map_err(map_vm_error)?;
+            PINNED.save(&mut wasm_store, meter, id, &Empty {})?;
+
+            (id, info)
         };
-        PARAMS.save(&mut wasm_storage, meter, &validated)?;
+
+        // now, let's instantiate the root contract, with the given gov address
+        let msg = to_json_binary(&layer_std::root::InstantiateMsg {
+            gov_address: gov_account.to_string(),
+        })?;
+        let _res = self.do_instantiate(
+            storage,
+            meter,
+            block,
+            sm,
+            &gov_account,
+            root_account(),
+            code_id,
+            code,
+            Some(gov_account.clone()),
+            msg,
+            vec![],
+            "Root Contract".to_string(),
+            true,
+        )?;
         Ok(())
     }
 
@@ -224,7 +265,7 @@ impl Wasm {
     ) -> PulsarResult<MsgResponse> {
         let resp = match msg {
             WasmMsg::StoreCode { sender, code } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let (checksum, analysis) = self.cache.store_code(&code).map_err(map_vm_error)?;
                 let info = CodeInfo {
                     creator: sender,
@@ -250,7 +291,7 @@ impl Wasm {
                 funds,
                 label,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = self.generate_address(storage, meter, &sender, code_id)?;
                 return self.do_instantiate(
@@ -278,7 +319,7 @@ impl Wasm {
                 funds,
                 salt,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
                 let contract_addr = build_instantiate_2_address(
                     &code.checksum,
@@ -308,7 +349,7 @@ impl Wasm {
                 msg,
                 funds,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
@@ -373,12 +414,16 @@ impl Wasm {
                 new_code_id,
                 msg,
             } => {
-                // only admin can migrate
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
+                let root = root_account();
+                // Only admin or root can call
                 let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 match &contract.admin {
                     Some(admin) if admin == &sender => Ok(()),
+                    _ if sender == root => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
+
                 // update the code and get the new code info
                 self.remove_contract_by_code(storage, meter, &contract_addr, &contract)?;
                 let code = self.load_code(storage.as_ref(), meter, new_code_id)?;
@@ -423,10 +468,13 @@ impl Wasm {
                 sender,
                 contract_addr,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
+                let root = root_account();
                 let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
+                // Only admin or root can call
                 match &contract.admin {
                     Some(admin) if admin == &sender => Ok(()),
+                    _ if sender == root => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
                 contract.admin = None;
@@ -439,10 +487,13 @@ impl Wasm {
                 contract_addr,
                 admin,
             } => {
-                ensure_eq!(signer, &sender, WasmError::Unauthorized);
+                ensure_eq!(signer, &sender, WasmError::SenderMismatch);
+                let root = root_account();
+                // Only admin or root can call
                 let mut contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 match &contract.admin {
                     Some(admin) if admin == &sender => Ok(()),
+                    _ if sender == root => Ok(()),
                     _ => Err(WasmError::Unauthorized),
                 }?;
                 let event = update_admin_event(&contract_addr, &admin);
@@ -455,15 +506,14 @@ impl Wasm {
                 contract_addr,
                 msg,
             } => {
-                // only special sender can do this - stored as param
-                let WasmParams { gov_account } =
-                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
-                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+                // Only root can call
+                let root = root_account();
+                ensure_eq!(sender, root, WasmError::NotRoot);
 
                 let contract = self.load_contract(storage.as_ref(), meter, &contract_addr)?;
                 let code = self.load_code(storage.as_ref(), meter, contract.code_id)?;
 
-                // call migrate on vm
+                // call sudo on vm
                 let env = build_env(block, &contract_addr);
                 let checksum = code.get_checksum_to_execute(meter)?;
                 let (result, gas) =
@@ -497,10 +547,9 @@ impl Wasm {
                 response
             }
             WasmMsg::Pin { sender, code_id } => {
-                // only special sender can do this - stored as param
-                let WasmParams { gov_account } =
-                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
-                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+                // Only root can call
+                let root = root_account();
+                ensure_eq!(sender, root, WasmError::NotRoot);
 
                 let mut code = self.load_code(storage.as_ref(), meter, code_id)?;
                 if !code.pinned {
@@ -521,10 +570,9 @@ impl Wasm {
                 MsgResponse::new(vec![event], WasmMsgData::PinCode {})
             }
             WasmMsg::Unpin { sender, code_id } => {
-                // only special sender can do this - stored as param
-                let WasmParams { gov_account } =
-                    PARAMS.load(&prefixed_read(storage.as_ref(), NAMESPACE_WASM), meter)?;
-                ensure_eq!(sender, gov_account, WasmError::Unauthorized);
+                // Only root can call
+                let root = root_account();
+                ensure_eq!(sender, root, WasmError::NotRoot);
 
                 let mut code = self.load_code(storage.as_ref(), meter, code_id)?;
                 if code.pinned {
@@ -971,7 +1019,10 @@ fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, 
     result.map_err(map_vm_error)?.map_err(map_contract_error)
 }
 
-fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, PulsarError> {
+fn cosmwasm_msg_to_layer(
+    msg: CosmosMsg<super::vm::CustomMsg>,
+    sender: &AccountId,
+) -> Result<Msg, PulsarError> {
     let res = match msg {
         CosmosMsg::Bank(bank) => match bank {
             cosmwasm_std::BankMsg::Send { to_address, amount } => layer_std::BankMsg::Send {
@@ -1058,6 +1109,53 @@ fn cosmwasm_msg_to_layer(msg: CosmosMsg, sender: &AccountId) -> Result<Msg, Puls
             .into(),
             x => unimplemented!("wasm msg {:?}", x),
         },
+        CosmosMsg::Custom(custom) => {
+            let root = root_account();
+            ensure_eq!(sender, &root, WasmError::NotRoot);
+            match custom {
+                CustomRootMsg::Sudo { contract_addr, msg } => layer_std::WasmMsg::Sudo {
+                    sender: root,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                    msg,
+                }
+                .into(),
+                CustomRootMsg::ClearAdmin { contract_addr } => layer_std::WasmMsg::ClearAdmin {
+                    sender: root,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                }
+                .into(),
+                CustomRootMsg::UpdateAdmin {
+                    contract_addr,
+                    admin,
+                } => layer_std::WasmMsg::UpdateAdmin {
+                    sender: root,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                    admin: AccountId::parse_string(&admin)?,
+                }
+                .into(),
+                CustomRootMsg::Pin { code_id } => layer_std::WasmMsg::Pin {
+                    sender: root,
+                    code_id,
+                }
+                .into(),
+                CustomRootMsg::Unpin { code_id } => layer_std::WasmMsg::Unpin {
+                    sender: root,
+                    code_id,
+                }
+                .into(),
+                CustomRootMsg::Migrate {
+                    contract_addr,
+                    new_code_id,
+                    msg,
+                } => layer_std::WasmMsg::Migrate {
+                    sender: root,
+                    contract_addr: AccountId::parse_string(&contract_addr)?,
+                    new_code_id,
+                    msg,
+                }
+                .into(),
+            }
+        }
         _ => todo!(),
     };
     Ok(res)

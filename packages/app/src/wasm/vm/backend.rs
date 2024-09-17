@@ -2,15 +2,19 @@ use std::{collections::HashMap, fmt, mem::transmute};
 use thiserror::Error;
 
 use cosmwasm_std::{
-    from_json, to_json_binary, Binary, BlockInfo, ContractResult, Empty, Order, QueryRequest,
-    SystemError, SystemResult,
+    from_json, to_json_binary, Binary, BlockInfo, ContractResult, Order, QueryRequest, SystemError,
+    SystemResult,
 };
 use cosmwasm_vm::{
     Backend, BackendApi, BackendError, BackendResult, GasInfo, Querier as BackendQuerier,
     Storage as BackendStorage,
 };
 
-use layer_std::{response::CodeInfo, AccountId, AccountIdError, GasError, GasMeter};
+use layer_std::{
+    response::CodeInfo,
+    root::{CustomRootMsg, CustomRootQuery},
+    AccountId, AccountIdError, GasError, GasMeter,
+};
 use layer_storage::{ReadonlyStorage, Storage};
 
 use crate::{PulsarError, StateMachine};
@@ -22,8 +26,8 @@ pub const GAS_COST_HUMAN_ADDRESS: u64 = 30;
 // 2.0:
 // pub const GAS_COST_VALIDATE_ADDRESS: u64 = 20;
 
-pub type CustomQuery = Empty;
-pub type CustomMsg = Empty;
+pub type CustomQuery = CustomRootQuery;
+pub type CustomMsg = CustomRootMsg;
 
 /// A bunch of unsafe lifetime games here...
 /// Only call it where you are sure all usage of this backend and instance is completed before the references

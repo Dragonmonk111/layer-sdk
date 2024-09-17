@@ -67,7 +67,8 @@ fn happy_path_cw20() {
     // verify it matches the data field
     match res.remove(0).result.unwrap().data.remove(0) {
         MsgData::Wasm(WasmMsgData::Store { code_id, .. }) => {
-            assert_eq!(code_id, 1);
+            // Note: code_id 1 is the root contract
+            assert_eq!(code_id, 2);
         }
         x => panic!("Unexpected result: {:?}", x),
     }

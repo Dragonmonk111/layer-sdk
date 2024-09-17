@@ -1,10 +1,11 @@
 use cosmwasm_std::{coin, coins, to_json_binary};
+use layer_std::root::{GovMsg, SystemMsg};
 use layer_std::{AccountId, GasError, MsgData, WasmMsg, WasmMsgData};
 
 use crate::genesis::{BankAccount, GenesisState, WasmParams};
 use crate::testing::utils::*;
 use crate::wasm::WasmError;
-use crate::PulsarError;
+use crate::{root_account, PulsarError};
 
 // v1.2.6
 const HACKATOM: &[u8] = include_bytes!("../../fixtures/hackatom.wasm");
@@ -31,21 +32,24 @@ fn hackatom_genesis(account: &AccountId, gov_key: &AccountId) -> GenesisState {
 struct SetupData {
     app: TestApp,
     signer: PrivateKey,
+    #[allow(dead_code)]
     gov_key: PrivateKey,
     code_id: u64,
 }
 
 // create and init app
 // store the hackatom code
+// gov key registers itself as system contract
 fn setup(path: &str) -> SetupData {
     let signer = PrivateKey::random();
     let sender = signer.account_id();
 
     let gov_key = PrivateKey::random();
+    let gov_addr = gov_key.account_id();
 
     let path = prepare_cache(path);
     let mut app = TestApp::new(path);
-    let genesis = hackatom_genesis(&sender, &gov_key.account_id());
+    let genesis = hackatom_genesis(&sender, &gov_addr);
     app.init(&genesis, "hackatom");
 
     let msg = WasmMsg::StoreCode {
@@ -764,7 +768,7 @@ fn sudo_works() {
     assert_eq!(app.balance(&contract, DENOM).unwrap().u128(), 10_000_000);
     assert_eq!(app.balance(&verifier, DENOM).unwrap().u128(), 0);
 
-    // signer cannot do sudo
+    // signer cannot do wasm sudo
     let sudo_msg = msgs::SudoMsg::StealFunds {
         recipient: verifier.to_string(),
         amount: coins(7_000_000, DENOM),
@@ -772,7 +776,7 @@ fn sudo_works() {
     let sequence = app.sequence(&sender).unwrap();
     let tx = TxBuilder::new()
         .with_msg(WasmMsg::Sudo {
-            sender,
+            sender: sender.clone(),
             contract_addr: contract.clone(),
             msg: to_json_binary(&sudo_msg).unwrap(),
         })
@@ -780,22 +784,58 @@ fn sudo_works() {
     let mut res = app.block(&[tx]);
     assert_eq!(res.len(), 1);
     let err = res.remove(0).result.unwrap_err();
-    assert_eq!(err, PulsarError::Wasm(WasmError::Unauthorized {}));
+    assert_eq!(err, PulsarError::Wasm(WasmError::NotRoot));
+
+    // signer cannot call sudo via root contract right now
+    let sys_msg = SystemMsg::Sudo {
+        contract_addr: contract.to_string(),
+        msg: to_json_binary(&sudo_msg).unwrap(),
+    };
+    let root_msg = WasmMsg::Execute {
+        sender: sender.clone(),
+        contract_addr: root_account(),
+        msg: to_json_binary(&sys_msg).unwrap(),
+        funds: vec![],
+    };
+    let sequence = app.sequence(&sender).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(root_msg.clone())
+        .with_signer(&signer, sequence);
+    let mut res = app.block(&[tx]);
+    assert_eq!(res.len(), 1);
+    let err = res.remove(0).result.unwrap_err();
+    assert_eq!(
+        err,
+        PulsarError::Wasm(WasmError::Contract("Unauthorized".to_string()))
+    );
 
     // no tokens moved
     assert_eq!(app.balance(&contract, DENOM).unwrap().u128(), 10_000_000);
     assert_eq!(app.balance(&verifier, DENOM).unwrap().u128(), 0);
 
-    // gov_key can sudo to eg steal funds
-    let gov_acct = gov_key.account_id();
-    let sequence = app.sequence(&gov_acct).unwrap();
+    // call root as gov, promoting sender, to allow it to directly call as system contract later
+    let gov_addr = gov_key.account_id();
+    let msg = GovMsg::PromoteContract {
+        contract_address: sender.to_string(),
+    };
+    let msg = WasmMsg::Execute {
+        sender: gov_addr,
+        contract_addr: root_account(),
+        msg: to_json_binary(&msg).unwrap(),
+        funds: vec![],
+    };
     let tx = TxBuilder::new()
-        .with_msg(WasmMsg::Sudo {
-            sender: gov_acct,
-            contract_addr: contract.clone(),
-            msg: to_json_binary(&sudo_msg).unwrap(),
-        })
-        .with_signer(&gov_key, sequence);
+        .with_msg(msg)
+        .with_signer(&gov_key, 0)
+        .with_fee(1_000_000, coin(0, DENOM));
+    let res = app.block(&[tx]);
+    assert_block_success(&res, 1);
+
+    // signer can now sudo to eg steal funds
+    let sequence = app.sequence(&sender).unwrap();
+    let tx = TxBuilder::new()
+        .with_msg(root_msg)
+        .with_signer(&signer, sequence);
     let res = app.block(&[tx]);
     assert_block_success(&res, 1);
 
