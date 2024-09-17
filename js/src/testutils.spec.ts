@@ -40,9 +40,9 @@ export const hostName = "localhost";
 export const faucetUrl = "http://localhost:8000/";
 
 export const localNet = {
-  tendermintUrl: `http://${hostName}:36657`,
-  tendermintUrlWs: `ws://${hostName}:36657`,
-  tendermintUrlHttp: `http://${hostName}:36657`,
+  tendermintUrl: `http://${hostName}:26657`,
+  tendermintUrlWs: `ws://${hostName}:26657`,
+  tendermintUrlHttp: `http://${hostName}:26657`,
   chainId: "slay3r-dev",
   denomStaking: DENOM,
   denomFee: DENOM,

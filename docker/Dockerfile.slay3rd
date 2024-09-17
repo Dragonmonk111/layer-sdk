@@ -16,6 +16,8 @@ COPY contracts/caller/Cargo.toml /myapp/contracts/caller/Cargo.toml
 COPY dummy.rs /myapp/contracts/caller/src/lib.rs
 COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
 COPY dummy.rs /myapp/contracts/echo/src/lib.rs
+COPY contracts/root/Cargo.toml /myapp/contracts/root/Cargo.toml
+COPY dummy.rs /myapp/contracts/root/src/lib.rs
 COPY packages/abci/Cargo.toml /myapp/packages/abci/Cargo.toml
 COPY dummy.rs /myapp/packages/abci/src/lib.rs
 COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
