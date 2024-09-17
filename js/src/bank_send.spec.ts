@@ -16,8 +16,8 @@ import {
   defaultWalletOptions,
   DENOM,
   faucet,
-  makeRandomAddress,
   localNet,
+  makeRandomAddress,
 } from "./testutils.spec";
 
 describe("SigningStargateClient", () => {
@@ -25,11 +25,7 @@ describe("SigningStargateClient", () => {
     it("works", async () => {
       const wallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
-      const client = await SigningStargateClient.createWithSigner(
-        cometClient,
-        wallet,
-        defaultSigningClientOptions
-      );
+      const client = await SigningStargateClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
       const msg = MsgSend.fromPartial({
         fromAddress: faucet.address0,
@@ -56,11 +52,7 @@ describe("SigningStargateClient", () => {
       const addr = (await wallet.getAccounts())[0];
       expect(addr.address).toEqual(faucet.address0);
       const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
-      const client = await SigningStargateClient.createWithSigner(
-        cometClient,
-        wallet,
-        defaultSigningClientOptions
-      );
+      const client = await SigningStargateClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
       const amount = coins(7890, DENOM);
       const beneficiaryAddress = makeRandomAddress();
@@ -86,11 +78,7 @@ describe("SigningStargateClient", () => {
     it("works with legacy Amino signer", async () => {
       const wallet = await Secp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
       const cometClient = await Comet38Client.connect(localNet.tendermintUrl);
-      const client = await SigningStargateClient.createWithSigner(
-        cometClient,
-        wallet,
-        defaultSigningClientOptions
-      );
+      const client = await SigningStargateClient.createWithSigner(cometClient, wallet, defaultSigningClientOptions);
 
       const amount = coins(7890, DENOM);
       const beneficiaryAddress = makeRandomAddress();
