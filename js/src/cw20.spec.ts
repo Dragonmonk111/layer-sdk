@@ -270,8 +270,6 @@ describe("Contract Migrate", () => {
     expect(contractAddress).toBeTruthy();
 
     const contractInfo1 = await directClient.getContract(contractAddress);
-    console.info(contractInfo1);
-    console.info(`contractInfo1 admin is same as faucet address0: ${contractInfo1.admin === signer}`);
     expect(contractInfo1.admin).toEqual(signer);
 
     // execute migrate msg
@@ -279,23 +277,10 @@ describe("Contract Migrate", () => {
     // I don't think this is a valid migrate message for cw20, only hackatom
     const migrateMsg = { admin: newVerifier };
 
-    const { logs, events, height, gasUsed, gasWanted } = await directClient.migrate(
-      signer,
-      contractAddress,
-      codeId2,
-      migrateMsg,
-      "auto"
-    );
-    console.info(`height: ${height}`);
-    console.info(`gasUsed: ${gasUsed}`);
-    console.info(`gasWanted: ${gasWanted}`);
-
-    // logs and events
-    console.info(`logs: ${JSON.stringify(logs)}`);
-    console.info(`events: ${JSON.stringify(events)}`);
+    const { height } = await directClient.migrate(signer, contractAddress, codeId2, migrateMsg, "auto");
+    expect(height).toBeGreaterThan(0);
 
     const contractInfo2 = await directClient.getContract(contractAddress);
-    console.info(contractInfo2);
     // we change the code ID, not the admin
     expect(contractInfo2.codeId).toEqual(codeId2);
     expect(contractInfo2.admin).toEqual(signer);
@@ -303,7 +288,7 @@ describe("Contract Migrate", () => {
     // Let's change the admin now
     await directClient.updateAdmin(signer, contractAddress, newVerifier, "auto");
     const contractInfo3 = await directClient.getContract(contractAddress);
-    console.info(contractInfo3);
+
     // we change the admin, not the code ID
     expect(contractInfo3.codeId).toEqual(codeId2);
     expect(contractInfo3.admin).toEqual(newVerifier);
