@@ -109,7 +109,12 @@ impl TryFrom<&Address> for cosmrs::AccountId {
     fn try_from(addr: &Address) -> Result<Self> {
         match &addr.kind {
             AddrKind::Cosmos { prefix } => {
-                cosmrs::AccountId::new(prefix, addr.value.as_bytes()).map_err(|e| anyhow!("{e:?}"))
+                let account_id: cosmrs::AccountId =
+                    addr.value.parse().map_err(|e| anyhow!("{e:?}"))?;
+                if account_id.prefix() != prefix {
+                    bail!("Address prefix does not match expected prefix");
+                }
+                Ok(account_id)
             }
             AddrKind::Eth => {
                 bail!("Address must be Cosmos - use convert_into_cosmos() instead");
@@ -227,7 +232,7 @@ mod test {
 
     // TODO get addresses that are actually the same underlying public key
 
-    const TEST_COSMOS_STR: &str = "osmo1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsll0sqv";
+    const TEST_COSMOS_STR: &str = "osmo1h5qke5tzc0fgz93wcxg8da2en3advfect0gh4a";
     const TEST_ETH_STR: &str = "0xb794f5ea0ba39494ce839613fffba74279579268";
 
     #[test]
@@ -260,7 +265,7 @@ mod test {
     fn test_convert_eth_to_cosmos() {
         // let test_string = "0xb794f5ea0ba39494ce839613fffba74279579268";
         // let addr_bytes:AddrEth = test_string.try_into().unwrap();
-        // let addr_string:Address = (&addr_bytes).into();
+        // let addr_string:AddrString = (&addr_bytes).into();
         // let addr_string_cosmos = addr_string.convert_into_cosmos("osmo".to_string()).unwrap();
         // assert_eq!(addr_string_cosmos.to_string(), "osmo1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsll0sqv");
     }
@@ -269,7 +274,7 @@ mod test {
     fn test_convert_cosmos_to_eth() {
         // let test_string = "osmo1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsll0sqv";
         // let account_id:AccountId = test_string.parse().unwrap();
-        // let addr_string:Address = (&account_id).try_into().unwrap();
+        // let addr_string:AddrString = (&account_id).try_into().unwrap();
         // let addr_string_eth = addr_string.convert_into_eth().unwrap();
         // assert_eq!(addr_string_eth.to_string(), "0xb794f5ea0ba39494ce839613fffba74279579268");
     }
