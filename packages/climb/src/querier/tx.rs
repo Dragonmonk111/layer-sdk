@@ -44,6 +44,7 @@ impl QueryClient {
             .context("couldn't broadcast tx")
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn poll_until_tx_ready(
         &self,
         tx_hash: String,
@@ -73,6 +74,11 @@ impl QueryClient {
                     return Ok(PollTxResponse { tx, tx_response });
                 }
                 Err(e) => {
+                    tracing::info!(
+                        "failed GetTxRequest [code: {}]. Full error: {:?}",
+                        e.code(),
+                        e
+                    );
                     if e.code() != tonic::Code::Ok && e.code() != tonic::Code::NotFound {
                         return Err(e.into());
                     }
