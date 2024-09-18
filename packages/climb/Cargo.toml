@@ -26,7 +26,8 @@ tendermint = "0.39.1"
 tendermint-proto = { version = "0.39.1", default-features = false}
 reqwest = {version = "0.12.5", features=["json"]}
 tendermint-rpc = {version = "0.39.1", default-features = false}
-layer-proto = { path = "../proto"} # this will need to do the same song-and-dance as ibc-proto to support web
+cosmos-sdk-proto = {version = "0.25.0", default-features = false, features = ["std", "cosmwasm", "grpc"] }
+tracing = "0.1.40"
 
 # Wasm specific dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]

@@ -1,22 +1,30 @@
-// This is typically created from SigningClient.inner_tx()
+use crate::prelude::*;
 
 use std::sync::{
     atomic::{AtomicBool, AtomicU64},
     Arc,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
-use cosmrs::{
-    crypto::{secp256k1::SigningKey, PublicKey},
-    tx::{Fee, SignDoc, SignerInfo},
-    Coin,
-};
-
 use crate::{
     querier::QueryClient,
     signing::middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp},
-    AddrString, ChainConfig,
+    ChainConfig,
 };
+use cosmos_sdk_proto::{
+    cosmos::{
+        auth::v1beta1::BaseAccount,
+        base::abci::v1beta1::TxResponse,
+        tx::{
+            signing::v1beta1::SignMode,
+            v1beta1::{
+                mode_info, AuthInfo, BroadcastMode, Fee, ModeInfo, SignDoc, SignerInfo, TxBody,
+                TxRaw,
+            },
+        },
+    },
+    tendermint::google::protobuf::Any,
+};
+use cosmrs::crypto::{secp256k1::SigningKey, PublicKey};
 
 pub struct TxBuilder<'a> {
     pub querier: &'a QueryClient,
@@ -49,7 +57,7 @@ pub struct TxBuilder<'a> {
     pub gas_simulate_multiplier: Option<f32>,
 
     /// The broadcast mode to use. If not set, the default is `Sync`
-    pub broadcast_mode: Option<cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode>,
+    pub broadcast_mode: Option<BroadcastMode>,
 
     /// Whether broadcasting should poll for the tx landing on chain before returning
     /// default is true
@@ -73,8 +81,7 @@ pub struct TxBuilder<'a> {
 impl<'a> TxBuilder<'a> {
     const DEFAULT_TX_TIMEOUT_BLOCKS: u64 = 10;
     const DEFAULT_GAS_MULTIPLIER: f32 = 1.5;
-    const DEFAULT_BROADCAST_MODE: cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode =
-        cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode::Sync;
+    const DEFAULT_BROADCAST_MODE: BroadcastMode = BroadcastMode::Sync;
     const DEFAULT_BROADCAST_POLL_SLEEP_DURATION: std::time::Duration =
         std::time::Duration::from_secs(1);
     const DEFAULT_BROADCAST_POLL_TIMEOUT_DURATION: std::time::Duration =
@@ -141,10 +148,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    pub fn set_broadcast_mode(
-        &mut self,
-        broadcast_mode: cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode,
-    ) -> &mut Self {
+    pub fn set_broadcast_mode(&mut self, broadcast_mode: BroadcastMode) -> &mut Self {
         self.broadcast_mode = Some(broadcast_mode);
         self
     }
@@ -186,9 +190,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    async fn query_base_account(
-        &self,
-    ) -> Result<cosmrs::proto::cosmos::auth::v1beta1::BaseAccount> {
+    async fn query_base_account(&self) -> Result<BaseAccount> {
         self.querier
             .base_account(
                 self.sender
@@ -198,17 +200,20 @@ impl<'a> TxBuilder<'a> {
             .await
     }
 
-    pub async fn broadcast(
-        self,
-        messages: impl IntoIterator<Item = cosmrs::Any>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    pub async fn broadcast(self, messages: impl IntoIterator<Item = Any>) -> Result<TxResponse> {
         let block_height = self.querier.block_height().await?;
+
         let tx_timeout_blocks = self
             .tx_timeout_blocks
             .unwrap_or(Self::DEFAULT_TX_TIMEOUT_BLOCKS);
-        let timeout_height =
-            cosmrs::tendermint::block::Height::try_from(block_height + tx_timeout_blocks)?;
-        let mut body = cosmrs::tx::Body::new(messages, "", timeout_height);
+
+        let mut body = TxBody {
+            messages: messages.into_iter().map(Into::into).collect(),
+            memo: "".to_string(),
+            timeout_height: block_height + tx_timeout_blocks,
+            extension_options: Default::default(),
+            non_critical_extension_options: Default::default(),
+        };
 
         if let Some(middleware) = self.middleware_map_body.as_ref() {
             for middleware in middleware.iter() {
@@ -266,22 +271,44 @@ impl<'a> TxBuilder<'a> {
             },
         };
 
-        let sign_tx = |fee: Fee| -> Result<Vec<u8>> {
-            let signer_info = SignerInfo::single_direct(self.public_key, sequence);
-            let auth_info = signer_info.auth_info(fee);
-            let sign_doc = SignDoc::new(
-                &body,
-                &auth_info,
-                &self.querier.chain_config.chain_id.as_str().try_into()?,
-                account_number,
-            )
-            .map_err(|err| anyhow!("{}", err))?;
-            let tx_raw = sign_doc
-                .sign(self.signing_key)
-                .map_err(|err| anyhow!("{}", err))?;
-            let tx_bytes = tx_raw.to_bytes().map_err(|err| anyhow!("{}", err))?;
+        let sign_tx = |fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee| -> Result<Vec<u8>> {
+            //let signer_info = cosmrs::tx::SignerInfo::single_direct(self.public_key, sequence);
+            let signer_info = SignerInfo {
+                public_key: self.public_key.map(Into::into),
+                mode_info: Some(ModeInfo {
+                    sum: Some(mode_info::Sum::Single(mode_info::Single {
+                        mode: SignMode::Direct.into(),
+                    })),
+                }),
+                sequence,
+            };
 
-            Ok(tx_bytes)
+            #[allow(deprecated)]
+            let auth_info = AuthInfo {
+                signer_infos: vec![signer_info],
+                fee: Some(fee),
+                tip: None,
+            };
+
+            let sign_doc = SignDoc {
+                body_bytes: body.to_bytes()?,
+                auth_info_bytes: auth_info.to_bytes()?,
+                chain_id: self.querier.chain_config.chain_id.to_string(),
+                account_number,
+            };
+
+            let signature = self
+                .signing_key
+                .sign(&sign_doc.to_bytes()?)
+                .map_err(|e| anyhow!("{}", e))?;
+
+            let tx_raw = TxRaw {
+                body_bytes: sign_doc.body_bytes.clone(),
+                auth_info_bytes: sign_doc.auth_info_bytes.clone(),
+                signatures: vec![signature.to_vec()],
+            };
+
+            tx_raw.to_bytes().map_err(|e| anyhow!("{}", e))
         };
 
         let gas_units = match self.gas_units_or_simulate {
@@ -428,11 +455,8 @@ pub enum FeeCalculation<'a> {
 
 impl<'a> FeeCalculation<'a> {
     pub fn calculate(&self) -> Result<Fee> {
-        let (gas_coin, gas_units) = match self {
-            Self::Simulation { chain_config } => (
-                Coin::new(0, &chain_config.gas_denom).map_err(|e| anyhow!("{}", e))?,
-                0,
-            ),
+        let (gas_coin, gas_limit) = match self {
+            Self::Simulation { chain_config } => (new_coin(0, &chain_config.gas_denom), 0),
             Self::RealNetwork {
                 chain_config,
                 gas_units,
@@ -442,10 +466,7 @@ impl<'a> FeeCalculation<'a> {
                     .parse::<f32>()
                     .map_err(|e| anyhow!("{}", e))?;
                 let amount = (price * *gas_units as f32).ceil() as u128;
-                (
-                    Coin::new(amount, &chain_config.gas_denom).map_err(|e| anyhow!("{}", e))?,
-                    *gas_units,
-                )
+                (new_coin(amount, &chain_config.gas_denom), *gas_units)
             }
             Self::RealCoin {
                 gas_coin,
@@ -453,6 +474,11 @@ impl<'a> FeeCalculation<'a> {
             } => (gas_coin.clone(), *gas_units),
         };
 
-        Ok(Fee::from_amount_and_gas(gas_coin, gas_units))
+        Ok(Fee {
+            amount: vec![gas_coin],
+            gas_limit,
+            payer: "".to_string(),
+            granter: "".to_string(),
+        })
     }
 }

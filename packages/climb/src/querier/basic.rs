@@ -1,8 +1,4 @@
-use anyhow::{anyhow, Context, Result};
-use cosmrs::proto::prost::Message;
-use cosmwasm_std::Uint128;
-
-use crate::AddrString;
+use crate::prelude::*;
 
 use super::{QueryClient, QueryRequest};
 
@@ -15,7 +11,7 @@ impl QueryClient {
         &self,
         addr: AddrString,
         limit_per_page: Option<u64>,
-    ) -> Result<Vec<cosmwasm_std::Coin>> {
+    ) -> Result<Vec<Coin>> {
         self.run_with_middleware(AllBalancesReq {
             addr,
             limit_per_page,
@@ -91,7 +87,7 @@ pub struct AllBalancesReq {
 }
 
 impl QueryRequest for AllBalancesReq {
-    type QueryResponse = Vec<cosmwasm_std::Coin>;
+    type QueryResponse = Vec<Coin>;
 
     async fn request(&self, client: QueryClient) -> Result<Self::QueryResponse> {
         let mut query_client = cosmrs::proto::cosmos::bank::v1beta1::query_client::QueryClient::new(
@@ -118,17 +114,7 @@ impl QueryRequest for AllBalancesReq {
                 .await
                 .map(|res| res.into_inner())?;
 
-            coins.extend(resp.balances.into_iter().map(|coin| {
-                let amount = coin
-                    .amount
-                    .parse::<Uint128>()
-                    .context("couldn't parse amount")
-                    .unwrap();
-                cosmwasm_std::Coin {
-                    denom: coin.denom,
-                    amount,
-                }
-            }));
+            coins.extend(resp.balances);
 
             match &resp.pagination {
                 None => break,

@@ -3,6 +3,7 @@ mod config;
 mod events;
 mod ibc_types;
 mod network;
+pub mod prelude;
 mod proto_helpers;
 pub mod querier;
 pub mod signing;

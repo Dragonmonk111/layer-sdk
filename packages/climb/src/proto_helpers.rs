@@ -16,12 +16,3 @@ where
 {
     cosmrs::Any::from_msg(msg).map_err(|e| e.into())
 }
-
-pub fn msg_layer_into_cosmrs_any<M>(type_url: String, msg: &M) -> Result<cosmrs::Any>
-where
-    M: cosmrs::tx::MessageExt,
-{
-    let mut value = Vec::new();
-    cosmrs::proto::prost::Message::encode(msg, &mut value)?;
-    Ok(cosmrs::Any { type_url, value })
-}
