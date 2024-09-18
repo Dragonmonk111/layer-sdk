@@ -252,7 +252,7 @@ mod test {
     fn test_basic_roundtrip_cosmos() {
         let test_string = TEST_COSMOS_STR;
         let account_id: AccountId = test_string.parse().unwrap();
-        let addr_string: Address = (&account_id).try_into().unwrap();
+        let addr_string: Address = (&account_id).into();
 
         assert_eq!(addr_string.to_string(), test_string);
         assert!(matches!(addr_string.kind, AddrKind::Cosmos { .. }));
