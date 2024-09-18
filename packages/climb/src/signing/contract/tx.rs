@@ -63,7 +63,7 @@ impl SigningClient {
             .value()
             .to_string();
 
-        let contract_address = self.querier.chain_config.parse_address(contract_address)?;
+        let contract_address = self.querier.chain_config.parse_address(&contract_address)?;
 
         Ok((contract_address, resp))
     }

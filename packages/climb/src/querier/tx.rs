@@ -74,7 +74,7 @@ impl QueryClient {
                     return Ok(PollTxResponse { tx, tx_response });
                 }
                 Err(e) => {
-                    tracing::info!(
+                    tracing::debug!(
                         "failed GetTxRequest [code: {}]. Full error: {:?}",
                         e.code(),
                         e

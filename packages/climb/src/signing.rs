@@ -15,8 +15,8 @@ use middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
 
 use super::TxBuilder;
 use crate::{
-    msg_into_cosmrs_any, querier::QueryClient, Address, ChainConfig, ChainId, SequenceStrategy,
-    SequenceStrategyKind,
+    msg_into_cosmrs_any, querier::QueryClient, AddrKind, Address, ChainConfig, ChainId,
+    SequenceStrategy, SequenceStrategyKind,
 };
 
 // Each combo of chain and seed phrase gets a single signing client
@@ -61,8 +61,12 @@ impl SigningClient {
         sequence_strategy: Option<SequenceStrategy>,
         signing_key: SigningKey,
     ) -> Result<Self> {
-        let addr =
-            Address::new_pub_key(&signing_key.public_key(), chain_config.address_kind.clone())?;
+        let addr = match &chain_config.address_kind {
+            AddrKind::Cosmos { prefix } => {
+                Address::new_cosmos_pub_key(&signing_key.public_key(), prefix)?
+            }
+            AddrKind::Eth => Address::new_eth_pub_key(&signing_key.public_key())?,
+        };
 
         let client = {
             // keep lock in scope so it can be definitively dropped before the await

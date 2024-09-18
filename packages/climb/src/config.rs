@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
-use crate::{AddrKind, Address};
+use crate::Address;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChainConfig {
@@ -13,6 +13,27 @@ pub struct ChainConfig {
     pub gas_amount: String,
     pub gas_denom: String,
     pub address_kind: AddrKind,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AddrKind {
+    Cosmos { prefix: String },
+    Eth,
+}
+
+impl std::hash::Hash for AddrKind {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            AddrKind::Cosmos { prefix } => {
+                1u32.hash(state);
+                prefix.hash(state);
+            }
+            AddrKind::Eth => {
+                2u32.hash(state);
+            }
+        }
+    }
 }
 
 impl ChainConfig {
@@ -29,8 +50,18 @@ impl ChainConfig {
             .unwrap_or_default())
     }
 
-    pub fn parse_address(&self, value: impl Into<String>) -> Result<Address> {
-        Address::new(&value.into(), self.address_kind.clone())
+    pub fn parse_address(&self, value: &str) -> Result<Address> {
+        match &self.address_kind {
+            AddrKind::Cosmos { prefix } => Address::new_cosmos(value, prefix),
+            AddrKind::Eth => Address::new_eth(value),
+        }
+    }
+
+    pub fn new_address_pub_key(&self, pub_key: &cosmrs::crypto::PublicKey) -> Result<Address> {
+        match &self.address_kind {
+            AddrKind::Cosmos { prefix } => Address::new_cosmos_pub_key(pub_key, prefix),
+            AddrKind::Eth => Address::new_eth_pub_key(pub_key),
+        }
     }
 }
 

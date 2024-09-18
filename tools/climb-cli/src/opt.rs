@@ -3,19 +3,51 @@ use std::{path::PathBuf, str::FromStr};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use cosmwasm_std::Coin;
-use layer_climb::{cosmrs::crypto::secp256k1::SigningKey, querier::QueryClient, signing::{key::cosmos_signing_key, SigningClient}, AddrKind, Address, ChainConfig};
+use layer_climb::{
+    cosmrs::crypto::secp256k1::SigningKey,
+    prelude::*,
+    querier::QueryClient,
+    signing::{key::cosmos_signing_key, SigningClient},
+    AddrKind, Address, ChainConfig,
+};
 use serde::{Deserialize, Serialize};
 
 // https://docs.rs/clap/latest/clap/_derive/_tutorial/chapter_0/index.html
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Args {
+pub struct Args {
     #[arg(long, value_enum, default_value_t = TargetEnvironment::Local)]
     pub target_env: TargetEnvironment,
 
+    /// Set the logging level
+    #[arg(long, value_enum, default_value_t = LogLevel::Info)]
+    //#[arg(long, value_enum, default_value_t = LogLevel::Debug)]
+    pub log_level: LogLevel,
+
     #[command(subcommand)]
     pub command: Command,
+}
+
+#[derive(Copy, Clone, Debug, clap::ValueEnum)]
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl From<LogLevel> for tracing::Level {
+    fn from(log_level: LogLevel) -> Self {
+        match log_level {
+            LogLevel::Trace => tracing::Level::TRACE,
+            LogLevel::Debug => tracing::Level::DEBUG,
+            LogLevel::Info => tracing::Level::INFO,
+            LogLevel::Warn => tracing::Level::WARN,
+            LogLevel::Error => tracing::Level::ERROR,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -26,8 +58,7 @@ pub enum TargetEnvironment {
 
 #[derive(Subcommand)]
 pub enum Command {
-    WalletShow {
-    },
+    WalletShow {},
     TapFaucet {
         #[arg(long)]
         amount: Option<u128>,
@@ -42,27 +73,30 @@ pub struct Opt {
 }
 
 impl Opt {
-    pub async fn parse() -> Result<Self> {
-
-        let args = Args::parse();
-
+    pub async fn new(args: Args) -> Result<Self> {
         let mnemonic = match args.target_env {
             TargetEnvironment::Local => std::env::var("LOCAL_MNEMONIC"),
-            TargetEnvironment::Testnet => std::env::var("TEST_MNEMONIC")
-        }.context("Mnemonic not found")?;
+            TargetEnvironment::Testnet => std::env::var("TEST_MNEMONIC"),
+        }
+        .context("Mnemonic not found")?;
 
-        let configs: Config = serde_json::from_str(include_str!("../config.json")).context("Failed to parse config")?;
+        let configs: Config = serde_json::from_str(include_str!("../config.json"))
+            .context("Failed to parse config")?;
 
         let chain_config = match args.target_env {
             TargetEnvironment::Local => configs.chains.local,
-            TargetEnvironment::Testnet => configs.chains.testnet
-        }.context(format!("Chain config for environment {:?} not found", args.target_env))?;
+            TargetEnvironment::Testnet => configs.chains.testnet,
+        }
+        .context(format!(
+            "Chain config for environment {:?} not found",
+            args.target_env
+        ))?;
 
         Ok(Opt {
             command: args.command,
             chain_config,
             mnemonic,
-            faucet_config: configs.faucet
+            faucet_config: configs.faucet,
         })
     }
 
@@ -71,8 +105,8 @@ impl Opt {
     }
 
     pub fn address(&self) -> Result<Address> {
-        let addr = Address::new_pub_key(&self.signing_key()?.public_key(), self.chain_config.address_kind.clone())?;
-        Ok(addr)
+        self.chain_config
+            .new_address_pub_key(&self.signing_key()?.public_key())
     }
 
     pub async fn query_client(&self) -> Result<QueryClient> {
@@ -92,7 +126,7 @@ impl Opt {
 #[derive(Debug, Deserialize, Serialize)]
 struct Config {
     pub chains: ChainConfigs,
-    pub faucet: FaucetConfig
+    pub faucet: FaucetConfig,
 }
 #[derive(Debug, Deserialize, Serialize)]
 struct ChainConfigs {

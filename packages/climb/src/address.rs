@@ -1,78 +1,79 @@
+use std::{hash::Hash, str::FromStr};
+
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 
 /// The canonical type used everywhere for addresses
-/// the internal representation is as a String, so that
-/// it's cheap to impl Display, which is the common usecase
-/// however, by keeping the AddrKind around, we can do conversions
-/// to and from different byte-level representations
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub struct Address {
-    pub value: String,
-    pub kind: AddrKind,
+/// Display is implemented as plain string
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Address {
+    Cosmos(cosmrs::AccountId),
+    Eth(AddrEth),
+}
+
+impl Hash for Address {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Address::Cosmos(_) => {
+                1u32.hash(state);
+            }
+            Address::Eth(_) => {
+                2u32.hash(state);
+            }
+        }
+        self.to_string().hash(state);
+    }
 }
 
 impl Address {
-    // this will attempt to validate the address
-    // if you already know that it's valid, just create the struct directly
-    pub fn new(value: &str, kind: AddrKind) -> Result<Self> {
-        match &kind {
-            AddrKind::Cosmos { prefix } => {
-                let account_id: cosmrs::AccountId = value.parse().map_err(|e| anyhow!("{e:?}"))?;
-                if account_id.prefix() != prefix {
-                    bail!("Address prefix does not match expected prefix");
+    // this will attempt to validate the address.
+    // If you want to avoid that, use the From trait
+    pub fn new_cosmos(value: &str, prefix: &str) -> Result<Self> {
+        let account_id: cosmrs::AccountId = value.parse().map_err(|e| anyhow!("{e:?}"))?;
+        if account_id.prefix() != prefix {
+            bail!("Address prefix does not match expected prefix");
+        }
+
+        Ok(Self::Cosmos(account_id))
+    }
+
+    pub fn new_eth(value: &str) -> Result<Self> {
+        let addr_eth: AddrEth = value.parse()?;
+        Ok(Self::Eth(addr_eth))
+    }
+
+    pub fn new_cosmos_pub_key(pub_key: &cosmrs::crypto::PublicKey, prefix: &str) -> Result<Self> {
+        let account_id = pub_key.account_id(prefix).map_err(|e| anyhow!("{e:?}"))?;
+        Ok(Self::Cosmos(account_id))
+    }
+
+    pub fn new_eth_pub_key(_pub_key: &cosmrs::crypto::PublicKey) -> Result<Self> {
+        bail!("TODO - implement eth address from public key");
+    }
+
+    pub fn into_cosmos(&self, prefix: &str) -> Result<Self> {
+        match self {
+            Address::Cosmos(account_id) => {
+                if account_id.prefix() == prefix {
+                    Ok(self.clone())
+                } else {
+                    let account_id = cosmrs::AccountId::new(prefix, &account_id.to_bytes())
+                        .map_err(|e| anyhow!("{e:?}"))?;
+                    Ok(Self::Cosmos(account_id))
                 }
-
-                Ok(Self {
-                    value: value.to_string(),
-                    kind,
-                })
             }
-            AddrKind::Eth => {
-                AddrEth::try_from(value)?;
-                Ok(Self {
-                    value: value.to_string(),
-                    kind,
-                })
-            }
-        }
-    }
-
-    pub fn new_pub_key(pub_key: &cosmrs::crypto::PublicKey, kind: AddrKind) -> Result<Self> {
-        match &kind {
-            AddrKind::Cosmos { prefix } => {
-                let account_id = pub_key.account_id(prefix).map_err(|e| anyhow!("{e:?}"))?;
-                Ok(Self {
-                    value: account_id.to_string(),
-                    kind,
-                })
-            }
-            AddrKind::Eth => {
-                bail!("TODO - implement pub_key to eth addr");
-            }
-        }
-    }
-
-    // for native conversions, all the From/Into traits are implemented
-    // but sometimes we want to convert from one kind to another
-    pub fn convert_into_cosmos(&self, prefix: String) -> Result<Self> {
-        match &self.kind {
-            AddrKind::Cosmos { .. } => Ok(Self {
-                value: self.value.clone(),
-                kind: AddrKind::Cosmos { prefix },
-            }),
-            AddrKind::Eth => {
+            Address::Eth(_) => {
                 bail!("TODO - implement eth to cosmos addr");
             }
         }
     }
 
-    pub fn convert_into_eth(&self) -> Result<Self> {
-        match &self.kind {
-            AddrKind::Cosmos { .. } => {
+    pub fn into_eth(&self) -> Result<Self> {
+        match self {
+            Address::Eth(_) => Ok(self.clone()),
+            Address::Cosmos(_) => {
                 bail!("TODO - implement cosmos to eth addr");
             }
-            AddrKind::Eth => Ok(self.clone()),
         }
     }
 }
@@ -80,60 +81,32 @@ impl Address {
 // the display impl ignores the kind
 impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum AddrKind {
-    Eth,
-    Cosmos { prefix: String },
-}
-
-///// Cosmos address
-impl From<&cosmrs::AccountId> for Address {
-    fn from(addr: &cosmrs::AccountId) -> Self {
-        Address {
-            value: addr.to_string(),
-            kind: AddrKind::Cosmos {
-                prefix: addr.prefix().to_string(),
-            },
+        match self {
+            Self::Cosmos(account_id) => {
+                write!(f, "{}", account_id)
+            }
+            Self::Eth(addr_eth) => {
+                write!(f, "{}", addr_eth)
+            }
         }
     }
 }
 
-impl TryFrom<&Address> for cosmrs::AccountId {
+///// Cosmos address
+impl TryFrom<Address> for cosmrs::AccountId {
     type Error = anyhow::Error;
 
-    fn try_from(addr: &Address) -> Result<Self> {
-        match &addr.kind {
-            AddrKind::Cosmos { prefix } => {
-                let account_id: cosmrs::AccountId =
-                    addr.value.parse().map_err(|e| anyhow!("{e:?}"))?;
-                if account_id.prefix() != prefix {
-                    bail!("Address prefix does not match expected prefix");
-                }
-                Ok(account_id)
-            }
-            AddrKind::Eth => {
-                bail!("Address must be Cosmos - use convert_into_cosmos() instead");
-            }
+    fn try_from(addr: Address) -> Result<Self> {
+        match addr {
+            Address::Cosmos(account_id) => Ok(account_id),
+            Address::Eth(_) => bail!("Address must be Cosmos - use into_cosmos() instead"),
         }
     }
 }
 
 impl From<cosmrs::AccountId> for Address {
-    fn from(addr: cosmrs::AccountId) -> Self {
-        (&addr).into()
-    }
-}
-
-impl TryFrom<Address> for cosmrs::AccountId {
-    type Error = anyhow::Error;
-
-    fn try_from(addr: Address) -> Result<Self> {
-        (&addr).try_into()
+    fn from(account_id: cosmrs::AccountId) -> Self {
+        Self::Cosmos(account_id)
     }
 }
 
@@ -147,54 +120,39 @@ impl AddrEth {
         Self(bytes)
     }
 
+    pub fn new_vec(bytes: Vec<u8>) -> Result<Self> {
+        if bytes.len() != 20 {
+            bail!("Invalid length for eth address");
+        }
+        let mut arr = [0u8; 20];
+        arr.copy_from_slice(&bytes);
+        Ok(Self(arr))
+    }
+
     pub fn as_bytes(&self) -> [u8; 20] {
         self.0
     }
 }
 
-impl From<&AddrEth> for Address {
-    fn from(addr: &AddrEth) -> Self {
-        Address {
-            value: format!("0x{}", hex::encode(addr.0)),
-            kind: AddrKind::Eth,
+impl std::fmt::Display for AddrEth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{}", hex::encode(self.0))
+    }
+}
+
+impl FromStr for AddrEth {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let s = s.trim();
+        if s.len() != 42 {
+            bail!("Invalid length for eth address");
         }
-    }
-}
-
-impl TryFrom<&Address> for AddrEth {
-    type Error = anyhow::Error;
-
-    fn try_from(addr: &Address) -> Result<Self> {
-        match addr.kind {
-            AddrKind::Eth => addr.to_string().try_into(),
-            AddrKind::Cosmos { .. } => {
-                bail!("Address must be Ethereum, use convert_into_eth() instead");
-            }
+        if !s.starts_with("0x") {
+            bail!("Invalid prefix for eth address");
         }
-    }
-}
-
-impl TryFrom<&[u8]> for AddrEth {
-    type Error = anyhow::Error;
-
-    fn try_from(bytes: &[u8]) -> Result<Self> {
-        Ok(Self::new(bytes.try_into().map_err(|e| anyhow!("{e:?}"))?))
-    }
-}
-
-impl TryFrom<&str> for AddrEth {
-    type Error = anyhow::Error;
-
-    fn try_from(s: &str) -> Result<Self> {
-        // strip off leading "0x"
-        let s = s.strip_prefix("0x").unwrap_or(s);
-        hex::decode(s)?.try_into()
-    }
-}
-
-impl From<AddrEth> for Address {
-    fn from(addr: AddrEth) -> Self {
-        (&addr).into()
+        let bytes = hex::decode(&s[2..])?;
+        Self::new_vec(bytes)
     }
 }
 
@@ -202,33 +160,23 @@ impl TryFrom<Address> for AddrEth {
     type Error = anyhow::Error;
 
     fn try_from(addr: Address) -> Result<Self> {
-        (&addr).try_into()
+        match addr {
+            Address::Eth(addr_eth) => Ok(addr_eth),
+            Address::Cosmos(_) => bail!("Address must be Eth - use into_eth() instead"),
+        }
     }
 }
 
-impl TryFrom<Vec<u8>> for AddrEth {
-    type Error = anyhow::Error;
-
-    fn try_from(bytes: Vec<u8>) -> Result<Self> {
-        bytes.as_slice().try_into()
-    }
-}
-
-impl TryFrom<String> for AddrEth {
-    type Error = anyhow::Error;
-
-    fn try_from(s: String) -> Result<Self> {
-        s.as_str().try_into()
+impl From<AddrEth> for Address {
+    fn from(addr: AddrEth) -> Self {
+        Self::Eth(addr)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use cosmrs::AccountId;
-
-    use crate::AddrKind;
-
     use super::{AddrEth, Address};
+    use cosmrs::AccountId;
 
     // TODO get addresses that are actually the same underlying public key
 
@@ -238,26 +186,24 @@ mod test {
     #[test]
     fn test_basic_roundtrip_eth() {
         let test_string = TEST_ETH_STR;
-        let addr_bytes: AddrEth = test_string.try_into().unwrap();
-        let addr_string: Address = (&addr_bytes).into();
+        let addr_eth: AddrEth = test_string.parse().unwrap();
+        let addr: Address = addr_eth.into();
 
-        assert_eq!(addr_string.to_string(), test_string);
-        assert_eq!(addr_string.kind, AddrKind::Eth);
+        assert_eq!(addr.to_string(), test_string);
 
-        let addr_bytes2: AddrEth = addr_string.try_into().unwrap();
-        assert_eq!(addr_bytes2, addr_bytes);
+        let addr_eth_2: AddrEth = addr.try_into().unwrap();
+        assert_eq!(addr_eth_2, addr_eth);
     }
 
     #[test]
     fn test_basic_roundtrip_cosmos() {
         let test_string = TEST_COSMOS_STR;
         let account_id: AccountId = test_string.parse().unwrap();
-        let addr_string: Address = (&account_id).into();
+        let addr: Address = account_id.clone().into();
 
-        assert_eq!(addr_string.to_string(), test_string);
-        assert!(matches!(addr_string.kind, AddrKind::Cosmos { .. }));
+        assert_eq!(addr.to_string(), test_string);
 
-        let account_id_2: AccountId = addr_string.try_into().unwrap();
+        let account_id_2: AccountId = addr.try_into().unwrap();
         assert_eq!(account_id_2, account_id);
     }
 
