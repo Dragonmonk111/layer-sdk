@@ -90,7 +90,13 @@ impl Service for TxService {
         let binary = hex::decode(&request.get_ref().hash).map_err(invalid_arg)?;
         let hash = tendermint::hash::Hash::try_from(binary).map_err(invalid_arg)?;
         // This returns an error if hash not found
-        let tx = self.client.tx(hash, false).await.map_err(gateway_error)?;
+        // We now hardcode the error to "not found" rather than "internal" for compatibility with client tools.
+        // I am very unsure how to differentiate the two based on the Tendermint RPC error enum.
+        let tx = self
+            .client
+            .tx(hash, false)
+            .await
+            .map_err(|e| Status::new(tonic::Code::NotFound, e.to_string()))?;
         let time = self.get_blocktime(tx.height).await?;
 
         let response = GetTxResponse {
