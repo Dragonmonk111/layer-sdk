@@ -3,13 +3,13 @@ use crate::prelude::*;
 use super::{QueryClient, QueryRequest};
 
 impl QueryClient {
-    pub async fn balance(&self, addr: AddrString, denom: Option<String>) -> Result<Option<u64>> {
+    pub async fn balance(&self, addr: Address, denom: Option<String>) -> Result<Option<u64>> {
         self.run_with_middleware(BalanceReq { addr, denom }).await
     }
 
     pub async fn all_balances(
         &self,
-        addr: AddrString,
+        addr: Address,
         limit_per_page: Option<u64>,
     ) -> Result<Vec<Coin>> {
         self.run_with_middleware(AllBalancesReq {
@@ -21,7 +21,7 @@ impl QueryClient {
 
     pub async fn base_account(
         &self,
-        addr: &AddrString,
+        addr: &Address,
     ) -> Result<cosmrs::proto::cosmos::auth::v1beta1::BaseAccount> {
         self.run_with_middleware(BaseAccountReq { addr: addr.clone() })
             .await
@@ -42,7 +42,7 @@ impl QueryClient {
 
 #[derive(Clone, Debug)]
 pub struct BalanceReq {
-    pub addr: AddrString,
+    pub addr: Address,
     pub denom: Option<String>,
 }
 
@@ -82,7 +82,7 @@ impl QueryRequest for BalanceReq {
 
 #[derive(Clone, Debug)]
 pub struct AllBalancesReq {
-    pub addr: AddrString,
+    pub addr: Address,
     pub limit_per_page: Option<u64>,
 }
 
@@ -143,7 +143,7 @@ impl QueryRequest for AllBalancesReq {
 
 #[derive(Clone, Debug)]
 pub struct BaseAccountReq {
-    pub addr: AddrString,
+    pub addr: Address,
 }
 
 impl QueryRequest for BaseAccountReq {

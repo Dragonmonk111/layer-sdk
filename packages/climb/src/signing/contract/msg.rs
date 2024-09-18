@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::{querier::contract::ContractMessage, signing::SigningClient, AddrString};
+use crate::{querier::contract::ContractMessage, signing::SigningClient, Address};
 
 impl SigningClient {
     pub fn contract_upload_file_msg(
@@ -75,7 +75,7 @@ impl SigningClient {
 }
 
 pub struct InstantiateParams<'a, T: Serialize> {
-    pub admin: Option<AddrString>,
+    pub admin: Option<Address>,
     pub code_id: u64,
     pub label: String,
     pub funds: Option<Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>>,
@@ -98,20 +98,20 @@ impl<'a, T: Serialize> InstantiateParams<'a, T> {
         self
     }
 
-    pub fn set_admin(mut self, admin: AddrString) -> Self {
+    pub fn set_admin(mut self, admin: Address) -> Self {
         self.admin = Some(admin);
         self
     }
 }
 
 pub struct ExecuteParams<'a, T: Serialize> {
-    pub address: AddrString,
+    pub address: Address,
     pub funds: Option<Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>>,
     pub msg: ContractMessage<'a, T>,
 }
 
 impl<'a, T: Serialize> ExecuteParams<'a, T> {
-    pub fn new(address: AddrString, msg: ContractMessage<'a, T>) -> Self {
+    pub fn new(address: Address, msg: ContractMessage<'a, T>) -> Self {
         Self {
             address,
             funds: None,
@@ -126,13 +126,13 @@ impl<'a, T: Serialize> ExecuteParams<'a, T> {
 }
 
 pub struct MigrateParams<'a, T: Serialize> {
-    pub address: AddrString,
+    pub address: Address,
     pub code_id: u64,
     pub msg: ContractMessage<'a, T>,
 }
 
 impl<'a, T: Serialize> MigrateParams<'a, T> {
-    pub fn new(address: AddrString, code_id: u64, msg: ContractMessage<'a, T>) -> Self {
+    pub fn new(address: Address, code_id: u64, msg: ContractMessage<'a, T>) -> Self {
         Self {
             address,
             code_id,

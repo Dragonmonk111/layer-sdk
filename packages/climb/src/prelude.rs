@@ -1,6 +1,6 @@
 pub(super) use anyhow::{anyhow, bail, Context, Result};
 
-pub use crate::AddrString;
+pub use crate::Address;
 
 // helpers re-exported
 pub use cosmos_sdk_proto::traits::Message;

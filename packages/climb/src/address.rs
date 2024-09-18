@@ -2,14 +2,20 @@ use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 
 /// The canonical type used everywhere for addresses
+/// the internal representation is as a String, so that
+/// it's cheap to impl Display, which is the common usecase
+/// however, by keeping the AddrKind around, we can do conversions
+/// to and from different byte-level representations
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub struct AddrString {
+pub struct Address {
     pub value: String,
     pub kind: AddrKind,
 }
 
-impl AddrString {
-    pub fn parse(value: &str, kind: AddrKind) -> Result<Self> {
+impl Address {
+    // this will attempt to validate the address
+    // if you already know that it's valid, just create the struct directly
+    pub fn new(value: &str, kind: AddrKind) -> Result<Self> {
         match &kind {
             AddrKind::Cosmos { prefix } => {
                 let account_id: cosmrs::AccountId = value.parse().map_err(|e| anyhow!("{e:?}"))?;
@@ -72,7 +78,7 @@ impl AddrString {
 }
 
 // the display impl ignores the kind
-impl std::fmt::Display for AddrString {
+impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
@@ -86,9 +92,9 @@ pub enum AddrKind {
 }
 
 ///// Cosmos address
-impl From<&cosmrs::AccountId> for AddrString {
+impl From<&cosmrs::AccountId> for Address {
     fn from(addr: &cosmrs::AccountId) -> Self {
-        AddrString {
+        Address {
             value: addr.to_string(),
             kind: AddrKind::Cosmos {
                 prefix: addr.prefix().to_string(),
@@ -97,10 +103,10 @@ impl From<&cosmrs::AccountId> for AddrString {
     }
 }
 
-impl TryFrom<&AddrString> for cosmrs::AccountId {
+impl TryFrom<&Address> for cosmrs::AccountId {
     type Error = anyhow::Error;
 
-    fn try_from(addr: &AddrString) -> Result<Self> {
+    fn try_from(addr: &Address) -> Result<Self> {
         match &addr.kind {
             AddrKind::Cosmos { prefix } => {
                 cosmrs::AccountId::new(prefix, addr.value.as_bytes()).map_err(|e| anyhow!("{e:?}"))
@@ -112,16 +118,16 @@ impl TryFrom<&AddrString> for cosmrs::AccountId {
     }
 }
 
-impl From<cosmrs::AccountId> for AddrString {
+impl From<cosmrs::AccountId> for Address {
     fn from(addr: cosmrs::AccountId) -> Self {
         (&addr).into()
     }
 }
 
-impl TryFrom<AddrString> for cosmrs::AccountId {
+impl TryFrom<Address> for cosmrs::AccountId {
     type Error = anyhow::Error;
 
-    fn try_from(addr: AddrString) -> Result<Self> {
+    fn try_from(addr: Address) -> Result<Self> {
         (&addr).try_into()
     }
 }
@@ -141,19 +147,19 @@ impl AddrEth {
     }
 }
 
-impl From<&AddrEth> for AddrString {
+impl From<&AddrEth> for Address {
     fn from(addr: &AddrEth) -> Self {
-        AddrString {
+        Address {
             value: format!("0x{}", hex::encode(addr.0)),
             kind: AddrKind::Eth,
         }
     }
 }
 
-impl TryFrom<&AddrString> for AddrEth {
+impl TryFrom<&Address> for AddrEth {
     type Error = anyhow::Error;
 
-    fn try_from(addr: &AddrString) -> Result<Self> {
+    fn try_from(addr: &Address) -> Result<Self> {
         match addr.kind {
             AddrKind::Eth => addr.to_string().try_into(),
             AddrKind::Cosmos { .. } => {
@@ -181,16 +187,16 @@ impl TryFrom<&str> for AddrEth {
     }
 }
 
-impl From<AddrEth> for AddrString {
+impl From<AddrEth> for Address {
     fn from(addr: AddrEth) -> Self {
         (&addr).into()
     }
 }
 
-impl TryFrom<AddrString> for AddrEth {
+impl TryFrom<Address> for AddrEth {
     type Error = anyhow::Error;
 
-    fn try_from(addr: AddrString) -> Result<Self> {
+    fn try_from(addr: Address) -> Result<Self> {
         (&addr).try_into()
     }
 }
@@ -217,7 +223,7 @@ mod test {
 
     use crate::AddrKind;
 
-    use super::{AddrEth, AddrString};
+    use super::{AddrEth, Address};
 
     // TODO get addresses that are actually the same underlying public key
 
@@ -228,7 +234,7 @@ mod test {
     fn test_basic_roundtrip_eth() {
         let test_string = TEST_ETH_STR;
         let addr_bytes: AddrEth = test_string.try_into().unwrap();
-        let addr_string: AddrString = (&addr_bytes).into();
+        let addr_string: Address = (&addr_bytes).into();
 
         assert_eq!(addr_string.to_string(), test_string);
         assert_eq!(addr_string.kind, AddrKind::Eth);
@@ -241,7 +247,7 @@ mod test {
     fn test_basic_roundtrip_cosmos() {
         let test_string = TEST_COSMOS_STR;
         let account_id: AccountId = test_string.parse().unwrap();
-        let addr_string: AddrString = (&account_id).try_into().unwrap();
+        let addr_string: Address = (&account_id).try_into().unwrap();
 
         assert_eq!(addr_string.to_string(), test_string);
         assert!(matches!(addr_string.kind, AddrKind::Cosmos { .. }));
@@ -254,7 +260,7 @@ mod test {
     fn test_convert_eth_to_cosmos() {
         // let test_string = "0xb794f5ea0ba39494ce839613fffba74279579268";
         // let addr_bytes:AddrEth = test_string.try_into().unwrap();
-        // let addr_string:AddrString = (&addr_bytes).into();
+        // let addr_string:Address = (&addr_bytes).into();
         // let addr_string_cosmos = addr_string.convert_into_cosmos("osmo".to_string()).unwrap();
         // assert_eq!(addr_string_cosmos.to_string(), "osmo1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsll0sqv");
     }
@@ -263,7 +269,7 @@ mod test {
     fn test_convert_cosmos_to_eth() {
         // let test_string = "osmo1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsll0sqv";
         // let account_id:AccountId = test_string.parse().unwrap();
-        // let addr_string:AddrString = (&account_id).try_into().unwrap();
+        // let addr_string:Address = (&account_id).try_into().unwrap();
         // let addr_string_eth = addr_string.convert_into_eth().unwrap();
         // assert_eq!(addr_string_eth.to_string(), "0xb794f5ea0ba39494ce839613fffba74279579268");
     }

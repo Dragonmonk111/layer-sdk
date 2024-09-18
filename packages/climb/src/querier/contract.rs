@@ -1,4 +1,4 @@
-use crate::AddrString;
+use crate::Address;
 
 use super::{QueryClient, QueryRequest};
 use anyhow::{anyhow, Context, Result};
@@ -7,7 +7,7 @@ use serde::{de::DeserializeOwned, Serialize};
 impl QueryClient {
     pub async fn contract_smart<'a, D: DeserializeOwned + Send + std::fmt::Debug + Sync>(
         &self,
-        address: &AddrString,
+        address: &Address,
         msg: ContractMessage<'a, impl Serialize>,
     ) -> Result<D> {
         self.run_with_middleware(ContractSmartReq {
@@ -19,7 +19,7 @@ impl QueryClient {
     }
     pub async fn contract_smart_raw_response<'a>(
         &self,
-        address: &AddrString,
+        address: &Address,
         msg: ContractMessage<'a, impl Serialize>,
     ) -> Result<Vec<u8>> {
         self.run_with_middleware(ContractSmartRawReq {
@@ -38,7 +38,7 @@ impl QueryClient {
     }
     pub async fn contract_info(
         &self,
-        address: &AddrString,
+        address: &Address,
     ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::QueryContractInfoResponse> {
         self.run_with_middleware(ContractInfoReq {
             address: address.clone(),
@@ -49,7 +49,7 @@ impl QueryClient {
 
 #[derive(Debug)]
 struct ContractSmartReq<D> {
-    pub address: AddrString,
+    pub address: Address,
     pub msg: Vec<u8>,
     _phantom: std::marker::PhantomData<D>,
 }
@@ -83,7 +83,7 @@ impl<D: DeserializeOwned + Send + std::fmt::Debug + Sync> QueryRequest for Contr
 
 #[derive(Clone, Debug)]
 struct ContractSmartRawReq {
-    pub address: AddrString,
+    pub address: Address,
     pub msg: Vec<u8>,
 }
 
@@ -138,7 +138,7 @@ impl QueryRequest for ContractCodeInfoReq {
 
 #[derive(Clone, Debug)]
 pub struct ContractInfoReq {
-    pub address: AddrString,
+    pub address: Address,
 }
 
 impl QueryRequest for ContractInfoReq {

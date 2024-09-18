@@ -31,7 +31,7 @@ pub struct TxBuilder<'a> {
     pub signing_key: &'a SigningKey,
 
     /// Must be set if not providing a `sequence` or `account_number`
-    pub sender: Option<AddrString>,
+    pub sender: Option<Address>,
 
     /// Probably want to always set this
     pub public_key: Option<PublicKey>,
@@ -118,7 +118,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    pub fn set_sender(&mut self, sender: AddrString) -> &mut Self {
+    pub fn set_sender(&mut self, sender: Address) -> &mut Self {
         self.sender = Some(sender);
         self
     }

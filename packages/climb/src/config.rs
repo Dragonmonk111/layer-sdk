@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
-use crate::{AddrKind, AddrString};
+use crate::{AddrKind, Address};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChainConfig {
@@ -29,8 +29,8 @@ impl ChainConfig {
             .unwrap_or_default())
     }
 
-    pub fn parse_address(&self, value: impl Into<String>) -> Result<AddrString> {
-        AddrString::parse(&value.into(), self.address_kind.clone())
+    pub fn parse_address(&self, value: impl Into<String>) -> Result<Address> {
+        Address::new(&value.into(), self.address_kind.clone())
     }
 }
 

@@ -15,14 +15,14 @@ use middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
 
 use super::TxBuilder;
 use crate::{
-    msg_into_cosmrs_any, querier::QueryClient, AddrString, ChainConfig, ChainId, SequenceStrategy,
+    msg_into_cosmrs_any, querier::QueryClient, Address, ChainConfig, ChainId, SequenceStrategy,
     SequenceStrategyKind,
 };
 
 // Each combo of chain and seed phrase gets a single signing client
 static SIGNING_CLIENT_CACHE: LazyLock<SigningClientCache> = LazyLock::new(SigningClientCache::new);
 
-type CacheKey = (ChainId, AddrString);
+type CacheKey = (ChainId, Address);
 
 struct SigningClientCache {
     clients: Mutex<HashMap<CacheKey, SigningClient>>,
@@ -41,7 +41,7 @@ impl SigningClientCache {
 pub struct SigningClient {
     pub querier: QueryClient,
     pub signing_key: Arc<SigningKey>,
-    pub addr: AddrString,
+    pub addr: Address,
     pub account_number: u64,
     /// Middleware to run before the tx is broadcast
     pub middleware_map_body: Arc<Vec<SigningMiddlewareMapBody>>,
@@ -62,7 +62,7 @@ impl SigningClient {
         signing_key: SigningKey,
     ) -> Result<Self> {
         let addr =
-            AddrString::new_pub_key(&signing_key.public_key(), chain_config.address_kind.clone())?;
+            Address::new_pub_key(&signing_key.public_key(), chain_config.address_kind.clone())?;
 
         let client = {
             // keep lock in scope so it can be definitively dropped before the await
@@ -138,7 +138,7 @@ impl SigningClient {
         &self,
         denom: Option<String>,
         amount: u128,
-        recipient: AddrString,
+        recipient: Address,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
         tx_builder
@@ -153,7 +153,7 @@ impl SigningClient {
         &self,
         denom: Option<String>,
         amount: u128,
-        recipient: AddrString,
+        recipient: Address,
     ) -> Result<cosmrs::proto::cosmos::bank::v1beta1::MsgSend> {
         let denom = denom.unwrap_or(self.querier.chain_config.gas_denom.clone());
 

@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use cosmwasm_std::Coin;
-use layer_climb::{cosmrs::crypto::secp256k1::SigningKey, querier::QueryClient, signing::{key::cosmos_signing_key, SigningClient}, AddrKind, AddrString, ChainConfig};
+use layer_climb::{cosmrs::crypto::secp256k1::SigningKey, querier::QueryClient, signing::{key::cosmos_signing_key, SigningClient}, AddrKind, Address, ChainConfig};
 use serde::{Deserialize, Serialize};
 
 // https://docs.rs/clap/latest/clap/_derive/_tutorial/chapter_0/index.html
@@ -70,8 +70,8 @@ impl Opt {
         cosmos_signing_key(self.mnemonic.split(" "))
     }
 
-    pub fn address(&self) -> Result<AddrString> {
-        let addr = AddrString::new_pub_key(&self.signing_key()?.public_key(), self.chain_config.address_kind.clone())?;
+    pub fn address(&self) -> Result<Address> {
+        let addr = Address::new_pub_key(&self.signing_key()?.public_key(), self.chain_config.address_kind.clone())?;
         Ok(addr)
     }
 
