@@ -42,7 +42,8 @@ fn public_key(&self) -> PublicKey;
 For convenience, it can be created from the ubiquitous "mnemonic string" with the provided [KeySigner](./src/signing/key.rs#L16) helper like:
 
 ```
-KeySigner::new_mnemonic_str(mnemonic)
+// None here means "Cosmos derivation path"
+KeySigner::new_mnemonic_str(mnemonic, None) 
 ```
 
 ## QueryClient
