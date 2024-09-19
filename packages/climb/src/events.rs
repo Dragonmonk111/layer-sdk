@@ -11,9 +11,9 @@ use crate::prelude::*;
 pub enum CosmosTxEvents<'a> {
     TxResponseRef(&'a cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse),
     TxResponseOwned(Box<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse>),
-    RpcListRef(&'a Vec<tendermint::abci::Event>),
+    RpcListRef(&'a [tendermint::abci::Event]),
     RpcListOwned(Box<Vec<tendermint::abci::Event>>),
-    CosmWasmRef(&'a Vec<cosmwasm_std::Event>),
+    CosmWasmRef(&'a [cosmwasm_std::Event]),
     CosmWasmOwned(Box<Vec<cosmwasm_std::Event>>),
 }
 
@@ -29,8 +29,8 @@ impl From<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> for CosmosTxEv
     }
 }
 
-impl<'a> From<&'a Vec<tendermint::abci::Event>> for CosmosTxEvents<'a> {
-    fn from(events: &'a Vec<tendermint::abci::Event>) -> Self {
+impl<'a> From<&'a [tendermint::abci::Event]> for CosmosTxEvents<'a> {
+    fn from(events: &'a [tendermint::abci::Event]) -> Self {
         CosmosTxEvents::RpcListRef(events)
     }
 }
@@ -41,8 +41,8 @@ impl From<Vec<cosmwasm_std::Event>> for CosmosTxEvents<'static> {
     }
 }
 
-impl<'a> From<&'a Vec<cosmwasm_std::Event>> for CosmosTxEvents<'a> {
-    fn from(events: &'a Vec<cosmwasm_std::Event>) -> Self {
+impl<'a> From<&'a [cosmwasm_std::Event]> for CosmosTxEvents<'a> {
+    fn from(events: &'a [cosmwasm_std::Event]) -> Self {
         CosmosTxEvents::CosmWasmRef(events)
     }
 }

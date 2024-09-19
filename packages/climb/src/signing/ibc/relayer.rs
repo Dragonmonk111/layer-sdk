@@ -192,7 +192,7 @@ impl IbcRelayer {
             }
         }
 
-        let events = CosmosTxEvents::from(&events);
+        let events = CosmosTxEvents::from(events.as_slice());
 
         for event in events.events_iter() {
             match IbcPacket::try_from(&event) {

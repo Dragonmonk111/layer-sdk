@@ -3,8 +3,8 @@ use std::{path::PathBuf, str::FromStr};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use cosmwasm_std::Coin;
-use serde::{Deserialize, Serialize};
 use layer_climb::prelude::*;
+use serde::{Deserialize, Serialize};
 
 // https://docs.rs/clap/latest/clap/_derive/_tutorial/chapter_0/index.html
 
@@ -61,9 +61,9 @@ pub enum Command {
         amount: Option<u128>,
     },
 
-    /// Generates a random wallet. 
+    /// Generates a random wallet.
     /// Shows the mnemonic and address.
-    GenerateWallet
+    GenerateWallet,
 }
 
 pub struct Opt {
@@ -104,7 +104,6 @@ impl Opt {
     pub fn signer(&self) -> Result<KeySigner> {
         KeySigner::new_mnemonic_str(&self.mnemonic, None)
     }
-
 
     pub fn address(&self) -> Result<Address> {
         self.chain_config
