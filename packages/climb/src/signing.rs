@@ -76,7 +76,7 @@ impl SigningClient {
 
     pub async fn transfer(
         &self,
-        denom: Option<String>,
+        denom: Option<&str>,
         amount: u128,
         recipient: Address,
         tx_builder: Option<TxBuilder<'_>>,
@@ -91,11 +91,11 @@ impl SigningClient {
 
     pub fn transfer_msg(
         &self,
-        denom: Option<String>,
+        denom: Option<&str>,
         amount: u128,
         recipient: Address,
     ) -> Result<cosmrs::proto::cosmos::bank::v1beta1::MsgSend> {
-        let denom = denom.unwrap_or(self.querier.chain_config.gas_denom.clone());
+        let denom = denom.unwrap_or(&self.querier.chain_config.gas_denom);
 
         let amount = cosmrs::proto::cosmos::base::v1beta1::Coin {
             amount: amount.to_string(),

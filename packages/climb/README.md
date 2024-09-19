@@ -115,10 +115,16 @@ The `Display` implementation for `Address` is a plain string as would typically 
 Generally speaking, you just call a method on the `SigningClient`. For example, here's how to transfer funds:
 
 ```rust
-signing_client.transfer(None, amount, recipient_addr, None).await?;
-```
+use layer_climb::prelude::*;
 
-In this case, the first `None` is the optional denom, and will use the chain's gas denom if not set.
+let amount:u128 = 1_000_000;
+let recpient_addr:Address = chain_config.parse_address("address string")?; // see `Addresses` above
+
+// use chain's native gas denom
+signing_client.transfer(None, amount, recipient_addr, None).await?;
+// some other denom
+signing_client.transfer(Some("uusdc"), amount, recipient_addr, None).await?;
+```
 
 The last `None` is typical for all transaction methods. It takes a `TxBuilder` which allows configuring per-transaction settings like the gas fee, simulation multiplier, and many more.
 
