@@ -3,10 +3,9 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use anyhow::Result;
 use tonic_web_wasm_client::Client;
 
-use crate::ChainConfig;
+use crate::prelude::*;
 
 static GRPC_CLIENT_CACHE: LazyLock<GrpcClientCache> = LazyLock::new(GrpcClientCache::new);
 

@@ -1,12 +1,11 @@
-use anyhow::{bail, Context, Result};
-use cosmrs::proto::prost::Message;
-
-use crate::{apply_grpc_height, IbcChannelId, IbcClientId, IbcConnectionId, IbcPortId};
+use crate::{
+    ibc_types::{IbcChannelId, IbcClientId, IbcConnectionId, IbcPortId},
+    prelude::*,
+};
 
 use super::{
     abci::{AbciProofKind, AbciProofReq},
     basic::{BlockHeaderReq, BlockHeightReq, StakingParamsReq},
-    QueryClient, QueryRequest,
 };
 
 impl QueryClient {

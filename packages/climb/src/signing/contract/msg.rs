@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::{querier::contract::ContractMessage, signing::SigningClient, Address};
+use crate::prelude::*;
 
 impl SigningClient {
     pub fn contract_upload_file_msg(

@@ -1,21 +1,13 @@
 pub mod address;
-mod config;
-mod events;
-mod ibc_types;
-mod network;
+pub mod config;
+pub mod events;
+pub mod ibc_types;
+pub mod network;
 pub mod prelude;
-mod proto_helpers;
+pub mod proto_helpers;
 pub mod querier;
 pub mod signing;
-mod transaction;
-
-pub use address::*;
-pub use config::*;
-pub use events::*;
-pub use ibc_types::*;
-pub use network::*;
-pub use proto_helpers::*;
-pub use transaction::*;
+pub mod transaction;
 
 // re-export
 pub use cosmrs;

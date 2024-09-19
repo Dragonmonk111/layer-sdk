@@ -3,10 +3,9 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use anyhow::{anyhow, Result};
 use tonic::transport::{Channel, ClientTlsConfig};
 
-use crate::ChainConfig;
+use crate::prelude::*;
 
 static GRPC_CHANNEL_CACHE: LazyLock<GrpcChannelCache> = LazyLock::new(GrpcChannelCache::new);
 

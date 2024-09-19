@@ -3,16 +3,12 @@ pub mod ibc;
 pub mod key;
 pub mod middleware;
 
-use std::sync::Arc;
-
-use anyhow::{anyhow, Result};
-use middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
-
-use super::TxBuilder;
 use crate::{
-    msg_into_cosmrs_any, querier::QueryClient, Address, ChainConfig, ChainId, SequenceStrategy,
-    SequenceStrategyKind, TxSigner,
+    prelude::*,
+    transaction::{SequenceStrategy, SequenceStrategyKind},
 };
+use middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
+use std::sync::Arc;
 
 // Cloning a SigningClient is pretty cheap
 #[derive(Clone)]

@@ -3,7 +3,7 @@ mod ibc;
 pub use constants::*;
 pub use ibc::*;
 
-use anyhow::{anyhow, Result};
+use crate::prelude::*;
 
 // this wrapper (with From impls for standard event sources) helps to abstract over events to aid filtering etc.
 // it is slightly opinionated in that it will search for events with the wasm- prefix if the exact type is not found

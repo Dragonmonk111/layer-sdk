@@ -1,7 +1,6 @@
-use anyhow::{Context, Result};
-use cosmrs::proto::prost::Message;
+use crate::prelude::*;
 
-use super::{basic::BlockHeightReq, QueryClient, QueryRequest};
+use super::basic::BlockHeightReq;
 
 impl QueryClient {
     pub async fn validator_set(

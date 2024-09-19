@@ -1,7 +1,4 @@
-use crate::Address;
-
-use super::{QueryClient, QueryRequest};
-use anyhow::{anyhow, Context, Result};
+use crate::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
 impl QueryClient {

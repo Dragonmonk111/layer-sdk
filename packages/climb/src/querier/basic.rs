@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use super::{QueryClient, QueryRequest};
-
 impl QueryClient {
     pub async fn balance(&self, addr: Address, denom: Option<String>) -> Result<Option<u64>> {
         self.run_with_middleware(BalanceReq { addr, denom }).await

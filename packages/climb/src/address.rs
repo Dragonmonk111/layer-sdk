@@ -1,6 +1,6 @@
 use std::{hash::Hash, str::FromStr};
 
-use anyhow::{anyhow, bail, Result};
+use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// The canonical type used everywhere for addresses

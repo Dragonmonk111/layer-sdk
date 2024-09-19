@@ -2,9 +2,8 @@
 // ideally they would be solely a backup (like the way abci_proof works)
 // some old implementation code is kept in comments for reference
 
-use anyhow::Result;
-
-use super::{basic::BlockHeightReq, QueryClient, QueryRequest};
+use super::basic::BlockHeightReq;
+use crate::prelude::*;
 
 impl QueryClient {
     pub async fn fetch_signed_header(

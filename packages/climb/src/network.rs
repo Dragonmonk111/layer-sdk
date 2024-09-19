@@ -1,7 +1,7 @@
 mod rpc;
 pub use rpc::*;
 
-use anyhow::Result;
+use crate::prelude::*;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

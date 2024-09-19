@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use super::QueryClient;
-use anyhow::Result;
+use crate::prelude::*;
 use futures::Stream;
 
 pub struct BlockEvents {

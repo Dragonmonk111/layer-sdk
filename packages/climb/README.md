@@ -9,13 +9,23 @@ You can think of it as the Rust alternative to CosmJS (kinda like CosmRS, but, d
 The easiest way to get a feel for the library is to check the cargo docs.
 As of right now, this isn't published anywhere, so just run `cargo doc --open`
 
+## Prelude
+
+Most of the types are re-exported in the prelude and can be used via the line-liner:
+
+```rust
+use layer_climb::prelude::*;
+```
+
 ## SigningClient
 
 [source code](./src/signing.rs#L20)
 
 A SigningClient needs only two things, a ChainConfig and a TxSigner:
 
-```
+```rust
+use layer_climb::prelude::*;
+
 SigningClient::new(chain_config, signer).await
 ```
 
@@ -33,7 +43,7 @@ This is a serde-friendly data struct and is typically loaded from disk. See the 
 
 This is a trait with only two required functions:
 
-```
+```rust
 fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
 fn public_key(&self) -> PublicKey;
 ```
@@ -41,7 +51,7 @@ fn public_key(&self) -> PublicKey;
 
 For convenience, it can be created from the ubiquitous "mnemonic string" with the provided [KeySigner](./src/signing/key.rs#L16) helper like:
 
-```
+```rust
 // None here means "Cosmos derivation path"
 KeySigner::new_mnemonic_str(mnemonic, None) 
 ```
@@ -56,7 +66,7 @@ However, often you want to make queries against other addresses for which you do
 
 All you need for this is the `ChainConfig`:
 
-```
+```rust
 QueryClient::new(chain_config).await
 ```
 
@@ -70,13 +80,13 @@ The QueryClient struct is slightly different for wasm32 targets, but this is all
 
 One difference compared to other clients is that we require knowing the address type. This paves the way for supporting Ethereum-style address strings throughout the client. You can construct an address manually via methods like `new_cosmos()`, but it's more convenient to create it via a method on `ChainConfig`:
 
-```
+```rust
 let addr = chain_config.parse_address("address string")?;
 ```
 
 A similar method exists to derive it from a public key:
 
-```
+```rust
 let addr = chain_config.address_from_pub_key(signer.public_key())?;
 ```
 
@@ -86,7 +96,7 @@ The `Display` implementation for `Address` is a plain string as would typically 
 
 Generally speaking, you just call a method on the `SigningClient`. For example, here's how to transfer funds:
 
-```
+```rust
 signing_client.transfer(None, amount, recipient_addr, None).await?;
 ```
 
@@ -99,7 +109,7 @@ The last `None` is typical for all transaction methods. It takes a `TxBuilder` w
 Technically, you don't even need a `SigningClient` for transactions, a `TxSigner` + `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method (it will automatically pass the `TxSigner` along):
 
 
-```
+```rust
 let tx_builder = signing_client.tx_builder();
 tx_builder.set_gas_simulate_multiplier(2.0);
 signing_client.transfer(None, amount, recipient_addr, Some(tx_builder)).await?;
@@ -137,7 +147,7 @@ This is especially helpful for CosmWasm events, so you don't need to worry about
 
 Here's an example of extracting the code id from a contract upload tx:
 
-```
+```rust
 let code_id: u64 = CosmosTxEvents::from(&tx_resp)
     .attr_first("store_code", "code_id")?
     .value()

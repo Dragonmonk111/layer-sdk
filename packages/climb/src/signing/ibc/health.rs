@@ -1,5 +1,4 @@
-use crate::{querier::abci::AbciProofKind, signing::SigningClient};
-use anyhow::{Context, Result};
+use crate::{prelude::*, querier::abci::AbciProofKind};
 
 impl SigningClient {
     // sanity check that the node has everything we need to do stuff

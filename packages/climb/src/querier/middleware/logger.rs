@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use crate::querier::QueryRequest;
-use anyhow::Result;
+use crate::prelude::*;
 
 #[derive(Clone)]
 pub struct QueryLoggerMiddlewareMapReq {

@@ -1,6 +1,19 @@
-pub(super) use anyhow::{anyhow, bail, Context, Result};
+// local "prelude" that isn't exported
+pub(crate) use crate::{network::apply_grpc_height, proto_helpers::*};
+pub(crate) use anyhow::{anyhow, bail, Context, Result};
 
-pub use crate::Address;
+// common types
+pub use crate::{
+    address::Address,
+    config::{ChainConfig, ChainId},
+    events::CosmosTxEvents,
+    network::ChainConfigGrpcExt,
+    querier::contract::ContractMessage,
+    querier::{QueryClient, QueryRequest},
+    signing::contract::{ExecuteParams, InstantiateParams, MigrateParams},
+    signing::{key::KeySigner, SigningClient},
+    transaction::{TxBuilder, TxSigner},
+};
 
 // helpers re-exported
 pub use cosmos_sdk_proto::traits::Message;

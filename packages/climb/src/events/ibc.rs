@@ -1,10 +1,7 @@
-// TODO - support ordered channels
-// maybe also detect timeouts...
-// but, relayers can always lie, so chains need to handle error detection anyway
-
 use crate::ibc_types::{IbcChannelId, IbcConnectionId, IbcPortId};
+use crate::prelude::*;
 
-use crate::{
+use crate::events::{
     EVENT_ATTR_IBC_CONNECTION_ID, EVENT_ATTR_IBC_PACKET_ACK_HEX, EVENT_ATTR_IBC_PACKET_DATA_HEX,
     EVENT_ATTR_IBC_PACKET_DST_CHANNEL, EVENT_ATTR_IBC_PACKET_DST_PORT,
     EVENT_ATTR_IBC_PACKET_SEQUENCE, EVENT_ATTR_IBC_PACKET_SRC_CHANNEL,
@@ -16,7 +13,6 @@ use super::{
     Event, EVENT_TYPE_IBC_ACK_PACKET, EVENT_TYPE_IBC_RECV_PACKET, EVENT_TYPE_IBC_SEND_PACKET,
     EVENT_TYPE_IBC_TIMEOUT_PACKET, EVENT_TYPE_IBC_WRITE_ACK,
 };
-use anyhow::{anyhow, Result};
 
 #[derive(Clone)]
 pub struct IbcPacket {

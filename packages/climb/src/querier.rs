@@ -14,10 +14,9 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Result;
 use middleware::{QueryMiddlewareMapReq, QueryMiddlewareMapResp, QueryMiddlewareRun};
 
-use crate::{ChainConfig, ChainConfigGrpcExt, RpcClient};
+use crate::{network::RpcClient, prelude::*};
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

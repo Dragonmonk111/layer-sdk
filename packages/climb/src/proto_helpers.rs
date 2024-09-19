@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::prelude::*;
 
 pub fn msg_into_google_any<M>(msg: &M) -> Result<tendermint_proto::google::protobuf::Any>
 where

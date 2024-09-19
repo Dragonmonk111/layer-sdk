@@ -1,15 +1,10 @@
 use crate::prelude::*;
-
+use crate::signing::middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64},
     Arc,
 };
 
-use crate::{
-    querier::QueryClient,
-    signing::middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp},
-    ChainConfig,
-};
 use cosmos_sdk_proto::{
     cosmos::{
         auth::v1beta1::BaseAccount,

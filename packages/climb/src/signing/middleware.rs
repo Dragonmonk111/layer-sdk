@@ -1,6 +1,6 @@
 pub mod logger;
 
-use anyhow::Result;
+use crate::prelude::*;
 use logger::{SigningLoggerMiddlewareMapBody, SigningLoggerMiddlewareMapResp};
 
 use cosmos_sdk_proto::cosmos::{base::abci::v1beta1::TxResponse, tx::v1beta1::TxBody};

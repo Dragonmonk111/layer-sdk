@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::prelude::*;
 use std::sync::LazyLock;
 use tendermint_rpc::Response;
 

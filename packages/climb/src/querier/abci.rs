@@ -1,9 +1,10 @@
+use crate::{
+    ibc_types::{IbcChannelId, IbcClientId, IbcConnectionId, IbcPortId},
+    prelude::*,
+};
 use std::sync::atomic::Ordering;
 
-use crate::ibc_types::{IbcChannelId, IbcClientId, IbcConnectionId, IbcPortId};
-use anyhow::{Context, Result};
-
-use super::{QueryClient, QueryClientMode, QueryRequest};
+use super::QueryClientMode;
 
 impl QueryClient {
     // from looking at other implementations, it might seem like getting proof_height from the current remote block height is the way to go
