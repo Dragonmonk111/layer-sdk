@@ -1,0 +1,191 @@
+# CLIent for Multiple Blockchains
+
+Climb is a Rust library for interacting with Lay3r and Cosmos.
+
+You can think of it as the Rust alternative to CosmJS (kinda like CosmRS, but, does more out of the box).
+
+## Cargo Docs
+
+The easiest way to get a feel for the library is to check the cargo docs.
+As of right now, this isn't published anywhere, so just run `cargo docs --open`
+
+## SigningClient
+
+[source code](./src/signing.rs#L41)
+
+A SigningClient needs only two things, a ChainConfig and a SigningKey:
+
+```
+SigningClient::new(chain_config, signing_key, None).await
+```
+
+_the last parameter is used to dictate the strategy for account sequence numbers. Using `None` will default to "query every time" mode, which is the safest bet for now as other modes are untested_
+
+The `SigningClient` is cheap to clone and also fairly cheap to create.
+
+#### ChainConfig
+
+[source code](./src/config.rs#L8)
+
+This is a serde-friendly data struct and is typically loaded from disk. See the [example in climb-cli](../../tools/climb-cli/config.json)
+
+#### SigningKey
+
+This comes from cosmrs. It represents any key that can be used to sign transactions.
+
+For convenience, it can be created from the ubiquitous "mnemonic string" with the [cosmos_signing_key](./src/signing/key.rs#L10) helper like:
+
+```
+cosmos_signing_key(mnemonic.split(" "))
+```
+
+## QueryClient
+
+[source code](./src/querier.rs) 
+
+_tip: the QueryClient is slightly different for wasm32 targets_
+
+If you have a SigningClient, then a QueryClient is created for you automatically as `signing_client.querier` and you have the wallet address in `signing_client.addr`
+
+However, often you want to make queries against other addresses for which you don't have the Signing Key
+
+All you need for this is the `ChainConfig`:
+
+```
+QueryClient::new(chain_config).await
+```
+
+The `QueryClient` is cheap to clone and also cheap to create (it uses a cache to re-use a global reqwest client as well as one grpc channel or client per-endpont).
+
+## Addresses
+
+[source code](./src/address.rs#L28)
+
+One difference compared to other clients is that we require knowing the address type. This paves the way for supporting Ethereum-style address strings throughout the client. You can construct an address manually via methods like `new_cosmos()`, but it's more convenient to create it via a method on `ChainConfig`:
+
+```
+let addr = chain_config.parse_address("address string")?;
+```
+
+A similar method exists to derive it from a public key:
+
+```
+let addr = chain_config.new_address_pub_key(signing_key.public_key())?;
+```
+
+The `Display` implementation for `Address` is a plain string as would typically be expected for display purposes (events, block explorers, etc.)
+
+## Transactions
+
+Generally speaking, you just call a method on the `SigningClient`. For example, here's how to transfer funds:
+
+```
+signing_client.transfer(None, amount, recipient_addr, None).await?;
+```
+
+In this case, the first `None` is the optional denom, and will use the chain's gas denom if not set.
+
+The last `None` is typical for all transaction methods. It takes a `TxBuilder` which allows configuring per-transaction settings like the gas fee, simulation multiplier, and many more.
+
+[source code](./src/transaction.rs#L29)
+
+Technically, you don't even need a `SigningClient` for transactions, a `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method:
+
+
+```
+let tx_builder = signing_client.tx_builder();
+tx_builder.set_gas_simulate_multiplier(2.0);
+signing_client.transfer(None, amount, recipient_addr, Some(tx_builder)).await?;
+```
+
+## Requests / Responses
+
+Internally, Query methods turn the arguments into a struct which implements a Request trait.
+
+[source code](./src/querier.rs#L52)
+
+The exact implementation here is likely to change, but it's a way to support generic middleware over all requests so we can do things like retry requests on failure, switch from grpc to rpc on any given request (not yet supported), etc. More details on this below.
+
+As an example, calling the [contract_code_info](./src/querier/contract.rs#L32) method on `QueryClient` creates an internal [ContractCodeInfoReq](./src/querier/contract.rs#L113) struct and the actual query is implemented on that struct's [request](./src/querier/contract.rs#L120) method.
+
+This is the pattern for all queries.
+
+## Messages
+
+Transactions work in a similar way, however instead of creating an internal Request type, each method calls an internal helper to create some message, and then broadcasts the message with a TxBuilder.
+
+This allows for calling those message-creating methods separately, and brodcasting them together in one transaction.
+
+The [TxBuilder broadcast method](./src/transaction.rs#L203) takes an iterator of these messages, which must be converted into a protobuf `Any`.
+
+## Events
+
+As a convenience helper to filter and search events, consider using `CosmosTxEvents`. It has `From` impls for various event sources like `TxResponse`, `Vec<Event>`, etc.
+
+It's a nearly zero-cost abstraction (just dynamic dispatch). Internally, it has variants with references, and so if you pass a reference source there are no allocations.
+
+This is especially helpful for CosmWasm events, so you don't need to worry about the `wasm-` prefix. For example, here's how you can extract the code id from a contract upload tx:
+
+```
+let code_id: u64 = CosmosTxEvents::from(&tx_resp)
+    .attr_first("store_code", "code_id")?
+    .value()
+    .parse()?;
+```
+
+[source code](./src/events.rs#L182)
+
+## Middleware
+
+_the exact architecture here is likely to change_
+
+The QueryClient supports middleware for:
+
+* mapping requests
+* mapping responses
+* running request -> response
+
+By default it runs a "runner" middleware to retry failing requests up to 3 times with a 100ms delay and exponential backoff.
+
+The TxBuilder supports middleware for:
+
+* mapping TxBody (containing all the messages)
+* mapping TxResponse
+
+By default, neither of these are set to anything.
+
+_while the middleware implementations are internally trait-based, attempting to make the middleware field on QueryClient and TxBuilder trait-based, so that third-party middleware is supported, led to some problems with the futures becoming !Send_
+
+## Logging
+
+_this is very likely to change_
+
+As of right now, some methods like IBC handlers take a function to log strings, and there are also logging middleware implementations.
+
+The reason for this was to differentiate between developer logs and user-facing logs and due to the origins of this crate as it was embedded in an application, as opposed to the library it is now.
+
+This will likely move to `tracing` and also decorate the library with tracing instrumention everywhere.
+
+## Errors
+
+_this is very likely to change_
+
+As of right now, errors are merely emitted as `anyhow` strings. While convenient for quick development, it makes error recovery nearly impossible. Most likely this will move to `thiserror`.
+
+## IBC
+
+There are convenient methods for client, connection, and channel handshakes
+
+[source code](./src/signing/ibc/handshake.rs)
+
+With the handshake completed, the client has a fully-functioning IBC relayer:
+
+[source code](./src/signing/ibc/relayer.rs)
+
+The `IbcRelayer` type is constructed from a `IbcRelayerBuilder`. This allows for having a cache that can be re-used across instances, while also mutating the cache when starting up so that expired clients can be recreated.
+
+[source code](./src/signing/ibc/relayer/builder.rs)
+
+The ergonomics of this relayer are intended to support the use-case of relaying over preconfigured ports, not necessarily assuming that the ibc clients are maintained by the ecosystem such as ICS-20 on a popular mainnet.
+
+_note: the relayer has been tested to complete packets from one chain to another, but there is currently an unresolved bug with relaying contract responses. It's recommended to use this only for simple testing, maintained relayers that are used at scale like Hermes or IBC-Relayer should be used in production_ 
