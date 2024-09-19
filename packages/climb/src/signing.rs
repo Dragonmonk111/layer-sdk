@@ -3,11 +3,7 @@ pub mod ibc;
 pub mod key;
 pub mod middleware;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock, Mutex},
-    vec,
-};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use cosmrs::crypto::secp256k1::SigningKey;
@@ -18,23 +14,6 @@ use crate::{
     msg_into_cosmrs_any, querier::QueryClient, AddrKind, Address, ChainConfig, ChainId,
     SequenceStrategy, SequenceStrategyKind,
 };
-
-// Each combo of chain and seed phrase gets a single signing client
-static SIGNING_CLIENT_CACHE: LazyLock<SigningClientCache> = LazyLock::new(SigningClientCache::new);
-
-type CacheKey = (ChainId, Address);
-
-struct SigningClientCache {
-    clients: Mutex<HashMap<CacheKey, SigningClient>>,
-}
-
-impl SigningClientCache {
-    fn new() -> Self {
-        Self {
-            clients: Mutex::new(HashMap::new()),
-        }
-    }
-}
 
 // Cloning a SigningClient is pretty cheap
 #[derive(Clone)]
@@ -68,46 +47,23 @@ impl SigningClient {
             AddrKind::Eth => Address::new_eth_pub_key(&signing_key.public_key())?,
         };
 
-        let client = {
-            // keep lock in scope so it can be definitively dropped before the await
-            let lock = SIGNING_CLIENT_CACHE.clients.lock().unwrap();
-            lock.get(&(chain_config.chain_id.clone(), addr.clone()))
-                .cloned()
-        };
+        let querier = QueryClient::new(chain_config.clone()).await?;
 
-        match client {
-            Some(client) => Ok(client),
-            None => {
-                let querier = QueryClient::new(chain_config.clone()).await?;
+        let base_account = querier.base_account(&addr).await?;
 
-                let base_account = querier.base_account(&addr).await?;
+        let sequence_strategy = Arc::new(
+            sequence_strategy.unwrap_or(SequenceStrategy::new(SequenceStrategyKind::Query)),
+        );
 
-                let sequence_strategy = Arc::new(
-                    sequence_strategy.unwrap_or(SequenceStrategy::new(SequenceStrategyKind::Query)),
-                );
-
-                let mut _self = Self {
-                    signing_key: Arc::new(signing_key),
-                    querier,
-                    addr,
-                    account_number: base_account.account_number,
-                    middleware_map_body: Arc::new(
-                        middleware::SigningMiddlewareMapBody::default_list(),
-                    ),
-                    middleware_map_resp: Arc::new(
-                        middleware::SigningMiddlewareMapResp::default_list(),
-                    ),
-                    sequence_strategy,
-                };
-
-                SIGNING_CLIENT_CACHE.clients.lock().unwrap().insert(
-                    (chain_config.chain_id.clone(), _self.addr.clone()),
-                    _self.clone(),
-                );
-
-                Ok(_self)
-            }
-        }
+        Ok(Self {
+            signing_key: Arc::new(signing_key),
+            querier,
+            addr,
+            account_number: base_account.account_number,
+            middleware_map_body: Arc::new(middleware::SigningMiddlewareMapBody::default_list()),
+            middleware_map_resp: Arc::new(middleware::SigningMiddlewareMapResp::default_list()),
+            sequence_strategy,
+        })
     }
 
     pub fn chain_id(&self) -> &ChainId {
