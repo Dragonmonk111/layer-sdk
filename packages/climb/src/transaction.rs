@@ -39,7 +39,7 @@ pub struct TxBuilder<'a> {
     /// if not set, the default is 10 blocks
     pub tx_timeout_blocks: Option<u64>,
     /// for manually overriding the sequence number, e.g. parallel transactions (multiple *messages* in a tx do not need this)
-    pub sequence_strategy: Option<Arc<SequenceStrategy>>,
+    pub sequence_strategy: Option<SequenceStrategy>,
 
     /// The account number of the sender. If not set, it will be derived from the sender's account
     pub account_number: Option<u64>,
@@ -113,7 +113,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    pub fn set_sequence_strategy(&mut self, sequence_strategy: Arc<SequenceStrategy>) -> &mut Self {
+    pub fn set_sequence_strategy(&mut self, sequence_strategy: SequenceStrategy) -> &mut Self {
         self.sequence_strategy = Some(sequence_strategy);
         self
     }
@@ -405,24 +405,24 @@ impl<'a> TxBuilder<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SequenceStrategy {
     pub kind: SequenceStrategyKind,
-    pub value: AtomicU64,
-    pub has_queried: AtomicBool,
+    pub value: Arc<AtomicU64>,
+    pub has_queried: Arc<AtomicBool>,
 }
 
 impl SequenceStrategy {
     pub fn new(kind: SequenceStrategyKind) -> Self {
         Self {
-            value: AtomicU64::new(match kind {
+            value: Arc::new(AtomicU64::new(match kind {
                 SequenceStrategyKind::Query => 0,             // will be ignored
                 SequenceStrategyKind::QueryAndIncrement => 0, // will be ignored
                 SequenceStrategyKind::SetAndIncrement(n) => n,
                 SequenceStrategyKind::Constant(n) => n,
-            }),
+            })),
             kind,
-            has_queried: AtomicBool::new(false),
+            has_queried: Arc::new(AtomicBool::new(false)),
         }
     }
 }

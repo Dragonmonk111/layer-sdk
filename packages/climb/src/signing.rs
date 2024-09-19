@@ -27,19 +27,14 @@ pub struct SigningClient {
     /// Middleware to run after the tx is broadcast
     pub middleware_map_resp: Arc<Vec<SigningMiddlewareMapResp>>,
     /// Strategy for determining the sequence number for txs
-    /// not `pub` since changing it after the first call would be weird
     /// it will be applied when calling `tx_builder()`
     /// (i.e. it's always possible to manually construct a TxBuilder and override it)
-    sequence_strategy: Arc<SequenceStrategy>,
+    /// Default is `SequenceStrategyKind::Query`
+    pub sequence_strategy: SequenceStrategy,
 }
 
 impl SigningClient {
-    /// if `sequence_strategy` is `None`, it will default to `Query`
-    pub async fn new(
-        chain_config: ChainConfig,
-        signing_key: SigningKey,
-        sequence_strategy: Option<SequenceStrategy>,
-    ) -> Result<Self> {
+    pub async fn new(chain_config: ChainConfig, signing_key: SigningKey) -> Result<Self> {
         let addr = match &chain_config.address_kind {
             AddrKind::Cosmos { prefix } => {
                 Address::new_cosmos_pub_key(&signing_key.public_key(), prefix)?
@@ -51,10 +46,6 @@ impl SigningClient {
 
         let base_account = querier.base_account(&addr).await?;
 
-        let sequence_strategy = Arc::new(
-            sequence_strategy.unwrap_or(SequenceStrategy::new(SequenceStrategyKind::Query)),
-        );
-
         Ok(Self {
             signing_key: Arc::new(signing_key),
             querier,
@@ -62,7 +53,7 @@ impl SigningClient {
             account_number: base_account.account_number,
             middleware_map_body: Arc::new(middleware::SigningMiddlewareMapBody::default_list()),
             middleware_map_resp: Arc::new(middleware::SigningMiddlewareMapResp::default_list()),
-            sequence_strategy,
+            sequence_strategy: SequenceStrategy::new(SequenceStrategyKind::Query),
         })
     }
 

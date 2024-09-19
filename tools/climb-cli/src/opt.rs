@@ -114,12 +114,12 @@ impl Opt {
     }
 
     pub async fn signing_client(&self) -> Result<SigningClient> {
-        SigningClient::new(self.chain_config.clone(), self.signing_key()?, None).await
+        SigningClient::new(self.chain_config.clone(), self.signing_key()?).await
     }
 
     pub async fn faucet_client(&self) -> Result<SigningClient> {
         let signing_key = cosmos_signing_key(self.faucet_config.mnemonic.split(" "))?;
-        SigningClient::new(self.chain_config.clone(), signing_key, None).await
+        SigningClient::new(self.chain_config.clone(), signing_key).await
     }
 }
 

@@ -16,10 +16,8 @@ As of right now, this isn't published anywhere, so just run `cargo docs --open`
 A SigningClient needs only two things, a ChainConfig and a SigningKey:
 
 ```
-SigningClient::new(chain_config, signing_key, None).await
+SigningClient::new(chain_config, signing_key).await
 ```
-
-_the last parameter is used to dictate the strategy for account sequence numbers. Using `None` will default to "query every time" mode, which is the safest bet for now as other modes are untested_
 
 The `SigningClient` is cheap to clone and also fairly cheap to create.
 
