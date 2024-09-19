@@ -17,3 +17,5 @@ cosmwasm-std = "2.0.3"
 tracing = "0.1.40"
 dotenvy = {version = "0.15.7", features = ["cli"]}
 tracing-subscriber = "0.3.18"
+bip39 = "2.0.0"
+rand = "0.8"

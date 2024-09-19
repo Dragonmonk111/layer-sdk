@@ -49,12 +49,30 @@ fn public_key(&self) -> PublicKey;
 ```
 
 
-For convenience, it can be created from the ubiquitous "mnemonic string" with the provided [KeySigner](./src/signing/key.rs#L16) helper like:
+For convenience, it can be created from a mnemonic with the provided [KeySigner](./src/signing/key.rs#L16) like:
 
 ```rust
+use layer_climb::prelude::*;
+
 // None here means "Cosmos derivation path"
-KeySigner::new_mnemonic_str(mnemonic, None) 
+let key_signer = KeySigner::new_mnemonic_str(my_mnemonic_string, None)?;
 ```
+
+This plays nicely with the `bip39` and `rand` Rust crates, so you can easily generate a random mnemonic and pass it to `new_mnemonic_iter`:
+
+```rust
+use layer_climb::prelude::*;
+use bip39::Mnemonic;
+use rand::Rng;
+
+let mut rng = rand::thread_rng();
+let entropy: [u8; 32] = rng.gen();
+let mnemonic = Mnemonic::from_entropy(&entropy)?;
+
+let signer = KeySigner::new_mnemonic_iter(mnemonic.word_iter(), None)?;
+```
+
+In fact, that's exactly how the `generate-wallet` command in [climb-cli](../../tools/climb-cli/) works!
 
 ## QueryClient
 

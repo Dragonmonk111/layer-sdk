@@ -52,11 +52,18 @@ pub enum TargetEnvironment {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Shows the wallet balance and address
     WalletShow {},
+
+    /// Taps the faucet to get some funds
     TapFaucet {
         #[arg(long)]
         amount: Option<u128>,
     },
+
+    /// Generates a random wallet. 
+    /// Shows the mnemonic and address.
+    GenerateWallet
 }
 
 pub struct Opt {

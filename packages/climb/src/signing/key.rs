@@ -17,7 +17,7 @@ pub struct KeySigner {
 }
 
 impl KeySigner {
-    pub fn new_mnemonic_vec<I, S>(mnemonic: I, derivation: Option<&DerivationPath>) -> Result<Self>
+    pub fn new_mnemonic_iter<I, S>(mnemonic: I, derivation: Option<&DerivationPath>) -> Result<Self>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
