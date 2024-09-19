@@ -16,7 +16,7 @@ use std::{
 
 use middleware::{QueryMiddlewareMapReq, QueryMiddlewareMapResp, QueryMiddlewareRun};
 
-use crate::{network::RpcClient, prelude::*};
+use crate::{network::rpc::RpcClient, prelude::*};
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -24,7 +24,7 @@ cfg_if::cfg_if! {
         pub struct QueryClient {
             pub chain_config: ChainConfig,
             pub grpc_channel: tonic_web_wasm_client::Client,
-            pub rpc_client: crate::network::RpcClient,
+            pub rpc_client: RpcClient,
             pub middleware_map_req: Arc<Vec<QueryMiddlewareMapReq>>,
             pub middleware_map_resp: Arc<Vec<QueryMiddlewareMapResp>>,
             pub middleware_run: Arc<Vec<QueryMiddlewareRun>>,
@@ -37,7 +37,7 @@ cfg_if::cfg_if! {
         pub struct QueryClient {
             pub chain_config: ChainConfig,
             pub grpc_channel: tonic::transport::Channel,
-            pub rpc_client: crate::network::RpcClient,
+            pub rpc_client: RpcClient,
             pub middleware_map_req: Arc<Vec<QueryMiddlewareMapReq>>,
             pub middleware_map_resp: Arc<Vec<QueryMiddlewareMapResp>>,
             pub middleware_run: Arc<Vec<QueryMiddlewareRun>>,

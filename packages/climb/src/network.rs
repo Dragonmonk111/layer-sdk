@@ -1,15 +1,12 @@
-mod rpc;
-pub use rpc::*;
+pub mod rpc;
 
 use crate::prelude::*;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
-        mod grpc_wasm;
-        pub use grpc_wasm::*;
+        pub mod grpc_wasm;
     } else {
-        mod grpc_native;
-        pub use grpc_native::*;
+        pub mod grpc_native;
     }
 }
 

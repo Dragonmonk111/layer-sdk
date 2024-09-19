@@ -9,6 +9,8 @@ use crate::prelude::*;
 
 static GRPC_CHANNEL_CACHE: LazyLock<GrpcChannelCache> = LazyLock::new(GrpcChannelCache::new);
 
+// This struct is just an internal cache so we don't have to reconnect to the same chain multiple times
+// it's intentionally *not* public so that the API is simply "get me a channel in the most efficient way possible"
 struct GrpcChannelCache {
     channels: Mutex<HashMap<String, Channel>>,
 }
@@ -21,12 +23,8 @@ impl GrpcChannelCache {
     }
 }
 
-pub trait ChainConfigGrpcExt {
-    fn get_grpc_channel(&self) -> impl std::future::Future<Output = Result<Channel>> + Send;
-}
-
-impl ChainConfigGrpcExt for ChainConfig {
-    async fn get_grpc_channel(&self) -> Result<Channel> {
+impl ChainConfig {
+    pub async fn get_grpc_channel(&self) -> Result<Channel> {
         // try to get the channel from the cache
         let channel = {
             // give the lock its own scope so it can be definitively dropped before the await

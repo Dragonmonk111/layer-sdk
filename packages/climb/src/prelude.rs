@@ -7,7 +7,6 @@ pub use crate::{
     address::Address,
     config::{ChainConfig, ChainId},
     events::CosmosTxEvents,
-    network::ChainConfigGrpcExt,
     querier::contract::ContractMessage,
     querier::{QueryClient, QueryRequest},
     signing::contract::{ExecuteParams, InstantiateParams, MigrateParams},
