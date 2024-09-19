@@ -43,8 +43,6 @@ cosmos_signing_key(mnemonic.split(" "))
 
 [source code](./src/querier.rs) 
 
-_tip: the QueryClient is slightly different for wasm32 targets_
-
 If you have a SigningClient, then a QueryClient is created for you automatically as `signing_client.querier` and you have the wallet address in `signing_client.addr`
 
 However, often you want to make queries against other addresses for which you don't have the Signing Key
@@ -56,6 +54,8 @@ QueryClient::new(chain_config).await
 ```
 
 The `QueryClient` is cheap to clone and also cheap to create (it uses a cache to re-use a global reqwest client as well as one grpc channel or client per-endpont).
+
+The QueryClient struct is slightly different for wasm32 targets, but this is all dealt with as an abstraction, methods are the same everywhere.
 
 ## Addresses
 
