@@ -5,10 +5,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bip39::Mnemonic;
 use clap::Parser;
 use cosmwasm_std::{Addr, Coin};
-use layer_climb::{
-    prelude::{KeySigner, TxSigner},
-    signing::SigningClient,
-};
+use layer_climb::prelude::*;
 use opt::{Args, Command, Opt};
 use rand::Rng;
 use std::{fs, os::unix::net};
@@ -28,7 +25,7 @@ async fn main() -> Result<()> {
 
     let opt = Opt::new(args).await?;
 
-    match opt.command {
+    match opt.command.clone() {
         Command::WalletShow {} => {
             let signing_client = opt.signing_client().await?;
             tracing::info!("address: {}", signing_client.addr);
@@ -88,8 +85,85 @@ async fn main() -> Result<()> {
             tracing::info!("{}", addr);
             tracing::info!("--- Mnemonic---");
             tracing::info!("{}", mnemonic);
-        }
+        },
+
+        Command::UploadContract { wasm_file } => {
+            let wasm_byte_code = tokio::fs::read(wasm_file).await?;
+            let client = opt.signing_client().await?;
+            let (code_id, tx_resp) = client.contract_upload_file(wasm_byte_code, None).await?;
+
+            tracing::info!("Tx Hash: {}", tx_resp.txhash);
+            tracing::info!("Code ID: {}", code_id);
+        },
+
+        Command::InstantiateContract {
+            code_id,
+            msg,
+            label,
+            funds_denom,
+            funds_amount,
+        } => {
+            let client = opt.signing_client().await?;
+
+            let msg = msg
+                .map(ContractMessage::new_raw_str)
+                .unwrap_or(ContractMessage::Empty);
+
+            let (addr, tx_resp) = client
+                .contract_instantiate(
+                    InstantiateParams::new(code_id, label.unwrap_or_default(), msg).set_admin(client.addr.clone()),
+                    None,
+                )
+                .await?; 
+
+            tracing::info!("Tx Hash: {}", tx_resp.txhash);
+            tracing::info!("Contract Address: {}", addr);
+        },
+
+        Command::ExecuteContract {
+            address,
+            msg,
+            funds_denom,
+            funds_amount,
+        } => {
+            let client = opt.signing_client().await?;
+
+            let msg = msg
+                .map(ContractMessage::new_raw_str)
+                .unwrap_or(ContractMessage::Empty);
+
+            let address = opt.chain_config.parse_address(&address)?;
+
+            let mut params = ExecuteParams::new(address, msg);
+
+            if let Some(funds_amount) = funds_amount {
+                let funds_denom = funds_denom.unwrap_or(opt.chain_config.gas_denom.clone());
+                params = params.set_funds(vec![new_coin(funds_denom, funds_amount)]);
+            }
+
+            let tx_resp = client.contract_execute(params, None).await?;
+
+            tracing::info!("Tx Hash: {}", tx_resp.txhash);
+        },
+
+        Command::QueryContract {
+            address,
+            msg,
+        } => {
+            let client = opt.signing_client().await?;
+
+            let msg = msg
+                .map(ContractMessage::new_raw_str)
+                .unwrap_or(ContractMessage::Empty);
+
+            let address = opt.chain_config.parse_address(&address)?;
+
+            let query = client.querier.contract_smart::<serde_json::Value>(&address, msg).await?.to_string();
+
+            tracing::info!("Query Response: {:?}", query);
+        },
     }
 
     Ok(())
 }
+

@@ -1,5 +1,5 @@
 [package]
-name = "dev-tools-cli"
+name = "climb-cli"
 version = "0.0.0"
 description = "Dev Tools"
 edition = "2021"

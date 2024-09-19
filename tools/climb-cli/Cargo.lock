@@ -538,6 +538,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 
 [[package]]
+name = "climb-cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bip39",
+ "clap 4.5.17",
+ "cosmwasm-std",
+ "dotenvy",
+ "futures",
+ "layer-climb",
+ "rand",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -804,25 +823,6 @@ dependencies = [
  "quote",
  "syn 2.0.77",
  "unicode-xid",
-]
-
-[[package]]
-name = "dev-tools-cli"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "bip39",
- "clap 4.5.17",
- "cosmwasm-std",
- "dotenvy",
- "futures",
- "layer-climb",
- "rand",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

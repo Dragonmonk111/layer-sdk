@@ -50,7 +50,7 @@ pub enum TargetEnvironment {
     Testnet,
 }
 
-#[derive(Subcommand)]
+#[derive(Clone, Subcommand)]
 pub enum Command {
     /// Shows the wallet balance and address
     WalletShow {},
@@ -64,6 +64,58 @@ pub enum Command {
     /// Generates a random wallet.
     /// Shows the mnemonic and address.
     GenerateWallet,
+
+    /// Uploads a contract to the chain
+    UploadContract {
+        /// Path to the .wasm file to upload
+        #[arg(long)]
+        wasm_file: PathBuf,
+    },
+
+    /// Instantiates a contract on the chain
+    InstantiateContract {
+        /// The code ID of the contract, obtained from `upload-contract`
+        #[arg(long)]
+        code_id: u64,
+        /// The instantiation message, as a json-encoded string
+        #[arg(long)]
+        msg: Option<String>,
+        /// Optional label for the contract
+        #[arg(long)]
+        label: Option<String>,
+        /// Optional funds to send, if not set will use the chain gas denom
+        #[arg(long)]
+        funds_denom: Option<String>,
+        /// Optional funds to send, if not set no funds will be sent
+        #[arg(long)]
+        funds_amount: Option<String>,
+    },
+
+    /// Executes a contract on the chain
+    ExecuteContract {
+        /// The address of the contract, obtained from `instantiate-contract`
+        #[arg(long)]
+        address: String,
+        /// The execution message, as a json-encoded string
+        #[arg(long)]
+        msg: Option<String>,
+        /// Optional funds to send, if not set will use the chain gas denom
+        #[arg(long)]
+        funds_denom: Option<String>,
+        /// Optional funds to send, if not set no funds will be sent
+        #[arg(long)]
+        funds_amount: Option<String>,
+    },
+
+    /// Queries a contract on the chain
+    QueryContract {
+        /// The address of the contract, obtained from `instantiate-contract`
+        #[arg(long)]
+        address: String,
+        /// The query message, as a json-encoded string
+        #[arg(long)]
+        msg: Option<String>,
+    },
 }
 
 pub struct Opt {
