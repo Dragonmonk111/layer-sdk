@@ -158,9 +158,10 @@ async fn main() -> Result<()> {
 
             let address = opt.chain_config.parse_address(&address)?;
 
-            let query = client.querier.contract_smart::<serde_json::Value>(&address, msg).await?.to_string();
+            let resp = client.querier.contract_smart_raw_response(&address, msg).await?;
+            let resp = std::str::from_utf8(&resp)?;
 
-            tracing::info!("Query Response: {:?}", query);
+            tracing::info!("Query Response: {:?}", resp);
         },
     }
 
