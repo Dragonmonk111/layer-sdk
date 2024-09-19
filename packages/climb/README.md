@@ -136,8 +136,12 @@ Technically, you don't even need a `SigningClient` for transactions, a `TxSigner
 ```rust
 let tx_builder = signing_client.tx_builder();
 tx_builder.set_gas_simulate_multiplier(2.0);
-signing_client.transfer(None, amount, recipient_addr, Some(tx_builder)).await?;
+let tx_resp = signing_client.transfer(None, amount, recipient_addr, Some(tx_builder)).await?;
 ```
+
+`tx_resp` contains the chain's native `TxResponse`, directly as the protobuf definition. You can log out the hash via `tx_resp.txhash`, or get really fancy by passing it to [CosmosTxEvents](#events).
+
+#### See [Contracts](#contracts) for contract-specific transactions
 
 ## Requests / Responses
 
@@ -151,7 +155,7 @@ As an example, calling the [contract_code_info](./src/querier/contract.rs#L32) m
 
 This is the pattern for all queries.
 
-## Messages
+## Transaction messages
 
 Transactions work in a similar way, however instead of creating an internal Request type, each method calls an internal helper to create some message, and then broadcasts the message with a TxBuilder.
 
@@ -233,3 +237,191 @@ The `IbcRelayer` type is constructed from a `IbcRelayerBuilder`. This allows for
 The ergonomics of this relayer are intended to support the use-case of relaying over preconfigured ports, not necessarily assuming that the ibc clients are maintained by the ecosystem such as ICS-20 on a popular mainnet.
 
 _note: the relayer has been tested to complete packets from one chain to another, but there is currently an unresolved bug with relaying contract responses. It's recommended to use this only for simple testing, maintained relayers that are used at scale like Hermes or IBC-Relayer should be used in production_ 
+
+## Contracts
+
+Interacting with contracts is straightforward. Transactions (like instantiate, execute, etc.) are on SigningClient, and queries (like "smart queries" and "contract info") are on QueryClient
+
+* [transactions source code](./src/signing/contract/tx.rs)
+* [queries source code](./src/querier/contract.rs)
+
+The types and parameters may look a little daunting at first, but it's all there to make real-world usage extremely simple. Let's look at some examples. For the sake of brevity, let's assume we already have a `SigningClient` called `client`
+
+For the sake of example and discussion, let's assume our contract has the following types:
+
+```rust
+#[cw_serde]
+pub struct InstantiateMsg { }
+
+#[cw_serde]
+pub enum ExecuteMsg {
+    StashMessage {
+        message: String
+    }
+}
+
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    /// * returns [MessagesResp]
+    #[returns(MessagesResp)]
+    GetMessages {
+        after_index: Option<Uint64>,
+        order: Option<Order>
+    },
+}
+
+#[cw_serde]
+pub struct MessagesResp {
+    pub messages: Vec<String>,
+}
+```
+
+### Contract Upload
+
+```rust
+use layer_climb::prelude::*;
+
+let wasm_byte_code = tokio::fs::read(wasm_file).await?;
+let (code_id, tx_resp) = client.contract_upload_file(wasm_byte_code, None).await?;
+```
+
+The `code_id` in that response is a `u64`, and the `tx_resp` is the protobuf `TxResponse` mentioned above in [Transactions](#transactions)
+
+### Contract Instantiation 
+
+Now that we have a `code_id`, let's instantiate a contract.
+
+We do this by calling the [contract_instantiate](./src/signing/contract/tx.rs#L33) method on our client, with [InstantiateParams](./src/signing/contract/msg.rs#77)
+
+In this specific case, the `InstantiateMsg` is the `Empty` type. We send this via `ContractMessage::Empty`. You can jump below to learn more about [ContractMessage](#contract-message). For this example let's also make sure we are the contract admin:
+
+```rust
+use layer_climb::prelude::*;
+
+let msg = ContractMessage::Empty;
+let params = InstantiateParams::new(code_id, "my contract label", msg)
+    .set_admin(client.addr.clone());
+
+let (addr, tx_resp) = client.contract_instantiate(params, None).await?; 
+```
+
+### Contract Execution 
+
+Now that we have an `addr`, let's execute a message. In this case we have our specific `ExecuteMsg` type from the contract (which is _not_ empty). Execution follows the same idea as instantiation, we call the [contract_execute](./src/signing/contract/tx.rs#L98) method on our client, with [ExecuteParams](./src/signing/contract/msg#107)
+
+```rust
+
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+let params = ExecuteParams::new(&addr, msg);
+
+let tx_resp = client.contract_execute(params, None).await?;
+```
+
+Wait, what if we wanted to send funds along with the execution message? That's easy - just call `params.set_funds()` and use the included `new_coin()` helper:
+
+```rust
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+let mut params = ExecuteParams::new(&addr, msg)
+    .set_funds(vec![new_coin("uslay", 1_000_000)]);
+
+let tx_resp = client.contract_execute(params, None).await?;
+```
+
+### Contract Query
+
+Now that we've executed something on the contract, let's query it. This has a couple differences compared to the previous methods we've seen.
+
+1. We call our method on `QueryClient` not `SigningClient`
+2. We only need to pass in a `ContractMessage` (no QueryParams)
+3. For "smart queries", we need to tell it what the return type is
+
+We have the option of raw queries or smart queries. Let's go with the [contract_smart](./src/querier/contract.rs#L5) method instead of a raw query.
+
+Example:
+
+```rust
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+// query_resp is a `MessagesResp
+let query_resp = client.querier.contract_smart::<MessagesResp>(&addr, msg).await?;
+```
+
+In that case, the `query_resp` is properly typechecked as `MessagesResp`. 
+
+What if we wanted to get it as a raw string? Just call `.contract_smart_raw_response()`:
+
+
+```rust
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+let raw_bytes = client.querier.contract_smart_raw_response(&addr, msg).await?;
+let raw_string = std::str::from_utf8(&raw_bytes)?;
+```
+
+## Contract Message
+
+[source code](./src/querier/contract.rs#L166)
+
+There are some common use-cases for sending contract messages that are footguns. By having a consistent `ContractMessage` type, we avoid these problems.
+
+Some examples:
+
+* Sending empty types: `ContractMessage::Empty` (on the wire it's `b"{}".to_vec()`)
+* Raw string types: `ContractMessage::Raw` (on the wire it's passed as the raw bytes, *not interpreted as some JSON value*)
+* Typechecked serde types: `ContractMessage::SerdeRef/Owned` (it's converted via cosmwasm_std::to_json_vec()`)
+
+All of these cases are handled very simply:
+
+* Empty: literally just the `ContractMessage::Empty` variant
+* Raw strings: `ContractMessage::new_raw_str`
+* Raw bytes: `ContractMessage::new_raw`
+* Serde-friendly types: `From/Into` or `new_serde_ref()` / `new_serde_owned()`
+
+In practice, generic tools typically work with optional raw strings. That's handled like this:
+
+```rust
+use layer_climb::prelude::*;
+
+// given this
+let maybe_message:Option<String>;
+
+// convert it into a ContractMessage
+let msg = msg
+    .map(ContractMessage::new_raw_str)
+    .unwrap_or(ContractMessage::Empty);
+```
+
+Whereas projects that have Rust types natively are handled like this:
+
+```rust
+use layer_climb::prelude::*;
+
+// given this, ofc it could be optional too
+let my_message:MySerdeFooMessage;
+
+// convert it into a ContractMessage
+let msg = ContractMessage::from(my_message);
+```
