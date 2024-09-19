@@ -7,7 +7,7 @@ You can think of it as the Rust alternative to CosmJS (kinda like CosmRS, but, d
 ## Cargo Docs
 
 The easiest way to get a feel for the library is to check the cargo docs.
-As of right now, this isn't published anywhere, so just run `cargo docs --open`
+As of right now, this isn't published anywhere, so just run `cargo doc --open`
 
 ## SigningClient
 
