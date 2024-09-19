@@ -4,7 +4,7 @@ mod opt;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use cosmwasm_std::{Addr, Coin};
-use layer_climb::signing::{key::cosmos_signing_key, SigningClient};
+use layer_climb::signing::{key::KeySigner, SigningClient};
 use opt::{Args, Command, Opt};
 use std::{fs, os::unix::net};
 use tracing;

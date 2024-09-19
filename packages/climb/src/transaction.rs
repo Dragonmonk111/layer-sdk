@@ -24,17 +24,15 @@ use cosmos_sdk_proto::{
     },
     tendermint::google::protobuf::Any,
 };
-use cosmrs::crypto::{secp256k1::SigningKey, PublicKey};
+use cosmrs::crypto::PublicKey;
 
 pub struct TxBuilder<'a> {
     pub querier: &'a QueryClient,
-    pub signing_key: &'a SigningKey,
+    pub signer: &'a dyn TxSigner,
 
     /// Must be set if not providing a `sequence` or `account_number`
     pub sender: Option<Address>,
 
-    /// Probably want to always set this
-    pub public_key: Option<PublicKey>,
     /// how many blocks until a tx is considered invalid
     /// if not set, the default is 10 blocks
     pub tx_timeout_blocks: Option<u64>,
@@ -78,6 +76,11 @@ pub struct TxBuilder<'a> {
     pub middleware_map_resp: Option<Arc<Vec<SigningMiddlewareMapResp>>>,
 }
 
+pub trait TxSigner: Send + Sync {
+    fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+    fn public_key(&self) -> PublicKey;
+}
+
 impl<'a> TxBuilder<'a> {
     const DEFAULT_TX_TIMEOUT_BLOCKS: u64 = 10;
     const DEFAULT_GAS_MULTIPLIER: f32 = 1.5;
@@ -87,11 +90,10 @@ impl<'a> TxBuilder<'a> {
     const DEFAULT_BROADCAST_POLL_TIMEOUT_DURATION: std::time::Duration =
         std::time::Duration::from_secs(30);
 
-    pub fn new(querier: &'a QueryClient, signing_key: &'a SigningKey) -> Self {
+    pub fn new(querier: &'a QueryClient, signer: &'a dyn TxSigner) -> Self {
         Self {
             querier,
-            signing_key,
-            public_key: None,
+            signer,
             gas_coin: None,
             sender: None,
             tx_timeout_blocks: None,
@@ -120,11 +122,6 @@ impl<'a> TxBuilder<'a> {
 
     pub fn set_sender(&mut self, sender: Address) -> &mut Self {
         self.sender = Some(sender);
-        self
-    }
-
-    pub fn set_public_key(&mut self, public_key: PublicKey) -> &mut Self {
-        self.public_key = Some(public_key);
         self
     }
 
@@ -274,7 +271,7 @@ impl<'a> TxBuilder<'a> {
         let sign_tx = |fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee| -> Result<Vec<u8>> {
             //let signer_info = cosmrs::tx::SignerInfo::single_direct(self.public_key, sequence);
             let signer_info = SignerInfo {
-                public_key: self.public_key.map(Into::into),
+                public_key: Some(self.signer.public_key().into()),
                 mode_info: Some(ModeInfo {
                     sum: Some(mode_info::Sum::Single(mode_info::Single {
                         mode: SignMode::Direct.into(),
@@ -297,15 +294,12 @@ impl<'a> TxBuilder<'a> {
                 account_number,
             };
 
-            let signature = self
-                .signing_key
-                .sign(&sign_doc.to_bytes()?)
-                .map_err(|e| anyhow!("{}", e))?;
+            let signature = self.signer.sign(&sign_doc)?;
 
             let tx_raw = TxRaw {
                 body_bytes: sign_doc.body_bytes.clone(),
                 auth_info_bytes: sign_doc.auth_info_bytes.clone(),
-                signatures: vec![signature.to_vec()],
+                signatures: vec![signature],
             };
 
             tx_raw.to_bytes().map_err(|e| anyhow!("{}", e))

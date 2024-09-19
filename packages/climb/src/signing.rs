@@ -6,20 +6,19 @@ pub mod middleware;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use cosmrs::crypto::secp256k1::SigningKey;
 use middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
 
 use super::TxBuilder;
 use crate::{
-    msg_into_cosmrs_any, querier::QueryClient, AddrKind, Address, ChainConfig, ChainId,
-    SequenceStrategy, SequenceStrategyKind,
+    msg_into_cosmrs_any, querier::QueryClient, Address, ChainConfig, ChainId, SequenceStrategy,
+    SequenceStrategyKind, TxSigner,
 };
 
 // Cloning a SigningClient is pretty cheap
 #[derive(Clone)]
 pub struct SigningClient {
     pub querier: QueryClient,
-    pub signing_key: Arc<SigningKey>,
+    pub signer: Arc<dyn TxSigner>,
     pub addr: Address,
     pub account_number: u64,
     /// Middleware to run before the tx is broadcast
@@ -34,20 +33,15 @@ pub struct SigningClient {
 }
 
 impl SigningClient {
-    pub async fn new(chain_config: ChainConfig, signing_key: SigningKey) -> Result<Self> {
-        let addr = match &chain_config.address_kind {
-            AddrKind::Cosmos { prefix } => {
-                Address::new_cosmos_pub_key(&signing_key.public_key(), prefix)?
-            }
-            AddrKind::Eth => Address::new_eth_pub_key(&signing_key.public_key())?,
-        };
+    pub async fn new(chain_config: ChainConfig, signer: impl TxSigner + 'static) -> Result<Self> {
+        let addr = chain_config.address_from_pub_key(&signer.public_key())?;
 
         let querier = QueryClient::new(chain_config.clone()).await?;
 
         let base_account = querier.base_account(&addr).await?;
 
         Ok(Self {
-            signing_key: Arc::new(signing_key),
+            signer: Arc::new(signer),
             querier,
             addr,
             account_number: base_account.account_number,
@@ -66,10 +60,9 @@ impl SigningClient {
     }
 
     pub fn tx_builder(&self) -> TxBuilder<'_> {
-        let mut tx_builder = TxBuilder::new(&self.querier, &self.signing_key);
+        let mut tx_builder = TxBuilder::new(&self.querier, self.signer.as_ref());
 
         tx_builder
-            .set_public_key(self.signing_key.public_key())
             .set_sender(self.addr.clone())
             .set_account_number(self.account_number)
             .set_sequence_strategy(self.sequence_strategy.clone());

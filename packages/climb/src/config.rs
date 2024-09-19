@@ -57,7 +57,7 @@ impl ChainConfig {
         }
     }
 
-    pub fn new_address_pub_key(&self, pub_key: &cosmrs::crypto::PublicKey) -> Result<Address> {
+    pub fn address_from_pub_key(&self, pub_key: &cosmrs::crypto::PublicKey) -> Result<Address> {
         match &self.address_kind {
             AddrKind::Cosmos { prefix } => Address::new_cosmos_pub_key(pub_key, prefix),
             AddrKind::Eth => Address::new_eth_pub_key(pub_key),

@@ -13,10 +13,10 @@ As of right now, this isn't published anywhere, so just run `cargo docs --open`
 
 [source code](./src/signing.rs#L20)
 
-A SigningClient needs only two things, a ChainConfig and a SigningKey:
+A SigningClient needs only two things, a ChainConfig and a TxSigner:
 
 ```
-SigningClient::new(chain_config, signing_key).await
+SigningClient::new(chain_config, signer).await
 ```
 
 The `SigningClient` is cheap to clone and also fairly cheap to create.
@@ -27,14 +27,22 @@ The `SigningClient` is cheap to clone and also fairly cheap to create.
 
 This is a serde-friendly data struct and is typically loaded from disk. See the [example in climb-cli](../../tools/climb-cli/config.json)
 
-#### SigningKey
+#### TxSigner
 
-This comes from cosmrs. It represents any key that can be used to sign transactions.
+[source code](./src/transaction.rs#L79)
 
-For convenience, it can be created from the ubiquitous "mnemonic string" with the [cosmos_signing_key](./src/signing/key.rs#L10) helper like:
+This is a trait with only two required functions:
 
 ```
-cosmos_signing_key(mnemonic.split(" "))
+fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+fn public_key(&self) -> PublicKey;
+```
+
+
+For convenience, it can be created from the ubiquitous "mnemonic string" with the provided [KeySigner](./src/signing/key.rs#L16) helper like:
+
+```
+KeySigner::new_mnemonic_str(mnemonic)
 ```
 
 ## QueryClient
@@ -68,7 +76,7 @@ let addr = chain_config.parse_address("address string")?;
 A similar method exists to derive it from a public key:
 
 ```
-let addr = chain_config.new_address_pub_key(signing_key.public_key())?;
+let addr = chain_config.address_from_pub_key(signer.public_key())?;
 ```
 
 The `Display` implementation for `Address` is a plain string as would typically be expected for display purposes (events, block explorers, etc.)
@@ -87,7 +95,7 @@ The last `None` is typical for all transaction methods. It takes a `TxBuilder` w
 
 [source code](./src/transaction.rs#L29)
 
-Technically, you don't even need a `SigningClient` for transactions, a `SigningKey` + `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method:
+Technically, you don't even need a `SigningClient` for transactions, a `TxSigner` + `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method (it will automatically pass the `TxSigner` along):
 
 
 ```

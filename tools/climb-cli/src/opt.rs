@@ -7,8 +7,8 @@ use layer_climb::{
     cosmrs::crypto::secp256k1::SigningKey,
     prelude::*,
     querier::QueryClient,
-    signing::{key::cosmos_signing_key, SigningClient},
-    AddrKind, Address, ChainConfig,
+    signing::{key::KeySigner, SigningClient},
+    AddrKind, Address, ChainConfig, TxSigner,
 };
 use serde::{Deserialize, Serialize};
 
@@ -100,13 +100,14 @@ impl Opt {
         })
     }
 
-    pub fn signing_key(&self) -> Result<SigningKey> {
-        cosmos_signing_key(self.mnemonic.split(" "))
+    pub fn signer(&self) -> Result<KeySigner> {
+        KeySigner::new_mnemonic_str(&self.mnemonic, None)
     }
+
 
     pub fn address(&self) -> Result<Address> {
         self.chain_config
-            .new_address_pub_key(&self.signing_key()?.public_key())
+            .address_from_pub_key(&self.signer()?.public_key())
     }
 
     pub async fn query_client(&self) -> Result<QueryClient> {
@@ -114,12 +115,12 @@ impl Opt {
     }
 
     pub async fn signing_client(&self) -> Result<SigningClient> {
-        SigningClient::new(self.chain_config.clone(), self.signing_key()?).await
+        SigningClient::new(self.chain_config.clone(), self.signer()?).await
     }
 
     pub async fn faucet_client(&self) -> Result<SigningClient> {
-        let signing_key = cosmos_signing_key(self.faucet_config.mnemonic.split(" "))?;
-        SigningClient::new(self.chain_config.clone(), signing_key).await
+        let signer = KeySigner::new_mnemonic_str(&self.faucet_config.mnemonic, None)?;
+        SigningClient::new(self.chain_config.clone(), signer).await
     }
 }
 
