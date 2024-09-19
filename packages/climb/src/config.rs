@@ -5,7 +5,6 @@ use crate::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChainConfig {
-    pub bech32_prefix: String,
     pub chain_id: ChainId,
     pub rpc_endpoint: String,
     pub grpc_endpoint: String,
