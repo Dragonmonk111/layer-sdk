@@ -35,6 +35,18 @@ impl<'a> From<&'a Vec<tendermint::abci::Event>> for CosmosTxEvents<'a> {
     }
 }
 
+impl From<Vec<cosmwasm_std::Event>> for CosmosTxEvents<'static> {
+    fn from(events: Vec<cosmwasm_std::Event>) -> Self {
+        CosmosTxEvents::CosmWasmOwned(Box::new(events))
+    }
+}
+
+impl<'a> From<&'a Vec<cosmwasm_std::Event>> for CosmosTxEvents<'a> {
+    fn from(events: &'a Vec<cosmwasm_std::Event>) -> Self {
+        CosmosTxEvents::CosmWasmRef(events)
+    }
+}
+
 impl From<Vec<tendermint::abci::Event>> for CosmosTxEvents<'static> {
     fn from(events: Vec<tendermint::abci::Event>) -> Self {
         CosmosTxEvents::RpcListOwned(Box::new(events))
