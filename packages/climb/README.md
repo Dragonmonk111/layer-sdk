@@ -11,7 +11,7 @@ As of right now, this isn't published anywhere, so just run `cargo docs --open`
 
 ## SigningClient
 
-[source code](./src/signing.rs#L41)
+[source code](./src/signing.rs#L20)
 
 A SigningClient needs only two things, a ChainConfig and a SigningKey:
 
@@ -41,7 +41,7 @@ cosmos_signing_key(mnemonic.split(" "))
 
 ## QueryClient
 
-[source code](./src/querier.rs) 
+[source code](./src/querier.rs#L38) 
 
 If you have a SigningClient, then a QueryClient is created for you automatically as `signing_client.querier` and you have the wallet address in `signing_client.addr`
 
@@ -89,7 +89,7 @@ The last `None` is typical for all transaction methods. It takes a `TxBuilder` w
 
 [source code](./src/transaction.rs#L29)
 
-Technically, you don't even need a `SigningClient` for transactions, a `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method:
+Technically, you don't even need a `SigningClient` for transactions, a `SigningKey` + `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method:
 
 
 ```
@@ -100,7 +100,7 @@ signing_client.transfer(None, amount, recipient_addr, Some(tx_builder)).await?;
 
 ## Requests / Responses
 
-Internally, Query methods turn the arguments into a struct which implements a Request trait.
+Internally, Query methods turn the arguments into a struct which implements a QueryRequest trait.
 
 [source code](./src/querier.rs#L52)
 
@@ -122,9 +122,13 @@ The [TxBuilder broadcast method](./src/transaction.rs#L203) takes an iterator of
 
 As a convenience helper to filter and search events, consider using `CosmosTxEvents`. It has `From` impls for various event sources like `TxResponse`, `Vec<Event>`, etc.
 
+[source code](./src/events.rs#L182)
+
 It's a nearly zero-cost abstraction (just dynamic dispatch). Internally, it has variants with references, and so if you pass a reference source there are no allocations.
 
-This is especially helpful for CosmWasm events, so you don't need to worry about the `wasm-` prefix. For example, here's how you can extract the code id from a contract upload tx:
+This is especially helpful for CosmWasm events, so you don't need to worry about the `wasm-` prefix. 
+
+Here's an example of extracting the code id from a contract upload tx:
 
 ```
 let code_id: u64 = CosmosTxEvents::from(&tx_resp)
@@ -133,7 +137,6 @@ let code_id: u64 = CosmosTxEvents::from(&tx_resp)
     .parse()?;
 ```
 
-[source code](./src/events.rs#L182)
 
 ## Middleware
 
@@ -178,7 +181,7 @@ There are convenient methods for client, connection, and channel handshakes
 
 [source code](./src/signing/ibc/handshake.rs)
 
-With the handshake completed, the client has a fully-functioning IBC relayer:
+With the handshake completed, we can create a fully-functioning IBC relayer:
 
 [source code](./src/signing/ibc/relayer.rs)
 
