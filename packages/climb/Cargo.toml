@@ -36,11 +36,11 @@ tonic-web-wasm-client = "0.6.0"
 futures-timer = {version = "3.0.3", features=["wasm-bindgen"], default-features = false}
 uuid = { version = "1.10.0", features = ["serde", "v4", "js"]}
 tonic = {version = "0.12", default-features = false}
-ibc-proto = { git = "https://github.com/dakom/ibc-proto-rs.git", branch = "no-transport", features = ["std", "client"], default-features = false} # FORK - pending https://discord.com/channels/669268347736686612/1204394546092580894/1283134340737532006
+ibc-proto = { git = "https://github.com/dakom/ibc-proto-rs.git", branch = "no-transport-consolidated", features = ["std", "client"], default-features = false} # FORK - pending https://github.com/cosmos/ibc-proto-rs/pull/240
 
 # Not-Wasm specific dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 futures-timer = {version = "3.0.3", default-features = false}
 uuid = { version = "1.10.0", features = ["serde", "v4"]}
 tonic = {version = "0.12", features = ["transport", "tls-native-roots", "tls-webpki-roots"]}
-ibc-proto = { git = "https://github.com/dakom/ibc-proto-rs.git", branch = "no-transport"} # FORK - pending https://discord.com/channels/669268347736686612/1204394546092580894/1283134340737532006
+ibc-proto = { git = "https://github.com/dakom/ibc-proto-rs.git", branch = "no-transport-consolidated"} # FORK - pending https://github.com/cosmos/ibc-proto-rs/pull/240

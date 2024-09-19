@@ -2640,7 +2640,7 @@ dependencies = [
 [[package]]
 name = "ibc-proto"
 version = "0.48.0"
-source = "git+https://github.com/dakom/ibc-proto-rs.git?branch=no-transport#7c3d0c2c0409f5afc55a53c1efb2164de44eeaac"
+source = "git+https://github.com/dakom/ibc-proto-rs.git?branch=no-transport-consolidated#414d66648820c8b92a7a0e68222146f5a566eed4"
 dependencies = [
  "base64 0.22.1",
  "bytes",
