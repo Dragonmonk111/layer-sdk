@@ -37,8 +37,8 @@ impl SigningClient {
     /// if `sequence_strategy` is `None`, it will default to `Query`
     pub async fn new(
         chain_config: ChainConfig,
-        sequence_strategy: Option<SequenceStrategy>,
         signing_key: SigningKey,
+        sequence_strategy: Option<SequenceStrategy>,
     ) -> Result<Self> {
         let addr = match &chain_config.address_kind {
             AddrKind::Cosmos { prefix } => {
