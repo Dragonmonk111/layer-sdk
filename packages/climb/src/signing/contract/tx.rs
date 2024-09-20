@@ -36,7 +36,7 @@ impl SigningClient {
         code_id: u64,
         label: impl ToString,
         msg: &impl Serialize,
-        funds: Option<Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>>,
+        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<(
         Address,
@@ -74,7 +74,7 @@ impl SigningClient {
         &self,
         address: &Address,
         msg: &impl Serialize,
-        funds: Option<Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>>,
+        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
         tx_builder

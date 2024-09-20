@@ -23,10 +23,26 @@ pub use cosmrs::tx::MessageExt;
 // so that we don't have to deal with confusion between types.
 pub use cosmos_sdk_proto::cosmos::base::v1beta1::Coin;
 
-// helper functions
+/// helper function to create a Coin
 pub fn new_coin(amount: impl ToString, denom: impl ToString) -> Coin {
     Coin {
         denom: denom.to_string(),
         amount: amount.to_string(),
     }
+}
+
+/// helper function to create a vec of coins from an iterator of tuples
+/// where the first is the amount, and the second is the denom.
+/// Example:
+/// ```rust
+/// new_coins([
+///     ("uusd", "100"),
+///     ("uslay", "200")
+/// ])
+/// ```
+pub fn new_coins(coins: impl IntoIterator<Item = (impl ToString, impl ToString)>) -> Vec<Coin> {
+    coins
+        .into_iter()
+        .map(|(amount, denom)| new_coin(amount, denom))
+        .collect()
 }

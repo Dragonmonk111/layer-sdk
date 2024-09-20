@@ -4,7 +4,6 @@ mod opt;
 use anyhow::{anyhow, bail, Context, Result};
 use bip39::Mnemonic;
 use clap::Parser;
-use cosmwasm_std::{Addr, Coin};
 use layer_climb::prelude::*;
 use opt::{Args, Command, Opt};
 use rand::Rng;
@@ -111,7 +110,7 @@ async fn main() -> Result<()> {
                     code_id, 
                     label.unwrap_or_default(), 
                     &contract_str_to_msg(msg.as_deref())?,
-                    None,
+                    get_funds(&opt.chain_config,funds_denom, funds_amount),
                     None,
                 )
                 .await?;
@@ -130,18 +129,11 @@ async fn main() -> Result<()> {
 
             let address = opt.chain_config.parse_address(&address)?;
 
-            let funds = match funds_amount {
-                Some(funds_amount) => {
-                    let funds_denom = funds_denom.unwrap_or(opt.chain_config.gas_denom.clone());
-                    Some(vec![new_coin(funds_denom, funds_amount)])
-                }
-                None => None,
-            };
 
             let tx_resp = client.contract_execute(
                 &address,
                 &contract_str_to_msg(msg.as_deref())?,
-                funds,
+                get_funds(&opt.chain_config,funds_denom, funds_amount),
                 None
             ).await?;
 
@@ -161,4 +153,15 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn get_funds(chain_config: &ChainConfig, funds_denom: Option<String>, funds_amount: Option<String>) -> Vec<Coin> {
+
+    match funds_amount {
+        Some(funds_amount) => {
+            let funds_denom = funds_denom.unwrap_or(chain_config.gas_denom.clone());
+            vec![new_coin(funds_denom, funds_amount)]
+        }
+        None => Vec::new(),
+    }
 }

@@ -301,7 +301,7 @@ let (addr, tx_resp) = client
         code_id, 
         "my contract", // label 
         &InstantiateMsg {},
-        None, // optional funds
+        Vec::new(), // optional funds
         None
     )
     .await?; 
@@ -322,12 +322,12 @@ let tx_resp = client.contract_execute(
     &ExecuteMsg::StashMessage {
         message: "hello world".to_string()
     },
-    None, // optional funds
+    Vec::new(), // optional funds
     None
 ).await?;
 ```
 
-Sending funds is made easier with the [new_coin()](./src/prelude.rs#L27) helper
+Sending funds is made easier with the [new_coin()](./src/prelude.rs#L27) helper, and if you have multiple coins, use [new_coins()](./src/prelude.rs#L43):
 
 ```rust
 use layer_climb::prelude::*;
@@ -337,7 +337,7 @@ let tx_resp = client.contract_execute(
     &ExecuteMsg::StashMessage {
         message: "hello world".to_string()
     },
-    Some(vec![new_coin("uslay", 1_000_000)]),
+    vec![new_coin("uslay", 1_000_000)],
     None
 ).await?;
 ```

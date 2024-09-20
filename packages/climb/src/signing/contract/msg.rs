@@ -20,7 +20,7 @@ impl SigningClient {
         admin: impl Into<Option<Address>>,
         code_id: u64,
         label: impl ToString,
-        funds: Option<Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>>,
+        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
         msg: &impl Serialize,
     ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::MsgInstantiateContract> {
         Ok(cosmrs::proto::cosmwasm::wasm::v1::MsgInstantiateContract {
@@ -29,21 +29,21 @@ impl SigningClient {
             code_id,
             label: label.to_string(),
             msg: contract_msg_to_vec(msg)?,
-            funds: funds.unwrap_or_default(),
+            funds,
         })
     }
 
     pub fn contract_execute_msg(
         &self,
         address: &Address,
-        funds: Option<Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>>,
+        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
         msg: &impl Serialize,
     ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContract> {
         Ok(cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContract {
             sender: self.addr.to_string(),
             contract: address.to_string(),
             msg: contract_msg_to_vec(msg)?,
-            funds: funds.unwrap_or_default(),
+            funds,
         })
     }
 
