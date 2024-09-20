@@ -1,0 +1,46 @@
+[package]
+name = "layer-climb"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["lib"]
+
+# General dependencies
+[dependencies]
+cosmwasm-std = "2.0.3"
+thiserror = "1.0.61"
+anyhow = "1.0.86"
+serde = "1.0.202"
+serde_json = "1.0.117"
+toml = "0.8.14"
+hex = "0.4.3"
+futures = "0.3"
+cosmrs = { version = "0.20.0", features = ["cosmwasm", "grpc-core"]}
+rand = "0.8.5"
+bip39 = "2.0.0"
+base64 = "0.22.0"
+cfg-if = "1.0.0"
+tendermint = "0.39.1"
+tendermint-proto = { version = "0.39.1", default-features = false}
+reqwest = {version = "0.12.5", features=["json"]}
+tendermint-rpc = {version = "0.39.1", default-features = false}
+cosmos-sdk-proto = {version = "0.25.0", default-features = false, features = ["std", "cosmwasm", "grpc"] }
+tracing = "0.1.40"
+
+# Wasm specific dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"]}
+tonic-web-wasm-client = "0.6.0"
+futures-timer = {version = "3.0.3", features=["wasm-bindgen"], default-features = false}
+uuid = { version = "1.10.0", features = ["serde", "v4", "js"]}
+tonic = {version = "0.12", default-features = false}
+ibc-proto = { git = "https://github.com/dakom/ibc-proto-rs.git", branch = "no-transport-consolidated", features = ["std", "client"], default-features = false} # FORK - pending https://github.com/cosmos/ibc-proto-rs/pull/240
+
+# Not-Wasm specific dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+futures-timer = {version = "3.0.3", default-features = false}
+uuid = { version = "1.10.0", features = ["serde", "v4"]}
+tonic = {version = "0.12", features = ["transport", "tls-native-roots", "tls-webpki-roots"]}
+ibc-proto = { git = "https://github.com/dakom/ibc-proto-rs.git", branch = "no-transport-consolidated"} # FORK - pending https://github.com/cosmos/ibc-proto-rs/pull/240

@@ -1,0 +1,427 @@
+# CLIent for Multiple Blockchains
+
+Climb is a Rust library for interacting with Lay3r and Cosmos.
+
+You can think of it as the Rust alternative to CosmJS (kinda like CosmRS, but, does more out of the box).
+
+## Cargo Docs
+
+The easiest way to get a feel for the library is to check the cargo docs.
+As of right now, this isn't published anywhere, so just run `cargo doc --open`
+
+## Prelude
+
+Most of the types are re-exported in the prelude and can be used via the line-liner:
+
+```rust
+use layer_climb::prelude::*;
+```
+
+## SigningClient
+
+[source code](./src/signing.rs#L20)
+
+A SigningClient needs only two things, a ChainConfig and a TxSigner:
+
+```rust
+use layer_climb::prelude::*;
+
+SigningClient::new(chain_config, signer).await
+```
+
+The `SigningClient` is cheap to clone and also fairly cheap to create.
+
+#### ChainConfig
+
+[source code](./src/config.rs#L8)
+
+This is a serde-friendly data struct and is typically loaded from disk. See the [example in climb-cli](../../tools/climb-cli/config.json)
+
+#### TxSigner
+
+[source code](./src/transaction.rs#L79)
+
+This is a trait with only two required functions:
+
+```rust
+fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+fn public_key(&self) -> PublicKey;
+```
+
+
+For convenience, it can be created from a mnemonic with the provided [KeySigner](./src/signing/key.rs#L16) like:
+
+```rust
+use layer_climb::prelude::*;
+
+// None here means "Cosmos derivation path"
+let key_signer = KeySigner::new_mnemonic_str(my_mnemonic_string, None)?;
+```
+
+This plays nicely with the `bip39` and `rand` Rust crates, so you can easily generate a random mnemonic and pass it to `new_mnemonic_iter`:
+
+```rust
+use layer_climb::prelude::*;
+use bip39::Mnemonic;
+use rand::Rng;
+
+let mut rng = rand::thread_rng();
+let entropy: [u8; 32] = rng.gen();
+let mnemonic = Mnemonic::from_entropy(&entropy)?;
+
+let signer = KeySigner::new_mnemonic_iter(mnemonic.word_iter(), None)?;
+```
+
+In fact, that's exactly how the `generate-wallet` command in [climb-cli](../../tools/climb-cli/) works!
+
+## QueryClient
+
+[source code](./src/querier.rs#L38) 
+
+If you have a SigningClient, then a QueryClient is created for you automatically as `signing_client.querier` and you have the wallet address in `signing_client.addr`
+
+However, often you want to make queries against other addresses for which you don't have the Signing Key
+
+All you need for this is the `ChainConfig`:
+
+```rust
+QueryClient::new(chain_config).await
+```
+
+The `QueryClient` is cheap to clone and also cheap to create (it uses a cache to re-use a global reqwest client as well as one grpc channel or client per-endpont).
+
+The QueryClient struct is slightly different for wasm32 targets, but this is all dealt with as an abstraction, methods are the same everywhere.
+
+## Addresses
+
+[source code](./src/address.rs#L28)
+
+One difference compared to other clients is that we require knowing the address type. This paves the way for supporting Ethereum-style address strings throughout the client. You can construct an address manually via methods like `new_cosmos()`, but it's more convenient to create it via a method on `ChainConfig`:
+
+```rust
+let addr = chain_config.parse_address("address string")?;
+```
+
+A similar method exists to derive it from a public key:
+
+```rust
+let addr = chain_config.address_from_pub_key(signer.public_key())?;
+```
+
+The `Display` implementation for `Address` is a plain string as would typically be expected for display purposes (events, block explorers, etc.)
+
+## Transactions
+
+Generally speaking, you just call a method on the `SigningClient`. For example, here's how to transfer funds:
+
+```rust
+use layer_climb::prelude::*;
+
+let amount:u128 = 1_000_000;
+let recpient_addr:Address = chain_config.parse_address("address string")?; // see `Addresses` above
+
+// use chain's native gas denom
+signing_client.transfer(None, amount, recipient_addr, None).await?;
+// some other denom
+signing_client.transfer(Some("uusdc"), amount, recipient_addr, None).await?;
+```
+
+The last `None` is typical for all transaction methods. It takes a `TxBuilder` which allows configuring per-transaction settings like the gas fee, simulation multiplier, and many more.
+
+[source code](./src/transaction.rs#L29)
+
+Technically, you don't even need a `SigningClient` for transactions, a `TxSigner` + `TxBuilder` + `QueryClient` is enough, but this is unwieldy. When you want to change transaction defaults, it's more convenient to get a `TxBuilder` from the `SigningClient`, and pass that as a parameter to the method (it will automatically pass the `TxSigner` along):
+
+
+```rust
+let tx_builder = signing_client.tx_builder();
+tx_builder.set_gas_simulate_multiplier(2.0);
+let tx_resp = signing_client.transfer(None, amount, recipient_addr, Some(tx_builder)).await?;
+```
+
+`tx_resp` contains the chain's native `TxResponse`, directly as the protobuf definition. You can log out the hash via `tx_resp.txhash`, or get really fancy by passing it to [CosmosTxEvents](#events).
+
+#### See [Contracts](#contracts) for contract-specific transactions
+
+## Requests / Responses
+
+Internally, Query methods turn the arguments into a struct which implements a QueryRequest trait.
+
+[source code](./src/querier.rs#L52)
+
+The exact implementation here is likely to change, but it's a way to support generic middleware over all requests so we can do things like retry requests on failure, switch from grpc to rpc on any given request (not yet supported), etc. More details on this below.
+
+As an example, calling the [contract_code_info](./src/querier/contract.rs#L32) method on `QueryClient` creates an internal [ContractCodeInfoReq](./src/querier/contract.rs#L113) struct and the actual query is implemented on that struct's [request](./src/querier/contract.rs#L120) method.
+
+This is the pattern for all queries.
+
+## Transaction messages
+
+Transactions work in a similar way, however instead of creating an internal Request type, each method calls an internal helper to create some message, and then broadcasts the message with a TxBuilder.
+
+This allows for calling those message-creating methods separately, and brodcasting them together in one transaction.
+
+The [TxBuilder broadcast method](./src/transaction.rs#L203) takes an iterator of these messages, which must be converted into a protobuf `Any`.
+
+## Events
+
+As a convenience helper to filter and search events, consider using `CosmosTxEvents`. It has `From` impls for various event sources like `TxResponse`, `Vec<Event>`, etc.
+
+[source code](./src/events.rs#L182)
+
+It's a nearly zero-cost abstraction (just dynamic dispatch). Internally, it has variants with references, and so if you pass a reference source there are no allocations.
+
+This is especially helpful for CosmWasm events, so you don't need to worry about the `wasm-` prefix. 
+
+Here's an example of extracting the code id from a contract upload tx:
+
+```rust
+let code_id: u64 = CosmosTxEvents::from(&tx_resp)
+    .attr_first("store_code", "code_id")?
+    .value()
+    .parse()?;
+```
+
+
+## Middleware
+
+_the exact architecture here is likely to change_
+
+The QueryClient supports middleware for:
+
+* mapping requests
+* mapping responses
+* running request -> response
+
+By default it runs a "runner" middleware to retry failing requests up to 3 times with a 100ms delay and exponential backoff.
+
+The TxBuilder supports middleware for:
+
+* mapping TxBody (containing all the messages)
+* mapping TxResponse
+
+By default, neither of these are set to anything.
+
+_while the middleware implementations are internally trait-based, attempting to make the middleware field on QueryClient and TxBuilder trait-based, so that third-party middleware is supported, led to some problems with the futures becoming !Send_
+
+## Logging
+
+_this is very likely to change_
+
+As of right now, some methods like IBC handlers take a function to log strings, and there are also logging middleware implementations.
+
+The reason for this was to differentiate between developer logs and user-facing logs and due to the origins of this crate as it was embedded in an application, as opposed to the library it is now.
+
+This will likely move to `tracing` and also decorate the library with tracing instrumention everywhere.
+
+## Errors
+
+_this is very likely to change_
+
+As of right now, errors are merely emitted as `anyhow` strings. While convenient for quick development, it makes error recovery nearly impossible. Most likely this will move to `thiserror`.
+
+## IBC
+
+There are convenient methods for client, connection, and channel handshakes
+
+[source code](./src/signing/ibc/handshake.rs)
+
+With the handshake completed, we can create a fully-functioning IBC relayer:
+
+[source code](./src/signing/ibc/relayer.rs)
+
+The `IbcRelayer` type is constructed from a `IbcRelayerBuilder`. This allows for having a cache that can be re-used across instances, while also mutating the cache when starting up so that expired clients can be recreated.
+
+[source code](./src/signing/ibc/relayer/builder.rs)
+
+The ergonomics of this relayer are intended to support the use-case of relaying over preconfigured ports, not necessarily assuming that the ibc clients are maintained by the ecosystem such as ICS-20 on a popular mainnet.
+
+_note: the relayer has been tested to complete packets from one chain to another, but there is currently an unresolved bug with relaying contract responses. It's recommended to use this only for simple testing, maintained relayers that are used at scale like Hermes or IBC-Relayer should be used in production_ 
+
+## Contracts
+
+Interacting with contracts is straightforward. Transactions (like instantiate, execute, etc.) are on SigningClient, and queries (like "smart queries" and "contract info") are on QueryClient
+
+* [transactions source code](./src/signing/contract/tx.rs)
+* [queries source code](./src/querier/contract.rs)
+
+The types and parameters may look a little daunting at first, but it's all there to make real-world usage extremely simple. Let's look at some examples. For the sake of brevity, let's assume we already have a `SigningClient` called `client`
+
+For the sake of example and discussion, let's assume our contract has the following types:
+
+```rust
+#[cw_serde]
+pub struct InstantiateMsg { }
+
+#[cw_serde]
+pub enum ExecuteMsg {
+    StashMessage {
+        message: String
+    }
+}
+
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    /// * returns [MessagesResp]
+    #[returns(MessagesResp)]
+    GetMessages {
+        after_index: Option<Uint64>,
+        order: Option<Order>
+    },
+}
+
+#[cw_serde]
+pub struct MessagesResp {
+    pub messages: Vec<String>,
+}
+```
+
+### Contract Upload
+
+```rust
+use layer_climb::prelude::*;
+
+let wasm_byte_code = tokio::fs::read(wasm_file).await?;
+let (code_id, tx_resp) = client.contract_upload_file(wasm_byte_code, None).await?;
+```
+
+The `code_id` in that response is a `u64`, and the `tx_resp` is the protobuf `TxResponse` mentioned above in [Transactions](#transactions)
+
+### Contract Instantiation 
+
+Now that we have a `code_id`, let's instantiate a contract.
+
+We do this by calling the [contract_instantiate](./src/signing/contract/tx.rs#L33) method on our client, with [InstantiateParams](./src/signing/contract/msg.rs#77)
+
+In this specific case, the `InstantiateMsg` is the `Empty` type. We send this via `ContractMessage::Empty`. You can jump below to learn more about [ContractMessage](#contract-message). For this example let's also make sure we are the contract admin:
+
+```rust
+use layer_climb::prelude::*;
+
+let msg = ContractMessage::Empty;
+let params = InstantiateParams::new(code_id, "my contract label", msg)
+    .set_admin(client.addr.clone());
+
+let (addr, tx_resp) = client.contract_instantiate(params, None).await?; 
+```
+
+### Contract Execution 
+
+Now that we have an `addr`, let's execute a message. In this case we have our specific `ExecuteMsg` type from the contract (which is _not_ empty). Execution follows the same idea as instantiation, we call the [contract_execute](./src/signing/contract/tx.rs#L98) method on our client, with [ExecuteParams](./src/signing/contract/msg#107)
+
+```rust
+
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+let params = ExecuteParams::new(&addr, msg);
+
+let tx_resp = client.contract_execute(params, None).await?;
+```
+
+Wait, what if we wanted to send funds along with the execution message? That's easy - just call `params.set_funds()` and use the included `new_coin()` helper:
+
+```rust
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+let mut params = ExecuteParams::new(&addr, msg)
+    .set_funds(vec![new_coin("uslay", 1_000_000)]);
+
+let tx_resp = client.contract_execute(params, None).await?;
+```
+
+### Contract Query
+
+Now that we've executed something on the contract, let's query it. This has a couple differences compared to the previous methods we've seen.
+
+1. We call our method on `QueryClient` not `SigningClient`
+2. We only need to pass in a `ContractMessage` (no QueryParams)
+3. For "smart queries", we need to tell it what the return type is
+
+We have the option of raw queries or smart queries. Let's go with the [contract_smart](./src/querier/contract.rs#L5) method instead of a raw query.
+
+Example:
+
+```rust
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+// query_resp is a `MessagesResp
+let query_resp = client.querier.contract_smart::<MessagesResp>(&addr, msg).await?;
+```
+
+In that case, the `query_resp` is properly typechecked as `MessagesResp`. 
+
+What if we wanted to get it as a raw string? Just call `.contract_smart_raw_response()`:
+
+
+```rust
+use layer_climb::prelude::*;
+
+// Into works for any Serialize type
+let msg:ContractMessage = ExecuteMsg::StashMessage {
+    message: "hello world".to_string()
+}.into();
+
+let raw_bytes = client.querier.contract_smart_raw_response(&addr, msg).await?;
+let raw_string = std::str::from_utf8(&raw_bytes)?;
+```
+
+## Contract Message
+
+[source code](./src/querier/contract.rs#L166)
+
+There are some common use-cases for sending contract messages that are footguns. By having a consistent `ContractMessage` type, we avoid these problems.
+
+Some examples:
+
+* Sending empty types: `ContractMessage::Empty` (on the wire it's `b"{}".to_vec()`)
+* Raw string types: `ContractMessage::Raw` (on the wire it's passed as the raw bytes, *not interpreted as some JSON value*)
+* Typechecked serde types: `ContractMessage::SerdeRef/Owned` (it's converted via cosmwasm_std::to_json_vec()`)
+
+All of these cases are handled very simply:
+
+* Empty: literally just the `ContractMessage::Empty` variant
+* Raw strings: `ContractMessage::new_raw_str`
+* Raw bytes: `ContractMessage::new_raw`
+* Serde-friendly types: `From/Into` or `new_serde_ref()` / `new_serde_owned()`
+
+In practice, generic tools typically work with optional raw strings. That's handled like this:
+
+```rust
+use layer_climb::prelude::*;
+
+// given this
+let maybe_message:Option<String>;
+
+// convert it into a ContractMessage
+let msg = msg
+    .map(ContractMessage::new_raw_str)
+    .unwrap_or(ContractMessage::Empty);
+```
+
+Whereas projects that have Rust types natively are handled like this:
+
+```rust
+use layer_climb::prelude::*;
+
+// given this, ofc it could be optional too
+let my_message:MySerdeFooMessage;
+
+// convert it into a ContractMessage
+let msg = ContractMessage::from(my_message);
+```

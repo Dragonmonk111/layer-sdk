@@ -1,6 +1,6 @@
 [workspace]
 members = ["app/*", "contracts/*", "packages/*"]
-exclude = ["tools/proto-compiler"]
+exclude = ["tools/proto-compiler", "tools/climb-cli"]
 resolver = "2"
 
 [workspace.package]
@@ -44,6 +44,7 @@ anyhow = { version = "1", default-features = false }
 
 layer-abci = { path = "./packages/abci" }
 layer-app = { path = "./packages/app" }
+layer-climb = { path = "./packages/climb" }
 layer-cosmos = { path = "./packages/cosmos" }
 layer-golem = { path = "./packages/golem" }
 layer-proto = { path = "./packages/proto" }

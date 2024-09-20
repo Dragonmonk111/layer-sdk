@@ -1,0 +1,58 @@
+use crate::prelude::*;
+use bip39::Mnemonic;
+use cosmos_sdk_proto::cosmos::tx::v1beta1::SignDoc;
+use cosmrs::{
+    bip32::DerivationPath,
+    crypto::{secp256k1::SigningKey, PublicKey},
+    tx::MessageExt,
+};
+use std::{str::FromStr, sync::LazyLock};
+
+// https://github.com/confio/cosmos-hd-key-derivation-spec?tab=readme-ov-file#the-cosmos-hub-path
+static COSMOS_HUB_PATH: LazyLock<DerivationPath> =
+    LazyLock::new(|| DerivationPath::from_str("m/44'/118'/0'/0/0").unwrap());
+
+pub struct KeySigner {
+    pub key: SigningKey,
+}
+
+impl KeySigner {
+    pub fn new_mnemonic_iter<I, S>(mnemonic: I, derivation: Option<&DerivationPath>) -> Result<Self>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut joined_str = String::new();
+        for word in mnemonic {
+            joined_str.push_str(word.as_ref());
+            joined_str.push(' ');
+        }
+
+        Self::new_mnemonic_str(&joined_str, derivation)
+    }
+
+    pub fn new_mnemonic_str(mnemonic: &str, derivation: Option<&DerivationPath>) -> Result<Self> {
+        let mnemonic: Mnemonic = mnemonic.parse()?;
+        let key = SigningKey::derive_from_path(
+            mnemonic.to_seed(""),
+            derivation.unwrap_or(&COSMOS_HUB_PATH),
+        )
+        .map_err(|err| anyhow!("{}", err))?;
+
+        Ok(Self { key })
+    }
+}
+
+impl TxSigner for KeySigner {
+    fn sign(&self, msg: &SignDoc) -> Result<Vec<u8>> {
+        let signed = self
+            .key
+            .sign(&msg.to_bytes()?)
+            .map_err(|err| anyhow!("{}", err))?;
+        Ok(signed.to_vec())
+    }
+
+    fn public_key(&self) -> PublicKey {
+        self.key.public_key()
+    }
+}

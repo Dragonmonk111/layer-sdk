@@ -13,3 +13,5 @@ internal/
 .idea
 .vscode
 
+# ignore .env files
+.env
