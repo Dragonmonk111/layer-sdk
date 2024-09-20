@@ -123,7 +123,7 @@ let recpient_addr:Address = chain_config.parse_address("address string")?; // se
 // use chain's native gas denom
 signing_client.transfer(None, amount, recipient_addr, None).await?;
 // some other denom
-signing_client.transfer(Some("uusdc"), amount, recipient_addr, None).await?;
+signing_client.transfer("uusdc", amount, recipient_addr, None).await?;
 ```
 
 The last `None` is typical for all transaction methods. It takes a `TxBuilder` which allows configuring per-transaction settings like the gas fee, simulation multiplier, and many more.

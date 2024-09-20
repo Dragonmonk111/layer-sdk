@@ -2,6 +2,7 @@ pub mod contract;
 pub mod ibc;
 pub mod key;
 pub mod middleware;
+pub mod msg;
 
 use crate::{
     prelude::*,
@@ -76,7 +77,7 @@ impl SigningClient {
 
     pub async fn transfer(
         &self,
-        denom: Option<&str>,
+        denom: impl Into<Option<&str>>,
         amount: u128,
         recipient: Address,
         tx_builder: Option<TxBuilder<'_>>,
@@ -87,25 +88,5 @@ impl SigningClient {
                 &self.transfer_msg(denom, amount, recipient)?,
             )?])
             .await
-    }
-
-    pub fn transfer_msg(
-        &self,
-        denom: Option<&str>,
-        amount: u128,
-        recipient: Address,
-    ) -> Result<cosmrs::proto::cosmos::bank::v1beta1::MsgSend> {
-        let denom = denom.unwrap_or(&self.querier.chain_config.gas_denom);
-
-        let amount = cosmrs::proto::cosmos::base::v1beta1::Coin {
-            amount: amount.to_string(),
-            denom: denom.parse().map_err(|err| anyhow!("{}", err))?,
-        };
-
-        Ok(cosmrs::proto::cosmos::bank::v1beta1::MsgSend {
-            from_address: self.addr.to_string(),
-            to_address: recipient.to_string(),
-            amount: vec![amount],
-        })
     }
 }

@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
             tracing::info!("{}", addr);
             tracing::info!("--- Mnemonic---");
             tracing::info!("{}", mnemonic);
-        },
+        }
 
         Command::UploadContract { wasm_file } => {
             let wasm_byte_code = tokio::fs::read(wasm_file).await?;
@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
 
             tracing::info!("Tx Hash: {}", tx_resp.txhash);
             tracing::info!("Code ID: {}", code_id);
-        },
+        }
 
         Command::InstantiateContract {
             code_id,
@@ -111,14 +111,15 @@ async fn main() -> Result<()> {
 
             let (addr, tx_resp) = client
                 .contract_instantiate(
-                    InstantiateParams::new(code_id, label.unwrap_or_default(), msg).set_admin(client.addr.clone()),
+                    InstantiateParams::new(code_id, label.unwrap_or_default(), msg)
+                        .set_admin(client.addr.clone()),
                     None,
                 )
-                .await?; 
+                .await?;
 
             tracing::info!("Tx Hash: {}", tx_resp.txhash);
             tracing::info!("Contract Address: {}", addr);
-        },
+        }
 
         Command::ExecuteContract {
             address,
@@ -144,12 +145,9 @@ async fn main() -> Result<()> {
             let tx_resp = client.contract_execute(params, None).await?;
 
             tracing::info!("Tx Hash: {}", tx_resp.txhash);
-        },
+        }
 
-        Command::QueryContract {
-            address,
-            msg,
-        } => {
+        Command::QueryContract { address, msg } => {
             let client = opt.signing_client().await?;
 
             let msg = msg
@@ -158,13 +156,15 @@ async fn main() -> Result<()> {
 
             let address = opt.chain_config.parse_address(&address)?;
 
-            let resp = client.querier.contract_smart_raw_response(&address, msg).await?;
+            let resp = client
+                .querier
+                .contract_smart_raw_response(&address, msg)
+                .await?;
             let resp = std::str::from_utf8(&resp)?;
 
             tracing::info!("Query Response: {:?}", resp);
-        },
+        }
     }
 
     Ok(())
 }
-
