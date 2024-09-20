@@ -1,5 +1,6 @@
 pub mod address;
 pub mod config;
+pub mod contract_helpers;
 pub mod events;
 pub mod ibc_types;
 pub mod network;
