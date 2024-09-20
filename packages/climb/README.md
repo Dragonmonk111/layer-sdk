@@ -362,7 +362,7 @@ let query_resp:MessagesResp = client.querier.contract_smart(
 
 The response is typechecked at runtime via `serde_json` (well, actually the cosmwasm_std implementation, to make sure it's 100% compatible with smart contracts), and from then on we get perfect guarantees that the response is what we expect.
 
-What if we wanted to get it as a raw string instead? Just call the [.contract_smart_raw_response()](./src/querier/contract.rs#L17) method instead:
+What if we wanted to get it as a raw string instead? Just call the [.contract_smart_raw_response()](./src/querier/contract.rs#L17) method:
 
 
 ```rust
@@ -408,7 +408,7 @@ let raw_bytes = client.querier.contract_smart_raw(
 ).await?;
 let raw_string = std::str::from_utf8(&raw_bytes)?;
 
-// bonus: given this input from a CLI tool, we can handle it all with .deref()
+// bonus: given this input from a CLI tool, we can handle it all with .as_deref()
 let maybe_message:Option<String>;
 
 let tx_resp = client.contract_execute(
