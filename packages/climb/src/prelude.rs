@@ -34,7 +34,9 @@ pub fn new_coin(amount: impl ToString, denom: impl ToString) -> Coin {
 /// helper function to create a vec of coins from an iterator of tuples
 /// where the first is the amount, and the second is the denom.
 /// Example:
-/// ```rust
+/// ```ignore
+/// use layer_climb::prelude::*;
+///
 /// new_coins([
 ///     ("uusd", "100"),
 ///     ("uslay", "200")
