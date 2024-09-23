@@ -17,7 +17,7 @@ impl SigningClient {
     ) -> Result<(u64, cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse)> {
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([msg_into_cosmrs_any(
+            .broadcast([proto_into_any(
                 &self.contract_upload_file_msg(wasm_byte_code)?,
             )?])
             .await?;
@@ -32,7 +32,11 @@ impl SigningClient {
 
     pub async fn contract_instantiate(
         &self,
-        params: InstantiateParams<'_, impl Serialize>,
+        admin: impl Into<Option<Address>>,
+        code_id: u64,
+        label: impl ToString,
+        msg: &impl Serialize,
+        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<(
         Address,
@@ -40,8 +44,8 @@ impl SigningClient {
     )> {
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([msg_into_cosmrs_any(
-                &self.contract_instantiate_msg(params)?,
+            .broadcast([proto_into_any(
+                &self.contract_instantiate_msg(admin, code_id, label, funds, msg)?,
             )?])
             .await?;
 
@@ -66,62 +70,33 @@ impl SigningClient {
         Ok((contract_address, resp))
     }
 
-    pub async fn contract_migrate(
-        &self,
-        params: MigrateParams<'_, impl Serialize>,
-        tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        tx_builder
-            .unwrap_or_else(|| self.tx_builder())
-            .broadcast([msg_into_cosmrs_any(&self.contract_migrate_msg(params)?)?])
-            .await
-    }
-    pub async fn contract_migrate_multi(
-        &self,
-        multi_params: Vec<MigrateParams<'_, impl Serialize>>,
-        tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        let msgs = multi_params
-            .into_iter()
-            .map(|params| {
-                self.contract_migrate_msg(params)
-                    .and_then(|msg| msg_into_cosmrs_any(&msg))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        tx_builder
-            .unwrap_or_else(|| self.tx_builder())
-            .broadcast(msgs)
-            .await
-    }
-
     pub async fn contract_execute(
         &self,
-        params: ExecuteParams<'_, impl Serialize>,
+        address: &Address,
+        msg: &impl Serialize,
+        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([msg_into_cosmrs_any(&self.contract_execute_msg(params)?)?])
+            .broadcast([proto_into_any(
+                &self.contract_execute_msg(address, funds, msg)?,
+            )?])
             .await
     }
 
-    pub async fn contract_execute_multi(
+    pub async fn contract_migrate(
         &self,
-        multi_params: Vec<ExecuteParams<'_, impl Serialize>>,
+        address: &Address,
+        code_id: u64,
+        msg: &impl Serialize,
         tx_builder: Option<TxBuilder<'_>>,
     ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        let msgs = multi_params
-            .into_iter()
-            .map(|params| {
-                self.contract_execute_msg(params)
-                    .and_then(|msg| msg_into_cosmrs_any(&msg))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast(msgs)
+            .broadcast([proto_into_any(
+                &self.contract_migrate_msg(address, code_id, msg)?,
+            )?])
             .await
     }
 }

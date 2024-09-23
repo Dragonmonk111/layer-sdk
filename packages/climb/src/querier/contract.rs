@@ -1,27 +1,27 @@
-use crate::prelude::*;
+use crate::{contract_helpers::contract_msg_to_vec, prelude::*};
 use serde::{de::DeserializeOwned, Serialize};
 
 impl QueryClient {
     pub async fn contract_smart<'a, D: DeserializeOwned + Send + std::fmt::Debug + Sync>(
         &self,
         address: &Address,
-        msg: ContractMessage<'a, impl Serialize>,
+        msg: &impl Serialize,
     ) -> Result<D> {
         self.run_with_middleware(ContractSmartReq {
             address: address.clone(),
-            msg: msg.try_into_vec()?,
+            msg: contract_msg_to_vec(&msg)?,
             _phantom: std::marker::PhantomData,
         })
         .await
     }
-    pub async fn contract_smart_raw_response<'a>(
+    pub async fn contract_smart_raw<'a>(
         &self,
         address: &Address,
-        msg: ContractMessage<'a, impl Serialize>,
+        msg: &impl Serialize,
     ) -> Result<Vec<u8>> {
         self.run_with_middleware(ContractSmartRawReq {
             address: address.clone(),
-            msg: msg.try_into_vec()?,
+            msg: contract_msg_to_vec(&msg)?,
         })
         .await
     }
@@ -159,74 +159,5 @@ impl QueryRequest for ContractInfoReq {
             .map(|res| res.into_inner())?;
 
         Ok(res)
-    }
-}
-
-#[derive(Clone)]
-pub enum ContractMessage<'a, T: Serialize> {
-    SerdeRef(&'a T),
-    SerdeOwned(T),
-    Raw(Vec<u8>),
-    Empty,
-}
-
-// The typical use-cases are for converting any serializable type into a ContractMessage
-impl<'a, T: Serialize> From<T> for ContractMessage<'a, T> {
-    fn from(s: T) -> Self {
-        ContractMessage::SerdeOwned(s)
-    }
-}
-
-impl<'a, T: Serialize> From<&'a T> for ContractMessage<'a, T> {
-    fn from(s: &'a T) -> Self {
-        ContractMessage::SerdeRef(s)
-    }
-}
-
-impl<'a, T: Serialize> ContractMessage<'a, T> {
-    pub fn new_serde_ref(s: &'a T) -> Self {
-        ContractMessage::SerdeRef(s)
-    }
-    pub fn new_serde_owned(s: T) -> Self {
-        ContractMessage::SerdeOwned(s)
-    }
-}
-
-// But - sometimes we don't want to convert it as json, we just want to pass it raw
-impl<'a> ContractMessage<'a, Vec<u8>> {
-    pub fn new_raw(s: Vec<u8>) -> Self {
-        ContractMessage::Raw(s)
-    }
-
-    pub fn new_raw_str(s: impl AsRef<str>) -> Self {
-        ContractMessage::Raw(s.as_ref().as_bytes().to_vec())
-    }
-}
-
-impl<'a, T: Serialize> ContractMessage<'a, T> {
-    pub fn try_into_vec(self) -> Result<Vec<u8>> {
-        match self {
-            ContractMessage::SerdeRef(s) => {
-                cosmwasm_std::to_json_vec(s).map_err(|err| anyhow!("{}", err))
-            }
-            ContractMessage::SerdeOwned(s) => {
-                cosmwasm_std::to_json_vec(&s).map_err(|err| anyhow!("{}", err))
-            }
-            ContractMessage::Raw(s) => Ok(s),
-            ContractMessage::Empty => Ok(b"{}".to_vec()),
-        }
-    }
-
-    pub fn try_into_string(self) -> Result<String> {
-        match self {
-            ContractMessage::SerdeRef(s) => {
-                cosmwasm_std::to_json_string(s).map_err(|err| anyhow!("{}", err))
-            }
-            ContractMessage::SerdeOwned(s) => {
-                cosmwasm_std::to_json_string(&s).map_err(|err| anyhow!("{}", err))
-            }
-            ContractMessage::Raw(s) => String::from_utf8(s).map_err(|err| anyhow!("{}", err)),
-            ContractMessage::Empty => Ok("{}".to_string()),
-        }
     }
 }

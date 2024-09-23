@@ -4,7 +4,6 @@ mod opt;
 use anyhow::{anyhow, bail, Context, Result};
 use bip39::Mnemonic;
 use clap::Parser;
-use cosmwasm_std::{Addr, Coin};
 use layer_climb::prelude::*;
 use opt::{Args, Command, Opt};
 use rand::Rng;
@@ -105,14 +104,13 @@ async fn main() -> Result<()> {
         } => {
             let client = opt.signing_client().await?;
 
-            let msg = msg
-                .map(ContractMessage::new_raw_str)
-                .unwrap_or(ContractMessage::Empty);
-
             let (addr, tx_resp) = client
                 .contract_instantiate(
-                    InstantiateParams::new(code_id, label.unwrap_or_default(), msg)
-                        .set_admin(client.addr.clone()),
+                    client.addr.clone(),
+                    code_id, 
+                    label.unwrap_or_default(), 
+                    &contract_str_to_msg(msg.as_deref())?,
+                    get_funds(&opt.chain_config,funds_denom, funds_amount),
                     None,
                 )
                 .await?;
@@ -129,20 +127,15 @@ async fn main() -> Result<()> {
         } => {
             let client = opt.signing_client().await?;
 
-            let msg = msg
-                .map(ContractMessage::new_raw_str)
-                .unwrap_or(ContractMessage::Empty);
-
             let address = opt.chain_config.parse_address(&address)?;
 
-            let mut params = ExecuteParams::new(address, msg);
 
-            if let Some(funds_amount) = funds_amount {
-                let funds_denom = funds_denom.unwrap_or(opt.chain_config.gas_denom.clone());
-                params = params.set_funds(vec![new_coin(funds_denom, funds_amount)]);
-            }
-
-            let tx_resp = client.contract_execute(params, None).await?;
+            let tx_resp = client.contract_execute(
+                &address,
+                &contract_str_to_msg(msg.as_deref())?,
+                get_funds(&opt.chain_config,funds_denom, funds_amount),
+                None
+            ).await?;
 
             tracing::info!("Tx Hash: {}", tx_resp.txhash);
         }
@@ -150,16 +143,9 @@ async fn main() -> Result<()> {
         Command::QueryContract { address, msg } => {
             let client = opt.signing_client().await?;
 
-            let msg = msg
-                .map(ContractMessage::new_raw_str)
-                .unwrap_or(ContractMessage::Empty);
-
             let address = opt.chain_config.parse_address(&address)?;
 
-            let resp = client
-                .querier
-                .contract_smart_raw_response(&address, msg)
-                .await?;
+            let resp = client.querier.contract_smart_raw(&address, &contract_str_to_msg(msg.as_deref())?).await?;
             let resp = std::str::from_utf8(&resp)?;
 
             tracing::info!("Query Response: {:?}", resp);
@@ -167,4 +153,15 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn get_funds(chain_config: &ChainConfig, funds_denom: Option<String>, funds_amount: Option<String>) -> Vec<Coin> {
+
+    match funds_amount {
+        Some(funds_amount) => {
+            let funds_denom = funds_denom.unwrap_or(chain_config.gas_denom.clone());
+            vec![new_coin(funds_denom, funds_amount)]
+        }
+        None => Vec::new(),
+    }
 }

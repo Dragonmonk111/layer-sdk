@@ -84,7 +84,7 @@ impl SigningClient {
     ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([msg_into_cosmrs_any(
+            .broadcast([proto_into_any(
                 &self.transfer_msg(denom, amount, recipient)?,
             )?])
             .await
