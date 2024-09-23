@@ -9,6 +9,8 @@ pub mod proto_helpers;
 pub mod querier;
 pub mod signing;
 pub mod transaction;
+#[cfg(feature = "web")]
+pub mod web;
 
 // re-export
 pub use cosmrs;

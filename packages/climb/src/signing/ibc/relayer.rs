@@ -98,6 +98,7 @@ impl IbcRelayer {
         for (chain_id, client) in unique_clients.iter() {
             let stream = Box::pin(
                 client
+                    .clone()
                     .stream_block_events(None)
                     .await?
                     .map(move |events| (chain_id, events)),

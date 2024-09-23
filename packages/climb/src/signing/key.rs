@@ -7,6 +7,7 @@ use cosmrs::{
     tx::MessageExt,
 };
 use std::{str::FromStr, sync::LazyLock};
+use async_trait::async_trait;
 
 // https://github.com/confio/cosmos-hd-key-derivation-spec?tab=readme-ov-file#the-cosmos-hub-path
 static COSMOS_HUB_PATH: LazyLock<DerivationPath> =
@@ -43,16 +44,41 @@ impl KeySigner {
     }
 }
 
-impl TxSigner for KeySigner {
-    fn sign(&self, msg: &SignDoc) -> Result<Vec<u8>> {
-        let signed = self
-            .key
-            .sign(&msg.to_bytes()?)
-            .map_err(|err| anyhow!("{}", err))?;
-        Ok(signed.to_vec())
-    }
+cfg_if::cfg_if! {
+    if #[cfg(feature = "web")] {
+        #[async_trait(?Send)]
+        impl TxSigner for KeySigner {
+            async fn sign(&self, msg: &SignDoc) -> Result<Vec<u8>> {
+                sign(self, msg).await
+            }
 
-    fn public_key(&self) -> PublicKey {
-        self.key.public_key()
+            async fn public_key(&self) -> Result<PublicKey> {
+                public_key(self).await
+            }
+        }
+
+    } else {
+        #[async_trait]
+        impl TxSigner for KeySigner {
+            async fn sign(&self, msg: &SignDoc) -> Result<Vec<u8>> {
+                sign(self, msg).await
+            }
+
+            async fn public_key(&self) -> Result<PublicKey> {
+                public_key(self).await
+            }
+        }
     }
+}
+
+async fn sign(signer: &KeySigner, msg: &SignDoc) -> Result<Vec<u8>> {
+    let signed = signer 
+        .key
+        .sign(&msg.to_bytes()?)
+        .map_err(|err| anyhow!("{}", err))?;
+    Ok(signed.to_vec())
+}
+
+async fn public_key(signer: &KeySigner) -> Result<PublicKey> {
+    Ok(signer.key.public_key())
 }
