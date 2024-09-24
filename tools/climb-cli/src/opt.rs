@@ -157,9 +157,9 @@ impl Opt {
         KeySigner::new_mnemonic_str(&self.mnemonic, None)
     }
 
-    pub fn address(&self) -> Result<Address> {
+    pub async fn address(&self) -> Result<Address> {
         self.chain_config
-            .address_from_pub_key(&self.signer()?.public_key())
+            .address_from_pub_key(&self.signer()?.public_key().await?)
     }
 
     pub async fn query_client(&self) -> Result<QueryClient> {
