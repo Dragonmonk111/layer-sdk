@@ -31,7 +31,7 @@ pub struct SigningClient {
 
 impl SigningClient {
     pub async fn new(chain_config: ChainConfig, signer: impl TxSigner + 'static) -> Result<Self> {
-        let addr = chain_config.address_from_pub_key(&signer.public_key())?;
+        let addr = chain_config.address_from_pub_key(&signer.public_key().await?)?;
 
         let querier = QueryClient::new(chain_config.clone()).await?;
 

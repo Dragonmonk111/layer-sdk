@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::prelude::*;
 use futures::Stream;
 
+#[derive(Debug, Clone)]
 pub struct BlockEvents {
     pub height: u64,
     pub events: Vec<tendermint::abci::Event>,
@@ -10,29 +11,31 @@ pub struct BlockEvents {
 
 impl QueryClient {
     pub async fn stream_block_events(
-        &self,
+        // take by value to avoid lifetime issues
+        // typically this means the caller is cloning the QueryClient
+        self,
         sleep_duration: Option<Duration>,
-    ) -> Result<impl Stream<Item = Result<BlockEvents>> + '_> {
+    ) -> Result<impl Stream<Item = Result<BlockEvents>>> {
         let start_height = self.block_height().await?;
 
         Ok(futures::stream::unfold(
-            start_height,
-            move |block_height| async move {
-                match self
+            (self, start_height),
+            move |(client, block_height)| async move {
+                match client
                     .wait_until_block_height(block_height, sleep_duration)
                     .await
                 {
-                    Ok(_) => match self.fetch_block_events(block_height).await {
-                        Err(err) => Some((Err(err), block_height)),
+                    Ok(_) => match client.fetch_block_events(block_height).await {
+                        Err(err) => Some((Err(err), (client, block_height))),
                         Ok(events) => Some((
                             Ok(BlockEvents {
                                 height: block_height,
                                 events,
                             }),
-                            block_height + 1,
+                            (client, block_height + 1),
                         )),
                     },
-                    Err(err) => Some((Err(err), block_height)),
+                    Err(err) => Some((Err(err), (client, block_height))),
                 }
             },
         ))

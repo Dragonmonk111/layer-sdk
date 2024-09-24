@@ -7,6 +7,10 @@ license = "Apache-2.0"
 [lib]
 crate-type = ["lib"]
 
+[features]
+default = []
+web = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:serde-wasm-bindgen"]
+
 # General dependencies
 [dependencies]
 cosmwasm-std = "2.0.3"
@@ -28,6 +32,10 @@ reqwest = {version = "0.12.5", features=["json"]}
 tendermint-rpc = {version = "0.39.1", default-features = false}
 cosmos-sdk-proto = {version = "0.25.0", default-features = false, features = ["std", "cosmwasm", "grpc"] }
 tracing = "0.1.40"
+async-trait = "0.1.82"
+wasm-bindgen = {version = "0.2.93", optional = true }
+wasm-bindgen-futures = {version = "0.4.43", optional = true}
+serde-wasm-bindgen = {version = "0.6.5", optional = true}
 
 # Wasm specific dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]

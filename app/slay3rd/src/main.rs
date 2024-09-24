@@ -1,5 +1,6 @@
 use std::env;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use clap::Parser;
 use config::ServerData;
@@ -7,8 +8,11 @@ use figment::{
     providers::{Env, Format, Serialized, Toml},
     Figment,
 };
+use http::{HeaderName, Method};
 use layer_storage::PersistentStorage;
 use tonic::transport::Server;
+use tonic_web::GrpcWebLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
@@ -149,7 +153,10 @@ async fn run_server<T: PersistentStorage + 'static + Send + Sync>(
         .unwrap();
 
     let grpc_server = Server::builder()
+        .accept_http1(true)
         .layer(grpc::LogLayer::new("grpc"))
+        .layer(cors_layer())
+        .layer(GrpcWebLayer::new())
         .add_service(grpc_reflection)
         .add_service(grpc::auth_service(query.clone()))
         .add_service(grpc::bank_service(query.clone()))
@@ -169,4 +176,40 @@ async fn run_server<T: PersistentStorage + 'static + Send + Sync>(
     if data.has_jaeger {
         opentelemetry::global::shutdown_tracer_provider();
     }
+}
+
+// See: https://github.com/hyperium/tonic/issues/1524
+fn cors_layer() -> CorsLayer {
+    const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+    const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
+        ["grpc-status", "grpc-message", "grpc-status-details-bin"];
+    const DEFAULT_ALLOW_HEADERS: [&str; 4] =
+        ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
+    const DEFAULT_ALLOW_METHODS: [Method; 5] = [
+        Method::POST,
+        Method::GET,
+        Method::OPTIONS,
+        Method::PUT,
+        Method::DELETE,
+    ];
+
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::mirror_request())
+        .allow_credentials(true)
+        .max_age(DEFAULT_MAX_AGE)
+        .expose_headers(
+            DEFAULT_EXPOSED_HEADERS
+                .iter()
+                .cloned()
+                .map(HeaderName::from_static)
+                .collect::<Vec<HeaderName>>(),
+        )
+        .allow_headers(
+            DEFAULT_ALLOW_HEADERS
+                .iter()
+                .cloned()
+                .map(HeaderName::from_static)
+                .collect::<Vec<HeaderName>>(),
+        )
+        .allow_methods(DEFAULT_ALLOW_METHODS)
 }

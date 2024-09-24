@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use crate::signing::middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
+use async_trait::async_trait;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64},
     Arc,
@@ -71,9 +72,21 @@ pub struct TxBuilder<'a> {
     pub middleware_map_resp: Option<Arc<Vec<SigningMiddlewareMapResp>>>,
 }
 
-pub trait TxSigner: Send + Sync {
-    fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
-    fn public_key(&self) -> PublicKey;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "web")] {
+        #[async_trait(?Send)]
+        pub trait TxSigner: Send + Sync {
+            async fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+            async fn public_key(&self) -> Result<PublicKey>;
+        }
+    } else {
+
+        #[async_trait]
+        pub trait TxSigner: Send + Sync {
+            async fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+            async fn public_key(&self) -> Result<PublicKey>;
+        }
+    }
 }
 
 impl<'a> TxBuilder<'a> {
@@ -263,41 +276,14 @@ impl<'a> TxBuilder<'a> {
             },
         };
 
-        let sign_tx = |fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee| -> Result<Vec<u8>> {
-            //let signer_info = cosmrs::tx::SignerInfo::single_direct(self.public_key, sequence);
-            let signer_info = SignerInfo {
-                public_key: Some(self.signer.public_key().into()),
-                mode_info: Some(ModeInfo {
-                    sum: Some(mode_info::Sum::Single(mode_info::Single {
-                        mode: SignMode::Direct.into(),
-                    })),
-                }),
-                sequence,
-            };
-
-            #[allow(deprecated)]
-            let auth_info = AuthInfo {
-                signer_infos: vec![signer_info],
-                fee: Some(fee),
-                tip: None,
-            };
-
-            let sign_doc = SignDoc {
-                body_bytes: body.to_bytes()?,
-                auth_info_bytes: auth_info.to_bytes()?,
-                chain_id: self.querier.chain_config.chain_id.to_string(),
-                account_number,
-            };
-
-            let signature = self.signer.sign(&sign_doc)?;
-
-            let tx_raw = TxRaw {
-                body_bytes: sign_doc.body_bytes.clone(),
-                auth_info_bytes: sign_doc.auth_info_bytes.clone(),
-                signatures: vec![signature],
-            };
-
-            tx_raw.to_bytes().map_err(|e| anyhow!("{}", e))
+        let signer_info = SignerInfo {
+            public_key: Some(self.signer.public_key().await?.into()),
+            mode_info: Some(ModeInfo {
+                sum: Some(mode_info::Sum::Single(mode_info::Single {
+                    mode: SignMode::Direct.into(),
+                })),
+            }),
+            sequence,
         };
 
         let gas_units = match self.gas_units_or_simulate {
@@ -310,7 +296,13 @@ impl<'a> TxBuilder<'a> {
                     chain_config: &self.querier.chain_config,
                 }
                 .calculate()?;
-                let simulate_tx_resp = self.querier.simulate_tx(sign_tx(fee)?).await?;
+                let simulate_tx_resp = self
+                    .querier
+                    .simulate_tx(
+                        self.sign_tx(signer_info.clone(), account_number, &body, fee)
+                            .await?,
+                    )
+                    .await?;
                 let gas_info = simulate_tx_resp
                     .gas_info
                     .context("unable to get gas from simulation")?;
@@ -331,7 +323,9 @@ impl<'a> TxBuilder<'a> {
             .calculate()?,
         };
 
-        let tx_bytes = sign_tx(fee)?;
+        let tx_bytes = self
+            .sign_tx(signer_info.clone(), account_number, &body, fee)
+            .await?;
         let broadcast_mode = self.broadcast_mode.unwrap_or(Self::DEFAULT_BROADCAST_MODE);
 
         let tx_response = self
@@ -391,6 +385,39 @@ impl<'a> TxBuilder<'a> {
         }
 
         Ok(tx_response)
+    }
+
+    async fn sign_tx(
+        &self,
+        signer_info: SignerInfo,
+        account_number: u64,
+        body: &TxBody,
+        fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee,
+    ) -> Result<Vec<u8>> {
+        //let signer_info = cosmrs::tx::SignerInfo::single_direct(self.public_key, sequence);
+        #[allow(deprecated)]
+        let auth_info = AuthInfo {
+            signer_infos: vec![signer_info],
+            fee: Some(fee),
+            tip: None,
+        };
+
+        let sign_doc = SignDoc {
+            body_bytes: body.to_bytes()?,
+            auth_info_bytes: auth_info.to_bytes()?,
+            chain_id: self.querier.chain_config.chain_id.to_string(),
+            account_number,
+        };
+
+        let signature = self.signer.sign(&sign_doc).await?;
+
+        let tx_raw = TxRaw {
+            body_bytes: sign_doc.body_bytes.clone(),
+            auth_info_bytes: sign_doc.auth_info_bytes.clone(),
+            signatures: vec![signature],
+        };
+
+        tx_raw.to_bytes().map_err(|e| anyhow!("{}", e))
     }
 }
 

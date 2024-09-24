@@ -1,6 +1,6 @@
 [workspace]
 members = ["app/*", "contracts/*", "packages/*"]
-exclude = ["tools/proto-compiler", "tools/climb-cli"]
+exclude = ["tools/proto-compiler", "tools/climb-cli", "tools/climb-web"]
 resolver = "2"
 
 [workspace.package]
@@ -40,6 +40,9 @@ prost = { version = "0.13", default-features = false }
 prost-types = { version = "0.13", default-features = false }
 tonic = "0.12.2"
 tonic-reflection = "0.12.2"
+tonic-web = "0.12.2"
+http = "1"
+tower-http = { version = "0.5", features = ["cors"] }
 anyhow = { version = "1", default-features = false }
 
 layer-abci = { path = "./packages/abci" }
