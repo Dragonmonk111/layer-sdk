@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::prelude::*;
 use futures::Stream;
 
+#[derive(Debug, Clone)]
 pub struct BlockEvents {
     pub height: u64,
     pub events: Vec<tendermint::abci::Event>,
