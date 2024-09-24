@@ -1,10 +1,10 @@
 use crate::prelude::*;
 use crate::signing::middleware::{SigningMiddlewareMapBody, SigningMiddlewareMapResp};
+use async_trait::async_trait;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64},
     Arc,
 };
-use async_trait::async_trait;
 
 use cosmos_sdk_proto::{
     cosmos::{
@@ -77,14 +77,14 @@ cfg_if::cfg_if! {
         #[async_trait(?Send)]
         pub trait TxSigner: Send + Sync {
             async fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
-            async fn public_key(&self) -> Result<PublicKey>; 
+            async fn public_key(&self) -> Result<PublicKey>;
         }
     } else {
 
         #[async_trait]
         pub trait TxSigner: Send + Sync {
             async fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
-            async fn public_key(&self) -> Result<PublicKey>; 
+            async fn public_key(&self) -> Result<PublicKey>;
         }
     }
 }
@@ -286,7 +286,6 @@ impl<'a> TxBuilder<'a> {
             sequence,
         };
 
-
         let gas_units = match self.gas_units_or_simulate {
             Some(gas_units) => gas_units,
             None => {
@@ -297,7 +296,13 @@ impl<'a> TxBuilder<'a> {
                     chain_config: &self.querier.chain_config,
                 }
                 .calculate()?;
-                let simulate_tx_resp = self.querier.simulate_tx(self.sign_tx(signer_info.clone(), account_number, &body, fee).await?).await?;
+                let simulate_tx_resp = self
+                    .querier
+                    .simulate_tx(
+                        self.sign_tx(signer_info.clone(), account_number, &body, fee)
+                            .await?,
+                    )
+                    .await?;
                 let gas_info = simulate_tx_resp
                     .gas_info
                     .context("unable to get gas from simulation")?;
@@ -318,7 +323,9 @@ impl<'a> TxBuilder<'a> {
             .calculate()?,
         };
 
-        let tx_bytes = self.sign_tx(signer_info.clone(), account_number, &body, fee).await?;
+        let tx_bytes = self
+            .sign_tx(signer_info.clone(), account_number, &body, fee)
+            .await?;
         let broadcast_mode = self.broadcast_mode.unwrap_or(Self::DEFAULT_BROADCAST_MODE);
 
         let tx_response = self
@@ -380,7 +387,13 @@ impl<'a> TxBuilder<'a> {
         Ok(tx_response)
     }
 
-    async fn sign_tx(&self, signer_info: SignerInfo, account_number: u64, body: &TxBody, fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee) -> Result<Vec<u8>> {
+    async fn sign_tx(
+        &self,
+        signer_info: SignerInfo,
+        account_number: u64,
+        body: &TxBody,
+        fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee,
+    ) -> Result<Vec<u8>> {
         //let signer_info = cosmrs::tx::SignerInfo::single_direct(self.public_key, sequence);
         #[allow(deprecated)]
         let auth_info = AuthInfo {

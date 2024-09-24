@@ -12,11 +12,11 @@ use http::{HeaderName, Method};
 use layer_storage::PersistentStorage;
 use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::info;
 use tracing_subscriber::fmt::time::LocalTime;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::FmtSubscriber;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use layer_abci::ServerConfig;
 use layer_app::AppConfig;
@@ -182,10 +182,16 @@ async fn run_server<T: PersistentStorage + 'static + Send + Sync>(
 fn cors_layer() -> CorsLayer {
     const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
     const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
-    ["grpc-status", "grpc-message", "grpc-status-details-bin"];
+        ["grpc-status", "grpc-message", "grpc-status-details-bin"];
     const DEFAULT_ALLOW_HEADERS: [&str; 4] =
-    ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
-    const DEFAULT_ALLOW_METHODS: [Method; 5] = [Method::POST, Method::GET, Method::OPTIONS, Method::PUT, Method::DELETE];
+        ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
+    const DEFAULT_ALLOW_METHODS: [Method; 5] = [
+        Method::POST,
+        Method::GET,
+        Method::OPTIONS,
+        Method::PUT,
+        Method::DELETE,
+    ];
 
     CorsLayer::new()
         .allow_origin(AllowOrigin::mirror_request())

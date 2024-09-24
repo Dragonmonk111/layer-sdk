@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use async_trait::async_trait;
 use bip39::Mnemonic;
 use cosmos_sdk_proto::cosmos::tx::v1beta1::SignDoc;
 use cosmrs::{
@@ -7,7 +8,6 @@ use cosmrs::{
     tx::MessageExt,
 };
 use std::{str::FromStr, sync::LazyLock};
-use async_trait::async_trait;
 
 // https://github.com/confio/cosmos-hd-key-derivation-spec?tab=readme-ov-file#the-cosmos-hub-path
 static COSMOS_HUB_PATH: LazyLock<DerivationPath> =
@@ -72,7 +72,7 @@ cfg_if::cfg_if! {
 }
 
 async fn sign(signer: &KeySigner, msg: &SignDoc) -> Result<Vec<u8>> {
-    let signed = signer 
+    let signed = signer
         .key
         .sign(&msg.to_bytes()?)
         .map_err(|err| anyhow!("{}", err))?;

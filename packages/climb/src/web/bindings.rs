@@ -1,10 +1,10 @@
-use wasm_bindgen::prelude::*;
+use crate::prelude::*;
+use async_trait::async_trait;
+use base64::prelude::*;
 use cosmos_sdk_proto::cosmos::tx::v1beta1::SignDoc;
 use cosmrs::crypto::PublicKey;
-use async_trait::async_trait;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
-use base64::prelude::*;
-use crate::prelude::*;
 
 pub struct KeplrSigner {
     pub id: String,
@@ -12,16 +12,21 @@ pub struct KeplrSigner {
 
 impl KeplrSigner {
     pub async fn new(chain_id: &ChainId) -> Result<Self> {
-        let id = ffi_keplr_register_signer(chain_id.as_str()).await.map_err(|e| anyhow!("{:?}", e))?;
-        let id = id.as_string().ok_or_else(|| anyhow!("Keplr signer id is not a string"))?;
+        let id = ffi_keplr_register_signer(chain_id.as_str())
+            .await
+            .map_err(|e| anyhow!("{:?}", e))?;
+        let id = id
+            .as_string()
+            .ok_or_else(|| anyhow!("Keplr signer id is not a string"))?;
         Ok(Self { id })
-
     }
 
     pub async fn add_chain(chain_config: &ChainConfig) -> Result<()> {
         let serialized = serde_json::to_string(chain_config)?;
 
-        ffi_keplr_add_chain(&serialized).await.map_err(|e| anyhow!("{:?}", e))?;
+        ffi_keplr_add_chain(&serialized)
+            .await
+            .map_err(|e| anyhow!("{:?}", e))?;
 
         Ok(())
     }
@@ -30,15 +35,14 @@ impl KeplrSigner {
 #[async_trait(?Send)]
 impl TxSigner for KeplrSigner {
     async fn sign(&self, sign_doc: &SignDoc) -> Result<Vec<u8>> {
-
         #[derive(serde::Serialize)]
         struct JsSignDoc {
             #[serde(rename = "bodyBytes")]
             pub body_bytes: Vec<u8>,
             #[serde(rename = "authInfoBytes")]
-            pub auth_info_bytes: Vec<u8>, 
+            pub auth_info_bytes: Vec<u8>,
             #[serde(rename = "chainId")]
-            pub chain_id: String, 
+            pub chain_id: String,
             #[serde(rename = "accountNumber")]
             pub account_number: u64,
         }
@@ -52,9 +56,13 @@ impl TxSigner for KeplrSigner {
 
         let sign_doc = serde_wasm_bindgen::to_value(&sign_doc).map_err(|e| anyhow!("{:?}", e))?;
 
-        let signature = ffi_keplr_sign(&self.id, &sign_doc).await.map_err(|e| anyhow!("{:?}", e))?;
+        let signature = ffi_keplr_sign(&self.id, &sign_doc)
+            .await
+            .map_err(|e| anyhow!("{:?}", e))?;
 
-        let signature = signature.as_string().ok_or_else(|| anyhow!("Signature is not a string"))?;
+        let signature = signature
+            .as_string()
+            .ok_or_else(|| anyhow!("Signature is not a string"))?;
 
         let signature_bytes = BASE64_STANDARD.decode(signature)?;
 
@@ -62,16 +70,19 @@ impl TxSigner for KeplrSigner {
     }
 
     async fn public_key(&self) -> Result<PublicKey> {
-        let keplr_key = ffi_keplr_public_key(&self.id).await.map_err(|e| anyhow!("{:?}", e))?;
+        let keplr_key = ffi_keplr_public_key(&self.id)
+            .await
+            .map_err(|e| anyhow!("{:?}", e))?;
 
-        let pub_key:Vec<u8> = keplr_key.pub_key().to_vec();
+        let pub_key: Vec<u8> = keplr_key.pub_key().to_vec();
 
         match keplr_key.algo().as_str() {
             "secp256k1" => {
-                let pub_key = tendermint::public_key::PublicKey::from_raw_secp256k1(&pub_key).context("Invalid secp256k1 public key")?;
+                let pub_key = tendermint::public_key::PublicKey::from_raw_secp256k1(&pub_key)
+                    .context("Invalid secp256k1 public key")?;
                 Ok(pub_key.into())
-            },
-            _ => bail!("Unsupported public key algorithm: {}", keplr_key.algo())
+            }
+            _ => bail!("Unsupported public key algorithm: {}", keplr_key.algo()),
         }
     }
 }
@@ -111,10 +122,15 @@ extern "C" {
     async fn ffi_keplr_register_signer(chain_id: &str) -> std::result::Result<JsValue, JsValue>;
 
     #[wasm_bindgen(catch)]
-    async fn ffi_keplr_add_chain(chain_config_as_string: &str) -> std::result::Result<JsValue, JsValue>;
+    async fn ffi_keplr_add_chain(
+        chain_config_as_string: &str,
+    ) -> std::result::Result<JsValue, JsValue>;
 
     #[wasm_bindgen(catch)]
-    async fn ffi_keplr_sign(keplr_id: &str, sign_doc: &JsValue) -> std::result::Result<JsValue, JsValue>;
+    async fn ffi_keplr_sign(
+        keplr_id: &str,
+        sign_doc: &JsValue,
+    ) -> std::result::Result<JsValue, JsValue>;
 
     #[wasm_bindgen(catch)]
     async fn ffi_keplr_public_key(keplr_id: &str) -> std::result::Result<KeplrKey, JsValue>;
