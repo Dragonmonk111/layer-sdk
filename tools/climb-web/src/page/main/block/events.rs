@@ -21,8 +21,6 @@ impl BlockEventsUi {
     }
 
     pub fn render(&self) -> Dom {
-        let state = self;
-
         let stream = self.client.querier.clone().stream_block_events(None);
 
         html!("div", {
