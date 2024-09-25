@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
         }
         Command::TapFaucet { amount } => {
             let faucet = opt.faucet_client().await?;
-            let addr = opt.address()?;
+            let addr = opt.address().await?;
             let amount = amount.unwrap_or(1_000_000);
 
             tracing::info!(
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
             let signer = KeySigner::new_mnemonic_iter(mnemonic.word_iter(), None)?;
             let addr = opt
                 .chain_config
-                .address_from_pub_key(&signer.public_key())?;
+                .address_from_pub_key(&signer.public_key().await?)?;
 
             tracing::info!("--- Address ---");
             tracing::info!("{}", addr);
