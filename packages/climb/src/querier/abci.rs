@@ -73,7 +73,7 @@ pub enum AbciProofKind {
     },
     IbcConsensus {
         client_id: IbcClientId,
-        height: ibc_proto::ibc::core::client::v1::Height,
+        height: proto::RevisionHeight,
     },
     IbcChannel {
         channel_id: IbcChannelId,
@@ -163,25 +163,23 @@ impl QueryRequest for AbciProofReq {
     async fn request(&self, client: QueryClient) -> Result<AbciProofResponse> {
         match client.get_abci_query_client_mode() {
             QueryClientMode::Grpc => {
-                let req = tonic::Request::new(
-                    cosmrs::proto::cosmos::base::tendermint::v1beta1::AbciQueryRequest {
-                        path: self.kind.path().to_string(),
-                        data: self.kind.data_bytes(),
-                        height: self.height.try_into()?,
-                        prove: true,
-                    },
-                );
+                let req = tonic::Request::new(proto::tendermint::AbciQueryRequest {
+                    path: self.kind.path().to_string(),
+                    data: self.kind.data_bytes(),
+                    height: self.height.try_into()?,
+                    prove: true,
+                });
 
                 // I think, don't do this, since height is part of the request?
                 // apply_grpc_height(&mut req, Some(self.height))?;
 
-                let mut query_client = cosmrs::proto::cosmos::base::tendermint::v1beta1::service_client::ServiceClient::new(client.grpc_channel.clone());
-                let resp: cosmrs::proto::cosmos::base::tendermint::v1beta1::AbciQueryResponse =
-                    query_client
-                        .abci_query(req)
-                        .await
-                        .map(|res| res.into_inner())
-                        .with_context(|| format!("couldn't get abci proof for {:?}", self.kind))?;
+                let mut query_client =
+                    proto::grpc_client::Tendermint::new(client.grpc_channel.clone());
+                let resp: proto::tendermint::AbciQueryResponse = query_client
+                    .abci_query(req)
+                    .await
+                    .map(|res| res.into_inner())
+                    .with_context(|| format!("couldn't get abci proof for {:?}", self.kind))?;
 
                 //log_abci_resp(&resp, &self.kind, self.height);
 
@@ -221,7 +219,7 @@ impl QueryRequest for AbciProofReq {
 }
 
 enum AbciProofToConvert {
-    Grpc(cosmrs::proto::cosmos::base::tendermint::v1beta1::ProofOps),
+    Grpc(proto::tendermint::ProofOps),
     Rpc(tendermint::merkle::proof::ProofOps),
 }
 
@@ -237,18 +235,18 @@ impl AbciProofToConvert {
         let mut proofs = Vec::new();
 
         for op in self.into_vec() {
-            let mut parsed = ibc_proto::ics23::CommitmentProof { proof: None };
-            cosmrs::proto::prost::Message::merge(&mut parsed, op.as_slice())?;
+            let mut parsed = proto::ibc_ics23::CommitmentProof { proof: None };
+            proto::Message::merge(&mut parsed, op.as_slice())?;
             // if let ibc_proto::ics23::commitment_proof::Proof::Exist(ibc_proto::ics23::ExistenceProof{ key, value, leaf, path}) = parsed.proof.as_mut().unwrap() {
             //     println!("{} vs. {:?}", op.field_type, path);
             // }
             proofs.push(parsed);
         }
 
-        let merkle_proof = ibc_proto::ibc::core::commitment::v1::MerkleProof { proofs };
+        let merkle_proof = proto::MerkleProof { proofs };
 
         let mut bytes = Vec::new();
-        cosmrs::proto::prost::Message::encode(&merkle_proof, &mut bytes)?;
+        proto::Message::encode(&merkle_proof, &mut bytes)?;
 
         Ok(bytes)
     }
@@ -256,11 +254,11 @@ impl AbciProofToConvert {
 
 // in theory, with this working, we could save some requests... but, it's finicky
 // fn log_abci_resp(resp: &cosmrs::proto::cosmos::base::tendermint::v1beta1::AbciQueryResponse, kind: &AbciProofKind, height: u64 ) {
-//     match tendermint_proto::google::protobuf::Any::decode(resp.value.as_slice()) {
+//     match proto::Any::decode(resp.value.as_slice()) {
 //         Ok(any) => {
 //             match any.type_url.as_str() {
 //                 "/ibc.lightclients.tendermint.v1.ClientState" => {
-//                     match ibc_proto::ibc::lightclients::tendermint::v1::ClientState::decode(any.value.as_slice()) {
+//                     match proto::ibc_light_client::ClientState::decode(any.value.as_slice()) {
 //                         Ok(client_state) => {
 //                             println!("abci_query response for {} at height {}: {:?}", kind.data_string(), height, client_state);
 //                         },
@@ -270,7 +268,7 @@ impl AbciProofToConvert {
 //                     }
 //                 },
 //                 "/ibc.lightclients.tendermint.v1.ConsensusState" => {
-//                     match ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState::decode(any.value.as_slice()) {
+//                     match proto::ibc_light_client::ConsensusState::decode(any.value.as_slice()) {
 //                         Ok(consensus_state) => {
 //                             println!("abci_query response for {} at height {}: {:?}", kind.data_string(), height, consensus_state);
 //                         },

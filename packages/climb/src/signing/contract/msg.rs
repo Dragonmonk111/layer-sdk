@@ -7,8 +7,8 @@ impl SigningClient {
     pub fn contract_upload_file_msg(
         &self,
         wasm_byte_code: Vec<u8>,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::MsgStoreCode> {
-        Ok(cosmrs::proto::cosmwasm::wasm::v1::MsgStoreCode {
+    ) -> Result<proto::wasm::MsgStoreCode> {
+        Ok(proto::wasm::MsgStoreCode {
             sender: self.addr.to_string(),
             wasm_byte_code,
             instantiate_permission: None,
@@ -20,10 +20,10 @@ impl SigningClient {
         admin: impl Into<Option<Address>>,
         code_id: u64,
         label: impl ToString,
-        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
+        funds: Vec<proto::Coin>,
         msg: &impl Serialize,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::MsgInstantiateContract> {
-        Ok(cosmrs::proto::cosmwasm::wasm::v1::MsgInstantiateContract {
+    ) -> Result<proto::wasm::MsgInstantiateContract> {
+        Ok(proto::wasm::MsgInstantiateContract {
             sender: self.addr.to_string(),
             admin: admin.into().map(|a| a.to_string()).unwrap_or_default(),
             code_id,
@@ -36,10 +36,10 @@ impl SigningClient {
     pub fn contract_execute_msg(
         &self,
         address: &Address,
-        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
+        funds: Vec<proto::Coin>,
         msg: &impl Serialize,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContract> {
-        Ok(cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContract {
+    ) -> Result<proto::wasm::MsgExecuteContract> {
+        Ok(proto::wasm::MsgExecuteContract {
             sender: self.addr.to_string(),
             contract: address.to_string(),
             msg: contract_msg_to_vec(msg)?,
@@ -52,8 +52,8 @@ impl SigningClient {
         address: &Address,
         code_id: u64,
         msg: &impl Serialize,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::MsgMigrateContract> {
-        Ok(cosmrs::proto::cosmwasm::wasm::v1::MsgMigrateContract {
+    ) -> Result<proto::wasm::MsgMigrateContract> {
+        Ok(proto::wasm::MsgMigrateContract {
             sender: self.addr.to_string(),
             contract: address.to_string(),
             code_id,

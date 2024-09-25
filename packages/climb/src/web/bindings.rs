@@ -1,7 +1,6 @@
 use crate::prelude::*;
 use async_trait::async_trait;
 use base64::prelude::*;
-use cosmos_sdk_proto::cosmos::tx::v1beta1::SignDoc;
 use cosmrs::crypto::PublicKey;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
@@ -34,7 +33,7 @@ impl KeplrSigner {
 
 #[async_trait(?Send)]
 impl TxSigner for KeplrSigner {
-    async fn sign(&self, sign_doc: &SignDoc) -> Result<Vec<u8>> {
+    async fn sign(&self, sign_doc: &proto::SignDoc) -> Result<Vec<u8>> {
         #[derive(serde::Serialize)]
         struct JsSignDoc {
             #[serde(rename = "bodyBytes")]

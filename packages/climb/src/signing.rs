@@ -81,7 +81,7 @@ impl SigningClient {
         amount: u128,
         recipient: Address,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
             .broadcast([proto_into_any(

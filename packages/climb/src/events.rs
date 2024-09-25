@@ -9,22 +9,22 @@ use crate::prelude::*;
 // it is slightly opinionated in that it will search for events with the wasm- prefix if the exact type is not found
 // also, it has attribute iterators to preserve performance with references
 pub enum CosmosTxEvents<'a> {
-    TxResponseRef(&'a cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse),
-    TxResponseOwned(Box<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse>),
+    TxResponseRef(&'a proto::TxResponse),
+    TxResponseOwned(Box<proto::TxResponse>),
     RpcListRef(&'a [tendermint::abci::Event]),
     RpcListOwned(Box<Vec<tendermint::abci::Event>>),
     CosmWasmRef(&'a [cosmwasm_std::Event]),
     CosmWasmOwned(Box<Vec<cosmwasm_std::Event>>),
 }
 
-impl<'a> From<&'a cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> for CosmosTxEvents<'a> {
-    fn from(resp: &'a cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse) -> Self {
+impl<'a> From<&'a proto::TxResponse> for CosmosTxEvents<'a> {
+    fn from(resp: &'a proto::TxResponse) -> Self {
         CosmosTxEvents::TxResponseRef(resp)
     }
 }
 
-impl From<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> for CosmosTxEvents<'static> {
-    fn from(resp: cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse) -> Self {
+impl From<proto::TxResponse> for CosmosTxEvents<'static> {
+    fn from(resp: proto::TxResponse) -> Self {
         CosmosTxEvents::TxResponseOwned(Box::new(resp))
     }
 }
@@ -56,20 +56,20 @@ impl From<Vec<tendermint::abci::Event>> for CosmosTxEvents<'static> {
 // Local event type to allow efficient lazy converting until after filtering/finding
 #[derive(Clone)]
 pub enum Event<'a> {
-    String(&'a cosmrs::proto::cosmos::base::abci::v1beta1::StringEvent),
-    Abci(&'a cosmrs::proto::tendermint::abci::Event),
+    String(&'a proto::StringEvent),
+    Abci(&'a proto::Event),
     Rpc(&'a tendermint::abci::Event),
     CosmWasm(&'a cosmwasm_std::Event),
 }
 
-impl<'a> From<&'a cosmrs::proto::cosmos::base::abci::v1beta1::StringEvent> for Event<'a> {
-    fn from(event: &'a cosmrs::proto::cosmos::base::abci::v1beta1::StringEvent) -> Self {
+impl<'a> From<&'a proto::StringEvent> for Event<'a> {
+    fn from(event: &'a proto::StringEvent) -> Self {
         Event::String(event)
     }
 }
 
-impl<'a> From<&'a cosmrs::proto::tendermint::abci::Event> for Event<'a> {
-    fn from(event: &'a cosmrs::proto::tendermint::abci::Event) -> Self {
+impl<'a> From<&'a proto::Event> for Event<'a> {
+    fn from(event: &'a proto::Event) -> Self {
         Event::Abci(event)
     }
 }
@@ -113,8 +113,8 @@ impl std::fmt::Debug for Event<'_> {
 }
 
 pub enum Attribute<'a> {
-    String(&'a cosmrs::proto::cosmos::base::abci::v1beta1::Attribute),
-    Abci(&'a cosmrs::proto::tendermint::abci::EventAttribute),
+    String(&'a proto::Attribute),
+    Abci(&'a proto::EventAttribute),
     Rpc(&'a tendermint::abci::EventAttribute),
     CosmWasm(&'a cosmwasm_std::Attribute),
 }

@@ -11,7 +11,7 @@ use super::{
 impl QueryClient {
     pub async fn ibc_connection_proofs(
         &self,
-        proof_height: ibc_proto::ibc::core::client::v1::Height,
+        proof_height: proto::RevisionHeight,
         client_id: &IbcClientId,
         connection_id: &IbcConnectionId,
     ) -> Result<IbcConnectionProofs> {
@@ -25,7 +25,7 @@ impl QueryClient {
 
     pub async fn ibc_channel_proofs(
         &self,
-        proof_height: ibc_proto::ibc::core::client::v1::Height,
+        proof_height: proto::RevisionHeight,
         channel_id: &IbcChannelId,
         port_id: &IbcPortId,
     ) -> Result<IbcChannelProofs> {
@@ -41,7 +41,7 @@ impl QueryClient {
         &self,
         ibc_client_id: &IbcClientId,
         height: Option<u64>,
-    ) -> Result<ibc_proto::ibc::lightclients::tendermint::v1::ClientState> {
+    ) -> Result<proto::ibc_light_client::ClientState> {
         self.run_with_middleware(IbcClientStateReq {
             ibc_client_id: ibc_client_id.clone(),
             height,
@@ -53,7 +53,7 @@ impl QueryClient {
         &self,
         connection_id: &IbcConnectionId,
         height: Option<u64>,
-    ) -> Result<ibc_proto::ibc::core::connection::v1::ConnectionEnd> {
+    ) -> Result<proto::ibc_connection::ConnectionEnd> {
         self.run_with_middleware(IbcConnectionReq {
             connection_id: connection_id.clone(),
             height,
@@ -64,9 +64,9 @@ impl QueryClient {
     pub async fn ibc_connection_consensus_state(
         &self,
         connection_id: &IbcConnectionId,
-        consensus_height: Option<ibc_proto::ibc::core::client::v1::Height>,
+        consensus_height: Option<proto::RevisionHeight>,
         height: Option<u64>,
-    ) -> Result<tendermint_proto::google::protobuf::Any> {
+    ) -> Result<proto::Any> {
         self.run_with_middleware(IbcConnectionConsensusStateReq {
             connection_id: connection_id.clone(),
             consensus_height,
@@ -80,7 +80,7 @@ impl QueryClient {
         channel_id: &IbcChannelId,
         port_id: &IbcPortId,
         height: Option<u64>,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::Channel> {
+    ) -> Result<proto::ibc_channel::Channel> {
         self.run_with_middleware(IbcChannelReq {
             channel_id: channel_id.clone(),
             port_id: port_id.clone(),
@@ -93,8 +93,8 @@ impl QueryClient {
         &self,
         trusting_period_secs: Option<u64>,
     ) -> Result<(
-        ibc_proto::ibc::lightclients::tendermint::v1::ClientState,
-        ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState,
+        proto::ibc_light_client::ClientState,
+        proto::ibc_light_client::ConsensusState,
     )> {
         self.run_with_middleware(IbcCreateClientConsensusStateReq {
             trusting_period_secs,
@@ -105,7 +105,7 @@ impl QueryClient {
 
 #[derive(Clone, Debug)]
 struct IbcConnectionProofsReq {
-    pub proof_height: ibc_proto::ibc::core::client::v1::Height,
+    pub proof_height: proto::RevisionHeight,
     pub client_id: IbcClientId,
     pub connection_id: IbcConnectionId,
 }
@@ -195,7 +195,7 @@ impl QueryRequest for IbcConnectionProofsReq {
 
 #[derive(Clone, Debug)]
 struct IbcChannelProofsReq {
-    pub proof_height: ibc_proto::ibc::core::client::v1::Height,
+    pub proof_height: proto::RevisionHeight,
     pub channel_id: IbcChannelId,
     pub port_id: IbcPortId,
 }
@@ -246,28 +246,23 @@ struct IbcClientStateReq {
 }
 
 impl QueryRequest for IbcClientStateReq {
-    type QueryResponse = ibc_proto::ibc::lightclients::tendermint::v1::ClientState;
+    type QueryResponse = proto::ibc_light_client::ClientState;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<ibc_proto::ibc::lightclients::tendermint::v1::ClientState> {
+    async fn request(&self, client: QueryClient) -> Result<proto::ibc_light_client::ClientState> {
         let IbcClientStateReq {
             ibc_client_id,
             height,
         } = self;
 
-        let mut req =
-            tonic::Request::new(ibc_proto::ibc::core::client::v1::QueryClientStateRequest {
-                client_id: ibc_client_id.to_string(),
-            });
+        let mut req = tonic::Request::new(proto::ibc_client::QueryClientStateRequest {
+            client_id: ibc_client_id.to_string(),
+        });
 
         apply_grpc_height(&mut req, *height)?;
 
-        let mut query_client = ibc_proto::ibc::core::client::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
-        let resp: ibc_proto::ibc::core::client::v1::QueryClientStateResponse = query_client
+        let mut query_client =
+            proto::ibc_client::query_client::QueryClient::new(client.grpc_channel.clone());
+        let resp: proto::ibc_client::QueryClientStateResponse = query_client
             .client_state(req)
             .await
             .map(|res| res.into_inner())
@@ -277,10 +272,8 @@ impl QueryRequest for IbcClientStateReq {
             .client_state
             .map(|client_state| match client_state.type_url.as_str() {
                 "/ibc.lightclients.tendermint.v1.ClientState" => {
-                    ibc_proto::ibc::lightclients::tendermint::v1::ClientState::decode(
-                        client_state.value.as_slice(),
-                    )
-                    .map_err(|e| e.into())
+                    proto::ibc_light_client::ClientState::decode(client_state.value.as_slice())
+                        .map_err(|e| e.into())
                 }
                 _ => Err(anyhow::anyhow!(
                     "unsupported client state type: {}",
@@ -301,28 +294,22 @@ struct IbcConnectionReq {
 }
 
 impl QueryRequest for IbcConnectionReq {
-    type QueryResponse = ibc_proto::ibc::core::connection::v1::ConnectionEnd;
+    type QueryResponse = proto::ibc_connection::ConnectionEnd;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<ibc_proto::ibc::core::connection::v1::ConnectionEnd> {
+    async fn request(&self, client: QueryClient) -> Result<proto::ibc_connection::ConnectionEnd> {
         let IbcConnectionReq {
             connection_id,
             height,
         } = self;
 
-        let mut req = tonic::Request::new(
-            ibc_proto::ibc::core::connection::v1::QueryConnectionRequest {
-                connection_id: connection_id.to_string(),
-            },
-        );
+        let mut req = tonic::Request::new(proto::ibc_connection::QueryConnectionRequest {
+            connection_id: connection_id.to_string(),
+        });
 
         apply_grpc_height(&mut req, *height)?;
 
-        let mut query_client = ibc_proto::ibc::core::connection::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client =
+            proto::ibc_connection::query_client::QueryClient::new(client.grpc_channel.clone());
 
         query_client
             .connection(req)
@@ -337,30 +324,26 @@ impl QueryRequest for IbcConnectionReq {
 #[derive(Clone, Debug)]
 struct IbcConnectionConsensusStateReq {
     pub connection_id: IbcConnectionId,
-    pub consensus_height: Option<ibc_proto::ibc::core::client::v1::Height>,
+    pub consensus_height: Option<proto::RevisionHeight>,
     pub height: Option<u64>,
 }
 
 impl QueryRequest for IbcConnectionConsensusStateReq {
-    type QueryResponse = tendermint_proto::google::protobuf::Any;
+    type QueryResponse = proto::Any;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<tendermint_proto::google::protobuf::Any> {
+    async fn request(&self, client: QueryClient) -> Result<proto::Any> {
         let IbcConnectionConsensusStateReq {
             connection_id,
             consensus_height,
             height,
         } = self;
 
-        let mut query_client = ibc_proto::ibc::core::connection::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client =
+            proto::ibc_connection::query_client::QueryClient::new(client.grpc_channel.clone());
 
         let consensus_height = match consensus_height {
             Some(h) => *h,
-            None => ibc_proto::ibc::core::client::v1::Height {
+            None => proto::RevisionHeight {
                 revision_number: client.chain_config.ibc_client_revision()?,
                 revision_height: match height {
                     Some(h) => *h,
@@ -370,7 +353,7 @@ impl QueryRequest for IbcConnectionConsensusStateReq {
         };
 
         let mut req = tonic::Request::new(
-            ibc_proto::ibc::core::connection::v1::QueryConnectionConsensusStateRequest {
+            proto::ibc_connection::QueryConnectionConsensusStateRequest {
                 connection_id: connection_id.to_string(),
                 revision_number: consensus_height.revision_number,
                 revision_height: consensus_height.revision_height,
@@ -397,28 +380,24 @@ struct IbcChannelReq {
 }
 
 impl QueryRequest for IbcChannelReq {
-    type QueryResponse = ibc_proto::ibc::core::channel::v1::Channel;
+    type QueryResponse = proto::ibc_channel::Channel;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::Channel> {
+    async fn request(&self, client: QueryClient) -> Result<proto::ibc_channel::Channel> {
         let IbcChannelReq {
             channel_id,
             port_id,
             height,
         } = self;
 
-        let mut req = tonic::Request::new(ibc_proto::ibc::core::channel::v1::QueryChannelRequest {
+        let mut req = tonic::Request::new(proto::ibc_channel::QueryChannelRequest {
             channel_id: channel_id.to_string(),
             port_id: port_id.to_string(),
         });
 
         apply_grpc_height(&mut req, *height)?;
 
-        let mut query_client = ibc_proto::ibc::core::channel::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client =
+            proto::ibc_channel::query_client::QueryClient::new(client.grpc_channel.clone());
 
         query_client
             .channel(req)
@@ -437,16 +416,16 @@ struct IbcCreateClientConsensusStateReq {
 
 impl QueryRequest for IbcCreateClientConsensusStateReq {
     type QueryResponse = (
-        ibc_proto::ibc::lightclients::tendermint::v1::ClientState,
-        ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState,
+        proto::ibc_light_client::ClientState,
+        proto::ibc_light_client::ConsensusState,
     );
 
     async fn request(
         &self,
         client: QueryClient,
     ) -> Result<(
-        ibc_proto::ibc::lightclients::tendermint::v1::ClientState,
-        ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState,
+        proto::ibc_light_client::ClientState,
+        proto::ibc_light_client::ConsensusState,
     )> {
         let trusting_period_secs = self.trusting_period_secs;
 
@@ -454,9 +433,9 @@ impl QueryRequest for IbcCreateClientConsensusStateReq {
             .request(client.clone())
             .await?;
 
-        let consensus_state = ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState {
+        let consensus_state = proto::ibc_light_client::ConsensusState {
             timestamp: latest_block_header.time(),
-            root: Some(ibc_proto::ibc::core::commitment::v1::MerkleRoot {
+            root: Some(proto::MerkleRoot {
                 // in MerkleRoot comment itself: "In the Cosmos SDK, the AppHash of a block header becomes the root."
                 hash: latest_block_header.app_hash(),
             }),
@@ -469,7 +448,7 @@ impl QueryRequest for IbcCreateClientConsensusStateReq {
             .unbonding_time
             .context("missing unbonding time")?;
 
-        let unbonding_period = tendermint_proto::google::protobuf::Duration {
+        let unbonding_period = proto::Duration {
             seconds: unbonding_period.seconds,
             nanos: unbonding_period.nanos,
         };
@@ -477,35 +456,35 @@ impl QueryRequest for IbcCreateClientConsensusStateReq {
         // 2/3 of the unbonding period gives enough time to trust without constant checking
         // but still within enough time to punish misbehaviour
         let trusting_period = match trusting_period_secs {
-            Some(trusting_period_secs) => tendermint_proto::google::protobuf::Duration {
+            Some(trusting_period_secs) => proto::Duration {
                 seconds: trusting_period_secs.try_into()?,
                 nanos: 0,
             },
-            None => tendermint_proto::google::protobuf::Duration {
+            None => proto::Duration {
                 seconds: (unbonding_period.seconds * 2) / 3,
                 nanos: (unbonding_period.nanos * 2) / 3,
             },
         };
 
         // value taken from ibc-go tests: https://github.com/cosmos/ibc-go/blob/049bef96f730ee7f29647b1d5833530444395abc/testing/values.go#L33
-        let max_clock_drift = tendermint_proto::google::protobuf::Duration {
+        let max_clock_drift = proto::Duration {
             seconds: 10,
             nanos: 0,
         };
 
         let chain_id = client.chain_config.chain_id.to_string();
 
-        let latest_height = ibc_proto::ibc::core::client::v1::Height {
+        let latest_height = proto::RevisionHeight {
             revision_number: client.chain_config.ibc_client_revision()?,
             revision_height: latest_block_header.height()?,
         };
 
         #[allow(deprecated)]
-        let client_state = ibc_proto::ibc::lightclients::tendermint::v1::ClientState {
+        let client_state = proto::ibc_light_client::ClientState {
             chain_id,
             // https://github.com/cosmos/ibc-go/blob/049bef96f730ee7f29647b1d5833530444395abc/modules/light-clients/07-tendermint/fraction.go#L9
             // -> https://github.com/cometbft/cometbft/blob/27a460641ad835b9e6ae47523c12b0678b4619a8/light/verifier.go#L15
-            trust_level: Some(ibc_proto::ibc::lightclients::tendermint::v1::Fraction {
+            trust_level: Some(proto::ibc_light_client::Fraction {
                 numerator: 1,
                 denominator: 3,
             }),
@@ -532,20 +511,20 @@ impl QueryRequest for IbcCreateClientConsensusStateReq {
 
 #[derive(Debug, Clone)]
 pub struct IbcConnectionProofs {
-    pub proof_height: ibc_proto::ibc::core::client::v1::Height,
-    pub consensus_height: ibc_proto::ibc::core::client::v1::Height,
+    pub proof_height: proto::RevisionHeight,
+    pub consensus_height: proto::RevisionHeight,
     pub query_height: u64,
-    pub connection: ibc_proto::ibc::core::connection::v1::ConnectionEnd,
+    pub connection: proto::ibc_connection::ConnectionEnd,
     pub connection_proof: Vec<u8>,
     pub client_state_proof: Vec<u8>,
     pub consensus_proof: Vec<u8>,
-    pub client_state: ibc_proto::ibc::lightclients::tendermint::v1::ClientState,
+    pub client_state: proto::ibc_light_client::ClientState,
 }
 
 #[derive(Debug, Clone)]
 pub struct IbcChannelProofs {
-    pub proof_height: ibc_proto::ibc::core::client::v1::Height,
+    pub proof_height: proto::RevisionHeight,
     pub query_height: u64,
-    pub channel: ibc_proto::ibc::core::channel::v1::Channel,
+    pub channel: proto::ibc_channel::Channel,
     pub channel_proof: Vec<u8>,
 }

@@ -6,19 +6,13 @@ use std::time::Duration;
 use crate::prelude::*;
 
 impl QueryClient {
-    pub async fn simulate_tx(
-        &self,
-        tx_bytes: Vec<u8>,
-    ) -> Result<cosmrs::proto::cosmos::tx::v1beta1::SimulateResponse> {
-        let mut query_client =
-            cosmrs::proto::cosmos::tx::v1beta1::service_client::ServiceClient::new(
-                self.grpc_channel.clone(),
-            );
+    pub async fn simulate_tx(&self, tx_bytes: Vec<u8>) -> Result<proto::SimulateResponse> {
+        let mut query_client = proto::grpc_client::Tx::new(self.grpc_channel.clone());
 
         Ok(query_client
             .simulate(
                 #[allow(deprecated)]
-                cosmrs::proto::cosmos::tx::v1beta1::SimulateRequest { tx: None, tx_bytes },
+                proto::SimulateRequest { tx: None, tx_bytes },
             )
             .await
             .map(|res| res.into_inner())?)
@@ -26,15 +20,12 @@ impl QueryClient {
     pub async fn broadcast_tx_bytes(
         &self,
         tx_bytes: Vec<u8>,
-        mode: cosmrs::proto::cosmos::tx::v1beta1::BroadcastMode,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        let mut query_client =
-            cosmrs::proto::cosmos::tx::v1beta1::service_client::ServiceClient::new(
-                self.grpc_channel.clone(),
-            );
+        mode: proto::BroadcastMode,
+    ) -> Result<proto::TxResponse> {
+        let mut query_client = proto::grpc_client::Tx::new(self.grpc_channel.clone());
 
         query_client
-            .broadcast_tx(cosmrs::proto::cosmos::tx::v1beta1::BroadcastTxRequest {
+            .broadcast_tx(proto::BroadcastTxRequest {
                 tx_bytes,
                 mode: mode.into(),
             })
@@ -50,16 +41,13 @@ impl QueryClient {
         sleep_duration: Duration,
         timeout_duration: Duration,
     ) -> Result<PollTxResponse> {
-        let mut query_client =
-            cosmrs::proto::cosmos::tx::v1beta1::service_client::ServiceClient::new(
-                self.grpc_channel.clone(),
-            );
+        let mut query_client = proto::grpc_client::Tx::new(self.grpc_channel.clone());
 
         let mut total_duration = Duration::default();
 
         loop {
             let response = query_client
-                .get_tx(cosmrs::proto::cosmos::tx::v1beta1::GetTxRequest {
+                .get_tx(proto::GetTxRequest {
                     hash: tx_hash.clone(),
                 })
                 .await
@@ -95,6 +83,6 @@ impl QueryClient {
 }
 
 pub struct PollTxResponse {
-    pub tx: Option<cosmrs::proto::cosmos::tx::v1beta1::Tx>,
-    pub tx_response: cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse,
+    pub tx: Option<proto::Tx>,
+    pub tx_response: proto::TxResponse,
 }

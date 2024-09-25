@@ -6,20 +6,6 @@ use std::sync::{
     Arc,
 };
 
-use cosmos_sdk_proto::{
-    cosmos::{
-        auth::v1beta1::BaseAccount,
-        base::abci::v1beta1::TxResponse,
-        tx::{
-            signing::v1beta1::SignMode,
-            v1beta1::{
-                mode_info, AuthInfo, BroadcastMode, Fee, ModeInfo, SignDoc, SignerInfo, TxBody,
-                TxRaw,
-            },
-        },
-    },
-    tendermint::google::protobuf::Any,
-};
 use cosmrs::crypto::PublicKey;
 
 pub struct TxBuilder<'a> {
@@ -40,7 +26,7 @@ pub struct TxBuilder<'a> {
 
     /// The gas coin to use. Gas price (in gas_coin.denom) = gas_coin.amount * gas_units
     /// If not set, it will be derived from querier.chain_config (without hitting the network)
-    pub gas_coin: Option<Coin>,
+    pub gas_coin: Option<proto::Coin>,
 
     /// The maximum gas units. Gas price (in gas_coin.denom) = gas_coin.amount * gas_units
     /// If not set, it will be derived from running an on-chain simulation multiplied by `gas_multiplier`
@@ -51,7 +37,7 @@ pub struct TxBuilder<'a> {
     pub gas_simulate_multiplier: Option<f32>,
 
     /// The broadcast mode to use. If not set, the default is `Sync`
-    pub broadcast_mode: Option<BroadcastMode>,
+    pub broadcast_mode: Option<proto::BroadcastMode>,
 
     /// Whether broadcasting should poll for the tx landing on chain before returning
     /// default is true
@@ -76,14 +62,14 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "web")] {
         #[async_trait(?Send)]
         pub trait TxSigner: Send + Sync {
-            async fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+            async fn sign(&self, doc: &proto::SignDoc) -> Result<Vec<u8>>;
             async fn public_key(&self) -> Result<PublicKey>;
         }
     } else {
 
         #[async_trait]
         pub trait TxSigner: Send + Sync {
-            async fn sign(&self, doc: &SignDoc) -> Result<Vec<u8>>;
+            async fn sign(&self, doc: &proto::SignDoc) -> Result<Vec<u8>>;
             async fn public_key(&self) -> Result<PublicKey>;
         }
     }
@@ -92,7 +78,7 @@ cfg_if::cfg_if! {
 impl<'a> TxBuilder<'a> {
     const DEFAULT_TX_TIMEOUT_BLOCKS: u64 = 10;
     const DEFAULT_GAS_MULTIPLIER: f32 = 1.5;
-    const DEFAULT_BROADCAST_MODE: BroadcastMode = BroadcastMode::Sync;
+    const DEFAULT_BROADCAST_MODE: proto::BroadcastMode = proto::BroadcastMode::Sync;
     const DEFAULT_BROADCAST_POLL_SLEEP_DURATION: std::time::Duration =
         std::time::Duration::from_secs(1);
     const DEFAULT_BROADCAST_POLL_TIMEOUT_DURATION: std::time::Duration =
@@ -133,7 +119,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    pub fn set_gas_coin(&mut self, gas_coin: Coin) -> &mut Self {
+    pub fn set_gas_coin(&mut self, gas_coin: proto::Coin) -> &mut Self {
         self.gas_coin = Some(gas_coin);
         self
     }
@@ -153,7 +139,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    pub fn set_broadcast_mode(&mut self, broadcast_mode: BroadcastMode) -> &mut Self {
+    pub fn set_broadcast_mode(&mut self, broadcast_mode: proto::BroadcastMode) -> &mut Self {
         self.broadcast_mode = Some(broadcast_mode);
         self
     }
@@ -195,7 +181,7 @@ impl<'a> TxBuilder<'a> {
         self
     }
 
-    async fn query_base_account(&self) -> Result<BaseAccount> {
+    async fn query_base_account(&self) -> Result<proto::BaseAccount> {
         self.querier
             .base_account(
                 self.sender
@@ -205,14 +191,17 @@ impl<'a> TxBuilder<'a> {
             .await
     }
 
-    pub async fn broadcast(self, messages: impl IntoIterator<Item = Any>) -> Result<TxResponse> {
+    pub async fn broadcast(
+        self,
+        messages: impl IntoIterator<Item = proto::Any>,
+    ) -> Result<proto::TxResponse> {
         let block_height = self.querier.block_height().await?;
 
         let tx_timeout_blocks = self
             .tx_timeout_blocks
             .unwrap_or(Self::DEFAULT_TX_TIMEOUT_BLOCKS);
 
-        let mut body = TxBody {
+        let mut body = proto::TxBody {
             messages: messages.into_iter().map(Into::into).collect(),
             memo: "".to_string(),
             timeout_height: block_height + tx_timeout_blocks,
@@ -229,7 +218,7 @@ impl<'a> TxBuilder<'a> {
             }
         }
 
-        let mut base_account: Option<cosmrs::proto::cosmos::auth::v1beta1::BaseAccount> = None;
+        let mut base_account: Option<proto::BaseAccount> = None;
 
         let sequence = match &self.sequence_strategy {
             Some(sequence_strategy) => match sequence_strategy.kind {
@@ -276,11 +265,11 @@ impl<'a> TxBuilder<'a> {
             },
         };
 
-        let signer_info = SignerInfo {
+        let signer_info = proto::SignerInfo {
             public_key: Some(self.signer.public_key().await?.into()),
-            mode_info: Some(ModeInfo {
-                sum: Some(mode_info::Sum::Single(mode_info::Single {
-                    mode: SignMode::Direct.into(),
+            mode_info: Some(proto::ModeInfo {
+                sum: Some(proto::mode_info::Sum::Single(proto::mode_info::Single {
+                    mode: proto::SignMode::Direct.into(),
                 })),
             }),
             sequence,
@@ -389,20 +378,19 @@ impl<'a> TxBuilder<'a> {
 
     async fn sign_tx(
         &self,
-        signer_info: SignerInfo,
+        signer_info: proto::SignerInfo,
         account_number: u64,
-        body: &TxBody,
-        fee: cosmos_sdk_proto::cosmos::tx::v1beta1::Fee,
+        body: &proto::TxBody,
+        fee: crate::proto::Fee,
     ) -> Result<Vec<u8>> {
-        //let signer_info = cosmrs::tx::SignerInfo::single_direct(self.public_key, sequence);
         #[allow(deprecated)]
-        let auth_info = AuthInfo {
+        let auth_info = proto::AuthInfo {
             signer_infos: vec![signer_info],
             fee: Some(fee),
             tip: None,
         };
 
-        let sign_doc = SignDoc {
+        let sign_doc = proto::SignDoc {
             body_bytes: body.to_bytes()?,
             auth_info_bytes: auth_info.to_bytes()?,
             chain_id: self.querier.chain_config.chain_id.to_string(),
@@ -411,7 +399,7 @@ impl<'a> TxBuilder<'a> {
 
         let signature = self.signer.sign(&sign_doc).await?;
 
-        let tx_raw = TxRaw {
+        let tx_raw = proto::TxRaw {
             body_bytes: sign_doc.body_bytes.clone(),
             auth_info_bytes: sign_doc.auth_info_bytes.clone(),
             signatures: vec![signature],
@@ -464,13 +452,13 @@ pub enum FeeCalculation<'a> {
         gas_units: u64,
     },
     RealCoin {
-        gas_coin: Coin,
+        gas_coin: proto::Coin,
         gas_units: u64,
     },
 }
 
 impl<'a> FeeCalculation<'a> {
-    pub fn calculate(&self) -> Result<Fee> {
+    pub fn calculate(&self) -> Result<proto::Fee> {
         let (gas_coin, gas_limit) = match self {
             Self::Simulation { chain_config } => (new_coin(0, &chain_config.gas_denom), 0),
             Self::RealNetwork {
@@ -490,7 +478,7 @@ impl<'a> FeeCalculation<'a> {
             } => (gas_coin.clone(), *gas_units),
         };
 
-        Ok(Fee {
+        Ok(proto::Fee {
             amount: vec![gas_coin],
             gas_limit,
             payer: "".to_string(),

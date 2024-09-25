@@ -17,14 +17,14 @@ impl SigningClient {
         remote_querier: &QueryClient,
         trusting_period_secs: Option<u64>,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_create_client_msg(trusting_period_secs, remote_querier)
             .await?;
 
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await
     }
 
@@ -32,15 +32,14 @@ impl SigningClient {
         &self,
         client_id: &IbcClientId,
         remote_querier: &QueryClient,
-        trusted_height: Option<ibc_proto::ibc::core::client::v1::Height>,
+        trusted_height: Option<proto::RevisionHeight>,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        let msg = cosmrs::Any::from_msg(
+    ) -> Result<proto::TxResponse> {
+        let msg = proto_into_any(
             &self
                 .ibc_update_client_msg(client_id, remote_querier, trusted_height)
                 .await?,
-        )
-        .map_err(|e| anyhow!("{}", e))?;
+        )?;
 
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
@@ -53,13 +52,12 @@ impl SigningClient {
         client_id: &IbcClientId,
         counterparty_client_id: &IbcClientId,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
-        let msg = cosmrs::Any::from_msg(
+    ) -> Result<proto::TxResponse> {
+        let msg = proto_into_any(
             &self
                 .ibc_open_connection_init_msg(client_id, counterparty_client_id)
                 .await?,
-        )
-        .map_err(|e| anyhow!("{}", e))?;
+        )?;
 
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
@@ -79,7 +77,7 @@ impl SigningClient {
         counterparty_connection_id: &IbcConnectionId,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_open_connection_try_msg(
                 client_id,
@@ -91,7 +89,7 @@ impl SigningClient {
 
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await;
 
         // wait 1 block so client update height - 1 will see it
@@ -108,7 +106,7 @@ impl SigningClient {
         counterparty_connection_id: &IbcConnectionId,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_open_connection_ack_msg(
                 client_id,
@@ -121,7 +119,7 @@ impl SigningClient {
 
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await;
 
         // wait 1 block so client update height - 1 will see it
@@ -138,7 +136,7 @@ impl SigningClient {
         counterparty_connection_id: &IbcConnectionId,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_open_connection_confirm_msg(
                 client_id,
@@ -151,7 +149,7 @@ impl SigningClient {
 
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await
     }
 
@@ -163,7 +161,7 @@ impl SigningClient {
         ordering: IbcChannelOrdering,
         counterparty_port_id: &IbcPortId,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self.ibc_open_channel_init_msg(
             connection_id,
             port_id,
@@ -174,7 +172,7 @@ impl SigningClient {
 
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await;
 
         // wait 1 block so client update height - 1 will see it
@@ -196,7 +194,7 @@ impl SigningClient {
         ordering: IbcChannelOrdering,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_open_channel_try_msg(
                 client_id,
@@ -213,7 +211,7 @@ impl SigningClient {
 
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await;
 
         // wait 1 block so client update height - 1 will see it
@@ -233,7 +231,7 @@ impl SigningClient {
         counterparty_version: &IbcChannelVersion,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_open_channel_ack_msg(
                 client_id,
@@ -248,7 +246,7 @@ impl SigningClient {
 
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await;
 
         // wait 1 block so client update height - 1 will see it
@@ -267,7 +265,7 @@ impl SigningClient {
         counterparty_channel_id: &IbcChannelId,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_open_channel_confirm_msg(
                 client_id,
@@ -281,7 +279,7 @@ impl SigningClient {
 
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await
     }
 
@@ -293,14 +291,14 @@ impl SigningClient {
         packet: IbcPacket,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_packet_recv_msg(client_id, packet, remote_querier)
             .await?;
 
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await
     }
 
@@ -312,14 +310,14 @@ impl SigningClient {
         packet: IbcPacket,
         remote_querier: &QueryClient,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         let msg = self
             .ibc_packet_ack_msg(client_id, packet, remote_querier)
             .await?;
 
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
-            .broadcast([cosmrs::Any::from_msg(&msg).map_err(|e| anyhow!("{}", e))?])
+            .broadcast([proto_into_any(&msg)?])
             .await
     }
 }

@@ -26,17 +26,14 @@ impl QueryClient {
         .await
     }
 
-    pub async fn contract_code_info(
-        &self,
-        code_id: u64,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::CodeInfoResponse> {
+    pub async fn contract_code_info(&self, code_id: u64) -> Result<proto::wasm::CodeInfoResponse> {
         self.run_with_middleware(ContractCodeInfoReq { code_id })
             .await
     }
     pub async fn contract_info(
         &self,
         address: &Address,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::QueryContractInfoResponse> {
+    ) -> Result<proto::wasm::QueryContractInfoResponse> {
         self.run_with_middleware(ContractInfoReq {
             address: address.clone(),
         })
@@ -88,17 +85,14 @@ impl QueryRequest for ContractSmartRawReq {
     type QueryResponse = Vec<u8>;
 
     async fn request(&self, client: QueryClient) -> Result<Vec<u8>> {
-        let mut query_client = cosmrs::proto::cosmwasm::wasm::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client =
+            proto::wasm::query_client::QueryClient::new(client.grpc_channel.clone());
 
         let res = query_client
-            .smart_contract_state(
-                cosmrs::proto::cosmwasm::wasm::v1::QuerySmartContractStateRequest {
-                    address: self.address.to_string(),
-                    query_data: self.msg.clone(),
-                },
-            )
+            .smart_contract_state(proto::wasm::QuerySmartContractStateRequest {
+                address: self.address.to_string(),
+                query_data: self.msg.clone(),
+            })
             .await
             .map(|res| res.into_inner())?;
 
@@ -112,18 +106,14 @@ struct ContractCodeInfoReq {
 }
 
 impl QueryRequest for ContractCodeInfoReq {
-    type QueryResponse = cosmrs::proto::cosmwasm::wasm::v1::CodeInfoResponse;
+    type QueryResponse = proto::wasm::CodeInfoResponse;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::CodeInfoResponse> {
-        let mut query_client = cosmrs::proto::cosmwasm::wasm::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+    async fn request(&self, client: QueryClient) -> Result<proto::wasm::CodeInfoResponse> {
+        let mut query_client =
+            proto::wasm::query_client::QueryClient::new(client.grpc_channel.clone());
 
         let res = query_client
-            .code(cosmrs::proto::cosmwasm::wasm::v1::QueryCodeRequest {
+            .code(proto::wasm::QueryCodeRequest {
                 code_id: self.code_id,
             })
             .await
@@ -139,22 +129,16 @@ pub struct ContractInfoReq {
 }
 
 impl QueryRequest for ContractInfoReq {
-    type QueryResponse = cosmrs::proto::cosmwasm::wasm::v1::QueryContractInfoResponse;
+    type QueryResponse = proto::wasm::QueryContractInfoResponse;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<cosmrs::proto::cosmwasm::wasm::v1::QueryContractInfoResponse> {
-        let mut query_client = cosmrs::proto::cosmwasm::wasm::v1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+    async fn request(&self, client: QueryClient) -> Result<proto::wasm::QueryContractInfoResponse> {
+        let mut query_client =
+            proto::wasm::query_client::QueryClient::new(client.grpc_channel.clone());
 
         let res = query_client
-            .contract_info(
-                cosmrs::proto::cosmwasm::wasm::v1::QueryContractInfoRequest {
-                    address: self.address.to_string(),
-                },
-            )
+            .contract_info(proto::wasm::QueryContractInfoRequest {
+                address: self.address.to_string(),
+            })
             .await
             .map(|res| res.into_inner())?;
 

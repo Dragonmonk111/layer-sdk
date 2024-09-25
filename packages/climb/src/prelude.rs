@@ -8,24 +8,21 @@ pub use crate::{
     config::{ChainConfig, ChainId},
     contract_helpers::contract_str_to_msg,
     events::CosmosTxEvents,
+    proto,
+    proto::Coin,
     proto_helpers::proto_into_any,
     querier::{QueryClient, QueryRequest},
     signing::{key::KeySigner, SigningClient},
     transaction::{TxBuilder, TxSigner},
 };
 
-// helpers re-exported
-pub use cosmos_sdk_proto::traits::Message;
-pub use cosmrs::tx::MessageExt;
-
 // Common types that can be confusing between different proto files.
 // standardized here. In cases where we want helper methods, use extension traits
 // so that we don't have to deal with confusion between types.
-pub use cosmos_sdk_proto::cosmos::base::v1beta1::Coin;
 
 /// helper function to create a Coin
-pub fn new_coin(amount: impl ToString, denom: impl ToString) -> Coin {
-    Coin {
+pub fn new_coin(amount: impl ToString, denom: impl ToString) -> proto::Coin {
+    proto::Coin {
         denom: denom.to_string(),
         amount: amount.to_string(),
     }
@@ -42,7 +39,9 @@ pub fn new_coin(amount: impl ToString, denom: impl ToString) -> Coin {
 ///     ("uslay", "200")
 /// ])
 /// ```
-pub fn new_coins(coins: impl IntoIterator<Item = (impl ToString, impl ToString)>) -> Vec<Coin> {
+pub fn new_coins(
+    coins: impl IntoIterator<Item = (impl ToString, impl ToString)>,
+) -> Vec<proto::Coin> {
     coins
         .into_iter()
         .map(|(amount, denom)| new_coin(amount, denom))

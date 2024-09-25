@@ -7,7 +7,7 @@ impl QueryClient {
         &self,
         height: Option<u64>,
         proposer_address: Option<&[u8]>,
-    ) -> Result<tendermint_proto::types::ValidatorSet> {
+    ) -> Result<proto::ValidatorSet> {
         self.run_with_middleware(ValidatorSetReq {
             height,
             proposer_address,
@@ -23,13 +23,10 @@ pub struct ValidatorSetReq<'a> {
 }
 
 impl<'a> QueryRequest for ValidatorSetReq<'a> {
-    type QueryResponse = tendermint_proto::types::ValidatorSet;
+    type QueryResponse = proto::ValidatorSet;
 
-    async fn request(&self, client: QueryClient) -> Result<tendermint_proto::types::ValidatorSet> {
-        let mut query_client =
-            cosmrs::proto::cosmos::base::tendermint::v1beta1::service_client::ServiceClient::new(
-                client.grpc_channel.clone(),
-            );
+    async fn request(&self, client: QueryClient) -> Result<proto::ValidatorSet> {
+        let mut query_client = proto::grpc_client::Tendermint::new(client.grpc_channel.clone());
 
         let height = match self.height {
             Some(height) => height,
@@ -47,20 +44,22 @@ impl<'a> QueryRequest for ValidatorSetReq<'a> {
             .transpose()?;
 
         loop {
-            let resp = query_client.get_validator_set_by_height(cosmrs::proto::cosmos::base::tendermint::v1beta1::GetValidatorSetByHeightRequest {
-                height: height.try_into()?,
-                pagination
-            }).await.map(|res| res.into_inner()).context("couldn't get validator set")?;
+            let resp = query_client
+                .get_validator_set_by_height(proto::GetValidatorSetByHeightRequest {
+                    height: height.try_into()?,
+                    pagination,
+                })
+                .await
+                .map(|res| res.into_inner())
+                .context("couldn't get validator set")?;
 
             for validator in resp.validators {
                 let pub_key = validator.pub_key.context("couldn't get public key")?;
 
                 let pub_key = match pub_key.type_url.as_str() {
                     "/cosmos.crypto.ed25519.PubKey" => {
-                        let key = cosmrs::proto::cosmos::crypto::ed25519::PubKey::decode(
-                            pub_key.value.as_slice(),
-                        )?
-                        .key;
+                        let key =
+                            proto::crypto::ed25519::PubKey::decode(pub_key.value.as_slice())?.key;
                         tendermint::public_key::PublicKey::Ed25519(key.as_slice().try_into()?)
                     }
                     _ => {
@@ -90,7 +89,7 @@ impl<'a> QueryRequest for ValidatorSetReq<'a> {
                 if resp_pagination.next_key.is_empty() {
                     break;
                 } else {
-                    pagination = Some(cosmrs::proto::cosmos::base::query::v1beta1::PageRequest {
+                    pagination = Some(proto::PageRequest {
                         key: resp_pagination.next_key,
                         offset: 0,
                         limit: 0,
@@ -107,7 +106,7 @@ impl<'a> QueryRequest for ValidatorSetReq<'a> {
             convert_raw_validator_set(tendermint::validator::Set::new(validators, proposer));
 
         // validators.sort_by_key(|v| (core::cmp::Reverse(v.voting_power), v.address.clone()));
-        // let validator_set = tendermint_proto::types::ValidatorSet {
+        // let validator_set = proto::ValidatorSet {
         //     validators,
         //     proposer,
         //     total_voting_power,
@@ -118,14 +117,12 @@ impl<'a> QueryRequest for ValidatorSetReq<'a> {
 }
 
 // yes, this is ridiculous
-fn convert_raw_validator_set(
-    validators: tendermint::validator::Set,
-) -> tendermint_proto::types::ValidatorSet {
-    tendermint_proto::types::ValidatorSet {
+fn convert_raw_validator_set(validators: tendermint::validator::Set) -> proto::ValidatorSet {
+    proto::ValidatorSet {
         validators: validators
             .validators()
             .iter()
-            .map(|validator| tendermint_proto::types::Validator {
+            .map(|validator| proto::Validator {
                 address: validator.address.into(),
                 pub_key: Some(tendermint_proto::crypto::PublicKey {
                     sum: Some(tendermint_proto::crypto::public_key::Sum::Ed25519(
@@ -137,8 +134,10 @@ fn convert_raw_validator_set(
             })
             .collect(),
 
-        proposer: validators.proposer().as_ref().map(|validator| {
-            tendermint_proto::types::Validator {
+        proposer: validators
+            .proposer()
+            .as_ref()
+            .map(|validator| proto::Validator {
                 address: validator.address.into(),
                 pub_key: Some(tendermint_proto::crypto::PublicKey {
                     sum: Some(tendermint_proto::crypto::public_key::Sum::Ed25519(
@@ -147,8 +146,7 @@ fn convert_raw_validator_set(
                 }),
                 voting_power: validator.power.into(),
                 proposer_priority: validator.proposer_priority.into(),
-            }
-        }),
+            }),
         total_voting_power: validators.total_voting_power().into(),
     }
 }

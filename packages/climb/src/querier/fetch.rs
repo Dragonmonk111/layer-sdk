@@ -6,10 +6,7 @@ use super::basic::BlockHeightReq;
 use crate::prelude::*;
 
 impl QueryClient {
-    pub async fn fetch_signed_header(
-        &self,
-        height: Option<u64>,
-    ) -> Result<tendermint_proto::types::SignedHeader> {
+    pub async fn fetch_signed_header(&self, height: Option<u64>) -> Result<proto::SignedHeader> {
         self.run_with_middleware(SignedHeaderReq { height }).await
     }
     pub async fn fetch_block_events(
@@ -29,9 +26,9 @@ struct SignedHeaderReq {
 }
 
 impl QueryRequest for SignedHeaderReq {
-    type QueryResponse = tendermint_proto::types::SignedHeader;
+    type QueryResponse = proto::SignedHeader;
 
-    async fn request(&self, client: QueryClient) -> Result<tendermint_proto::types::SignedHeader> {
+    async fn request(&self, client: QueryClient) -> Result<proto::SignedHeader> {
         let height = match self.height {
             Some(height) => height,
             None => BlockHeightReq {}.request(client.clone()).await?,
@@ -78,10 +75,10 @@ impl QueryRequest for BlockEventsReq {
 }
 
 // yes, this is ridiculous
-// pub fn convert_rpc_signed_header(signed_header: tendermint_proto::types::SignedHeader) -> tendermint_proto::types::SignedHeader {
-//     tendermint_proto::types::SignedHeader {
+// pub fn convert_rpc_signed_header(signed_header: proto::SignedHeader) -> proto::SignedHeader {
+//     proto::SignedHeader {
 //         header: signed_header.header.map(|header| {
-//             tendermint_proto::types::Header {
+//             proto::Header {
 //                 version: header.version.map(|consensus| {
 //                     tendermint_proto::version::Consensus {
 //                         block: consensus.block,
@@ -91,16 +88,16 @@ impl QueryRequest for BlockEventsReq {
 //                 chain_id: header.chain_id,
 //                 height: header.height,
 //                 time: header.time.map(|time| {
-//                     tendermint_proto::google::protobuf::Timestamp {
+//                     proto::Timestamp {
 //                         seconds: time.seconds,
 //                         nanos: time.nanos,
 //                     }
 //                 }),
 //                 last_block_id: header.last_block_id.map(|block_id| {
-//                     tendermint_proto::types::BlockId {
+//                     proto::BlockId {
 //                         hash: block_id.hash,
 //                         part_set_header: block_id.part_set_header.map(|part_set_header| {
-//                             tendermint_proto::types::PartSetHeader {
+//                             proto::PartSetHeader {
 //                                 total: part_set_header.total,
 //                                 hash: part_set_header.hash,
 //                             }
@@ -120,14 +117,14 @@ impl QueryRequest for BlockEventsReq {
 //         }),
 
 //         commit: signed_header.commit.map(|commit| {
-//             tendermint_proto::types::Commit {
+//             proto::Commit {
 //                 height: commit.height,
 //                 round: commit.round,
 //                 block_id: commit.block_id.map(|block_id| {
-//                     tendermint_proto::types::BlockId {
+//                     proto::BlockId {
 //                         hash: block_id.hash,
 //                         part_set_header: block_id.part_set_header.map(|part_set_header| {
-//                             tendermint_proto::types::PartSetHeader {
+//                             proto::PartSetHeader {
 //                                 total: part_set_header.total,
 //                                 hash: part_set_header.hash,
 //                             }
@@ -135,11 +132,11 @@ impl QueryRequest for BlockEventsReq {
 //                     }
 //                 }),
 //                 signatures: commit.signatures.into_iter().map(|signature| {
-//                     tendermint_proto::types::CommitSig {
+//                     proto::CommitSig {
 //                         block_id_flag: signature.block_id_flag as i32,
 //                         validator_address: signature.validator_address,
 //                         timestamp: signature.timestamp.map(|timestamp| {
-//                             tendermint_proto::google::protobuf::Timestamp {
+//                             proto::Timestamp {
 //                                 seconds: timestamp.seconds,
 //                                 nanos: timestamp.nanos,
 //                             }
@@ -155,13 +152,13 @@ impl QueryRequest for BlockEventsReq {
 
 // #[derive(Debug, Clone)]
 // pub struct IbcClientStateWithProof{
-//     pub client_state: ibc_proto::ibc::lightclients::tendermint::v1::ClientState,
+//     pub client_state: proto::ibc_light_client::ClientState,
 //     pub proof: Vec<u8>,
 // }
 
 // #[derive(Debug, Clone)]
 // pub struct IbcConnectionWithProof {
-//     pub connection: ibc_proto::ibc::core::connection::v1::ConnectionEnd,
+//     pub connection: proto::ibc_connection::ConnectionEnd,
 //     pub proof: Vec<u8>,
 // }
 
@@ -173,7 +170,7 @@ impl QueryRequest for BlockEventsReq {
 
 // impl QueryClient {
 
-//     async fn fetch_ibc_connection_proofs(&self, proof_height: ibc_proto::ibc::core::client::v1::Height, client_id: &IbcClientId, connection_id: &IbcConnectionId) -> Result<IbcConnectionProofs> {
+//     async fn fetch_ibc_connection_proofs(&self, proof_height: proto::RevisionHeight, client_id: &IbcClientId, connection_id: &IbcConnectionId) -> Result<IbcConnectionProofs> {
 //         let query_height = proof_height.revision_height - 1;
 
 //         // all-in-one RPC style:
@@ -211,10 +208,10 @@ impl QueryRequest for BlockEventsReq {
 //     }
 //     async fn fetch_ibc_client_state_with_proof(&self, ibc_client_id: &IbcClientId, height: u64) -> Result<IbcClientStateWithProof> {
 //         let resp = self.fetch_ibc_abci_query(IbcAbciProof::ClientState { client_id: ibc_client_id.clone() }, height, true).await?;
-//         let client_state = tendermint_proto::google::protobuf::Any::decode(resp.value.as_slice())?;
+//         let client_state = proto::Any::decode(resp.value.as_slice())?;
 //         let client_state = match client_state.type_url.as_str() {
 //             "/ibc.lightclients.tendermint.v1.ClientState" => {
-//                 ibc_proto::ibc::lightclients::tendermint::v1::ClientState::decode(client_state.value.as_slice())
+//                 proto::ibc_light_client::ClientState::decode(client_state.value.as_slice())
 //                     .map_err(|e| e.into())
 //             },
 //             _ => Err(anyhow::anyhow!("unsupported client state type: {}", client_state.type_url)),
@@ -228,14 +225,14 @@ impl QueryRequest for BlockEventsReq {
 
 //     async fn fetch_ibc_connection_with_proof(&self, connection_id: &IbcConnectionId, height: u64) -> Result<IbcConnectionWithProof> {
 //         let resp = self.fetch_ibc_abci_query(IbcAbciProof::Connection { connection_id: connection_id.clone() }, height, true).await?;
-//         let connection = ibc_proto::ibc::core::connection::v1::ConnectionEnd::decode(resp.value.as_slice())?;
+//         let connection = proto::ibc_connection::ConnectionEnd::decode(resp.value.as_slice())?;
 //         let proof = resp.proof.context("missing proof")?;
 //         let proof = convert_rpc_proof(proof)?;
 
 //         Ok(IbcConnectionWithProof { connection, proof})
 //     }
 
-//     async fn fetch_ibc_consensus_state_with_proof(&self, client_id: &IbcClientId, consensus_height: ibc_proto::ibc::core::client::v1::Height, height: u64) -> Result<IbcConsensusStateWithProof> {
+//     async fn fetch_ibc_consensus_state_with_proof(&self, client_id: &IbcClientId, consensus_height: proto::RevisionHeight, height: u64) -> Result<IbcConsensusStateWithProof> {
 //         let resp = self.fetch_ibc_abci_query(IbcAbciProof::Consensus { client_id: client_id.clone(), height: consensus_height.clone() }, height, true).await?;
 //         let proof = resp.proof.context("missing proof")?;
 //         let proof = convert_rpc_proof(proof)?;

@@ -343,10 +343,10 @@ impl SigningClient {
 
         let connection = self.querier.ibc_connection(&connection_id, None).await?;
         ensure!(
-            connection.state() == ibc_proto::ibc::core::connection::v1::State::Open,
+            connection.state() == proto::ibc_connection::State::Open,
             "connection state on {} is not {:?} instead it's {:?}",
             self.querier.chain_config.chain_id,
-            ibc_proto::ibc::core::connection::v1::State::Open,
+            proto::ibc_connection::State::Open,
             connection.state()
         );
         let counterparty_connection = counterparty_client
@@ -354,10 +354,10 @@ impl SigningClient {
             .ibc_connection(&counterparty_connection_id, None)
             .await?;
         ensure!(
-            counterparty_connection.state() == ibc_proto::ibc::core::connection::v1::State::Open,
+            counterparty_connection.state() == proto::ibc_connection::State::Open,
             "connection state on {} is not {:?} instead it's {:?}",
             counterparty_client.querier.chain_config.chain_id,
-            ibc_proto::ibc::core::connection::v1::State::Open,
+            proto::ibc_connection::State::Open,
             counterparty_connection.state()
         );
 
@@ -693,10 +693,10 @@ impl SigningClient {
 
         let channel = self.querier.ibc_channel(&channel_id, port_id, None).await?;
         ensure!(
-            channel.state() == ibc_proto::ibc::core::channel::v1::State::Open,
+            channel.state() == proto::ibc_channel::State::Open,
             "channel state on {} is not {:?} instead it's {:?}",
             self.querier.chain_config.chain_id,
-            ibc_proto::ibc::core::channel::v1::State::Open,
+            proto::ibc_channel::State::Open,
             channel.state()
         );
         let counterparty_channel = counterparty_client
@@ -704,10 +704,10 @@ impl SigningClient {
             .ibc_channel(&counterparty_channel_id, counterparty_port_id, None)
             .await?;
         ensure!(
-            counterparty_channel.state() == ibc_proto::ibc::core::channel::v1::State::Open,
+            counterparty_channel.state() == proto::ibc_channel::State::Open,
             "channel state on {} is not {:?} instead it's {:?}",
             counterparty_client.querier.chain_config.chain_id,
-            ibc_proto::ibc::core::channel::v1::State::Open,
+            proto::ibc_channel::State::Open,
             counterparty_channel.state()
         );
 

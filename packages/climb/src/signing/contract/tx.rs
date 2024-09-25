@@ -14,7 +14,7 @@ impl SigningClient {
         &self,
         wasm_byte_code: Vec<u8>,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<(u64, cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse)> {
+    ) -> Result<(u64, proto::TxResponse)> {
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
             .broadcast([proto_into_any(
@@ -36,12 +36,9 @@ impl SigningClient {
         code_id: u64,
         label: impl ToString,
         msg: &impl Serialize,
-        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
+        funds: Vec<proto::Coin>,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<(
-        Address,
-        cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse,
-    )> {
+    ) -> Result<(Address, proto::TxResponse)> {
         let resp = tx_builder
             .unwrap_or_else(|| self.tx_builder())
             .broadcast([proto_into_any(
@@ -74,9 +71,9 @@ impl SigningClient {
         &self,
         address: &Address,
         msg: &impl Serialize,
-        funds: Vec<cosmrs::proto::cosmos::base::v1beta1::Coin>,
+        funds: Vec<proto::Coin>,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
             .broadcast([proto_into_any(
@@ -91,7 +88,7 @@ impl SigningClient {
         code_id: u64,
         msg: &impl Serialize,
         tx_builder: Option<TxBuilder<'_>>,
-    ) -> Result<cosmrs::proto::cosmos::base::abci::v1beta1::TxResponse> {
+    ) -> Result<proto::TxResponse> {
         tx_builder
             .unwrap_or_else(|| self.tx_builder())
             .broadcast([proto_into_any(

@@ -3,9 +3,7 @@ use crate::{prelude::*, querier::abci::AbciProofKind};
 impl SigningClient {
     // sanity check that the node has everything we need to do stuff
     // returns the tendermint version info
-    pub async fn ibc_check_compat(
-        &self,
-    ) -> Result<cosmrs::proto::cosmos::base::tendermint::v1beta1::VersionInfo> {
+    pub async fn ibc_check_compat(&self) -> Result<proto::VersionInfo> {
         let _ = self
             .querier
             .rpc_client
@@ -13,11 +11,8 @@ impl SigningClient {
             .await
             .context("couldn't get health over rpc")?;
 
-        let node_info_resp =
-            cosmrs::proto::cosmos::base::tendermint::v1beta1::service_client::ServiceClient::new(
-                self.querier.grpc_channel.clone(),
-            )
-            .get_node_info(cosmrs::proto::cosmos::base::tendermint::v1beta1::GetNodeInfoRequest {})
+        let node_info_resp = proto::grpc_client::Tendermint::new(self.querier.grpc_channel.clone())
+            .get_node_info(proto::GetNodeInfoRequest {})
             .await
             .map(|resp| resp.into_inner())
             .context("couldn't get status over grpc")?;

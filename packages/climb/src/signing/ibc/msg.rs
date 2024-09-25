@@ -19,12 +19,12 @@ impl SigningClient {
         &self,
         trusting_period_secs: Option<u64>,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::client::v1::MsgCreateClient> {
+    ) -> Result<proto::ibc_client::MsgCreateClient> {
         let (client_state, consensus_state) = remote_querier
             .ibc_create_client_consensus_state(trusting_period_secs)
             .await?;
 
-        Ok(ibc_proto::ibc::core::client::v1::MsgCreateClient {
+        Ok(proto::ibc_client::MsgCreateClient {
             signer: self.addr.to_string(),
             consensus_state: Some(msg_into_google_any(&consensus_state)?),
             client_state: Some(msg_into_google_any(&client_state)?),
@@ -35,8 +35,8 @@ impl SigningClient {
         &self,
         client_id: &IbcClientId,
         remote_querier: &QueryClient,
-        trusted_height: Option<ibc_proto::ibc::core::client::v1::Height>,
-    ) -> Result<ibc_proto::ibc::core::client::v1::MsgUpdateClient> {
+        trusted_height: Option<proto::RevisionHeight>,
+    ) -> Result<proto::ibc_client::MsgUpdateClient> {
         // From Go relayer:
         // > MsgUpdateClient queries for the current client state on dst,
         // > then queries for the latest and trusted headers on src
@@ -85,14 +85,14 @@ impl SigningClient {
             )
             .await?;
 
-        let header = ibc_proto::ibc::lightclients::tendermint::v1::Header {
+        let header = proto::ibc_light_client::Header {
             signed_header: Some(curr_signed_header),
             trusted_height: Some(trusted_height),
             validator_set: Some(validator_set),
             trusted_validators: Some(trusted_validators),
         };
 
-        Ok(ibc_proto::ibc::core::client::v1::MsgUpdateClient {
+        Ok(proto::ibc_client::MsgUpdateClient {
             client_id: client_id.to_string(),
             signer: self.addr.to_string(),
             // this is the ibc header
@@ -106,22 +106,20 @@ impl SigningClient {
         &self,
         client_id: &IbcClientId,
         counterparty_client_id: &IbcClientId,
-    ) -> Result<ibc_proto::ibc::core::connection::v1::MsgConnectionOpenInit> {
-        Ok(
-            ibc_proto::ibc::core::connection::v1::MsgConnectionOpenInit {
-                client_id: client_id.to_string(),
-                counterparty: Some(ibc_proto::ibc::core::connection::v1::Counterparty {
-                    client_id: counterparty_client_id.to_string(),
-                    // Go implementation sets this to empty here: https://github.com/cosmos/ibc-go/blob/bb34919be78550e1a2b2da8ad727889ba6a1fc83/modules/core/03-connection/types/msgs.go#L37
-                    connection_id: "".to_string(),
-                    prefix: Some(IBC_MERKLE_PREFIX.clone()),
-                }),
-                version: Some(IBC_VERSION.clone()),
-                // just used for "time delayed connections": https://ibc.cosmos.network/v8/ibc/overview/#time-delayed-connections
-                delay_period: 0,
-                signer: self.addr.to_string(),
-            },
-        )
+    ) -> Result<proto::ibc_connection::MsgConnectionOpenInit> {
+        Ok(proto::ibc_connection::MsgConnectionOpenInit {
+            client_id: client_id.to_string(),
+            counterparty: Some(proto::ibc_connection::Counterparty {
+                client_id: counterparty_client_id.to_string(),
+                // Go implementation sets this to empty here: https://github.com/cosmos/ibc-go/blob/bb34919be78550e1a2b2da8ad727889ba6a1fc83/modules/core/03-connection/types/msgs.go#L37
+                connection_id: "".to_string(),
+                prefix: Some(IBC_MERKLE_PREFIX.clone()),
+            }),
+            version: Some(IBC_VERSION.clone()),
+            // just used for "time delayed connections": https://ibc.cosmos.network/v8/ibc/overview/#time-delayed-connections
+            delay_period: 0,
+            signer: self.addr.to_string(),
+        })
     }
 
     pub async fn ibc_open_connection_try_msg(
@@ -130,7 +128,7 @@ impl SigningClient {
         counterparty_client_id: &IbcClientId,
         counterparty_connection_id: &IbcConnectionId,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::connection::v1::MsgConnectionOpenTry> {
+    ) -> Result<proto::ibc_connection::MsgConnectionOpenTry> {
         let IbcConnectionProofs {
             proof_height,
             consensus_height,
@@ -152,7 +150,7 @@ impl SigningClient {
             )
             .await?;
 
-        if connection.state() != ibc_proto::ibc::core::connection::v1::State::Init {
+        if connection.state() != proto::ibc_connection::State::Init {
             bail!(
                 "counterparty connection state is not Init, instead it is {:?}",
                 connection.state()
@@ -160,7 +158,7 @@ impl SigningClient {
         }
 
         #[allow(deprecated)]
-        Ok(ibc_proto::ibc::core::connection::v1::MsgConnectionOpenTry {
+        Ok(proto::ibc_connection::MsgConnectionOpenTry {
             client_id: client_id.to_string(),
             client_state: Some(msg_into_google_any(&client_state)?),
             proof_height: Some(proof_height),
@@ -169,7 +167,7 @@ impl SigningClient {
             proof_consensus: consensus_proof,
             consensus_height: Some(consensus_height),
             counterparty_versions: vec![IBC_VERSION.clone()],
-            counterparty: Some(ibc_proto::ibc::core::connection::v1::Counterparty {
+            counterparty: Some(proto::ibc_connection::Counterparty {
                 client_id: counterparty_client_id.to_string(),
                 connection_id: counterparty_connection_id.to_string(),
                 prefix: Some(IBC_MERKLE_PREFIX.clone()),
@@ -191,7 +189,7 @@ impl SigningClient {
         connection_id: &IbcConnectionId,
         counterparty_connection_id: &IbcConnectionId,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::connection::v1::MsgConnectionOpenAck> {
+    ) -> Result<proto::ibc_connection::MsgConnectionOpenAck> {
         let IbcConnectionProofs {
             query_height,
             proof_height,
@@ -213,7 +211,7 @@ impl SigningClient {
             )
             .await?;
 
-        if connection.state() != ibc_proto::ibc::core::connection::v1::State::Tryopen {
+        if connection.state() != proto::ibc_connection::State::Tryopen {
             bail!(
                 "counterparty connection state is not TryOpen at height {}, instead it is {:?}",
                 query_height,
@@ -222,7 +220,7 @@ impl SigningClient {
         }
 
         #[allow(deprecated)]
-        Ok(ibc_proto::ibc::core::connection::v1::MsgConnectionOpenAck {
+        Ok(proto::ibc_connection::MsgConnectionOpenAck {
             connection_id: connection_id.to_string(),
             counterparty_connection_id: counterparty_connection_id.to_string(),
             client_state: Some(msg_into_google_any(&client_state)?),
@@ -245,7 +243,7 @@ impl SigningClient {
         connection_id: &IbcConnectionId,
         counterparty_connection_id: &IbcConnectionId,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::connection::v1::MsgConnectionOpenConfirm> {
+    ) -> Result<proto::ibc_connection::MsgConnectionOpenConfirm> {
         let IbcConnectionProofs {
             proof_height,
             connection_proof,
@@ -263,14 +261,12 @@ impl SigningClient {
             .await?;
 
         #[allow(deprecated)]
-        Ok(
-            ibc_proto::ibc::core::connection::v1::MsgConnectionOpenConfirm {
-                connection_id: connection_id.to_string(),
-                proof_ack: connection_proof,
-                proof_height: Some(proof_height),
-                signer: self.addr.to_string(),
-            },
-        )
+        Ok(proto::ibc_connection::MsgConnectionOpenConfirm {
+            connection_id: connection_id.to_string(),
+            proof_ack: connection_proof,
+            proof_height: Some(proof_height),
+            signer: self.addr.to_string(),
+        })
     }
 
     pub fn ibc_open_channel_init_msg(
@@ -280,21 +276,17 @@ impl SigningClient {
         version: &IbcChannelVersion,
         ordering: IbcChannelOrdering,
         counterparty_port_id: &IbcPortId,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::MsgChannelOpenInit> {
+    ) -> Result<proto::ibc_channel::MsgChannelOpenInit> {
         #[allow(deprecated)]
-        Ok(ibc_proto::ibc::core::channel::v1::MsgChannelOpenInit {
+        Ok(proto::ibc_channel::MsgChannelOpenInit {
             port_id: port_id.to_string(),
-            channel: Some(ibc_proto::ibc::core::channel::v1::Channel {
-                state: ibc_proto::ibc::core::channel::v1::State::Init as i32,
+            channel: Some(proto::ibc_channel::Channel {
+                state: proto::ibc_channel::State::Init as i32,
                 ordering: match ordering {
-                    IbcChannelOrdering::Ordered => {
-                        ibc_proto::ibc::core::channel::v1::Order::Ordered as i32
-                    }
-                    IbcChannelOrdering::Unordered => {
-                        ibc_proto::ibc::core::channel::v1::Order::Unordered as i32
-                    }
+                    IbcChannelOrdering::Ordered => proto::ibc_channel::Order::Ordered as i32,
+                    IbcChannelOrdering::Unordered => proto::ibc_channel::Order::Unordered as i32,
                 },
-                counterparty: Some(ibc_proto::ibc::core::channel::v1::Counterparty {
+                counterparty: Some(proto::ibc_channel::Counterparty {
                     port_id: counterparty_port_id.to_string(),
                     channel_id: "".to_string(),
                 }),
@@ -318,7 +310,7 @@ impl SigningClient {
         counterparty_version: &IbcChannelVersion,
         ordering: IbcChannelOrdering,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::MsgChannelOpenTry> {
+    ) -> Result<proto::ibc_channel::MsgChannelOpenTry> {
         let IbcChannelProofs {
             proof_height,
             channel_proof,
@@ -336,20 +328,16 @@ impl SigningClient {
             .await?;
 
         #[allow(deprecated)]
-        Ok(ibc_proto::ibc::core::channel::v1::MsgChannelOpenTry {
+        Ok(proto::ibc_channel::MsgChannelOpenTry {
             port_id: port_id.to_string(),
             previous_channel_id: "".to_string(),
-            channel: Some(ibc_proto::ibc::core::channel::v1::Channel {
-                state: ibc_proto::ibc::core::channel::v1::State::Tryopen as i32,
+            channel: Some(proto::ibc_channel::Channel {
+                state: proto::ibc_channel::State::Tryopen as i32,
                 ordering: match ordering {
-                    IbcChannelOrdering::Ordered => {
-                        ibc_proto::ibc::core::channel::v1::Order::Ordered as i32
-                    }
-                    IbcChannelOrdering::Unordered => {
-                        ibc_proto::ibc::core::channel::v1::Order::Unordered as i32
-                    }
+                    IbcChannelOrdering::Ordered => proto::ibc_channel::Order::Ordered as i32,
+                    IbcChannelOrdering::Unordered => proto::ibc_channel::Order::Unordered as i32,
                 },
-                counterparty: Some(ibc_proto::ibc::core::channel::v1::Counterparty {
+                counterparty: Some(proto::ibc_channel::Counterparty {
                     port_id: counterparty_port_id.to_string(),
                     channel_id: counterparty_channel_id.to_string(),
                 }),
@@ -374,7 +362,7 @@ impl SigningClient {
         counterparty_channel_id: &IbcChannelId,
         counterparty_version: &IbcChannelVersion,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::MsgChannelOpenAck> {
+    ) -> Result<proto::ibc_channel::MsgChannelOpenAck> {
         let IbcChannelProofs {
             proof_height,
             channel_proof,
@@ -392,7 +380,7 @@ impl SigningClient {
             .await?;
 
         #[allow(deprecated)]
-        Ok(ibc_proto::ibc::core::channel::v1::MsgChannelOpenAck {
+        Ok(proto::ibc_channel::MsgChannelOpenAck {
             port_id: port_id.to_string(),
             channel_id: channel_id.to_string(),
             counterparty_channel_id: counterparty_channel_id.to_string(),
@@ -411,7 +399,7 @@ impl SigningClient {
         counterparty_port_id: &IbcPortId,
         counterparty_channel_id: &IbcChannelId,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::MsgChannelOpenConfirm> {
+    ) -> Result<proto::ibc_channel::MsgChannelOpenConfirm> {
         let IbcChannelProofs {
             proof_height,
             channel_proof,
@@ -429,7 +417,7 @@ impl SigningClient {
             .await?;
 
         #[allow(deprecated)]
-        Ok(ibc_proto::ibc::core::channel::v1::MsgChannelOpenConfirm {
+        Ok(proto::ibc_channel::MsgChannelOpenConfirm {
             port_id: port_id.to_string(),
             channel_id: channel_id.to_string(),
             proof_ack: channel_proof,
@@ -443,7 +431,7 @@ impl SigningClient {
         client_id: &IbcClientId,
         packet: IbcPacket,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::MsgRecvPacket> {
+    ) -> Result<proto::ibc_channel::MsgRecvPacket> {
         let proof_height = self
             .querier
             .ibc_client_state(client_id, None)
@@ -472,7 +460,7 @@ impl SigningClient {
             bail!("packet commitment proof is empty");
         }
 
-        Ok(ibc_proto::ibc::core::channel::v1::MsgRecvPacket {
+        Ok(proto::ibc_channel::MsgRecvPacket {
             packet: Some(convert_ibc_packet(&packet)?),
             proof_commitment: packet_commitment_store.proof,
             proof_height: Some(proof_height),
@@ -485,7 +473,7 @@ impl SigningClient {
         client_id: &IbcClientId,
         mut packet: IbcPacket,
         remote_querier: &QueryClient,
-    ) -> Result<ibc_proto::ibc::core::channel::v1::MsgAcknowledgement> {
+    ) -> Result<proto::ibc_channel::MsgAcknowledgement> {
         let proof_height = self
             .querier
             .ibc_client_state(client_id, None)
@@ -524,7 +512,7 @@ impl SigningClient {
         // but it does not reflect the original message, so we need to (re)invert it
         packet.invert();
 
-        Ok(ibc_proto::ibc::core::channel::v1::MsgAcknowledgement {
+        Ok(proto::ibc_channel::MsgAcknowledgement {
             packet: Some(convert_ibc_packet(&packet)?),
             acknowledgement,
             proof_acked: packet_ack_store.proof,
@@ -534,42 +522,38 @@ impl SigningClient {
     }
 }
 
-pub static IBC_VERSION: LazyLock<ibc_proto::ibc::core::connection::v1::Version> =
-    LazyLock::new(|| {
-        ibc_proto::ibc::core::connection::v1::Version {
-            // Go implementation: https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/03-connection/types/version.go#L18
-            identifier: "1".to_string(),
-            // Go implementation: https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/03-connection/types/version.go#L22
-            features: vec!["ORDER_ORDERED".to_string(), "ORDER_UNORDERED".to_string()],
-        }
-    });
+pub static IBC_VERSION: LazyLock<proto::ibc_connection::Version> = LazyLock::new(|| {
+    proto::ibc_connection::Version {
+        // Go implementation: https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/03-connection/types/version.go#L18
+        identifier: "1".to_string(),
+        // Go implementation: https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/03-connection/types/version.go#L22
+        features: vec!["ORDER_ORDERED".to_string(), "ORDER_UNORDERED".to_string()],
+    }
+});
 
-pub static IBC_MERKLE_PREFIX: LazyLock<ibc_proto::ibc::core::commitment::v1::MerklePrefix> =
-    LazyLock::new(|| {
-        ibc_proto::ibc::core::commitment::v1::MerklePrefix {
-            // Go implementation: https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/03-connection/keeper/keeper.go#L53
-            // -> https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/exported/module.go#L5
-            // but also in spec: https://github.com/cosmos/ibc/tree/main/spec/core/ics-003-connection-semantics
-            // > Chains should expose an endpoint to allow relayers to query the connection prefix. If not specified, a default counterpartyPrefix of "ibc" should be used.
-            // and there doesn't seem to be a universal way to query this, so we'll just use the default (hermes does this too)
-            key_prefix: "ibc".as_bytes().to_vec(),
-        }
-    });
+pub static IBC_MERKLE_PREFIX: LazyLock<proto::MerklePrefix> = LazyLock::new(|| {
+    proto::MerklePrefix {
+        // Go implementation: https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/03-connection/keeper/keeper.go#L53
+        // -> https://github.com/cosmos/ibc-go/blob/d771177acf66890c9c6f6e5df9a37b8031dbef7d/modules/core/exported/module.go#L5
+        // but also in spec: https://github.com/cosmos/ibc/tree/main/spec/core/ics-003-connection-semantics
+        // > Chains should expose an endpoint to allow relayers to query the connection prefix. If not specified, a default counterpartyPrefix of "ibc" should be used.
+        // and there doesn't seem to be a universal way to query this, so we'll just use the default (hermes does this too)
+        key_prefix: "ibc".as_bytes().to_vec(),
+    }
+});
 
-fn convert_ibc_packet(packet: &IbcPacket) -> Result<ibc_proto::ibc::core::channel::v1::Packet> {
-    Ok(ibc_proto::ibc::core::channel::v1::Packet {
+fn convert_ibc_packet(packet: &IbcPacket) -> Result<proto::ibc_channel::Packet> {
+    Ok(proto::ibc_channel::Packet {
         sequence: packet.sequence,
         source_port: packet.src_port_id.to_string(),
         source_channel: packet.src_channel_id.to_string(),
         destination_port: packet.dst_port_id.to_string(),
         destination_channel: packet.dst_channel_id.to_string(),
         timeout_height: match packet.timeout_height {
-            IbcPacketTimeoutHeight::Revision { revision, height } => {
-                Some(ibc_proto::ibc::core::client::v1::Height {
-                    revision_number: revision,
-                    revision_height: height,
-                })
-            }
+            IbcPacketTimeoutHeight::Revision { revision, height } => Some(proto::RevisionHeight {
+                revision_number: revision,
+                revision_height: height,
+            }),
             IbcPacketTimeoutHeight::None => None,
         },
         timeout_timestamp: packet.timeout_timestamp,

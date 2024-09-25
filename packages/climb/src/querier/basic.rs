@@ -9,7 +9,7 @@ impl QueryClient {
         &self,
         addr: Address,
         limit_per_page: Option<u64>,
-    ) -> Result<Vec<Coin>> {
+    ) -> Result<Vec<proto::Coin>> {
         self.run_with_middleware(AllBalancesReq {
             addr,
             limit_per_page,
@@ -17,14 +17,11 @@ impl QueryClient {
         .await
     }
 
-    pub async fn base_account(
-        &self,
-        addr: &Address,
-    ) -> Result<cosmrs::proto::cosmos::auth::v1beta1::BaseAccount> {
+    pub async fn base_account(&self, addr: &Address) -> Result<proto::BaseAccount> {
         self.run_with_middleware(BaseAccountReq { addr: addr.clone() })
             .await
     }
-    pub async fn staking_params(&self) -> Result<cosmrs::proto::cosmos::staking::v1beta1::Params> {
+    pub async fn staking_params(&self) -> Result<proto::staking::Params> {
         self.run_with_middleware(StakingParamsReq {}).await
     }
     pub async fn block(&self, height: Option<u64>) -> Result<BlockResp> {
@@ -48,9 +45,7 @@ impl QueryRequest for BalanceReq {
     type QueryResponse = Option<u64>;
 
     async fn request(&self, client: QueryClient) -> Result<Self::QueryResponse> {
-        let mut query_client = cosmrs::proto::cosmos::bank::v1beta1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client = proto::grpc_client::Bank::new(client.grpc_channel.clone());
 
         let denom = self
             .denom
@@ -58,7 +53,7 @@ impl QueryRequest for BalanceReq {
             .unwrap_or(client.chain_config.gas_denom.clone());
 
         let coin = query_client
-            .balance(cosmrs::proto::cosmos::bank::v1beta1::QueryBalanceRequest {
+            .balance(proto::bank::QueryBalanceRequest {
                 address: self.addr.to_string(),
                 denom,
             })
@@ -85,12 +80,10 @@ pub struct AllBalancesReq {
 }
 
 impl QueryRequest for AllBalancesReq {
-    type QueryResponse = Vec<Coin>;
+    type QueryResponse = Vec<proto::Coin>;
 
     async fn request(&self, client: QueryClient) -> Result<Self::QueryResponse> {
-        let mut query_client = cosmrs::proto::cosmos::bank::v1beta1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client = proto::grpc_client::Bank::new(client.grpc_channel.clone());
 
         let mut coins = Vec::new();
 
@@ -102,13 +95,11 @@ impl QueryRequest for AllBalancesReq {
 
         loop {
             let resp = query_client
-                .all_balances(
-                    cosmrs::proto::cosmos::bank::v1beta1::QueryAllBalancesRequest {
-                        address: self.addr.to_string(),
-                        pagination,
-                        resolve_denom: true,
-                    },
-                )
+                .all_balances(proto::bank::QueryAllBalancesRequest {
+                    address: self.addr.to_string(),
+                    pagination,
+                    resolve_denom: true,
+                })
                 .await
                 .map(|res| res.into_inner())?;
 
@@ -123,16 +114,13 @@ impl QueryRequest for AllBalancesReq {
                 }
             }
 
-            pagination =
-                resp.pagination.map(
-                    |p| cosmrs::proto::cosmos::base::query::v1beta1::PageRequest {
-                        key: p.next_key,
-                        offset: 0,
-                        limit,
-                        count_total: false,
-                        reverse: false,
-                    },
-                );
+            pagination = resp.pagination.map(|p| proto::PageRequest {
+                key: p.next_key,
+                offset: 0,
+                limit,
+                count_total: false,
+                reverse: false,
+            });
         }
 
         Ok(coins)
@@ -145,24 +133,21 @@ pub struct BaseAccountReq {
 }
 
 impl QueryRequest for BaseAccountReq {
-    type QueryResponse = cosmrs::proto::cosmos::auth::v1beta1::BaseAccount;
+    type QueryResponse = proto::BaseAccount;
 
     async fn request(&self, client: QueryClient) -> Result<Self::QueryResponse> {
-        let mut query_client = cosmrs::proto::cosmos::auth::v1beta1::query_client::QueryClient::new(
-            client.grpc_channel.clone(),
-        );
+        let mut query_client = proto::grpc_client::Auth::new(client.grpc_channel.clone());
 
         let account = query_client
-            .account(cosmrs::proto::cosmos::auth::v1beta1::QueryAccountRequest {
+            .account(proto::auth::QueryAccountRequest {
                 address: self.addr.to_string(),
             })
             .await
             .map(|res| res.into_inner().account)?
             .ok_or_else(|| anyhow!("account {} not found", self.addr))?;
 
-        let account =
-            cosmrs::proto::cosmos::auth::v1beta1::BaseAccount::decode(account.value.as_slice())
-                .context("couldn't decode account")?;
+        let account = proto::BaseAccount::decode(account.value.as_slice())
+            .context("couldn't decode account")?;
 
         Ok(account)
     }
@@ -172,19 +157,13 @@ impl QueryRequest for BaseAccountReq {
 pub struct StakingParamsReq {}
 
 impl QueryRequest for StakingParamsReq {
-    type QueryResponse = cosmrs::proto::cosmos::staking::v1beta1::Params;
+    type QueryResponse = proto::staking::Params;
 
-    async fn request(
-        &self,
-        client: QueryClient,
-    ) -> Result<cosmrs::proto::cosmos::staking::v1beta1::Params> {
-        let mut query_client =
-            cosmrs::proto::cosmos::staking::v1beta1::query_client::QueryClient::new(
-                client.grpc_channel.clone(),
-            );
+    async fn request(&self, client: QueryClient) -> Result<proto::staking::Params> {
+        let mut query_client = proto::grpc_client::Staking::new(client.grpc_channel.clone());
 
         let resp = query_client
-            .params(cosmrs::proto::cosmos::staking::v1beta1::QueryParamsRequest {})
+            .params(proto::staking::QueryParamsRequest {})
             .await
             .map(|res| res.into_inner())
             .context("couldn't get staking params")?;
@@ -200,27 +179,22 @@ pub struct BlockReq {
 
 #[derive(Debug)]
 pub enum BlockResp {
-    Sdk(cosmrs::proto::cosmos::base::tendermint::v1beta1::Block),
-    Old(cosmrs::proto::tendermint::types::Block),
+    Sdk(proto::SdkBlock),
+    Old(proto::TendermintBlock),
 }
 
 impl QueryRequest for BlockReq {
     type QueryResponse = BlockResp;
 
     async fn request(&self, client: QueryClient) -> Result<Self::QueryResponse> {
-        let mut query_client =
-            cosmrs::proto::cosmos::base::tendermint::v1beta1::service_client::ServiceClient::new(
-                client.grpc_channel.clone(),
-            );
+        let mut query_client = proto::grpc_client::Tendermint::new(client.grpc_channel.clone());
         let height = self.height;
 
         match height {
             Some(height) => query_client
-                .get_block_by_height(
-                    cosmrs::proto::cosmos::base::tendermint::v1beta1::GetBlockByHeightRequest {
-                        height: height.try_into()?,
-                    },
-                )
+                .get_block_by_height(proto::tendermint::GetBlockByHeightRequest {
+                    height: height.try_into()?,
+                })
                 .await
                 .map_err(|err| err.into())
                 .and_then(|res| {
@@ -234,9 +208,7 @@ impl QueryRequest for BlockReq {
                     }
                 }),
             None => query_client
-                .get_latest_block(
-                    cosmrs::proto::cosmos::base::tendermint::v1beta1::GetLatestBlockRequest {},
-                )
+                .get_latest_block(proto::tendermint::GetLatestBlockRequest {})
                 .await
                 .map_err(|err| err.into())
                 .and_then(|res| {
@@ -264,8 +236,8 @@ pub struct BlockHeaderReq {
 
 #[derive(Debug)]
 pub enum BlockHeaderResp {
-    Sdk(cosmrs::proto::cosmos::base::tendermint::v1beta1::Header),
-    Old(cosmrs::proto::tendermint::types::Header),
+    Sdk(proto::SdkHeader),
+    Old(proto::TendermintHeader),
 }
 
 impl BlockHeaderResp {
@@ -276,17 +248,13 @@ impl BlockHeaderResp {
         })
     }
 
-    pub fn time(&self) -> Option<tendermint_proto::google::protobuf::Timestamp> {
+    pub fn time(&self) -> Option<proto::Timestamp> {
         match self {
             BlockHeaderResp::Sdk(header) => header.time,
-            BlockHeaderResp::Old(header) => {
-                header
-                    .time
-                    .map(|time| tendermint_proto::google::protobuf::Timestamp {
-                        seconds: time.seconds,
-                        nanos: time.nanos,
-                    })
-            }
+            BlockHeaderResp::Old(header) => header.time.map(|time| proto::Timestamp {
+                seconds: time.seconds,
+                nanos: time.nanos,
+            }),
         }
     }
 

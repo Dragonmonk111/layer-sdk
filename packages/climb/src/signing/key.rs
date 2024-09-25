@@ -1,11 +1,9 @@
 use crate::prelude::*;
 use async_trait::async_trait;
 use bip39::Mnemonic;
-use cosmos_sdk_proto::cosmos::tx::v1beta1::SignDoc;
 use cosmrs::{
     bip32::DerivationPath,
     crypto::{secp256k1::SigningKey, PublicKey},
-    tx::MessageExt,
 };
 use std::{str::FromStr, sync::LazyLock};
 
@@ -48,7 +46,7 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "web")] {
         #[async_trait(?Send)]
         impl TxSigner for KeySigner {
-            async fn sign(&self, msg: &SignDoc) -> Result<Vec<u8>> {
+            async fn sign(&self, msg: &proto::SignDoc) -> Result<Vec<u8>> {
                 sign(self, msg).await
             }
 
@@ -60,7 +58,7 @@ cfg_if::cfg_if! {
     } else {
         #[async_trait]
         impl TxSigner for KeySigner {
-            async fn sign(&self, msg: &SignDoc) -> Result<Vec<u8>> {
+            async fn sign(&self, msg: &proto::SignDoc) -> Result<Vec<u8>> {
                 sign(self, msg).await
             }
 
@@ -71,7 +69,7 @@ cfg_if::cfg_if! {
     }
 }
 
-async fn sign(signer: &KeySigner, msg: &SignDoc) -> Result<Vec<u8>> {
+async fn sign(signer: &KeySigner, msg: &proto::SignDoc) -> Result<Vec<u8>> {
     let signed = signer
         .key
         .sign(&msg.to_bytes()?)
