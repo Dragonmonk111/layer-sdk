@@ -8,4 +8,4 @@ if groups | grep -q docker; then
 fi
 
 cd "$SCRIPT_DIR"
-$SUDO docker compose -f docker-compose.yml -f jaeger-elastic-compose.yml --profile faucet up -d
+$SUDO docker compose --profile faucet --profile wasmatic up -d
