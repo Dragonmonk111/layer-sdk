@@ -22,8 +22,6 @@ COPY packages/abci/Cargo.toml /myapp/packages/abci/Cargo.toml
 COPY dummy.rs /myapp/packages/abci/src/lib.rs
 COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
 COPY dummy.rs /myapp/packages/app/src/lib.rs
-COPY packages/climb/Cargo.toml /myapp/packages/climb/Cargo.toml
-COPY dummy.rs /myapp/packages/climb/src/lib.rs
 COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
 COPY dummy.rs /myapp/packages/cosmos/src/lib.rs
 COPY packages/golem/Cargo.toml /myapp/packages/golem/Cargo.toml
