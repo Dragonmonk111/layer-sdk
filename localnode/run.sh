@@ -8,4 +8,4 @@ if groups | grep -q docker; then
 fi
 
 cd "$SCRIPT_DIR"
-$SUDO docker compose up -d
+$SUDO docker compose up --profile wasmatic -d

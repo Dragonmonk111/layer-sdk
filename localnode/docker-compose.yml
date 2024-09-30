@@ -20,6 +20,8 @@ volumes:
     external: true
   comet_data:
     external: true
+  wasmatic_data:
+    external: true
 
 services:
   slay3r:
@@ -97,3 +99,5 @@ services:
     depends_on:
       - slay3r
     profiles: [wasmatic]
+    volumes:
+      - wasmatic_data:/wasmatic
