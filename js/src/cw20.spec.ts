@@ -225,7 +225,7 @@ describe("Cw20 Test Cases", () => {
 });
 
 describe("Contract Migrate", () => {
-  fit("migrate new contract code", async () => {
+  it("migrate new contract code", async () => {
     const signer = faucet.address0;
     const directWallet = await DirectSecp256k1HdWallet.fromMnemonic(faucet.mnemonic, defaultWalletOptions);
     const directClient = await SigningCosmWasmClient.createWithSigner(
