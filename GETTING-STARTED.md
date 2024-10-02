@@ -4,9 +4,9 @@ Let's say Alice the User wants to mint a NFT with an image generated from an off
 
 Lay3r to the rescue! The process looks like this:
 
-1. Alice submits a task to a special contract with the required work information (image size, AI prompt, etc.). 
+1. Alice submits a task to a special contract with the required work information (image size, AI prompt, etc.).
 2. Bob is scanning the chain, looking for on-chain events that encapsulate the work order.
-3. Bob goes off and does the work with his beefy machine (or crayons, no limits!), ultimately writing some metadata such as the IPFS hash back onto the chain. 
+3. Bob goes off and does the work with his beefy machine (or crayons, no limits!), ultimately writing some metadata such as the IPFS hash back onto the chain.
 4. Alice notices that the on-chain status has changed to completed work, and she can now go download her image at that IPFS hash.
 
 There's more details of course - Bob isn't actually staring at a monitor reading blockchain events, and how does Alice know he really ran the "awesome image generation" code she requested? The short answer is Bob is running an AVS and everything is secured by the underlying consensus algorithms, but, as a developer getting started, we're more interested in what pieces need to be built in order to facilitate the flow of data here.
@@ -31,7 +31,7 @@ The SDK contains the blockchain software and a few additional tools for interact
 
 1. Build the Docker image: `scripts/build_docker.sh`
 2. Reset the Volumes: `localnode/reset_volumes.sh`
-3. Start the node: `localnode/run.sh` 
+3. Start the node: `localnode/run.sh`
 4. Health checks
 	1. Check RPC status: `curl http://localhost:26657/status | jq`
 	2. Check gRPC status: `grpcurl -plaintext localhost:9090 list`
@@ -62,8 +62,16 @@ economy stock theory fatal elder harbor betray wasp final emotion task crumble s
 However, it's probably better to use our own wallet. We provide a few tools to make this easy:
 
 1. cd to `layer-sdk/js` (same place we ran JS tests above)
+    1. If running for the first time you might need to call first:
+    ```bash
+    # Install ts-node
+    $ npm install -g ts-node
+
+    # Install Node.js type definitions
+    $ npm install @types/node --save-dev
+    ```
 2. Generate a new mnemonic and address: `npm run generate-mnemonic`
-    1. Alternatively, get the address for an existing mnemonic: `npm run show-mnemonic -- "{MNEMONIC HERE}"` 
+    1. Alternatively, get the address for an existing mnemonic: `npm run show-mnemonic -- "{MNEMONIC HERE}"`
 3. Tap the faucet `npm run tap-faucet -- {ADDRESS} {amount}`
     1. The amount is optional, if not set then a default of 1000000uslay will be sent
 
@@ -88,7 +96,7 @@ RUST_LOG = "info"
 
 
 4. Deploy the contracts: `cargo run --bin avs -- --local deploy {OPERATOR_ADDR}`
-	1. For testing purposes, the operator here can by any valid address 
+	1. For testing purposes, the operator here can by any valid address
 5. View the latest-and-greatest deploy: `cargo run --bin avs -- --local view`
 
 You'll see output like this:
@@ -115,7 +123,7 @@ Our AVS's are executed on Spin, a WASM-based runtime that can run locally and/or
 	1. `cd runners/task-queue`
 	2. `spin plugin install pluginify
 	3. `RUSTFLAGS='-C link-arg=-s' cargo build --releaseA
-	4. `spin pluginify --install`	
+	4. `spin pluginify --install`
 
 [_more details in the plugin documentation_](https://github.com/Lay3rLabs/lay3r-avs-runners/blob/main/runners/task-queue/README.md)
 
