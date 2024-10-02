@@ -94,6 +94,8 @@ services:
 
   wasmatic:
     image: "ghcr.io/lay3rlabs/wasmatic:latest"
+    env_file:
+      - ./wasmatic.env
     ports:
       - "8081:8081"
     depends_on:
