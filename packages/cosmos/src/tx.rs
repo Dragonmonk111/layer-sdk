@@ -185,17 +185,17 @@ mod test {
         Coin,
     };
 
-    use layer_std::{AccountId, BankMsg, PubKey, DEFAULT_BECH32_PREFIX};
+    use layer_std::{AccountId, BankMsg, PubKey, BECH32_PREFIX};
 
     #[test]
     fn happy_path_tx_parsing() {
         let sender_private_key = secp256k1::SigningKey::random();
         let sender_public_key = sender_private_key.public_key();
-        let sender_account_id = sender_public_key.account_id(DEFAULT_BECH32_PREFIX).unwrap();
+        let sender_account_id = sender_public_key.account_id(BECH32_PREFIX).unwrap();
 
         let rcpt_account_id = secp256k1::SigningKey::random()
             .public_key()
-            .account_id(DEFAULT_BECH32_PREFIX)
+            .account_id(BECH32_PREFIX)
             .unwrap();
 
         let sequence_number = 5;

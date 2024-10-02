@@ -13,7 +13,7 @@ import { calculateFee, GasPrice, SigningStargateClientOptions } from "@cosmjs/st
 import { SignMode } from "cosmjs-types/cosmos/tx/signing/v1beta1/signing";
 import { AuthInfo, SignDoc, TxBody } from "cosmjs-types/cosmos/tx/v1beta1/tx";
 
-export const PREFIX = "slay3r";
+export const PREFIX = "layer";
 
 export const DENOM = "uslay";
 
@@ -43,7 +43,7 @@ export const localNet = {
   tendermintUrl: `http://${hostName}:26657`,
   tendermintUrlWs: `ws://${hostName}:26657`,
   tendermintUrlHttp: `http://${hostName}:26657`,
-  chainId: "slay3r-dev",
+  chainId: "slay3r-local",
   denomStaking: DENOM,
   denomFee: DENOM,
   blockTime: 1_000, // ms
@@ -84,11 +84,11 @@ export const faucet = {
     type: "tendermint/PubKeySecp256k1",
     value: "Aum2063ub/ErUnIUB36sK55LktGUStgcbSiaAnL1wadu",
   },
-  address0: "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j",
-  address1: "slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu",
-  address2: "slay3r1xy4yqngt0nlkdcenxymg8tenrghmek4nvqd2x7",
-  address3: "slay3r142u9fgcjdlycfcez3lw8x6x5h7rfjlnfqpc27w",
-  address4: "slay3r1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rcdwjdw",
+  address0: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug",
+  address1: "layer10dyr9899g6t0pelew4nvf4j5c3jcgv0rwnkg3x",
+  address2: "layer1xy4yqngt0nlkdcenxymg8tenrghmek4ntzd2ty",
+  address3: "layer142u9fgcjdlycfcez3lw8x6x5h7rfjlnf8rc2n5",
+  address4: "layer1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rl0wjq5",
 };
 
 /** Unused account */
@@ -97,7 +97,7 @@ export const unused = {
     type: "tendermint/PubKeySecp256k1",
     value: "ArkCaFUJ/IH+vKBmNRCdUVl3mCAhbopk9jjW4Ko4OfRQ",
   },
-  address: "slay3r1cjsxept9rkggzxztslae9ndgpdyt2408gk35w5",
+  address: "layer1cjsxept9rkggzxztslae9ndgpdyt24080535rw",
   accountNumber: 0,
   sequence: 0,
   balanceFee: "1000000000", // 1000 SLAY
@@ -135,7 +135,7 @@ export const validator = {
   sequence: 1,
 };
 
-export const nonExistentAddress = "slay3r1p79apjaufyphcmsn4g07cynqf0wyjuezhu34k9";
+export const nonExistentAddress = "layer1p79apjaufyphcmsn4g07cynqf0wyjuezs734ml";
 
 export const nonNegativeIntegerMatcher = /^[0-9]+$/;
 export const tendermintIdMatcher = /^[0-9A-F]{64}$/;

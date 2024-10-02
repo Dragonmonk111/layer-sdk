@@ -191,7 +191,7 @@ mod fixtures {
     fn encode_account_response() {
         let request = QueryResponse::<PulsarError>::Auth(AuthQueryResponse::Account(
             AccountResponse::External {
-                address: must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"),
+                address: must_id("layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"),
                 pubkey: Some(PubKey::Secp256k1(Binary::from(
                     hex!("034f04181eeba35391b858633a765c4a0c189697b40d216354d50890d350c70290")
                         .as_slice(),
@@ -248,8 +248,8 @@ mod fixtures {
             result: Ok(TxResponse {
                 data: vec![MsgData::Bank(BankMsgData::Send {})],
                 events: vec![vec![Event::new("transfer")
-                    .add_attribute("recipient", "slay3r18jlmr4cta5ecgw96kx40cgvnpaq4ysturn54n8")
-                    .add_attribute("sender", "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j")
+                    .add_attribute("recipient", "layer18jlmr4cta5ecgw96kx40cgvnpaq4ystuy3547a")
+                    .add_attribute("sender", "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug")
                     .add_attribute("amount", "2000000uslay")]],
             }),
         });

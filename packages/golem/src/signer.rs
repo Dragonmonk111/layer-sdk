@@ -95,14 +95,14 @@ mod tests {
 
         assert_eq!(
             key.account(),
-            AccountId::parse_string("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j").unwrap()
+            AccountId::parse_string("layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug").unwrap()
         );
         assert_eq!(key.index(), 0);
 
         let key2 = key.with_index(1);
         assert_eq!(
             key2.account(),
-            AccountId::parse_string("slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu").unwrap()
+            AccountId::parse_string("layer10dyr9899g6t0pelew4nvf4j5c3jcgv0rwnkg3x").unwrap()
         );
         assert_eq!(key2.index(), 1);
     }

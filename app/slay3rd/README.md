@@ -78,7 +78,7 @@ Add the following to `~/.slay3r/config/genesis.json`:
   "app_state": {
     "bank": [
       {
-        "address": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j",
+        "address": "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug",
         "balance": [
           {
             "amount": "4000000000",
@@ -88,7 +88,7 @@ Add the following to `~/.slay3r/config/genesis.json`:
       }
     ],
     "wasm": {
-      "gov_account": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"
+      "gov_account": "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"
     }
   }
 ```

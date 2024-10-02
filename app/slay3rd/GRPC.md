@@ -7,13 +7,13 @@ Run the whole setup including gateway with:
 Now, check the following endpoints:
 
 ```bash
-curl localhost:1317/cosmos/bank/v1beta1/balances/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j | jq .
+curl localhost:1317/cosmos/bank/v1beta1/balances/layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug | jq .
 
-curl localhost:1317/cosmos/bank/v1beta1/balances/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j/by_denom?denom=uslay | jq .
+curl localhost:1317/cosmos/bank/v1beta1/balances/layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug/by_denom?denom=uslay | jq .
 ```
 
 ```bash
-curl localhost:1317/cosmos/auth/v1beta1/accounts/slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j | jq .
+curl localhost:1317/cosmos/auth/v1beta1/accounts/layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug | jq .
 ```
 
 Run the integration tests and check again, along with the following cosmwasm ones:
@@ -29,13 +29,13 @@ curl localhost:1317/cosmwasm/wasm/v1/code/1 | jq .
 curl localhost:1317/cosmwasm/wasm/v1/code/1/contracts | jq .contracts
 
 # Replace with address from your contract
-curl localhost:1317/cosmwasm/wasm/v1/contract/slay3r13xthx4g4vjyp43gnwxk0mw4zeuvp96ljhh7q0pec9znj409er0csv5pw6v | jq .
+curl localhost:1317/cosmwasm/wasm/v1/contract/layer13xthx4g4vjyp43gnwxk0mw4zeuvp96ljhh7q0pec9znj409er0csj40elw | jq .
 ```
 
 ```bash
-echo -n '{"balance":{"address":"slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"}}' | base64 -w0
+echo -n '{"balance":{"address":"layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"}}' | base64 -w0
 
-curl localhost:1317/cosmwasm/wasm/v1/contract/slay3r13xthx4g4vjyp43gnwxk0mw4zeuvp96ljhh7q0pec9znj409er0csv5pw6v/smart/eyJiYWxhbmNlIjp7ImFkZHJlc3MiOiJzbGF5M3IxcGtwdHJlN2Zka2w2Z2Zyemxlc2pqdmh4aGxjM3I0Z212azNyM2oifX0= | jq -r .data | base64 -d
+curl localhost:1317/cosmwasm/wasm/v1/contract/layer13xthx4g4vjyp43gnwxk0mw4zeuvp96ljhh7q0pec9znj409er0csj40elw/smart/eyJiYWxhbmNlIjp7ImFkZHJlc3MiOiJsYXllcjFwa3B0cmU3ZmRrbDZnZnJ6bGVzamp2aHhobGMzcjRnbXQ1M3J1ZyJ9fQ== | jq -r .data | base64 -d
 ```
 
 This is a basic end-to-end that they are working.

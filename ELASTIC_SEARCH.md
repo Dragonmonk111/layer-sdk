@@ -174,7 +174,7 @@ Request body:
             },
             {
               "wildcard": {
-                "tags.value": "*signer: slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j*"
+                "tags.value": "*signer: layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug*"
               }
             }
           ]

@@ -36,7 +36,7 @@
   "app_state": {
     "bank": [
       {
-        "address": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j",
+        "address": "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug",
         "balance": [
           {
             "amount": "4000000000",
@@ -45,7 +45,7 @@
         ]
       },
       {
-        "address": "slay3r10dyr9899g6t0pelew4nvf4j5c3jcgv0rf3kguu",
+        "address": "layer10dyr9899g6t0pelew4nvf4j5c3jcgv0rwnkg3x",
         "balance": [
           {
             "amount": "4000000000",
@@ -54,7 +54,7 @@
         ]
       },
       {
-        "address": "slay3r1xy4yqngt0nlkdcenxymg8tenrghmek4nvqd2x7",
+        "address": "layer1xy4yqngt0nlkdcenxymg8tenrghmek4ntzd2ty",
         "balance": [
           {
             "amount": "4000000000",
@@ -63,7 +63,7 @@
         ]
       },
       {
-        "address": "slay3r142u9fgcjdlycfcez3lw8x6x5h7rfjlnfqpc27w",
+        "address": "layer142u9fgcjdlycfcez3lw8x6x5h7rfjlnf8rc2n5",
         "balance": [
           {
             "amount": "4000000000",
@@ -72,7 +72,7 @@
         ]
       },
       {
-        "address": "slay3r1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rcdwjdw",
+        "address": "layer1hsm76p4ahyhl5yh3ve9ur49r5kemhp2rl0wjq5",
         "balance": [
           {
             "amount": "4000000000",
@@ -81,7 +81,7 @@
         ]
       },
       {
-        "address": "slay3r1cjsxept9rkggzxztslae9ndgpdyt2408gk35w5",
+        "address": "layer1cjsxept9rkggzxztslae9ndgpdyt24080535rw",
         "balance": [
           {
             "amount": "1000000000",
@@ -91,7 +91,7 @@
       }
     ],
     "wasm": {
-      "gov_account": "slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"
+      "gov_account": "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"
     }
   }
 }

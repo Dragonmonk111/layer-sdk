@@ -516,8 +516,8 @@ mod tests {
     // run finalize_block
     // query account + balances for update
     fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
-        let sender = must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j");
-        let recipient = must_id("slay3r1y5hl7x8hxl72dc9gu920eaz6l7vhl0luu6s70h");
+        let sender = must_id("layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug");
+        let recipient = must_id("layer1y5hl7x8hxl72dc9gu920eaz6l7vhl0lumcs7zd");
         let denom: &str = "uslay";
 
         let expected_gas = 16_000u64;
@@ -577,7 +577,7 @@ mod tests {
                 recipient: recipient.clone(),
                 amount: coins(2_000_000, denom),
             })],
-            signer: must_id("slay3r1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmvk3r3j"),
+            signer: must_id("layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"),
             signing_info: SigningInfo {
                 message_hash: Binary::from(
                     hex!("6d368a4b8436e0b19a2d06069e0b70086ba7c40e91a9d04d31946c10346d79a9")
