@@ -20,6 +20,8 @@ volumes:
     external: true
   comet_data:
     external: true
+  wasmatic_data:
+    external: true
 
 services:
   slay3r:
@@ -89,3 +91,13 @@ services:
       - cometbft
     restart: unless-stopped
     profiles: [faucet]
+
+  wasmatic:
+    image: "ghcr.io/lay3rlabs/wasmatic:latest"
+    ports:
+      - "8081:8081"
+    depends_on:
+      - slay3r
+    profiles: [wasmatic]
+    volumes:
+      - wasmatic_data:/wasmatic
