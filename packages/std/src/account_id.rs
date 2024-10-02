@@ -7,7 +7,7 @@ use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
-pub const BECH32_PREFIX: &str = "slay3r";
+pub const BECH32_PREFIX: &str = "layer";
 
 /// Valid lengths of decoded addresses
 pub const VALID_ADDR_LENGTH: [usize; 2] = [20usize, 32usize];
@@ -208,13 +208,13 @@ mod tests {
     fn test_creation() {
         // properly parses and encoded proper size
         let id = AccountId::new(&[42u8; 20]).unwrap();
-        assert!(id.to_string().starts_with("slay3r1"));
+        assert!(id.to_string().starts_with("layer1"));
         let reparse = AccountId::parse_string(&id.to_string()).unwrap();
         assert_eq!(id, reparse);
 
         // we can encode and decode valid addresses
         let id = AccountId::new(&[69u8; 32]).unwrap();
-        assert!(id.to_string().starts_with("slay3r1"));
+        assert!(id.to_string().starts_with("layer1"));
         let reparse = AccountId::parse_string(&id.to_string()).unwrap();
         assert_eq!(id, reparse);
 
@@ -222,7 +222,7 @@ mod tests {
         let _ = AccountId::new(&[69u8; 15]).unwrap_err();
 
         // incorrect bedh32 input fails
-        let bad_addr = id.to_string().replace("q", "k");
+        let bad_addr = id.to_string().replace("z", "k");
         let _ = AccountId::parse_string(&bad_addr).unwrap_err();
     }
 
@@ -232,7 +232,7 @@ mod tests {
         let id = AccountId::new(&raw).unwrap();
 
         let as_string = to_json_binary(&id.to_string()).unwrap();
-        assert!(as_string.starts_with(br#""slay3r1"#));
+        assert!(as_string.starts_with(br#""layer1"#));
 
         let as_raw = to_json_binary(&raw).unwrap();
         assert!(as_raw.starts_with(b"[42,42,"));
