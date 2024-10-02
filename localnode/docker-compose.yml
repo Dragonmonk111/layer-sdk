@@ -81,7 +81,7 @@ services:
       - ./faucet.env
     environment:
       - FAUCET_CONCURRENCY=3
-      - FAUCET_ADDRESS_PREFIX=slay3r
+      - FAUCET_ADDRESS_PREFIX=layer
       - FAUCET_TOKENS=uslay
       - FAUCET_GAS_PRICE=0.025uslay
     ports:

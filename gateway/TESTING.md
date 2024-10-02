@@ -28,6 +28,6 @@ which you can get from [the integration tests](../integration/src/testutils.spec
 ```bash
 curl --header "Content-Type: application/json" \
   --request POST \
-  --data '{"denom":"uslay","address":"slay3r1z6cn9ahndgpz9xnzydad08qpkzlrkdjpglymu2"}' \
+  --data '{"denom":"uslay","address":"layer1z6cn9ahndgpz9xnzydad08qpkzlrkdjp0aym3s"}' \
   http://localhost:8000/credit
 ```
