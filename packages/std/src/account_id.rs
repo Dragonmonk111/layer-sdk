@@ -7,15 +7,10 @@ use cosmwasm_std::{Addr, StdResult};
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use thiserror::Error;
 
-pub const ENV_BECH32_PREFIX: Option<&'static str> = std::option_env!("SLAY_BECH32");
-pub const DEFAULT_BECH32_PREFIX: &str = "slay3r";
+pub const BECH32_PREFIX: &str = "slay3r";
 
 /// Valid lengths of decoded addresses
 pub const VALID_ADDR_LENGTH: [usize; 2] = [20usize, 32usize];
-
-fn bech32_prefix() -> &'static str {
-    ENV_BECH32_PREFIX.unwrap_or(DEFAULT_BECH32_PREFIX)
-}
 
 // Note: this is expanded cw_serde macro minus the Debug implementation, as we want to use Display there
 #[derive(::std::clone::Clone, ::std::cmp::PartialEq, ::cosmwasm_schema::schemars::JsonSchema)]
@@ -57,7 +52,7 @@ impl From<Bech32Error> for AccountIdError {
 
 impl Display for AccountId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        bech32::encode_to_fmt(f, bech32_prefix(), self.0.to_base32(), Variant::Bech32).unwrap()
+        bech32::encode_to_fmt(f, BECH32_PREFIX, self.0.to_base32(), Variant::Bech32).unwrap()
     }
 }
 
@@ -142,9 +137,8 @@ impl AccountId {
             return Err(AccountIdError::InvalidVariant);
         }
         // make sure the proper chain prefix
-        let prefix = bech32_prefix();
-        if hrp != prefix {
-            return Err(AccountIdError::InvalidPrefix(hrp, prefix));
+        if hrp != BECH32_PREFIX {
+            return Err(AccountIdError::InvalidPrefix(hrp, BECH32_PREFIX));
         }
         let addr = Vec::<u8>::from_base32(&data).unwrap();
         // we only support 20 and 32 bytes for the binary version, enforce this for sanity check
