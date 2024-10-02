@@ -88,6 +88,15 @@
             "denom": "uslay"
           }
         ]
+      },
+      {
+        "address": "layer1qyfn9l7w78kxcerwwwc6dpad305dulhk9jks0r",
+        "balance": [
+          {
+            "amount": "2500000000",
+            "denom": "uslay"
+          }
+        ]
       }
     ],
     "wasm": {
