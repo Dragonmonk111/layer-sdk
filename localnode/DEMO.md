@@ -80,8 +80,11 @@ cargo run -- --env=local task-queue view-queue
 # rebuild the component
 (cd ../.. && ./scripts/build_wasi.sh)
 
+# Testable is optional if you want to try the next step
+# Do not use for production deployments
 cargo run -- wasmatic deploy --name demo1 \
     --wasm-source ../../components/cavs_square.wasm  \
+    --testable \
     --task $LOCAL_TASK_QUEUE_ADDRESS
 ```
 
@@ -91,6 +94,21 @@ the wasmatic logs (in another console ideally):
 ```bash
 docker logs -f localnode-wasmatic-1
 ```
+
+### Test a Component
+
+This can only be done if `--testable` was provided above
+
+```bash
+cargo run -- wasmatic test --name demo1 --input '{"x": 32}'
+```
+
+It will parse the input as if you pushed it to the task queue and return
+the result (or error) to the caller. Nothing is written on chain.
+
+Note: if you change state when being triggered, this will break the AVS
+consensus mechanism (different results for different operators), and thus
+should not be used in production.
 
 ### Trigger Task
 
@@ -102,3 +120,4 @@ cargo run -- --env=local task-queue add-task -b '{"x": 12}' -d 'test 1'
 # wait a few secords, or until the log output shows it is executed
 cargo run -- --env=local task-queue view-queue
 ```
+
