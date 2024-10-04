@@ -55,8 +55,8 @@ echo "LOCAL_MNEMONIC=\"$M\"" > .env
 # this should have a nice 24 word phrase
 cat .env
 
-cargo run -- --env=local faucet tap
-cargo run -- --env=local wallet show
+cargo run -- --target=local faucet tap
+cargo run -- --target=local wallet show
 ```
 
 ### Deploy Contracts
@@ -66,12 +66,12 @@ cargo run -- --env=local wallet show
 (cd ../.. && ./scripts/optimizer.sh)
 
 # deploy them
-cargo run -- --env=local deploy contracts --operators wasmatic
+cargo run -- --target=local deploy contracts --operators wasmatic
 
 # Copy the line that says "export LOCAL_TASK_QUEUE_ADDRESS" and paste it in your shell
 
 # make sure we set this up properly
-cargo run -- --env=local task-queue view-queue
+cargo run -- --target=local task-queue view-queue
 ```
 
 ### Deploy WASI component
@@ -113,11 +113,11 @@ should not be used in production.
 ### Trigger Task
 
 ```bash
-cargo run -- --env=local task-queue view-queue
+cargo run -- --target=local task-queue view-queue
 
-cargo run -- --env=local task-queue add-task -b '{"x": 12}' -d 'test 1'
+cargo run -- --target=local task-queue add-task -b '{"x": 12}' -d 'test 1'
 
 # wait a few secords, or until the log output shows it is executed
-cargo run -- --env=local task-queue view-queue
+cargo run -- --target=local task-queue view-queue
 ```
 
