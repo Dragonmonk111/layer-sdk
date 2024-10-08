@@ -82,7 +82,7 @@ cargo run -- --target=local task-queue view-queue
 
 # Testable is optional if you want to try the next step
 # Do not use for production deployments
-cargo run -- wasmatic deploy --name demo1 \
+cargo run -- --target=local wasmatic deploy --name demo1 \
     --wasm-source ../../components/cavs_square.wasm  \
     --testable \
     --task $LOCAL_TASK_QUEUE_ADDRESS
