@@ -22,11 +22,18 @@ This document serves as a guide to the different repositories and components inv
 
 
 ### 2. Wasmatic (Closed-Source)
-- **Purpose:** Contains closed-source server components.
+- **Purpose:** Wasmatic repository provides tools for deploying and managing WebAssembly applications with an operator API. It supports adding, testing, and removing applications triggered by cron schedules or queues.
 - **Tools and Components:**
-    - **Wasm Runner:** Manages the execution of WebAssembly tasks on the server.
-    - **Wasm API:** Provides the interface for communication with Wasm processes.
+    - **Examples:**
+      - **btc-avg:** the example shows how to register WebAssembly applications, like fetching Bitcoin prices, and trigger them using API calls based on a schedule or task queue.
+      - **composition/http-allow-list:** defines an `HTTP` access control in a WebAssembly component, allowing outgoing requests only to specified hosts (in our case, "api.coingecko.com"). If a request is made to an unauthorized host, it is refused.
+      - **square:** this defines a WebAssembly component that processes tasks from a task queue. It takes an input number, squares it, and returns the result in a serialized JSON format.
+    - **Scripts:** different shell scripts that ease up developing for Lay3r.
+    - **Src:** contains modules that handle app management, storage, queues, and operator control, enabling the deployment and execution of tasks for various applications.
+    - **Wit:** This WIT file in this module defines the task-queue and cron-job interfaces for Lay3r AVS. The other folders contain functions to process tasks  and cron jobs, as well as imports for handling I/O, clocks, and HTTP requests.
 - **Related Docs:** Internal documentation only.
+    - [Authoring components](https://github.com/Lay3rLabs/wasmatic/blob/main/AUTHORING_COMPONENTS.md)
+    - [Wasmatic README.md](https://github.com/Lay3rLabs/wasmatic/blob/main/README.md)
 
 ### 3. AVS-Toolkit
 - **Purpose:** Open-source toolkit for deploying AVS contracts and related services.
