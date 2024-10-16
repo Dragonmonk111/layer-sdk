@@ -31,9 +31,24 @@ This document serves as a guide to the different repositories and components inv
 ### 3. AVS-Toolkit
 - **Purpose:** Open-source toolkit for deploying AVS contracts and related services.
 - **Tools and Components:**
-    - **Contract Deployer:** Simplifies deployment of actively validated services (AVS) contracts.
-    - **CLI Tools:** A set of command-line utilities for interacting with the AVS ecosystem.
-- **Related Docs:** [AVS-Toolkit README](link-to-avs-toolkit-readme)
+    - **Contracts:** Example contracts, that can be deployed to Lay3r or used as guides how to build your own.
+    - **Packages:** 
+      - **APIs:** Shared functionality, structs, trait definitions, etc. that can be reused.
+      - **helpers:** Useful tools for other components of `avs-toolkit`.
+      - **layer-wasi:** This module handles the construction and sending of HTTP requests, handling of responses and the interactions with WASI streams in an asynchronus way.
+      - **orch:** Helpers for `[cw-orch](https://docs.rs/cw-orch/latest/cw_orch/)`.
+    - **Scripts:** Different shell scripts that ease up developing for Lay3r.
+    - **Tools:** 
+      - **cli:** A cli tool that allows the managing of smartcontracts and blockchain tasks from the terminal. You can deploy your contracts, manage task queues, tap a faucet and other WASM operations on local and testnet.
+      - **gui:** GUI tool for interacting with your smart contracts from the browser.
+    - **WASI:** 
+      - **oracle-example:** Example demonstrating how to build simple AVS Oracle component that queries the CoinGecko API for BTC/USD prices and calculates an average price over the past hour.
+      - **py-square:** Example demonstrating how to build and deploy simple Python-based AVS Oracle component that squares an input number using WASI.
+      - **square:** Same as the example above but in Rust
+    - **Wit:** This WIT file in this module defines the task-queue and cron-job interfaces for Lay3r AVS. The other folders contain functions to process tasks  and cron jobs, as well as imports for handling I/O, clocks, and HTTP requests.
+- **Related Docs:** 
+    - [Tools/CLI](https://github.com/Lay3rLabs/avs-toolkit/blob/main/tools/cli/README.md)
+    - [Tools/GUI](https://github.com/Lay3rLabs/avs-toolkit/blob/main/tools/gui/README.md)
 
 ### 4. Lay3r-Contracts (Soon to Be Renamed, Closed-Source)
 - **Purpose:** Contains closed-source contract and deployment tools.
