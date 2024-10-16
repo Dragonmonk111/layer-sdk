@@ -50,9 +50,18 @@ This document serves as a guide to the different repositories and components inv
     - [Tools/CLI](https://github.com/Lay3rLabs/avs-toolkit/blob/main/tools/cli/README.md)
     - [Tools/GUI](https://github.com/Lay3rLabs/avs-toolkit/blob/main/tools/gui/README.md)
 
-### 4. Lay3r-Contracts (Soon to Be Renamed, Closed-Source)
-- **Purpose:** Contains closed-source contract and deployment tools.
+### 4. Commitments
+- **Purpose:** Set of infrastructure contracts to be deployed on the lay3r blockchain in order to provide core functionality.
 - **Tools and Components:**
+    - **Codegen:** Module built on top of [ts-codegen](https://github.com/CosmWasm/ts-codegen) to generate `TypeScript` types and code boilerplate for frontends.
+    - **Contracts:**
+      - **delegations:**
+      - **fan-in:**
+      - **fan-out:**
+      - **operators:**
+      - **splitter:**
+      - **token-staking:**
+      - **token-weighting:**
     - **Contract Templates:** Predefined smart contract templates for rapid deployment.
     - **Deployment Scripts:** Automated scripts for deploying contracts to various environments.
 - **Related Docs:** Internal documentation only.
