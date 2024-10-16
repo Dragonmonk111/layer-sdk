@@ -52,6 +52,7 @@ More info available on the [README there](https://github.com/Lay3rLabs/avs-toolk
 ```bash
 M=$(cargo run wallet create | tail -1 | cut -c16-)
 echo "LOCAL_MNEMONIC=\"$M\"" > .env
+echo "TEST_MNEMONIC=\"$M\"" >> .env
 # this should have a nice 24 word phrase
 cat .env
 
@@ -69,6 +70,7 @@ cargo run -- --target=local wallet show
 cargo run -- --target=local deploy contracts --operators wasmatic
 
 # Copy the line that says "export LOCAL_TASK_QUEUE_ADDRESS" and paste it in your shell
+# For testnet, copy and paste TEST_TASK_QUEUE_ADDRESS
 
 # make sure we set this up properly
 cargo run -- --target=local task-queue view-queue
