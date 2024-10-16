@@ -62,6 +62,8 @@ This document serves as a guide to the different repositories and components inv
       - **splitter:** divides stakes from a provider and sends them to multiple consumers based on predifined share percentages. It can handle staking, unstaking, and provide information about the flow of stakes between the provider and consumers.
       - **token-staking:** allows users to stake their tokens and pass the stake to another contract (consumer). Users can stake, unstake, and withdraw tokens after waiting period. The contract keeps track of staked tokens, handles requests to release them, and provides information about how much is staked, unbonded, or available for withdrawal.
       - **token-weighting:** manages voting power distribution based on staked tokens, with different tokens contributing varying power by predefined weights. It can handle the staking, unstaking, unbonding, and adjusting of voting power accordingly. The contract allows queries for individual and total voting power
+    - **Deploy:** deployment scripts deploy various contracts and subsystems to `devnet`, with options for local or mainnet setups. An .env file with mnemonic keys is required. Scripts in the bin directory handle deployment, viewing, staking, and managing contracts.
+    - **Docs:** elaborative explanation of the core Lay3r products.
     - **Contract Templates:** Predefined smart contract templates for rapid deployment.
     - **Deployment Scripts:** Automated scripts for deploying contracts to various environments.
 - **Related Docs:** Internal documentation only.
