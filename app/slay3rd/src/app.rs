@@ -171,7 +171,7 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
         let app = self.app.read();
         let chain_id = app.chain_id();
-        let tx = request.tx.clone();
+        // let tx = request.tx.clone();
         let to_check = match check_request_from_proto(request, chain_id) {
             Ok(tx) => tx,
             Err(e) => {
@@ -182,10 +182,10 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
         // Really no easier way to release the app lock??
         parking_lot::lock_api::RwLockReadGuard::unlock_fair(app);
 
-        // add raw tx to mempool if it is valid
-        if res.is_ok() {
-            self.mempool.write().push(tx);
-        }
+        // // UGLY WORKAROUND: add raw tx to mempool if it is valid
+        // if res.is_ok() {
+        //     self.mempool.write().push(tx);
+        // }
         let out = check_response_to_proto(res);
         println!("{:?}", out);
         span.record("gas_wanted", out.gas_wanted);
@@ -268,8 +268,13 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
             mempool_txs = Empty
         )
         .entered();
-        let txs = self.mempool.write().split_off(0);
+
+        // // UGLY WORKAROUND: use local mempool
+        // let txs = self.mempool.write().split_off(0);
+        let txs = request.txs;
+
         span.record("mempool_txs", txs.len());
+
         // TODO: compare/combine these
         // TODO: Trim down to max bytes
 
