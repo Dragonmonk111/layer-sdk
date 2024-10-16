@@ -69,6 +69,7 @@ This document serves as a guide to the different repositories and components inv
       - **APIs:** Shared functionality, structs, trait definitions, etc. that can be reused.
       - **Bindings:** _to be decided_
       - **Orch:** `[cw-orch](https://docs.rs/cw-orch/latest/cw_orch/)` helpers for lay3r contracts
+    - **Scripts:** Different shell scripts that ease up developing for Lay3r.
     - **Contract Templates:** Predefined smart contract templates for rapid deployment.
     - **Deployment Scripts:** Automated scripts for deploying contracts to various environments.
 - **Related Docs:** Internal documentation only.
