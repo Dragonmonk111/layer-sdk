@@ -55,13 +55,13 @@ This document serves as a guide to the different repositories and components inv
 - **Tools and Components:**
     - **Codegen:** Module built on top of [ts-codegen](https://github.com/CosmWasm/ts-codegen) to generate `TypeScript` types and code boilerplate for frontends.
     - **Contracts:**
-      - **delegations:**
-      - **fan-in:**
-      - **fan-out:**
-      - **operators:**
-      - **splitter:**
-      - **token-staking:**
-      - **token-weighting:**
+      - **delegations:** smart contract responsible for delegations of a restaking mechanism. It cna connect providers and consumers, allows for staking, unstaking and delegation. Provides a set of queries for the related states.
+      - **fan-in:** collects stakes from multiple providers into a single consumer, managing security levels, adding input providers, and facilitating staking, unstaking, and tracking of assets across tokens.
+      - **fan-out:** distributes staked assets from a single provider to multiple consumers, managing security levels and handling flows of stakes across different contracts, with staking, unstaking, and unbonding.
+      - **operators:** manages staking and unstaking with operators acting on behalf of stakers. We can assign operators and set the flow of stakes between providers and consumers.
+      - **splitter:** divides stakes from a provider and sends them to multiple consumers based on predifined share percentages. It can handle staking, unstaking, and provide information about the flow of stakes between the provider and consumers.
+      - **token-staking:** allows users to stake their tokens and pass the stake to another contract (consumer). Users can stake, unstake, and withdraw tokens after waiting period. The contract keeps track of staked tokens, handles requests to release them, and provides information about how much is staked, unbonded, or available for withdrawal.
+      - **token-weighting:** manages voting power distribution based on staked tokens, with different tokens contributing varying power by predefined weights. It can handle the staking, unstaking, unbonding, and adjusting of voting power accordingly. The contract allows queries for individual and total voting power
     - **Contract Templates:** Predefined smart contract templates for rapid deployment.
     - **Deployment Scripts:** Automated scripts for deploying contracts to various environments.
 - **Related Docs:** Internal documentation only.
