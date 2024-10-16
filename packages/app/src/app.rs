@@ -263,7 +263,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         match res {
             Ok(TxData { gas_wanted, .. }) => {
-                let gas_used = gas_wanted;
+                let gas_used = meter.used();
                 let gas = GasInfo {
                     gas_used,
                     gas_wanted,
