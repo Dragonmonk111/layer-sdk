@@ -64,6 +64,11 @@ This document serves as a guide to the different repositories and components inv
       - **token-weighting:** manages voting power distribution based on staked tokens, with different tokens contributing varying power by predefined weights. It can handle the staking, unstaking, unbonding, and adjusting of voting power accordingly. The contract allows queries for individual and total voting power
     - **Deploy:** deployment scripts deploy various contracts and subsystems to `devnet`, with options for local or mainnet setups. An .env file with mnemonic keys is required. Scripts in the bin directory handle deployment, viewing, staking, and managing contracts.
     - **Docs:** elaborative explanation of the core Lay3r products.
+    - **Packages:** 
+      # I think the below are redundant and we will be using the ones from `avs-toolkit`
+      - **APIs:** Shared functionality, structs, trait definitions, etc. that can be reused.
+      - **Bindings:** _to be decided_
+      - **Orch:** `[cw-orch](https://docs.rs/cw-orch/latest/cw_orch/)` helpers for lay3r contracts
     - **Contract Templates:** Predefined smart contract templates for rapid deployment.
     - **Deployment Scripts:** Automated scripts for deploying contracts to various environments.
 - **Related Docs:** Internal documentation only.
