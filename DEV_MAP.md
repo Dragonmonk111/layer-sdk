@@ -101,10 +101,7 @@ This document serves as a guide to the different repositories and components inv
     - [Indexer documentations](https://github.com/Lay3rLabs/lay3r-indexer/blob/main/README.md)
 
 ### 7. Dao-Dao-Api
-- **Purpose:** Brief description
-- **Tools and components:**
-    - **Placeholder:** Documentation site for external developers building on the stack.
-- **Related Docs:** [docs-avs](link-to-docs-avs)
+- **Purpose:** implements the DAO-DAO API specification tailored for the Lay3r blockchain's indexer
 
 ---
 
