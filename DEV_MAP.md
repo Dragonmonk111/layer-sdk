@@ -84,10 +84,14 @@ This document serves as a guide to the different repositories and components inv
 ### 5. UI, Examples, and Docs
 - **Purpose:** These repositories contain the user interface (UI), example code, and documentation for external developers.
 - **Related Repositories:**
+    - **example-avs-ui:** provides a sample UI for AVS projects built on the Lay3r blockchain, using Next.js, TypeScript, and Tailwind CSS. It simplifies the development of small demo applications with smart contract integration. It offers setup instructions for building and deploying a Single Page Application (SPA) that interacts with smart contracts.
+    -- **explorer:** simple tool for exploring Cosmos-based blockchains and managing wallets, fetching live data directly from trusted Cosmos nodes without using cached data. It aims to support many blockchains by relying on official third-party servers for efficiency.
     - **docs-avs:** Documentation site for external developers building on the stack.
     - **UI Repository:** Contains the frontend code for interacting with Lay3r services.
     - **Example Repository:** Provides sample projects to demonstrate how to build on the AVS framework.
-- **Related Docs:** [docs-avs](link-to-docs-avs)
+- **Related Docs:** 
+    - [example-avs-ui](https://github.com/Lay3rLabs/example-avs-ui/blob/main/README.md)
+    - [explorer](https://github.com/Lay3rLabs/explorer/blob/master/README.md)
 
 ### 6. Lay3r-indexer
 - **Purpose:** This repository is a custom state indexer and API server for the Lay3r blockchain, focusing on state streaming, data transformation, and PostgreSQL integration. It supports gRPC-based state streaming and provides APIs for querying blockchain data, with a focus on contracts like cw20.
