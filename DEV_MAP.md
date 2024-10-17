@@ -90,7 +90,7 @@ This document serves as a guide to the different repositories and components inv
 - **Related Docs:** [docs-avs](link-to-docs-avs)
 
 ### 6. Lay3r-indexer
-- **Purpose:** Brief description
+- **Purpose:** This repository is a custom state indexer and API server for the Lay3r blockchain, focusing on state streaming, data transformation, and PostgreSQL integration. It supports gRPC-based state streaming and provides APIs for querying blockchain data, with a focus on contracts like cw20.
 - **Tools and components:**
     - **Placeholder:** Documentation site for external developers building on the stack.
 - **Related Docs:** [docs-avs](link-to-docs-avs)
