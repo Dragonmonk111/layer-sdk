@@ -89,6 +89,18 @@ This document serves as a guide to the different repositories and components inv
     - **Example Repository:** Provides sample projects to demonstrate how to build on the AVS framework.
 - **Related Docs:** [docs-avs](link-to-docs-avs)
 
+### 6. Lay3r-indexer
+- **Purpose:** Brief description
+- **Tools and components:**
+    - **Placeholder:** Documentation site for external developers building on the stack.
+- **Related Docs:** [docs-avs](link-to-docs-avs)
+
+### 7. Dao-Dao-Api
+- **Purpose:** Brief description
+- **Tools and components:**
+    - **Placeholder:** Documentation site for external developers building on the stack.
+- **Related Docs:** [docs-avs](link-to-docs-avs)
+
 ---
 
 ## Additional Resources
