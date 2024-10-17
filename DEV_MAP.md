@@ -106,6 +106,16 @@ This document serves as a guide to the different repositories and components inv
 
 ### 7. Dao-Dao-Api
 - **Purpose:** implements the DAO-DAO API specification tailored for the Lay3r blockchain's indexer
+- **Packages:**
+    - **app:** core application logic for handling API requests related to DAO operations
+    - **cmd/dao-dao-api:** command-line interface for starting or interacting with the DAO API.
+    - **config:** configuration files for managing API settings and environment variables.
+    - **docs:** contains resources for API documentation (statik and swagger-ui)
+    - **proto:** protocol buffer definitions for API communication
+    - **querier/contract:** functions to query data from smart contracts.
+    - **scripts:** utility scripts for generating protobuf code, creating and combining Swagger documentation etc.
+    - **types/contract:** type definitions related to DAO contracts for use in the code.
+    
 
 ---
 
