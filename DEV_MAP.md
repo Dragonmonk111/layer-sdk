@@ -91,9 +91,14 @@ This document serves as a guide to the different repositories and components inv
 
 ### 6. Lay3r-indexer
 - **Purpose:** This repository is a custom state indexer and API server for the Lay3r blockchain, focusing on state streaming, data transformation, and PostgreSQL integration. It supports gRPC-based state streaming and provides APIs for querying blockchain data, with a focus on contracts like cw20.
-- **Tools and components:**
-    - **Placeholder:** Documentation site for external developers building on the stack.
-- **Related Docs:** [docs-avs](link-to-docs-avs)
+- **Packages:**
+    - **cmd/indexer:** main entry point for the indexer, where commands are defined and executed.
+    - **pkg:** reusable Go code libraries/packages for different functionalities such as interacting with external services, databases, and managing the indexer logic.
+    - **proto:** protocol buffer definitions, used for defining communication formats and gRPC services
+    - **scripts:** helper shell scripts
+    - **spec:** provides documentation and examples for streaming blockchain data from the Lay3r network.
+- **Related Docs:** 
+    - [Indexer documentations](https://github.com/Lay3rLabs/lay3r-indexer/blob/main/README.md)
 
 ### 7. Dao-Dao-Api
 - **Purpose:** Brief description
