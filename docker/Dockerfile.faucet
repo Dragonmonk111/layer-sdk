@@ -8,7 +8,7 @@
 
 FROM node:20-slim AS build-env
 
-RUN apt-get update && apt-get install -y libusb-1.0-0-dev git
+RUN apt-get update && apt-get install -y libusb-1.0-0-dev git build-essential pkg-config libudev-dev python3
 RUN git clone -b v0.32.3 --depth 1 https://github.com/cosmos/cosmjs.git /app
 
 WORKDIR /app
