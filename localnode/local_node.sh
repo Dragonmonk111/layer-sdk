@@ -1,5 +1,6 @@
 #!/bin/bash
 
+rm -rf ~/.slay3r
 mkdir -p ~/.slay3r
 cometbft init --home ~/.slay3r
 
@@ -7,7 +8,7 @@ cp ./genesis.json ~/.slay3r/config/.
 
 cp ./slay3r.toml ~/.slay3r/config/.
 
-cp ./priv_validation.json ~/.slay3r/config/.
+cp ./priv_validator_key.json ~/.slay3r/config/.
 
 slay3rd --log debug
 
