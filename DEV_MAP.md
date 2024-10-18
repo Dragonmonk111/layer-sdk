@@ -22,7 +22,7 @@ This document serves as a guide to the different repositories and components inv
 
 
 ### 2. Wasmatic (Closed-Source)
-- **Purpose:** Wasmatic repository provides tools for deploying and managing WebAssembly applications with an operator API. It supports adding, testing, and removing applications triggered by cron schedules or queues.
+- **Purpose:** Wasmatic repository provides tools for deploying and managing WebAssembly applications with an operator API. It supports adding, testing, and removing applications triggered by cron schedules or queues, and serves as a wrapper around Wasmtime for executing the applications.
 - **Tools and Components:**
     - **Examples:**
       - **btc-avg:** the example shows how to register WebAssembly applications, like fetching Bitcoin prices, and trigger them using API calls based on a schedule or task queue.
