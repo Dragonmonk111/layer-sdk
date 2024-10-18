@@ -62,7 +62,7 @@ This document serves as a guide to the different repositories and components inv
 - **Tools and Components:**
     - **Codegen:** Module built on top of [ts-codegen](https://github.com/CosmWasm/ts-codegen) to generate `TypeScript` types and code boilerplate for frontends.
     - **Contracts:**
-      - **delegations:** smart contract responsible for delegations of a restaking mechanism. It cna connect providers and consumers, allows for staking, unstaking and delegation. Provides a set of queries for the related states.
+      - **delegations:** smart contract responsible for delegations of a restaking mechanism. It can connect providers and consumers, allows for staking, unstaking and delegation. Provides a set of queries for the related states.
       - **fan-in:** collects stakes from multiple providers into a single consumer, managing security levels, adding input providers, and facilitating staking, unstaking, and tracking of assets across tokens.
       - **fan-out:** distributes staked assets from a single provider to multiple consumers, managing security levels and handling flows of stakes across different contracts, with staking, unstaking, and unbonding.
       - **operators:** manages staking and unstaking with operators acting on behalf of stakers. We can assign operators and set the flow of stakes between providers and consumers.
