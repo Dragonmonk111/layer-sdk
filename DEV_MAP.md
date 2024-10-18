@@ -5,7 +5,7 @@ This document serves as a guide to the different repositories and components inv
 ## Repositories Overview
 
 ### **1. Layer-SDK**
-- **Purpose:** Provides server-related functionality.
+- **Purpose:** Provides blockchain-related code and tooling. It brings together different components for running a server locally, and its main focus is on blockchain functionality.
 - **Tools and Components:**
     - **Layer-SDK Server:** Handles the core server logic and processes.
     - **Contracts**: Contains test contracts primarily for testing purposes, not for production. The **root contract** is deployed during Layer-SDK chain initialization and is invoked by other contracts.
