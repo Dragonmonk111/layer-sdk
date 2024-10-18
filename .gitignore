@@ -12,6 +12,9 @@ internal/
 .DS_Store
 .idea
 .vscode
+node_modules/
+package-lock.json
+package.json
 
 node_modules/
 package-lock.json
