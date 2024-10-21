@@ -45,6 +45,8 @@ services:
     expose:
       # for slay3r grpc callbacks
       - "26657"
+    environment:
+      - CMT_LOG_LEVEL = "mempool:debug,abci:debug,*:info"
     ports:
       - "26656:26656"
       - "26657:26657"

@@ -171,7 +171,6 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
 
         let app = self.app.read();
         let chain_id = app.chain_id();
-        let tx = request.tx.clone();
         let to_check = match check_request_from_proto(request, chain_id) {
             Ok(tx) => tx,
             Err(e) => {
@@ -179,15 +178,11 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
             }
         };
         let res = app.check_tx(to_check);
+
         // Really no easier way to release the app lock??
         parking_lot::lock_api::RwLockReadGuard::unlock_fair(app);
 
-        // add raw tx to mempool if it is valid
-        if res.is_ok() {
-            self.mempool.write().push(tx);
-        }
         let out = check_response_to_proto(res);
-        println!("{:?}", out);
         span.record("gas_wanted", out.gas_wanted);
         span.record("gas_used", out.gas_used);
         span.record("code", out.code);
@@ -268,28 +263,18 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
             mempool_txs = Empty
         )
         .entered();
-        let txs = self.mempool.write().split_off(0);
-        span.record("mempool_txs", txs.len());
-        // TODO: compare/combine these
-        // TODO: Trim down to max bytes
 
-        // TODO: the below makes sense once Tendermint mempool plays nice.
-        // For now, we just use local mempool
-        /*
+        let mut txs = request.txs;
+
         // Per the ABCI++ spec: if the size of RequestPrepareProposal.txs is
         // greater than RequestPrepareProposal.max_tx_bytes, the Application
         // MUST remove transactions to ensure that the
         // RequestPrepareProposal.max_tx_bytes limit is respected by those
         // transactions returned in ResponsePrepareProposal.txs.
-        let RequestPrepareProposal {
-            max_tx_bytes,
-            ..
-        } = request;
+        let RequestPrepareProposal { max_tx_bytes, .. } = request;
         let max_tx_bytes: usize = max_tx_bytes.try_into().unwrap_or(0);
-        let mut total_tx_bytes: usize = txs
-            .iter()
-            .map(|tx| tx.len())
-            .fold(0, |acc, len| acc.saturating_add(len));
+        let mut total_tx_bytes: usize = txs.iter().map(|tx| tx.len()).sum();
+        // FIXME: we could do some prioritization based on gas price, right now just FIFO
         while total_tx_bytes > max_tx_bytes {
             if let Some(tx) = txs.pop() {
                 total_tx_bytes = total_tx_bytes.saturating_sub(tx.len());
@@ -297,7 +282,8 @@ impl<T: PersistentStorage + 'static> Application for Pulsarium<T> {
                 break;
             }
         }
-        */
+
+        span.record("mempool_txs", txs.len());
         ResponsePrepareProposal { txs }
     }
 
