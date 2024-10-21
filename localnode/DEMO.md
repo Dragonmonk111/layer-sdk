@@ -67,7 +67,7 @@ cargo run -- --target=local wallet show
 (cd ../.. && ./scripts/optimizer.sh)
 
 # deploy them
-cargo run -- --target=local deploy contracts --operators wasmatic
+cargo run -- --target=local deploy -m verifier-simple contracts --operators wasmatic
 
 # Copy the line that says "export LOCAL_TASK_QUEUE_ADDRESS" and paste it in your shell
 # For testnet, copy and paste TEST_TASK_QUEUE_ADDRESS
@@ -102,7 +102,7 @@ docker logs -f localnode-wasmatic-1
 This can only be done if `--testable` was provided above
 
 ```bash
-cargo run -- wasmatic test --name demo1 --input '{"x": 32}'
+cargo run -- --target=local wasmatic test --name demo1 --input '{"x": 32}'
 ```
 
 It will parse the input as if you pushed it to the task queue and return

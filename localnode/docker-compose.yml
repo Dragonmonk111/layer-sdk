@@ -95,13 +95,14 @@ services:
     profiles: [faucet]
 
   wasmatic:
-    image: "ghcr.io/lay3rlabs/wasmatic:latest"
+    image: "ghcr.io/lay3rlabs/wasmatic:v0.1.0-rc.1"
     env_file:
       - ./wasmatic.env
     ports:
       - "8081:8081"
     depends_on:
       - slay3r
+      - cometbft
     profiles: [wasmatic]
     volumes:
       - wasmatic_data:/wasmatic
