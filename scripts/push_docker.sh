@@ -10,6 +10,13 @@ if groups | grep -q docker; then
   SUDO=""
 fi
 
+TAG=${TAG:-}
+
 for img in gateway slay3rd; do
   $SUDO docker push ghcr.io/lay3rlabs/${img}:latest
+
+  if [ -n "$TAG" ]; then
+    $SUDO docker tag ghcr.io/lay3rlabs/${img}:latest ghcr.io/lay3rlabs/${img}:$TAG
+    $SUDO docker push ghcr.io/lay3rlabs/${img}:$TAG
+  fi
 done

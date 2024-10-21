@@ -2390,7 +2390,7 @@ dependencies = [
 
 [[package]]
 name = "layer-abci"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "prost 0.13.3",
@@ -2404,7 +2404,7 @@ dependencies = [
 
 [[package]]
 name = "layer-app"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2433,7 +2433,7 @@ dependencies = [
 
 [[package]]
 name = "layer-cosmos"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "cosmos-sdk-proto 0.18.0",
@@ -2452,7 +2452,7 @@ dependencies = [
 
 [[package]]
 name = "layer-golem"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "abstract-cw-multi-test",
  "abstract-cw-plus-interface",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "layer-proto"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "layer-std",
  "prost 0.13.3",
@@ -2483,7 +2483,7 @@ dependencies = [
 
 [[package]]
 name = "layer-root"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -2497,7 +2497,7 @@ dependencies = [
 
 [[package]]
 name = "layer-std"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bech32 0.9.1",
  "bytes",
@@ -2518,7 +2518,7 @@ dependencies = [
 
 [[package]]
 name = "layer-storage"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "cosmwasm-std",
  "cw-storage-plus",
@@ -3938,7 +3938,7 @@ dependencies = [
 
 [[package]]
 name = "slay3rd"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "clap",
@@ -4136,7 +4136,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tc-caller"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -4148,7 +4148,7 @@ dependencies = [
 
 [[package]]
 name = "tc-echo"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
