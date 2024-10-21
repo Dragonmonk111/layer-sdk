@@ -25,7 +25,7 @@ volumes:
 
 services:
   slay3r:
-    image: "ghcr.io/lay3rlabs/slay3rd:latest"
+    image: "ghcr.io/lay3rlabs/slay3rd:0.5.0"
     expose:
       # abci server only for cometbft
       - "26658"
@@ -67,7 +67,7 @@ services:
       - "8080:16686"
 
   gateway:
-    image: "ghcr.io/lay3rlabs/gateway:latest"
+    image: "ghcr.io/lay3rlabs/gateway:0.5.0"
     ports:
       # rest port
       - "1317:1317"
@@ -76,6 +76,7 @@ services:
     depends_on:
       - slay3r
 
+  # TODO: update this to the climb faucet
   faucet:
     image: "ghcr.io/lay3rlabs/faucet:latest"
     # Setup based on https://github.com/cosmos/cosmjs/tree/main/packages/faucet#working-with-docker
@@ -95,7 +96,7 @@ services:
     profiles: [faucet]
 
   wasmatic:
-    image: "ghcr.io/lay3rlabs/wasmatic:v0.1.0-rc.1"
+    image: "ghcr.io/lay3rlabs/wasmatic:0.1.0-rc.1"
     env_file:
       - ./wasmatic.env
     ports:
