@@ -54,7 +54,6 @@ docker pull jaegertracing/jaeger-agent:1.59
 docker pull jaegertracing/jaeger-query:1.59
 ```
 
-
 ### Minimal Run
 
 To run without a facuet and just in-memory tracing, run the following:
@@ -115,7 +114,7 @@ These can be found in `layer-contracts` repo in the `deploy` package.
 
 ### Golang CLI
 
-You can also use a fork of `wasmd`, which we maintain on the 
+You can also use a fork of `wasmd`, which we maintain on the
 [slay3r branch of our fork](https://github.com/Lay3rLabs/wasmd/tree/slay3r).
 
 ```bash

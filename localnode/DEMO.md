@@ -11,6 +11,12 @@ the [wasmatic repo](https://github.com/Lay3rLabs/wasmatic):
 ./scripts/build_docker.sh
 ```
 
+To run the faucet, you'll also need to build it:
+
+```bash
+./scripts/build_faucet.sh
+```
+
 Otherwise, you can just get the most recent published images here:
 
 ```bash
@@ -23,7 +29,10 @@ Once the images are updated, reset everything and start fresh:
 ```bash
 cd localnode
 ./reset_volumes.sh
+
 ./run.sh
+# OR with the faucet:
+./run_all.sh
 ```
 
 The rest of this document assumes you have a well-running instance here.
@@ -79,6 +88,9 @@ cargo run -- --target=local task-queue view-queue
 ### Deploy WASI component
 
 ```bash
+# setup wasi
+(cd ../.. && ./scripts/setup_wasi.sh)
+
 # rebuild the component
 (cd ../.. && ./scripts/build_wasi.sh)
 
