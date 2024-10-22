@@ -96,7 +96,7 @@ services:
     profiles: [faucet]
 
   wasmatic:
-    image: "ghcr.io/lay3rlabs/wasmatic:0.1.0-rc.1"
+    image: "ghcr.io/lay3rlabs/wasmatic:0.1.0"
     env_file:
       - ./wasmatic.env
     ports:
