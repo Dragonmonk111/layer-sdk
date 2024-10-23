@@ -20,5 +20,8 @@ node_modules/
 package-lock.json
 package.json
 
+# ignore ollama models
+localnode/ollama
+
 # ignore .env files
 .env
