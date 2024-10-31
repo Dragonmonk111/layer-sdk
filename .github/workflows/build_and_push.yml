@@ -34,8 +34,9 @@ jobs:
       - name: Build and push AMD64 image
         uses: docker/build-push-action@v5
         with:
-          context: .
-        #   push: ${{ github.event_name != 'pull_request' }}
+          context: ./app/slay3rd
+          file: ./docker/Dockerfile.slay3rd
+          #   push: ${{ github.event_name != 'pull_request' }}
           push: true
           tags: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-amd64
           platforms: linux/amd64
@@ -62,8 +63,9 @@ jobs:
       - name: Build and push ARM64 image
         uses: docker/build-push-action@v5
         with:
-          context: .
-        #   push: ${{ github.event_name != 'pull_request' }}
+          context: ./app/slay3rd
+          file: ./docker/Dockerfile.slay3rd
+          #   push: ${{ github.event_name != 'pull_request' }}
           push: true
           tags: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-arm64
           platforms: linux/arm64
