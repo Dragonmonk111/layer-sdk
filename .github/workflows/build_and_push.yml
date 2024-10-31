@@ -4,9 +4,6 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-  pull_request:
-    branches:
-      - main
 
 env:
   REGISTRY_IMAGE: ghcr.io/lay3rlabs/layer-sdk
@@ -15,7 +12,7 @@ env:
 jobs:
   build_amd64:
     name: Build and Push AMD64 Image
-    runs-on: ubuntu-latest
+    runs-on: linux-8-core
     permissions:
       contents: read
       packages: write
