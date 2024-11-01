@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY_IMAGE: ghcr.io/lay3rlabs/layer-sdk
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build_amd64:
@@ -20,6 +19,18 @@ jobs:
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
+
+      - name: Set IMAGE_TAG
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${TAG#v}"
+          else
+            TAG="latest"
+          fi
+          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -48,6 +59,18 @@ jobs:
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
+
+      - name: Set IMAGE_TAG
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${TAG#v}"
+          else
+            TAG="latest"
+          fi
+          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -79,14 +102,17 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v4
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY_IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=sha
+      - name: Set IMAGE_TAG
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${TAG#v}"
+          else
+            TAG="latest"
+          fi
+          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -99,35 +125,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push multi-arch manifest
-        env:
-          REGISTRY_IMAGE: ${{ env.REGISTRY_IMAGE }}
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          echo "REGISTRY_IMAGE: $REGISTRY_IMAGE"
-          echo "IMAGE_TAG: $IMAGE_TAG"
-          echo "TAGS: $TAGS"
-        
-            # Initialize TAG_ARGS with the primary tag
-            TAG_ARGS="-t ${REGISTRY_IMAGE}:${IMAGE_TAG}"
-        
-            # Check if TAGS is not empty
-            if [ -n "$TAGS" ]; then
-              # Split TAGS into an array
-              IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
-              for FULL_TAG in "${TAG_ARRAY[@]}"; do
-                # Extract the tag name from the full image reference
-                TAG=${FULL_TAG##*:}
-                # Append to TAG_ARGS if TAG is not empty
-                if [ -n "$TAG" ]; then
-                  TAG_ARGS="$TAG_ARGS -t ${REGISTRY_IMAGE}:$TAG"
-                fi
-              done
-            fi
-        
-            echo "TAG_ARGS: $TAG_ARGS"
-        
-            # Create and push the multi-arch manifest with all tags
-            docker buildx imagetools create $TAG_ARGS \
-              ${REGISTRY_IMAGE}:${IMAGE_TAG}-amd64 \
-              ${REGISTRY_IMAGE}:${IMAGE_TAG}-arm64
+          docker buildx imagetools create \
+          --tag ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }} \
+          ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-amd64 \
+          ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-arm64
