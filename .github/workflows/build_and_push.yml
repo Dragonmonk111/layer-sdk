@@ -6,13 +6,8 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 env:
-<<<<<<< Updated upstream
-  REGISTRY_IMAGE: ghcr.io/lay3rlabs/layer-sdk
-  IMAGE_TAG: ${{ github.sha }}
-=======
   REGISTRY_IMAGE_SLAY3R: ghcr.io/lay3rlabs/layer-sdk
   REGISTRY_IMAGE_GATEWAY: ghcr.io/lay3rlabs/gateway
->>>>>>> Stashed changes
 
 jobs:
   build_amd64:
@@ -217,37 +212,7 @@ jobs:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-<<<<<<< Updated upstream
-          echo "REGISTRY_IMAGE: $REGISTRY_IMAGE"
-          echo "IMAGE_TAG: $IMAGE_TAG"
-          echo "TAGS: $TAGS"
-        
-            # Initialize TAG_ARGS with the primary tag
-            TAG_ARGS="-t ${REGISTRY_IMAGE}:${IMAGE_TAG}"
-        
-            # Check if TAGS is not empty
-            if [ -n "$TAGS" ]; then
-              # Split TAGS into an array
-              IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
-              for FULL_TAG in "${TAG_ARRAY[@]}"; do
-                # Extract the tag name from the full image reference
-                TAG=${FULL_TAG##*:}
-                # Append to TAG_ARGS if TAG is not empty
-                if [ -n "$TAG" ]; then
-                  TAG_ARGS="$TAG_ARGS -t ${REGISTRY_IMAGE}:$TAG"
-                fi
-              done
-            fi
-        
-            echo "TAG_ARGS: $TAG_ARGS"
-        
-            # Create and push the multi-arch manifest with all tags
-            docker buildx imagetools create $TAG_ARGS \
-              ${REGISTRY_IMAGE}:${IMAGE_TAG}-amd64 \
-              ${REGISTRY_IMAGE}:${IMAGE_TAG}-arm64
-=======
           docker buildx imagetools create \
           --tag ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }} \
           ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }}-amd64 \
           ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }}-arm64
->>>>>>> Stashed changes
