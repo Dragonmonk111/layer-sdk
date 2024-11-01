@@ -6,8 +6,13 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 env:
+<<<<<<< Updated upstream
   REGISTRY_IMAGE: ghcr.io/lay3rlabs/layer-sdk
   IMAGE_TAG: ${{ github.sha }}
+=======
+  REGISTRY_IMAGE_SLAY3R: ghcr.io/lay3rlabs/layer-sdk
+  REGISTRY_IMAGE_GATEWAY: ghcr.io/lay3rlabs/gateway
+>>>>>>> Stashed changes
 
 jobs:
   build_amd64:
@@ -34,7 +39,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile.slay3rd
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-amd64
+          tags: ${{ env.REGISTRY_IMAGE_SLAY3R }}:${{ env.IMAGE_TAG }}-amd64
           platforms: linux/amd64
           provenance: false
 
@@ -62,14 +67,122 @@ jobs:
           context: .
           file: ./docker/Dockerfile.slay3rd
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-arm64
+          tags: ${{ env.REGISTRY_IMAGE_SLAY3R }}:${{ env.IMAGE_TAG }}-arm64
           platforms: linux/arm64
           provenance: false
+         
+  build_gateway_amd64:
+    name: Build and Push Gateway AMD64 Image
+    runs-on: linux-8-core
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
 
-  create_manifest:
-    name: Create and Push Multi-Arch Manifest
+      - name: Set IMAGE_TAG
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${TAG#v}"
+          else
+            TAG="latest"
+          fi
+          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+        
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: Build and push Gateway AMD64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.gateway
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }}-amd64
+          platforms: linux/amd64
+          provenance: false
+
+  build_gateway_arm64:
+    name: Build and Push Gateway ARM64 Image
+    runs-on: arm64-builder
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+        
+      - name: Set IMAGE_TAG
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${TAG#v}"
+          else
+            TAG="latest"
+          fi
+          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+        
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Gateway ARM64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.gateway
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }}-arm64
+          platforms: linux/arm64
+          provenance: false
+        
+  create_manifest_layersdk:
+    name: Create and Push Layer-sdk Multi-Arch Manifest
     runs-on: ubuntu-latest
     needs: [build_amd64, build_arm64]
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+        
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: Create and push layersdk multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+          --tag ${{ env.REGISTRY_IMAGE_SLAY3R }}:${{ env.IMAGE_TAG }} \
+          ${{ env.REGISTRY_IMAGE_SLAY3R }}:${{ env.IMAGE_TAG }}-amd64 \
+          ${{ env.REGISTRY_IMAGE_SLAY3R }}:${{ env.IMAGE_TAG }}-arm64
+         
+
+  create_manifest_gateway:
+    name: Create and Push Gateway Multi-Arch Manifest
+    runs-on: ubuntu-latest
+    needs: [build_gateway_amd64, build_gateway_arm64]
     if: ${{ github.event_name != 'pull_request' }}
     permissions:
       contents: read
@@ -104,6 +217,7 @@ jobs:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
+<<<<<<< Updated upstream
           echo "REGISTRY_IMAGE: $REGISTRY_IMAGE"
           echo "IMAGE_TAG: $IMAGE_TAG"
           echo "TAGS: $TAGS"
@@ -131,3 +245,9 @@ jobs:
             docker buildx imagetools create $TAG_ARGS \
               ${REGISTRY_IMAGE}:${IMAGE_TAG}-amd64 \
               ${REGISTRY_IMAGE}:${IMAGE_TAG}-arm64
+=======
+          docker buildx imagetools create \
+          --tag ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }} \
+          ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }}-amd64 \
+          ${{ env.REGISTRY_IMAGE_GATEWAY }}:${{ env.IMAGE_TAG }}-arm64
+>>>>>>> Stashed changes
