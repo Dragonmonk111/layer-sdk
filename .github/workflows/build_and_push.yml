@@ -2,6 +2,8 @@ name: Build and Push Multi-Arch Images
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
@@ -20,17 +22,19 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v4
 
-      - name: Set IMAGE_TAG
+      - name: Set IMAGE_TAGS
         shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             TAG="${TAG#v}"
+            TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+            IMAGE_TAGS="${TAG},latest"
           else
             TAG="latest"
+            IMAGE_TAGS="${TAG}"
           fi
-          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
-          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "IMAGE_TAGS=${IMAGE_TAGS}" >> $GITHUB_ENV
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -45,7 +49,8 @@ jobs:
           context: .
           file: ./docker/Dockerfile.slay3rd
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-amd64
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAGS }}-amd64
           platforms: linux/amd64
           provenance: false
 
@@ -60,17 +65,19 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v4
 
-      - name: Set IMAGE_TAG
+      - name: Set IMAGE_TAGS
         shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             TAG="${TAG#v}"
+            TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+            IMAGE_TAGS="${TAG},latest"
           else
             TAG="latest"
+            IMAGE_TAGS="${TAG}"
           fi
-          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
-          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "IMAGE_TAGS=${IMAGE_TAGS}" >> $GITHUB_ENV
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -85,7 +92,8 @@ jobs:
           context: .
           file: ./docker/Dockerfile.slay3rd
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-arm64
+          tags: |
+            ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAGS }}-arm64
           platforms: linux/arm64
           provenance: false
 
@@ -102,17 +110,19 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v4
 
-      - name: Set IMAGE_TAG
+      - name: Set IMAGE_TAGS
         shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             TAG="${TAG#v}"
+            TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
+            IMAGE_TAGS="${TAG},latest"
           else
             TAG="latest"
+            IMAGE_TAGS="${TAG}"
           fi
-          TAG="${TAG//[^a-zA-Z0-9_.-]/-}"
-          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "IMAGE_TAGS=${IMAGE_TAGS}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -125,8 +135,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push multi-arch manifest
+        shell: bash
         run: |
-          docker buildx imagetools create \
-          --tag ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }} \
-          ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-amd64 \
-          ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}-arm64
+          IFS=',' read -ra TAG_ARRAY <<< "${IMAGE_TAGS}"
+          for TAG in "${TAG_ARRAY[@]}"; do
+            docker buildx imagetools create \
+              --tag ${{ env.REGISTRY_IMAGE }}:${TAG} \
+              ${{ env.REGISTRY_IMAGE }}:${TAG}-amd64 \
+              ${{ env.REGISTRY_IMAGE }}:${TAG}-arm64
+          done
