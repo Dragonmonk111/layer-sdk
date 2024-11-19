@@ -10,8 +10,8 @@ if groups | grep -q docker; then
   SUDO=""
 fi
 
-$SUDO docker run --rm -w /buf/proto -v $(pwd)/proto:/buf/proto -v $(pwd)/gateway:/buf/gateway "$IMAGE" ls-files
-$SUDO docker run --rm -w /buf/proto -v $(pwd)/proto:/buf/proto -v $(pwd)/gateway:/buf/gateway "$IMAGE" generate
+$SUDO docker run --rm -w /buf/proto -v $(pwd)/packages/cosmossdk/tools/protospec:/buf/proto -v $(pwd)/packages/cosmossdk/tools/gateway:/buf/gateway "$IMAGE" ls-files
+$SUDO docker run --rm -w /buf/proto -v $(pwd)/packages/cosmossdk/tools/protospec:/buf/proto -v $(pwd)/packages/cosmossdk/tools/gateway:/buf/gateway "$IMAGE" generate
 
 # change it back if we ran as root before
 if [ -n "$SUDO" ]; then
