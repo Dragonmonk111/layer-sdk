@@ -18,21 +18,21 @@ COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
 COPY dummy.rs /myapp/contracts/echo/src/lib.rs
 COPY contracts/root/Cargo.toml /myapp/contracts/root/Cargo.toml
 COPY dummy.rs /myapp/contracts/root/src/lib.rs
-COPY packages/abci/Cargo.toml /myapp/packages/abci/Cargo.toml
-COPY dummy.rs /myapp/packages/abci/src/lib.rs
-COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
-COPY dummy.rs /myapp/packages/app/src/lib.rs
-COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
-COPY dummy.rs /myapp/packages/cosmos/src/lib.rs
-COPY packages/golem/Cargo.toml /myapp/packages/golem/Cargo.toml
-COPY dummy.rs /myapp/packages/golem/src/lib.rs
-COPY packages/proto/Cargo.toml /myapp/packages/proto/Cargo.toml
-COPY dummy.rs /myapp/packages/proto/src/lib.rs
-COPY dummy.rs /myapp/packages/proto/examples/sync_test.rs
-COPY packages/std/Cargo.toml /myapp/packages/std/Cargo.toml
-COPY dummy.rs /myapp/packages/std/src/lib.rs
-COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml
-COPY dummy.rs /myapp/packages/storage/src/lib.rs
+COPY packages/comet/abci/Cargo.toml /myapp/packages/comet/abci/Cargo.toml
+COPY dummy.rs /myapp/packages/comet/abci/src/lib.rs
+COPY packages/layer/Cargo.toml /myapp/packages/layer/Cargo.toml
+COPY dummy.rs /myapp/packages/layer/src/lib.rs
+COPY packages/cosmossdk/cosmos/Cargo.toml /myapp/packages/cosmossdk/cosmos/Cargo.toml
+COPY dummy.rs /myapp/packages/cosmossdk/cosmos/src/lib.rs
+COPY packages/cosmossdk/golem/Cargo.toml /myapp/packages/cosmossdk/golem/Cargo.toml
+COPY dummy.rs /myapp/packages/cosmossdk/golem/src/lib.rs
+COPY packages/cosmossdk/proto/Cargo.toml /myapp/packages/cosmossdk/proto/Cargo.toml
+COPY dummy.rs /myapp/packages/cosmossdk/proto/src/lib.rs
+COPY dummy.rs /myapp/packages/cosmossdk/proto/examples/sync_test.rs
+COPY packages/core/std/Cargo.toml /myapp/packages/core/std/Cargo.toml
+COPY dummy.rs /myapp/packages/core/std/src/lib.rs
+COPY packages/core/storage/Cargo.toml /myapp/packages/core/storage/Cargo.toml
+COPY dummy.rs /myapp/packages/core/storage/src/lib.rs
 RUN cargo build --release --bin layerd
 
 # clean up these fake local deps so we compile for real later

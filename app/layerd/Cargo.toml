@@ -1,6 +1,6 @@
 [package]
-name = "slay3rd"
-description = "Rust ABCI app to run slay3r with CometBFT 0.38"
+name = "layerd"
+description = "Rust ABCI app to run layer with CometBFT 0.38"
 version = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
