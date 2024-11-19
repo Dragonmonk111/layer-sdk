@@ -10,8 +10,8 @@ RUN apt update && apt install -y clang
 
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
 COPY Cargo.lock Cargo.toml /myapp/
-COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
-COPY dummy.rs /myapp/app/slay3rd/src/main.rs
+COPY app/layerd/Cargo.toml /myapp/app/layerd/Cargo.toml
+COPY dummy.rs /myapp/app/layerd/src/main.rs
 COPY contracts/caller/Cargo.toml /myapp/contracts/caller/Cargo.toml
 COPY dummy.rs /myapp/contracts/caller/src/lib.rs
 COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
@@ -33,7 +33,7 @@ COPY packages/std/Cargo.toml /myapp/packages/std/Cargo.toml
 COPY dummy.rs /myapp/packages/std/src/lib.rs
 COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml
 COPY dummy.rs /myapp/packages/storage/src/lib.rs
-RUN cargo build --release --bin slay3rd
+RUN cargo build --release --bin layerd
 
 # clean up these fake local deps so we compile for real later
 RUN rm /myapp/*/*/src/*.rs
@@ -41,7 +41,7 @@ RUN rm -rf target/release/.fingerprint/layer-*
 
 # This build step should just compile the local code and be faster
 COPY . .
-RUN cargo build --release --bin slay3rd
+RUN cargo build --release --bin layerd
 
 ### PRODUCTION
 
@@ -49,8 +49,8 @@ RUN cargo build --release --bin slay3rd
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4 wget
-COPY --from=builder /myapp/target/release/slay3rd /usr/local/bin/slay3rd
-# COPY --from=builder /myapp/Cargo.toml /usr/local/bin/slay3rd
+COPY --from=builder /myapp/target/release/layerd /usr/local/bin/layerd
+# COPY --from=builder /myapp/Cargo.toml /usr/local/bin/layerd
 EXPOSE 26658
-CMD ["slay3rd"]
+CMD ["layerd"]
 
