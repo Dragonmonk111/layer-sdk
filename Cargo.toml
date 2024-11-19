@@ -1,7 +1,7 @@
 [workspace]
 # members = ["app/*", "contracts/*", "packages/comet/*", "packages/core/*", "packages/cosmossdk/*", "packages/utils/*"]
 members = ["app/*", "contracts/*", "packages/comet/*", "packages/core/*", "packages/cosmossdk/*"]
-exclude = ["tools/proto-compiler"]
+exclude = ["packages/cosmossdk/tools", "packages/cosmossdk/tools/*"]
 resolver = "2"
 
 [workspace.package]
