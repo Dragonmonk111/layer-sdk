@@ -11,7 +11,7 @@ use layer_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
 use crate::{wasm::keeper::contract_storage, StateMachine};
 
-use super::backend::{danger_will_robinson, out_of_gas, VmApi, VmQuerier, VmStore};
+use super::backend::{make_backend, out_of_gas, VmApi, VmQuerier, VmStore};
 
 const DEFAULT_CACHE_MB: usize = 500;
 const DEFAULT_INSTANCE_MB: usize = 32;
@@ -106,8 +106,8 @@ impl VmCache {
         let mut wrap = WeakSubTx::new(query);
         let mut working = contract_storage(&mut wrap, contract);
 
-        // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
+        // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
+        let backend = unsafe { make_backend(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -159,8 +159,8 @@ impl VmCache {
         let mut wrap = WeakSubTx::new(query);
         let mut working = contract_storage(&mut wrap, contract);
 
-        // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
+        // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
+        let backend = unsafe { make_backend(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -211,8 +211,8 @@ impl VmCache {
         let mut wrap = WeakSubTx::new(query);
         let mut working = contract_storage(&mut wrap, contract);
 
-        // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
+        // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
+        let backend = unsafe { make_backend(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -263,8 +263,8 @@ impl VmCache {
         let mut wrap = WeakSubTx::new(query);
         let mut working = contract_storage(&mut wrap, contract);
 
-        // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
+        // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
+        let backend = unsafe { make_backend(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -315,8 +315,8 @@ impl VmCache {
         let mut wrap = WeakSubTx::new(query);
         let mut working = contract_storage(&mut wrap, contract);
 
-        // This is where we fake all the lifetimes....
-        let backend = unsafe { danger_will_robinson(sm, &mut working, query, meter, &env.block) };
+        // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
+        let backend = unsafe { make_backend(sm, &mut working, query, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -364,9 +364,9 @@ impl VmCache {
         let mut unmetered = contract_storage(&mut scratch, contract_addr);
         let mut contract = AppMeter::new(&mut unmetered);
 
-        // This is where we fake all the lifetimes....
+        // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
         let backend =
-            unsafe { danger_will_robinson(sm, &mut contract, global_storage, meter, &env.block) };
+            unsafe { make_backend(sm, &mut contract, global_storage, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,

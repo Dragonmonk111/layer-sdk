@@ -28,24 +28,36 @@ pub const GAS_COST_VALIDATE_ADDRESS: u64 = 20;
 pub type CustomQuery = CustomRootQuery;
 pub type CustomMsg = CustomRootMsg;
 
-/// A bunch of unsafe lifetime games here...
-/// Only call it where you are sure all usage of this backend and instance is completed before the references
-pub(crate) unsafe fn danger_will_robinson(
+/// Construct a Backend with raw pointers to stack-local data.
+///
+/// # Safety
+///
+/// The returned Backend must not outlive any of: `sm`, `contract_storage`,
+/// `query_storage`, `meter`. The caller in cache.rs guarantees this by
+/// consuming the Backend within the same stack frame — it is passed to
+/// `get_instance`, the instance is used, and then recycled before the
+/// function returns.
+pub(crate) unsafe fn make_backend(
     sm: &StateMachine,
     contract_storage: &mut dyn Storage,
     query_storage: &dyn ReadonlyStorage,
     meter: &GasMeter,
     block: &BlockInfo,
 ) -> Backend<VmApi, VmStore, VmQuerier> {
+    // transmute erases the non-'static lifetime on the dyn trait fat pointer.
+    // This is sound because make_backend's safety contract requires all pointees
+    // to outlive the returned Backend (see doc comment above).
+    let storage_ptr: *mut (dyn Storage + 'static) = transmute(contract_storage as *mut dyn Storage);
+    let query_ptr: *const (dyn ReadonlyStorage + 'static) = transmute(query_storage as *const dyn ReadonlyStorage);
     let storage = VmStore {
-        storage: transmute::<&mut dyn Storage, &mut dyn Storage>(contract_storage),
-        meter: &*(meter as *const GasMeter),
+        storage: storage_ptr,
+        meter: meter as *const GasMeter,
         iterators: HashMap::new(),
     };
     let querier = VmQuerier {
-        sm: &*(sm as *const StateMachine),
-        storage: transmute::<&dyn ReadonlyStorage, &dyn ReadonlyStorage>(query_storage),
-        meter: &*(meter as *const GasMeter),
+        sm: sm as *const StateMachine,
+        storage: query_ptr,
+        meter: meter as *const GasMeter,
         block: block.clone(),
     };
 
@@ -90,11 +102,17 @@ fn account_error_to_backend(e: AccountIdError) -> BackendError {
 }
 
 pub struct VmQuerier {
-    sm: &'static StateMachine,
-    storage: &'static dyn ReadonlyStorage,
-    meter: &'static GasMeter,
+    // SAFETY: pointer valid for the duration of the enclosing cache call;
+    // same invariant as VmStore above.
+    sm: *const StateMachine,
+    storage: *const dyn ReadonlyStorage,
+    meter: *const GasMeter,
     block: BlockInfo,
 }
+
+// SAFETY: VmQuerier is only used within a single-threaded cache call scope.
+// The raw pointers point to data that outlives the VmQuerier.
+unsafe impl Send for VmQuerier {}
 
 impl BackendQuerier for VmQuerier {
     fn query_raw(
@@ -104,12 +122,14 @@ impl BackendQuerier for VmQuerier {
     ) -> BackendResult<cosmwasm_std::SystemResult<cosmwasm_std::ContractResult<cosmwasm_std::Binary>>>
     {
         let sdk_gas_limit = wasmer_gas_to_sdk(gas_limit);
-        let sub_limit = sdk_gas_limit < self.meter.remaining();
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let sub_limit = sdk_gas_limit < unsafe { (*self.meter).remaining() };
         let (res, gas_used) = if sub_limit {
             let sub_meter = GasMeter::new(sdk_gas_limit);
             let res = self.do_query_raw(request, &sub_meter);
             let gas_used = sub_meter.used();
-            let gas_res = self.meter.charge(gas_used);
+            // SAFETY: pointer valid for cache call duration (see make_backend docs)
+            let gas_res = unsafe { (*self.meter).charge(gas_used) };
             if let Err(e) = gas_res {
                 return (
                     Err(out_of_gas(e)),
@@ -118,9 +138,11 @@ impl BackendQuerier for VmQuerier {
             }
             (res, gas_used)
         } else {
-            let start = self.meter.used();
-            let res = self.do_query_raw(request, self.meter);
-            let gas_used = self.meter.used() - start;
+            // SAFETY: pointer valid for cache call duration (see make_backend docs)
+            let start = unsafe { (*self.meter).used() };
+            let res = unsafe { self.do_query_raw(request, &*self.meter) };
+            // SAFETY: pointer valid for cache call duration (see make_backend docs)
+            let gas_used = unsafe { (*self.meter).used() } - start;
             (res, gas_used)
         };
         (
@@ -175,7 +197,8 @@ impl VmQuerier {
                 request: Binary::from(request),
             })?;
         let query = cosmwasm_query_to_layer(cosmos)?;
-        let response = self.sm.query(self.storage, meter, &self.block, query)?;
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let response = unsafe { (*self.sm).query(&*self.storage, meter, &self.block, query) }?;
         layer_response_to_cosmwasm(response)
     }
 }
@@ -304,10 +327,18 @@ fn unsupported_response<T, U: fmt::Debug>(kind: &U) -> Result<T, QueryError> {
 }
 
 pub struct VmStore {
-    storage: &'static mut dyn Storage,
-    meter: &'static GasMeter,
+    // SAFETY: pointer valid for the duration of the enclosing cache call;
+    // never stored beyond the Backend lifetime. The caller in cache.rs
+    // guarantees this by consuming the Backend within the same stack frame
+    // (passed to get_instance, recycled before returning).
+    storage: *mut dyn Storage,
+    meter: *const GasMeter,
     iterators: HashMap<u32, Iter>,
 }
+
+// SAFETY: VmStore is only used within a single-threaded cache call scope.
+// The raw pointers point to data that outlives the VmStore.
+unsafe impl Send for VmStore {}
 
 pub(crate) fn out_of_gas(err: GasError) -> BackendError {
     match err {
@@ -317,9 +348,11 @@ pub(crate) fn out_of_gas(err: GasError) -> BackendError {
 
 impl BackendStorage for VmStore {
     fn get(&self, key: &[u8]) -> BackendResult<Option<Vec<u8>>> {
-        let pre = self.meter.used();
-        let val = self.storage.get(self.meter, key).map_err(out_of_gas);
-        let used = self.meter.used() - pre;
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let pre = unsafe { (*self.meter).used() };
+        let val = unsafe { (*self.storage).get(&*self.meter, key) }.map_err(out_of_gas);
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let used = unsafe { (*self.meter).used() } - pre;
         (val, GasInfo::with_externally_used(used))
     }
 
@@ -357,19 +390,20 @@ impl BackendStorage for VmStore {
             return (Ok(None), GasInfo::free());
         }
 
-        let start_gas = self.meter.used();
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let start_gas = unsafe { (*self.meter).used() };
 
         // read the next value
         let start = iter.start.as_deref();
         let end = iter.end.as_deref();
-        let mut ptr = match self
-            .storage
-            .as_ref()
-            .range(self.meter, start, end, iter.order)
+        let mut ptr = match unsafe { (*self.storage).as_ref() }
+            // SAFETY: pointer valid for cache call duration (see make_backend docs)
+            .range(unsafe { &*self.meter }, start, end, iter.order)
         {
             Ok(x) => x,
             Err(e) => {
-                let used = self.meter.used() - start_gas;
+                // SAFETY: pointer valid for cache call duration (see make_backend docs)
+                let used = unsafe { (*self.meter).used() } - start_gas;
                 let gas = GasInfo::with_externally_used(used);
                 return (Err(out_of_gas(e)), gas);
             }
@@ -378,7 +412,8 @@ impl BackendStorage for VmStore {
             Some(Ok(x)) => Some(x),
             None => None,
             Some(Err(e)) => {
-                let used = self.meter.used() - start_gas;
+                // SAFETY: pointer valid for cache call duration (see make_backend docs)
+                let used = unsafe { (*self.meter).used() } - start_gas;
                 let gas = GasInfo::with_externally_used(used);
                 return (Err(out_of_gas(e)), gas);
             }
@@ -400,14 +435,16 @@ impl BackendStorage for VmStore {
                 }
 
                 // and return this one
-                let used = self.meter.used() - start_gas;
+                // SAFETY: pointer valid for cache call duration (see make_backend docs)
+                let used = unsafe { (*self.meter).used() } - start_gas;
                 let gas = GasInfo::with_externally_used(used);
                 (Some((k, v)), gas)
             }
             None => {
                 // we hit the end, record that
                 iter.done = true;
-                let used = self.meter.used() - start_gas;
+                // SAFETY: pointer valid for cache call duration (see make_backend docs)
+                let used = unsafe { (*self.meter).used() } - start_gas;
                 let gas = GasInfo::with_externally_used(used);
                 (None, gas)
             }
@@ -417,16 +454,20 @@ impl BackendStorage for VmStore {
     }
 
     fn set(&mut self, key: &[u8], value: &[u8]) -> BackendResult<()> {
-        let pre = self.meter.used();
-        let val = self.storage.set(self.meter, key, value).map_err(out_of_gas);
-        let used = self.meter.used() - pre;
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let pre = unsafe { (*self.meter).used() };
+        let val = unsafe { (*self.storage).set(&*self.meter, key, value) }.map_err(out_of_gas);
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let used = unsafe { (*self.meter).used() } - pre;
         (val, GasInfo::with_externally_used(used))
     }
 
     fn remove(&mut self, key: &[u8]) -> BackendResult<()> {
-        let pre = self.meter.used();
-        let val = self.storage.remove(self.meter, key).map_err(out_of_gas);
-        let used = self.meter.used() - pre;
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let pre = unsafe { (*self.meter).used() };
+        let val = unsafe { (*self.storage).remove(&*self.meter, key) }.map_err(out_of_gas);
+        // SAFETY: pointer valid for cache call duration (see make_backend docs)
+        let used = unsafe { (*self.meter).used() } - pre;
         (val, GasInfo::with_externally_used(used))
     }
 }

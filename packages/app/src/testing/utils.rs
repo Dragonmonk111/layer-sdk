@@ -339,7 +339,7 @@ impl PrivateKey {
     pub fn sign(&self, message: &[u8]) -> Binary {
         let digest = Sha256::new_with_prefix(message);
         let signature: Signature = self.0.sign_digest(digest);
-        signature.to_vec().into()
+        signature.to_bytes().to_vec().into()
     }
 }
 
