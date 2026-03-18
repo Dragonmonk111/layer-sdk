@@ -30,7 +30,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. `danger_will_robinson` unsafe lifetime transmute in `packages/app/src/wasm/vm/` is replaced with a safe alternative and confirmed by `cargo miri test` passing on all VM tests
   3. Contract instantiation produces the same address on every node given the same deployer and salt (deterministic, no `SystemTime` or random input)
   4. CosmWasm is present as a git submodule at `v2.3.2` with CWA-2024-004 cherry-picked; the fork builds and the `BackendApi` trait is extensible for custom host functions
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Delete ABCI/slay3rd, remove Tendermint workspace deps, verify clean build
+- [ ] 01-02-PLAN.md — Add CosmWasm fork submodule, upgrade BackendApi v1 to v2, add Ethereum stubs
+- [ ] 01-03-PLAN.md — Eliminate unsafe transmute, add address determinism regression test
 
 ### Phase 2: Commonware Consensus
 **Goal**: CometBFT ABCI is removed and replaced by a Commonware `threshold_simplex` Automaton; a multi-node local testnet reaches consensus, produces identical AppHash across all nodes, and generates BLS12-381 threshold signature certificates per finalized block — the state machine may still use Cosmos types at this stage
@@ -90,11 +95,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/3 | Planning complete | - |
 | 2. Commonware Consensus | 0/TBD | Not started | - |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |
