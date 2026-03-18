@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-foundation-01-PLAN.md
-last_updated: "2026-03-18T14:54:21.444Z"
-last_activity: 2026-03-18 — Roadmap revised; phase order updated (Commonware now Phase 2, Ethereum Types Phase 3, WASM Runtime Phase 4); "Ewasm" terminology corrected throughout
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-18T00:00:00.000Z"
+last_activity: 2026-03-18 — Plan 01-02 complete; CosmWasm v2.3.2 submodule integrated via patch.crates-io; BackendApi v2 + 14 Ethereum stubs; all cw-* upgraded to 2.0.0
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 4
 ---
 
 # Project State
@@ -26,31 +26,32 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 ## Current Position
 
 Phase: 1 of 6 (Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-18 — Roadmap revised; phase order updated (Commonware now Phase 2, Ethereum Types Phase 3, WASM Runtime Phase 4); "Ewasm" terminology corrected throughout
+Plan: 2 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-18 — Plan 01-02 complete; CosmWasm v2.3.2 submodule integrated via patch.crates-io; BackendApi v2 + 14 Ethereum stubs; all cw-* upgraded to 2.0.0
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 4%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0 hours
+- Total plans completed: 2
+- Average duration: ~120 min
+- Total execution time: ~4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| — | — | — | — |
+| 01-foundation | 2/3 | ~4h | ~120 min |
 
 **Recent Trend:**
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: 01-01 (workspace cleanup), 01-02 (CosmWasm v2 upgrade)
+- Trend: On track
 
 *Updated after each plan completion*
 | Phase 01-foundation P01 | 6 | 2 tasks | 32 files |
+| Phase 01-foundation P02 | 180 min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,10 @@ Recent decisions affecting current work:
 - [Terminology]: "Ewasm" removed throughout — the old Ewasm project (ethereum/ewasm) is dead and its EEI spec is not being implemented; the correct framing is "de-Cosmos'd WASM runtime" (CosmWasm VM with Cosmos types stripped and Ethereum types substituted); host functions are idiomatic Ethereum-style, not Ewasm EEI
 - [Phase 01-foundation]: cosmrs 0.13.0 transitively pulls in tendermint 0.31.1 via layer-cosmos/layer-golem — accepted as Phase 1 known acceptable (Phase 3 replaces cosmrs entirely)
 - [Phase 01-foundation]: Upgraded tonic 0.12.2->0.12.3 and bytes 1.4.0->1.11.1 to fix addressable RUSTSEC advisories found during workspace audit
+- [Plan 01-02]: patch.crates-io redirect pattern used for cosmwasm submodule — direct path deps cause nested workspace inheritance conflicts where outer workspace (0.5.0) resolves version instead of cosmwasm workspace (2.3.2)
+- [Plan 01-02]: BackendApi Ethereum stubs use default unimplemented!() impls — VmApi compiles without changes; Phase 4 overrides with real linker registrations
+- [Plan 01-02]: packages/golem excluded from workspace — cw-orch-core v1→v2 has 30+ breaking trait signature changes; deferred to separate migration task
+- [Plan 01-02]: lib/cosmwasm uses upstream CosmWasm v2.3.2 as base (lay3r fork URL 404 at exec time) — lay3r-v2.3.2 branch created with Layer customizations applied
 
 ### Pending Todos
 
@@ -80,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T14:54:21.442Z
-Stopped at: Completed 01-foundation-01-PLAN.md
+Last session: 2026-03-18T00:00:00.000Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None

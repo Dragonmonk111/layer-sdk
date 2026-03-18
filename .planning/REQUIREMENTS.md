@@ -15,8 +15,8 @@
 
 ### CosmWasm Fork
 
-- [ ] **FORK-01**: CosmWasm forked at v2.3.2 as a git submodule in this repo (not a vendored copy; fork must include cherry-pick of CWA-2024-004 gas mispricing security fix as day-one work)
-- [ ] **FORK-02**: Custom host function injection mechanism in place — `BackendApi` trait and linker infrastructure to register Ethereum-specific host functions
+- [x] **FORK-01**: CosmWasm forked at v2.3.2 as a git submodule in this repo (not a vendored copy; fork must include cherry-pick of CWA-2024-004 gas mispricing security fix as day-one work)
+- [x] **FORK-02**: Custom host function injection mechanism in place — `BackendApi` trait and linker infrastructure to register Ethereum-specific host functions
 
 ### Commonware Consensus
 
@@ -93,8 +93,8 @@
 | FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Pending |
 | FOUND-03 | Phase 1 | Pending |
-| FORK-01 | Phase 1 | Pending |
-| FORK-02 | Phase 1 | Pending |
+| FORK-01 | Phase 1 | Complete |
+| FORK-02 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | Pending |
 | CONS-02 | Phase 2 | Pending |
 | CONS-03 | Phase 2 | Pending |
