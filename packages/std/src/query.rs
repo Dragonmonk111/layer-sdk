@@ -286,13 +286,13 @@ pub struct ContractInfoResponse {
 
 impl From<ContractInfoResponse> for cosmwasm_std::ContractInfoResponse {
     fn from(value: ContractInfoResponse) -> Self {
-        let mut res = cosmwasm_std::ContractInfoResponse::default();
-        res.code_id = value.code_id;
-        res.creator = value.creator.to_string();
-        res.admin = value.admin.map(|a| a.to_string());
-        res.pinned = value.pinned;
-        res.ibc_port = value.ibc_port;
-        res
+        cosmwasm_std::ContractInfoResponse::new(
+            value.code_id,
+            value.creator.into(),
+            value.admin.map(|a| a.into()),
+            value.pinned,
+            value.ibc_port,
+        )
     }
 }
 

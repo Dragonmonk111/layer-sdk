@@ -4,14 +4,12 @@ use sha2::{
 };
 use thiserror::Error;
 
+use cosmwasm_std::Checksum;
 use layer_std::AccountId;
 
 use crate::PulsarError;
 
 use super::WasmError;
-
-// 2.0: use cosmwasm_std::Checksum
-type Checksum = cosmwasm_std::Binary;
 
 pub fn build_instantiate_address(
     sender: &[u8],
@@ -39,16 +37,13 @@ pub fn build_instantiate_2_address(
     salt: &[u8],
     msg: &[u8],
 ) -> Result<AccountId, PulsarError> {
-    if checksum.len() != 32 {
-        return Err(Instantiate2AddressError::InvalidChecksumLength.into());
-    }
     if salt.is_empty() || salt.len() > 64 {
         return Err(Instantiate2AddressError::InvalidSaltLength.into());
     };
 
     let mut key = Vec::<u8>::new();
     key.extend_from_slice(b"wasm\0");
-    // Fixed length from Checksum type (checked above)
+    // Checksum is always 32 bytes in v2
     key.extend_from_slice(&(32u64).to_be_bytes());
     key.extend_from_slice(checksum.as_slice());
     key.extend_from_slice(&(creator.len() as u64).to_be_bytes());
@@ -76,9 +71,6 @@ fn hash(ty: &str, key: &[u8]) -> Vec<u8> {
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum Instantiate2AddressError {
-    /// Checksum must be 32 bytes
-    #[error("invalid checksum length")]
-    InvalidChecksumLength,
     /// Salt must be between 1 and 64 bytes
     #[error("invalid salt length")]
     InvalidSaltLength,
@@ -99,8 +91,9 @@ mod tests {
     // test vectors from cosmwasm-std
     #[test]
     fn build_instantiate_2_address_works() {
-        let checksum1 =
-            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5").into();
+        let checksum1 = Checksum::from(
+            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5"),
+        );
         let creator1 = AccountId::new(&hex!("9999999999aaaaaaaaaabbbbbbbbbbcccccccccc")).unwrap();
         let salt1 = hex!("61");
         let salt2 = hex!("aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbbbcc221100acadae");
@@ -164,40 +157,15 @@ mod tests {
             ))
         ));
 
-        // invalid checksum length
-        let broken_cs =
-            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2").into();
-        assert!(matches!(
-            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
-            PulsarError::Wasm(WasmError::Instantiate2Error(
-                Instantiate2AddressError::InvalidChecksumLength
-            ))
-        ));
-        let broken_cs = hex!("").into();
-        assert!(matches!(
-            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
-            PulsarError::Wasm(WasmError::Instantiate2Error(
-                Instantiate2AddressError::InvalidChecksumLength
-            ))
-        ));
-        let broken_cs =
-            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa").into();
-        assert!(matches!(
-            build_instantiate_2_address(&broken_cs, &creator1, &salt1, b"").unwrap_err(),
-            PulsarError::Wasm(WasmError::Instantiate2Error(
-                Instantiate2AddressError::InvalidChecksumLength
-            ))
-        ));
-
-        // 2.0
-        // // invalid checksum length won't even make a Checksum
-        // let _ =
-        //     Checksum::from_hex("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2")
-        //         .unwrap_err();
-        // let _ = Checksum::from_hex("").unwrap_err();
-        // let _ = Checksum::from_hex(
-        //     "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa",
-        // )
-        // .unwrap_err();
+        // Invalid checksum length won't even make a Checksum (compile-time or construction-time)
+        let _ = Checksum::from_hex(
+            "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2",
+        )
+        .unwrap_err();
+        let _ = Checksum::from_hex("").unwrap_err();
+        let _ = Checksum::from_hex(
+            "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa",
+        )
+        .unwrap_err();
     }
 }

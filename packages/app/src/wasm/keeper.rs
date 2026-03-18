@@ -3,8 +3,8 @@ use cosmwasm_std::{
     ensure_eq, to_json_binary, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo,
     Order, Reply, ReplyOn, SubMsg, SubMsgResponse,
 };
-// 2.0: use cosmwasm_std::Checksum
-use cosmwasm_vm::{Checksum, VmError};
+use cosmwasm_std::Checksum;
+use cosmwasm_vm::VmError;
 use cw_storage_plus::{Bound, KeyDeserialize};
 
 use layer_std::api::MsgResponse;
@@ -318,8 +318,14 @@ impl Wasm {
             } => {
                 ensure_eq!(signer, &sender, WasmError::SenderMismatch);
                 let code = self.load_code(storage.as_ref(), meter, code_id)?;
+                let cs_bytes: [u8; 32] = code
+                    .checksum
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| WasmError::Checksum)?;
+                let checksum_typed = Checksum::from(cs_bytes);
                 let contract_addr = build_instantiate_2_address(
-                    &code.checksum,
+                    &checksum_typed,
                     &sender,
                     &salt,
                     b"", // we consider fix_msg to always be false, this was cosmwasm-std decision
@@ -725,19 +731,18 @@ impl Wasm {
                         // append events to parent response (only on success)
                         parent_response.events.extend(res.events.clone());
                         // and prepare a response value to call the contract with both (1.x) data and (2.x) msg_responses
-                        let (_type_url, value) = encode_cosmwasm_response(res.data);
+                        let (type_url, value) = encode_cosmwasm_response(res.data);
                         #[allow(deprecated)]
                         let data = maybe_binary(value.clone());
-                        // 2.0:
-                        // let msg_response = cosmwasm_std::MsgResponse {
-                        //     type_url: type_url.to_string(),
-                        //     value: value.into(),
-                        // };
+                        let msg_response = cosmwasm_std::MsgResponse {
+                            type_url: type_url.to_string(),
+                            value: value.into(),
+                        };
                         #[allow(deprecated)]
                         Ok(SubMsgResponse {
                             events: res.events,
                             data,
-                            // msg_responses: vec![msg_response],
+                            msg_responses: vec![msg_response],
                         })
                     }
                     Err(err) => Err(err.to_string()),
@@ -745,9 +750,8 @@ impl Wasm {
                 let reply = Reply {
                     id: msg.id,
                     result: result.into(),
-                    // 2.0:
-                    // gas_used,
-                    // payload: msg.payload,
+                    gas_used: 0,
+                    payload: msg.payload,
                 };
 
                 // call the reply entry point
@@ -852,7 +856,11 @@ impl Wasm {
                     checksum,
                     pinned,
                 } = self.load_code(storage, meter, code_id)?;
-                let hash = Checksum::try_from(checksum.as_slice()).map_err(map_vm_error)?;
+                let cs_bytes: [u8; 32] = checksum
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| WasmError::Checksum)?;
+                let hash = Checksum::from(cs_bytes);
                 let data = if include_wasm {
                     self.cache.load_code(&hash).map_err(map_vm_error)?
                 } else {
@@ -1002,11 +1010,6 @@ fn map_vm_error(err: VmError) -> PulsarError {
         e => WasmError::Vm(e.to_string()).into(),
     }
 }
-
-// 2.0:
-// fn map_checksum_error(_: cosmwasm_std::ChecksumError) -> PulsarError {
-//     PulsarError::Wasm(WasmError::Checksum)
-// }
 
 fn map_contract_error(err: String) -> PulsarError {
     WasmError::Contract(err).into()
