@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-18T13:17:22.297Z"
+stopped_at: Completed 01-foundation-01-PLAN.md
+last_updated: "2026-03-18T14:54:21.444Z"
 last_activity: 2026-03-18 — Roadmap revised; phase order updated (Commonware now Phase 2, Ethereum Types Phase 3, WASM Runtime Phase 4); "Ewasm" terminology corrected throughout
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01-foundation P01 | 6 | 2 tasks | 32 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - [Roadmap]: Phase 5 (WAVS) depends on both Phase 4 (WASM runtime) and Phase 2 (Commonware finalized blocks with BLS certificates)
 - [Roadmap]: Phase 6 (zkVM) deferred to last — requires CONS-05 threshold certs, stable WASM runtime, and a Merkle state root not yet in the storage layer
 - [Terminology]: "Ewasm" removed throughout — the old Ewasm project (ethereum/ewasm) is dead and its EEI spec is not being implemented; the correct framing is "de-Cosmos'd WASM runtime" (CosmWasm VM with Cosmos types stripped and Ethereum types substituted); host functions are idiomatic Ethereum-style, not Ewasm EEI
+- [Phase 01-foundation]: cosmrs 0.13.0 transitively pulls in tendermint 0.31.1 via layer-cosmos/layer-golem — accepted as Phase 1 known acceptable (Phase 3 replaces cosmrs entirely)
+- [Phase 01-foundation]: Upgraded tonic 0.12.2->0.12.3 and bytes 1.4.0->1.11.1 to fix addressable RUSTSEC advisories found during workspace audit
 
 ### Pending Todos
 
@@ -77,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T13:17:22.289Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-foundation/01-CONTEXT.md
+Last session: 2026-03-18T14:54:21.442Z
+Stopped at: Completed 01-foundation-01-PLAN.md
+Resume file: None

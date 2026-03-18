@@ -9,7 +9,7 @@
 
 ### Foundation
 
-- [ ] **FOUND-01**: Codebase builds cleanly with 2026 dependencies — all Tendermint/CometBFT crates removed, dependency conflicts resolved, `cargo audit` passes
+- [x] **FOUND-01**: Codebase builds cleanly with 2026 dependencies — all Tendermint/CometBFT crates removed, dependency conflicts resolved, `cargo audit` passes
 - [ ] **FOUND-02**: `danger_will_robinson` unsafe lifetime transmute in `packages/app/src/wasm/vm/` resolved before Commonware async contexts are added
 - [ ] **FOUND-03**: Non-deterministic WASM contract address generation (`keeper.rs:1001`) fixed
 
@@ -90,7 +90,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Pending |
 | FOUND-03 | Phase 1 | Pending |
 | FORK-01 | Phase 1 | Pending |
