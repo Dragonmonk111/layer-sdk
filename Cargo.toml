@@ -1,12 +1,16 @@
 [workspace]
 members = ["contracts/*", "packages/*"]
-exclude = ["tools/proto-compiler"]
+exclude = [
+  "tools/proto-compiler",
+  "packages/golem",  # excluded: cw-orch-core 2.x API migration deferred
+]
 resolver = "2"
 
 [workspace.package]
 edition       = "2021"
 version       = "0.5.0"
 license       = "CC-BY-NC-ND-4.0"
+repository    = "https://github.com/lay3r-labs/layer-sdk"
 
 exclude = [
   # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
@@ -16,16 +20,22 @@ exclude = [
 
 [workspace.dependencies]
 thiserror    = "1.0.38"
-cosmwasm-std = { version = "1.5.4", default-features = false, features = ["cosmwasm_1_4"] }
-cosmwasm-schema = "1.5.4"
-cosmwasm-crypto = "1.5.4"
-cosmwasm-vm = { version = "1.5.4", default-features = false, features = ["iterator"] }
-cw-storage-plus = { version = "1.2.0", default-features = false }
-cw-utils = "1.0.1"
-cw-multi-test = "1.0.1"
-cw2 = { version = "1" }
-cw20 = { version = "1" }
-cw20-base = { version = "1" }
+cosmwasm-std = { version = "=2.3.2", default-features = false, features = ["cosmwasm_2_0"] }
+cosmwasm-schema = { version = "=2.3.2" }
+cosmwasm-crypto = { version = "=2.3.2" }
+cosmwasm-vm = { version = "=2.3.2", default-features = false, features = ["iterator"] }
+# Internal cosmwasm crate deps — needed for [patch.crates-io] workspace = true resolution
+cosmwasm-core = { version = "=2.3.2" }
+cosmwasm-derive = { version = "=2.3.2" }
+cosmwasm-schema-derive = { version = "=2.3.2" }
+cosmwasm-vm-derive = { version = "=2.3.2" }
+schemars = "0.8.4"
+cw-storage-plus = { version = "2.0.0", default-features = false }
+cw-utils = "2.0.0"
+cw-multi-test = "2.0.0"
+cw2 = { version = "2.0.0" }
+cw20 = { version = "2.0.0" }
+cw20-base = { version = "2.0.0" }
 
 serde = { version = "1.0.160", default-features = false }
 serde_json = "1.0.116"
@@ -67,8 +77,19 @@ futures = { version = "0.3.30", default-features = false }
 
 cosmrs = { version = "0.13.0", default-features = false, features = ["cosmwasm"] }
 cosmos-sdk-proto = { version = "0.18.0", default-features = false, features = ["cosmwasm"] }
-cw-orch-core = { version = "1"}
-abstract-cw-multi-test = { version = "1", default-features = false }
+cw-orch-core = { version = "2"}
+abstract-cw-multi-test = { version = "2", default-features = false }
+
+[patch.crates-io]
+# Redirect all cosmwasm crates to the fork submodule at lib/cosmwasm (v2.3.2)
+# This approach avoids nested workspace inheritance issues with `workspace = true` fields
+cosmwasm-std    = { path = "lib/cosmwasm/packages/std" }
+cosmwasm-schema = { path = "lib/cosmwasm/packages/schema" }
+cosmwasm-crypto = { path = "lib/cosmwasm/packages/crypto" }
+cosmwasm-vm     = { path = "lib/cosmwasm/packages/vm" }
+cosmwasm-core   = { path = "lib/cosmwasm/packages/core" }
+cosmwasm-derive = { path = "lib/cosmwasm/packages/derive" }
+cosmwasm-schema-derive = { path = "lib/cosmwasm/packages/schema-derive" }
 
 [profile.release]
 # temporary to speed up testing
