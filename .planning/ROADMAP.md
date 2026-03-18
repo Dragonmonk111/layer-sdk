@@ -12,7 +12,7 @@ Layer is a meta-chain being revitalized from a 2-year dormant state. The journey
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation** - Clean the codebase, fix the unsafe VM transmute, resolve 2-year-old dependency conflicts, and fork CosmWasm as a git submodule
+- [x] **Phase 1: Foundation** - Clean the codebase, fix the unsafe VM transmute, resolve 2-year-old dependency conflicts, and fork CosmWasm as a git submodule (completed 2026-03-18)
 - [ ] **Phase 2: Commonware Consensus** - Replace CometBFT ABCI with Commonware simplex Automaton — multi-node testnet reaches consensus with BLS threshold certificates
 - [ ] **Phase 3: Ethereum Types** - Replace Cosmos bech32 addresses with Ethereum 20-byte addresses and ABI encoding throughout every package
 - [ ] **Phase 4: WASM Runtime (Ethereum Types)** - Replace the CosmWasm VM with a de-Cosmos'd WASM runtime on wasmtime — Rust contracts using Ethereum-style host functions can deploy and execute end-to-end
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 2/3 | In Progress|  |
+| 1. Foundation | 3/3 | Complete   | 2026-03-18 |
 | 2. Commonware Consensus | 0/TBD | Not started | - |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |

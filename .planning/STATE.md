@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
-status: planning
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-03-18T00:00:00.000Z"
-last_activity: 2026-03-18 — Plan 01-02 complete; CosmWasm v2.3.2 submodule integrated via patch.crates-io; BackendApi v2 + 14 Ethereum stubs; all cw-* upgraded to 2.0.0
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-03-18T17:41:28.410Z"
+last_activity: 2026-03-18 — Plan 01-03 complete; danger_will_robinson reference transmute eliminated; make_backend raw pointer backend; FOUND-02+FOUND-03 satisfied; Phase 1 complete
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 4
 ---
 
@@ -25,33 +25,34 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 1 of 6 (Foundation)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-18 — Plan 01-02 complete; CosmWasm v2.3.2 submodule integrated via patch.crates-io; BackendApi v2 + 14 Ethereum stubs; all cw-* upgraded to 2.0.0
+Phase: 1 of 6 (Foundation) — COMPLETE
+Plan: 3 of 3 in current phase — COMPLETE
+Status: Ready for Phase 2
+Last activity: 2026-03-18 — Plan 01-03 complete; danger_will_robinson reference transmute eliminated via make_backend raw pointers; FOUND-02 and FOUND-03 satisfied
 
-Progress: [█░░░░░░░░░] 4%
+Progress: [██████████] 100% (Phase 1 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: ~120 min
-- Total execution time: ~4 hours
+- Total plans completed: 3
+- Average duration: ~93 min
+- Total execution time: ~4.8 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 2/3 | ~4h | ~120 min |
+| 01-foundation | 3/3 | ~4.8h | ~96 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (workspace cleanup), 01-02 (CosmWasm v2 upgrade)
+- Last 5 plans: 01-01 (workspace cleanup), 01-02 (CosmWasm v2 upgrade), 01-03 (unsafe transmute elimination)
 - Trend: On track
 
 *Updated after each plan completion*
 | Phase 01-foundation P01 | 6 | 2 tasks | 32 files |
 | Phase 01-foundation P02 | 180 min | 3 tasks | 13 files |
+| Phase 01-foundation P03 | 50 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Plan 01-02]: BackendApi Ethereum stubs use default unimplemented!() impls — VmApi compiles without changes; Phase 4 overrides with real linker registrations
 - [Plan 01-02]: packages/golem excluded from workspace — cw-orch-core v1→v2 has 30+ breaking trait signature changes; deferred to separate migration task
 - [Plan 01-02]: lib/cosmwasm uses upstream CosmWasm v2.3.2 as base (lay3r fork URL 404 at exec time) — lay3r-v2.3.2 branch created with Layer customizations applied
+- [Phase 01-foundation]: transmute on raw pointers retained for fat pointer lifetime erasure in make_backend — *ptr not &ref, meaningfully safer than original reference transmute
+- [Phase 01-foundation]: miri blocked by wasmer FFI and file I/O syscalls — documented as expected limitation, functional correctness verified by regular test suite
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T00:00:00.000Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-03-18T17:41:28.407Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
