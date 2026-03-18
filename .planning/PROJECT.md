@@ -2,11 +2,11 @@
 
 ## What This Is
 
-Layer is a blockchain with a WebAssembly smart contract runtime, currently being revitalized after nearly 2 years of inactivity. The project is replacing its consensus layer (Tendermint → Commonware), replacing its smart contract runtime (CosmWasm → Ewasm with Ethereum types), and integrating with WAVS to give AVS programs persistent on-chain state — with a path to roll up that state to Ethereum via a zkVM.
+Layer is a **meta-chain**: a stateful computational engine that exists both on and off-chain simultaneously. It can read from any blockchain, execute transactions on any network, and maintain its own cryptographically-secured state via EigenLayer restaking. WAVS programs run off-chain; Layer is the stateful on-chain backbone they read from and write to. The project is being revitalized after ~2 years of dormancy with a full stack replacement: Tendermint → Commonware consensus, CosmWasm → Ewasm (Ethereum types), and new bidirectional WAVS state integration.
 
 ## Core Value
 
-WAVS programs can read from and write to persistent Layer state — enabling AVS operators to submit results on-chain and for Layer to serve as a stateful execution environment for the EigenLayer ecosystem.
+WAVS programs can read from and write to persistent Layer state — enabling AVS operators to submit results on-chain and for Layer to serve as the stateful backbone of the EigenLayer meta-chain ecosystem, with state anchored to Ethereum via zkVM proofs.
 
 ## Requirements
 
