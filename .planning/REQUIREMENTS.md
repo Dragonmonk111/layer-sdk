@@ -22,9 +22,9 @@
 
 - [x] **CONS-01**: CometBFT ABCI server (`packages/abci/`, `app/slay3rd/`) replaced with Commonware `threshold_simplex` Automaton implementation
 - [x] **CONS-02**: `propose()`, `verify()`, and `genesis()` Automaton callbacks wired to the existing `App<T>` state machine
-- [ ] **CONS-03**: Validator set management implemented via Commonware Scheme participants and static config; crash recovery via WAL — initial static validator set, extensible for future dynamic management
+- [x] **CONS-03**: Validator set management implemented via Commonware Scheme participants and static config; crash recovery via WAL — initial static validator set, extensible for future dynamic management
 - [x] **CONS-04**: State transitions are fully deterministic — no `HashMap` iteration, no `SystemTime`, no floats in any code path reachable from `certify()` or `verify()`
-- [ ] **CONS-05**: Consensus produces threshold signature certificates (BLS12-381) per block, stored in the block header — prerequisite for zkVM rollup proofs
+- [x] **CONS-05**: Consensus produces threshold signature certificates (BLS12-381) per block, stored in the block header — prerequisite for zkVM rollup proofs
 
 ### Ethereum Types
 
@@ -97,9 +97,9 @@
 | FORK-02 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | Complete |
 | CONS-02 | Phase 2 | Complete |
-| CONS-03 | Phase 2 | Pending |
+| CONS-03 | Phase 2 | Complete |
 | CONS-04 | Phase 2 | Complete |
-| CONS-05 | Phase 2 | Pending |
+| CONS-05 | Phase 2 | Complete |
 | TYPES-01 | Phase 3 | Pending |
 | TYPES-02 | Phase 3 | Pending |
 | TYPES-03 | Phase 3 | Pending |
