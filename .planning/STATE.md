@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: Ready for Phase 2
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-19T16:29:45.990Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-19T16:56:07.239Z"
 last_activity: 2026-03-18 — Plan 01-03 complete; danger_will_robinson reference transmute eliminated via make_backend raw pointers; FOUND-02 and FOUND-03 satisfied
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
   percent: 100
 ---
 
@@ -54,6 +54,7 @@ Progress: [██████████] 100% (Phase 1 complete)
 | Phase 01-foundation P02 | 180 min | 3 tasks | 13 files |
 | Phase 01-foundation P03 | 50 | 2 tasks | 4 files |
 | Phase 02-commonware-consensus P01 | 6 | 2 tasks | 6 files |
+| Phase 02-commonware-consensus P02 | 20 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 02-commonware-consensus]: Commonware 2026.3.0 pinned exactly (ALPHA software; version confirmed via crates.io API 2026-03-19)
 - [Phase 02-commonware-consensus]: HashSet retained in capabilities() at cosmwasm_vm CacheOptions boundary; BTreeSet cannot satisfy impl Into<HashSet<String>>; capabilities() not in certify/verify paths
 - [Phase 02-commonware-consensus]: BTreeMap replaces HashMap in VmStore.iterators (backend.rs) and ValidCoins.seen (bank/keeper.rs) for determinism in App finalize_block paths
+- [Phase 02-commonware-consensus]: LayerNode generic over P: PublicKey (not hardcoded to BLS12-381) — allows unit tests with ed25519::PublicKey and future scheme swaps without changing the bridge
+- [Phase 02-commonware-consensus]: Tx deserialization deferred to Plan 04 — layer_std::Tx has no serde::Deserialize impl; Phase 2 certify passes empty Tx slice; correct wire format confirmed in Plan 04 integration testing
+- [Phase 02-commonware-consensus]: Sync #[test] + block_on(new_current_thread) pattern for App<T> tests — wasmer JIT mmap initialization not safe for concurrent OS threads; eliminates SIGBUS on macOS
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T16:29:45.986Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-19T16:55:58.725Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
