@@ -158,6 +158,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             time: Timestamp::from_nanos(payload.timestamp_nanos),
             proposer_address: payload.proposer.clone(),
             last_votes: vec![],
+            // certificate is set by the consensus engine after certify() completes
+            // and the BLS threshold signature is produced. See relay.rs (Plan 03).
+            // The Reporter receives the Finalization activity which contains the certificate;
+            // for Phase 2, we store None here and the LayerReporter updates the block record
+            // when the finalization certificate is delivered.
+            certificate: None,
         };
 
         let result = {

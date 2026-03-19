@@ -552,6 +552,7 @@ mod tests {
             time: Timestamp::from_seconds(1690406618),
             proposer_address: vec![1u8; 32],
             last_votes: vec![],
+            certificate: None,
         };
         app.finalize_block(block).unwrap();
 
@@ -632,6 +633,7 @@ mod tests {
             time: Timestamp::from_seconds(1690406620),
             proposer_address: vec![1u8; 32],
             last_votes: vec![],
+            certificate: None,
         };
         let block_res = app.finalize_block(block).unwrap();
         assert_eq!(block_res.tx_results.len(), 1);

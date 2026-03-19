@@ -1,0 +1,25 @@
+[package]
+name = "generate-testnet-keys"
+version = "0.1.0"
+edition = "2021"
+
+# This tool is NOT a workspace member. The empty [workspace] table below prevents
+# Cargo from auto-detecting the parent workspace when built with:
+#   cargo build --manifest-path tools/generate-testnet-keys/Cargo.toml
+# Or: cd tools/generate-testnet-keys && cargo build
+[workspace]
+
+[[bin]]
+name = "generate-testnet-keys"
+path = "src/main.rs"
+
+[dependencies]
+commonware-cryptography = "2026.3.0"
+commonware-utils = "2026.3.0"
+commonware-math = "2026.3.0"
+commonware-codec = "2026.3.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+rand_chacha = "0.3"
+hex = "0.4"

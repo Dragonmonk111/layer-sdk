@@ -75,6 +75,7 @@ impl TestApp {
             time: info.time.plus_nanos(NANO_SECOND_PER_BLOCK),
             proposer_address: vec![1u8; 32],
             last_votes: vec![],
+            certificate: None,
         };
         self.app.finalize_block(block).unwrap().tx_results
     }

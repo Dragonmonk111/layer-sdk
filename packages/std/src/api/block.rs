@@ -36,6 +36,13 @@ pub struct Block {
     pub proposer_address: Vec<u8>,
     /// votes contains all validators who voted for the last block to make consensus
     pub last_votes: Vec<Validator>,
+
+    /// BLS12-381 threshold signature certificate for this block.
+    /// Produced by Commonware threshold_simplex (via simplex with BLS scheme) after certify() completes.
+    /// `None` for the genesis block or blocks not yet certified.
+    /// These are the raw certificate bytes from the consensus engine — prerequisite
+    /// for zkVM rollup proofs (ZKVM-02, CONS-05).
+    pub certificate: Option<Vec<u8>>,
 }
 
 /**
