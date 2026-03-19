@@ -158,11 +158,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             time: Timestamp::from_nanos(payload.timestamp_nanos),
             proposer_address: payload.proposer.clone(),
             last_votes: vec![],
-            // certificate is set by the consensus engine after certify() completes
-            // and the BLS threshold signature is produced. See relay.rs (Plan 03).
-            // The Reporter receives the Finalization activity which contains the certificate;
-            // for Phase 2, we store None here and the LayerReporter updates the block record
-            // when the finalization certificate is delivered.
+            // The BLS certificate is NOT available at certify() time — it is produced
+            // by the consensus engine after a quorum of validators certify. The
+            // LayerReporter receives the Finalization activity with cert_bytes and
+            // calls App::set_block_certificate(height, cert_bytes) to persist it.
+            // See main.rs LayerReporter::report() for the storage path.
             certificate: None,
         };
 
@@ -186,7 +186,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                     height = height,
                     app_hash = %hex::encode(&response.app_hash),
                     digest = %hex::encode(digest),
-                    "Block finalized with BLS certificate"
+                    "Block finalized — certificate stored by Reporter on Finalization activity"
                 );
                 true
             }

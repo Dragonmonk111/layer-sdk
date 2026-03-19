@@ -88,6 +88,12 @@ const APP_STATE: Item<AppState> = Item::new("state");
 // _ prefix ensures it is not included in the app hash
 const LAST_BLOCK: Item<BlockInfo> = Item::new("_last_block");
 
+/// Storage key prefix for BLS certificates keyed by block height.
+/// The "_" prefix follows the same convention as LAST_BLOCK — it excludes
+/// the certificate from app_hash computation. Certificate delivery timing
+/// differs across validators and must not affect consensus determinism.
+const BLOCK_CERTIFICATE_KEY_PREFIX: &str = "_cert/";
+
 #[cw_serde]
 pub struct AppState {
     pub chain_id: String,
@@ -448,6 +454,52 @@ impl<T: PersistentStorage + 'static> App<T> {
         })
     }
 
+    /// Store a BLS12-381 threshold certificate for a previously committed block.
+    ///
+    /// Called by the consensus Reporter after the threshold signature is assembled
+    /// from validator certify() votes. The certificate is NOT available at
+    /// certify() time — it is produced by the consensus engine after a quorum
+    /// of validators have certified the block.
+    ///
+    /// The certificate is stored under a "_cert/{height}" key. The "_" prefix
+    /// excludes it from app_hash computation (same convention as LAST_BLOCK),
+    /// because certificate delivery timing may differ across validators and
+    /// must not affect consensus determinism.
+    ///
+    /// # Arguments
+    /// * `height` - The block height this certificate belongs to
+    /// * `certificate` - The raw BLS12-381 threshold signature bytes from the consensus engine
+    ///
+    /// # Returns
+    /// `Ok(())` on success, or an error if the storage write fails.
+    pub fn set_block_certificate(
+        &mut self,
+        height: u64,
+        certificate: Vec<u8>,
+    ) -> PulsarResult<()> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let key = format!("{}{}", BLOCK_CERTIFICATE_KEY_PREFIX, height);
+        let cert_item: Item<Vec<u8>> = Item::new(&key);
+        cert_item.save(&mut writer, &meter, &certificate)?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
+    /// Retrieve the BLS certificate for a block at the given height, if stored.
+    ///
+    /// Returns `None` if no certificate has been stored for this height yet
+    /// (e.g., the Reporter hasn't fired yet, or this is a genesis block).
+    pub fn get_block_certificate(&self, height: u64) -> Option<Vec<u8>> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let key = format!("{}{}", BLOCK_CERTIFICATE_KEY_PREFIX, height);
+        let cert_item: Item<Vec<u8>> = Item::new(&key);
+        let result = cert_item.may_load(&reader, &meter).ok().flatten();
+        reader.abort();
+        result
+    }
+
     #[cfg(test)]
     pub fn copy_storage_to_memory(&self) -> layer_storage::MemoryStore {
         layer_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
@@ -702,5 +754,45 @@ mod tests {
             QueryResponse::Auth(AuthQueryResponse::Account(res)) => res,
             x => panic!("Exected AccountResponse, got {:?}", x),
         }
+    }
+
+    #[test]
+    fn test_set_and_get_block_certificate() {
+        let storage = MemoryStore::default();
+        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3r/cert_test"));
+        let mut app = App::new(storage, logic);
+
+        let genesis = GenesisState {
+            bank: vec![],
+            wasm: WasmParams {
+                gov_account: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug".to_string(),
+            },
+        };
+        let request = mock_init(&genesis);
+        app.init(request).unwrap();
+
+        // Finalize block 1 so the App has a block at height 1
+        let block = Block {
+            txs: vec![],
+            height: 1,
+            time: Timestamp::from_seconds(1690406618),
+            proposer_address: vec![1u8; 32],
+            last_votes: vec![],
+            certificate: None,
+        };
+        app.finalize_block(block).unwrap();
+
+        // No certificate stored yet for block 1
+        assert_eq!(app.get_block_certificate(1), None);
+
+        // Store a certificate for block 1 (simulating the Reporter path)
+        let fake_cert = vec![0xCA, 0xFE, 0xBA, 0xBE, 0x01, 0x02, 0x03, 0x04];
+        app.set_block_certificate(1, fake_cert.clone()).unwrap();
+
+        // Retrieve and verify it matches what was stored
+        assert_eq!(app.get_block_certificate(1), Some(fake_cert));
+
+        // Block 2 has no certificate (no Reporter fired for it yet)
+        assert_eq!(app.get_block_certificate(2), None);
     }
 }

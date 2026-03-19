@@ -92,13 +92,23 @@ impl KeyMaterial {
     }
 }
 
-/// Simple logging reporter that logs all consensus activity via tracing.
+/// Consensus reporter that persists BLS threshold certificates to the Layer App storage.
 ///
 /// Implements `commonware_consensus::Reporter` for the simplex Activity type.
-/// When a `Finalization` activity is received, it stores the BLS certificate bytes
-/// keyed by payload digest — prerequisite for CONS-05.
+/// When a `Finalization` activity is received, it extracts the BLS certificate bytes
+/// and calls `App::set_block_certificate()` to persist them keyed by block height.
+///
+/// This closes the CONS-05 gap: the certificate is NOT available at certify() time
+/// (it is assembled by the consensus engine after a quorum of validators certify).
+/// The Finalization activity delivers the certificate post-commit, and the Reporter
+/// is the correct place to store it.
 #[derive(Clone)]
-struct LayerReporter;
+struct LayerReporter {
+    /// Shared reference to the Layer application.
+    /// Used to persist BLS certificates via set_block_certificate()
+    /// when the consensus engine delivers a Finalization activity.
+    app: Arc<Mutex<App<MemoryStore>>>,
+}
 
 impl Reporter for LayerReporter {
     type Activity = commonware_consensus::simplex::types::Activity<
@@ -113,16 +123,52 @@ impl Reporter for LayerReporter {
         match &activity {
             Activity::Finalization(finalization) => {
                 // CONS-05: Finalized block with BLS threshold certificate.
-                // The certificate bytes are available here for block header storage.
+                // The certificate bytes are produced by the consensus engine after a quorum
+                // of validators certify. They are NOT available at certify() time.
                 let cert_bytes = finalization.certificate.encode().to_vec();
                 let payload_digest: [u8; 32] = finalization.proposal.payload.0;
+
+                // Determine the block height: query the App's last committed block.
+                // Since certify() -> execute_block() -> finalize_block() has already run,
+                // the App's LAST_BLOCK height IS the block that just received its certificate.
+                let height = {
+                    let app = self.app.lock().await;
+                    app.info().map(|b| b.height).unwrap_or(0)
+                };
+
                 tracing::info!(
+                    height = height,
                     view = ?finalization.proposal.round,
                     payload_digest = %hex::encode(payload_digest),
                     cert_len = cert_bytes.len(),
                     certificate = %hex::encode(&cert_bytes),
                     "Block finalized with BLS threshold certificate (CONS-05)"
                 );
+
+                // CONS-05: Persist the BLS certificate to the committed block record.
+                // This is the post-commit update path — the block was already committed
+                // by certify()/execute_block()/finalize_block(), and now we store the
+                // certificate that the consensus engine produced from the quorum of
+                // certify votes.
+                if !cert_bytes.is_empty() {
+                    let mut app = self.app.lock().await;
+                    match app.set_block_certificate(height, cert_bytes.clone()) {
+                        Ok(()) => {
+                            tracing::info!(
+                                height = height,
+                                cert_len = cert_bytes.len(),
+                                "BLS certificate stored in block record (CONS-05)"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                height = height,
+                                error = ?e,
+                                "Failed to store BLS certificate — CONS-05 gap"
+                            );
+                        }
+                    }
+                }
             }
             Activity::Notarization(notarization) => {
                 tracing::debug!(
@@ -274,7 +320,9 @@ async fn run_node(
     // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
     // This is what allows non-proposer validators to find payloads in verify().
     let relay = LayerRelay::new(layer_node.pending_payloads());
-    let reporter = LayerReporter;
+    // CONS-05: Reporter holds the app Arc so it can persist BLS certificates
+    // via set_block_certificate() when the Finalization activity fires.
+    let reporter = LayerReporter { app: app_arc.clone() };
 
     info!("LayerNode and LayerRelay created (shared pending_payloads)");
 
