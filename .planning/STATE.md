@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: verifying
-stopped_at: "Completed 02-04-PLAN.md Task 2 (checkpoint:human-verify approved; Phase 2 fully complete)"
-last_updated: "2026-03-19T17:49:59.627Z"
+stopped_at: Completed 02-05-PLAN.md (CONS-05 gap closed; BLS certificates now persisted via LayerReporter)
+last_updated: "2026-03-19T19:33:44.053Z"
 last_activity: 2026-03-19 — Plan 02-04 Task 2 approved; determinism audit confirmed clean (only comments and capabilities() boundary match); all CONS-* deliverables verified
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
   percent: 100
 ---
 
@@ -57,6 +57,7 @@ Progress: [██████████] 100% (Phase 2 plans complete)
 | Phase 02-commonware-consensus P02 | 20 | 2 tasks | 5 files |
 | Phase 02-commonware-consensus P03 | 90 | 2 tasks | 12 files |
 | Phase 02-commonware-consensus P04 | 10 | 2 tasks | 6 files |
+| Phase 02-commonware-consensus P05 | 4 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,8 @@ Recent decisions affecting current work:
 - [Plan 02-04]: verify-cert uses G1::decode + ops::verify_message::<MinSig> directly (avoids protocol-specific Subject/Namespace types in standalone tool)
 - [Plan 02-04]: testnet.sh documents Phase 3+ launch procedure; Phase 2 in-process simulated P2P cannot span separate OS processes — cross-process consensus requires Phase 3 authenticated channels
 - [Plan 02-04]: verify-consensus.sh supports SKIP_CRASH_TEST=1 for environments without process isolation
+- [Phase 02-commonware-consensus]: Certificate stored under '_cert/{height}' key with '_' prefix — excluded from app_hash, same as LAST_BLOCK, because certificate delivery timing is asynchronous and must not affect consensus determinism
+- [Phase 02-commonware-consensus]: LayerReporter changed from stateless unit struct to stateful struct holding Arc<Mutex<App<T>>> for post-commit certificate persistence (CONS-05)
 
 ### Pending Todos
 
@@ -105,6 +108,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T17:49:59.625Z
-Stopped at: Completed 02-04-PLAN.md Task 2 (checkpoint:human-verify approved; Phase 2 fully complete)
+Last session: 2026-03-19T19:33:44.051Z
+Stopped at: Completed 02-05-PLAN.md (CONS-05 gap closed; BLS certificates now persisted via LayerReporter)
 Resume file: None
