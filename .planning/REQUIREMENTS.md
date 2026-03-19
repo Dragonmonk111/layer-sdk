@@ -22,9 +22,9 @@
 
 - [ ] **CONS-01**: CometBFT ABCI server (`packages/abci/`, `app/slay3rd/`) replaced with Commonware `threshold_simplex` Automaton implementation
 - [ ] **CONS-02**: `propose()`, `verify()`, and `genesis()` Automaton callbacks wired to the existing `App<T>` state machine
-- [ ] **CONS-03**: Validator set management implemented via Commonware `Supervisor` trait — initial static validator set, extensible for future dynamic management
+- [ ] **CONS-03**: Validator set management implemented via Commonware Scheme participants and static config; crash recovery via WAL — initial static validator set, extensible for future dynamic management
 - [ ] **CONS-04**: State transitions are fully deterministic — no `HashMap` iteration, no `SystemTime`, no floats in any code path reachable from `certify()` or `verify()`
-- [ ] **CONS-05**: Consensus produces threshold signature certificates (BLS12-381) per block — prerequisite for zkVM rollup proofs
+- [ ] **CONS-05**: Consensus produces threshold signature certificates (BLS12-381) per block, stored in the block header — prerequisite for zkVM rollup proofs
 
 ### Ethereum Types
 
@@ -127,4 +127,4 @@
 
 ---
 *Requirements defined: 2026-03-18*
-*Last updated: 2026-03-18 — phase reorder (Commonware → Phase 2, Ethereum Types → Phase 3, WASM Runtime → Phase 4); "Ewasm" terminology replaced with "WASM Runtime (Ethereum Types)" / "de-Cosmos'd WASM runtime"*
+*Last updated: 2026-03-19 — CONS-03 updated to reflect Commonware 2026.3.0 API (Scheme participants + static config, not Supervisor trait); CONS-05 clarified to include "stored in the block header"*
