@@ -30,5 +30,8 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 hex = { workspace = true }
 
+[dev-dependencies]
+cosmwasm-std = { workspace = true }
+
 [features]
 rocksdb = ["layer-storage/rocksdb"]

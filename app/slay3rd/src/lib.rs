@@ -2,4 +2,4 @@
 
 pub mod block;
 pub mod mempool;
-// pub mod node;   — added in Task 2
+pub mod node;

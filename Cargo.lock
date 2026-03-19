@@ -4190,6 +4190,7 @@ dependencies = [
  "commonware-p2p",
  "commonware-runtime",
  "commonware-storage",
+ "cosmwasm-std",
  "hex",
  "layer-app",
  "layer-std",
