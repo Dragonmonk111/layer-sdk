@@ -120,6 +120,7 @@ impl Reporter for LayerReporter {
                     view = ?finalization.proposal.round,
                     payload_digest = %hex::encode(payload_digest),
                     cert_len = cert_bytes.len(),
+                    certificate = %hex::encode(&cert_bytes),
                     "Block finalized with BLS threshold certificate (CONS-05)"
                 );
             }

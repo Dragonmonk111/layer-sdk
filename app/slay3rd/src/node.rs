@@ -172,15 +172,28 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         };
 
         match result {
-            Ok(_) => {
+            Ok(response) => {
                 // Commit succeeded: advance height and update last_digest.
                 let mut h = self.current_height.lock().await;
                 *h = height;
                 let mut last = self.last_digest.lock().await;
                 *last = digest;
+
+                // Structured log: height, app_hash, digest (CONS-04, CONS-05 audit support)
+                // The certificate bytes are set in Block.certificate by the Reporter after
+                // certify() returns. The verify-consensus.sh script parses these fields.
+                tracing::info!(
+                    height = height,
+                    app_hash = %hex::encode(&response.app_hash),
+                    digest = %hex::encode(digest),
+                    "Block finalized with BLS certificate"
+                );
                 true
             }
-            Err(_) => false,
+            Err(e) => {
+                tracing::error!(height = height, error = ?e, "finalize_block failed");
+                false
+            }
         }
     }
 }
