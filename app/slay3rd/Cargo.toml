@@ -1,0 +1,34 @@
+[package]
+name = "slay3rd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "slay3rd"
+path = "src/main.rs"
+
+[dependencies]
+layer-app = { workspace = true }
+layer-std = { workspace = true }
+layer-storage = { workspace = true }
+
+commonware-consensus = { workspace = true }
+commonware-p2p = { workspace = true }
+commonware-cryptography = { workspace = true }
+commonware-runtime = { workspace = true }
+commonware-storage = { workspace = true }
+
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+bincode = { workspace = true }
+sha2 = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+hex = { workspace = true }
+
+[features]
+rocksdb = ["layer-storage/rocksdb"]
