@@ -62,7 +62,7 @@ completed: 2026-03-19
 - **Duration:** 10 min
 - **Started:** 2026-03-19T17:29:06Z
 - **Completed:** 2026-03-19T17:39:53Z
-- **Tasks:** 1 of 2 (Task 2 is a human-verify checkpoint)
+- **Tasks:** 2 of 2 (Task 2 checkpoint approved 2026-03-19)
 - **Files modified:** 6
 
 ## Accomplishments
@@ -78,7 +78,9 @@ Each task was committed atomically:
 
 1. **Task 1: Testnet orchestration, crash recovery test, certificate-in-header verification, and offline verifier** - `0ed1866` (feat)
 
-**Plan metadata:** (to be committed after SUMMARY)
+2. **Task 2: Verify testnet consensus, crash recovery, certificate in block header, and BLS verification** - `0ed1866` (checkpoint:human-verify — approved 2026-03-19; determinism audit run and documented)
+
+**Plan metadata:** `4d3770e` (docs: complete plan 04)
 
 ## Files Created/Modified
 
@@ -94,6 +96,27 @@ Each task was committed atomically:
 - `verify-cert` uses `G1::decode` + `ops::verify_message::<MinSig>` directly rather than the higher-level `Generic::certificate_verifier` API — avoids importing protocol-specific `Subject`/`Namespace` types from `commonware-consensus` in a standalone tool
 - `verify-cert --check-presence` mode: non-cryptographic validation that `Block.certificate` is `Some` and non-empty; used by `verify-consensus.sh` for CONS-05 log-based verification
 - `testnet.sh` documents the full Phase 3+ multi-node launch procedure; the Phase 2 in-process simulated P2P network cannot span separate OS processes (each process creates an isolated network) — this is the documented Phase 2 limitation
+
+## Task 2 Verification Results (Human Checkpoint Approved 2026-03-19)
+
+User approved the verification approach. Live 3-node testnet verification is deferred to Phase 3 because Phase 2 uses in-process simulated P2P that cannot span separate OS processes.
+
+The following automated checks were run as part of checkpoint completion:
+
+**1. Determinism audit** (`grep -rn 'HashMap\|HashSet\|SystemTime::now' app/slay3rd/src/ packages/app/src/`):
+
+All matches found are either:
+- Comments/documentation (e.g., `NOT SystemTime::now()`, `// NEVER use SystemTime::now() here.`, `// BTreeMap (not HashMap)`)
+- `packages/app/src/wasm/vm/cache.rs` `HashSet` in `capabilities()` — marked `DETERMINISM-SAFE` (not in certify/verify paths; cosmwasm_vm boundary requires `HashSet<String>`)
+
+**Verdict: No actual non-deterministic usage in certify/verify paths. Audit PASSES.**
+
+**2. Script syntax checks:**
+- `bash -n scripts/testnet.sh`: OK
+- `bash -n scripts/verify-consensus.sh`: OK
+
+**3. verify-cert build:**
+- `cargo build --manifest-path tools/verify-cert/Cargo.toml`: Finished (0.12s, already compiled)
 
 ## Deviations from Plan
 
@@ -127,6 +150,15 @@ Each task was committed atomically:
 - Phase 3 (Ethereum Types) can proceed — it does not depend on live testnet consensus
 - When Phase 3 wires real P2P (`commonware_p2p::authenticated`), `scripts/testnet.sh` and `scripts/verify-consensus.sh` can be run for live verification
 - The offline `verify-cert` tool is ready for use as soon as real certificate bytes are available from a live testnet
+
+## Self-Check: PASSED
+
+- FOUND: scripts/testnet.sh
+- FOUND: scripts/verify-consensus.sh
+- FOUND: tools/verify-cert/src/main.rs
+- FOUND: .planning/phases/02-commonware-consensus/02-04-SUMMARY.md
+- FOUND: commit 0ed1866 (feat: testnet orchestration, consensus verification, and BLS certificate verifier)
+- FOUND: commit 4d3770e (docs: complete plan 04)
 
 ---
 *Phase: 02-commonware-consensus*
