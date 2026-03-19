@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: Ready for Phase 2
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-03-18T22:54:22.542Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-19T16:29:45.990Z"
 last_activity: 2026-03-18 — Plan 01-03 complete; danger_will_robinson reference transmute eliminated via make_backend raw pointers; FOUND-02 and FOUND-03 satisfied
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
   percent: 100
 ---
 
@@ -53,6 +53,7 @@ Progress: [██████████] 100% (Phase 1 complete)
 | Phase 01-foundation P01 | 6 | 2 tasks | 32 files |
 | Phase 01-foundation P02 | 180 min | 3 tasks | 13 files |
 | Phase 01-foundation P03 | 50 | 2 tasks | 4 files |
+| Phase 02-commonware-consensus P01 | 6 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ Recent decisions affecting current work:
 - [Plan 01-02]: lib/cosmwasm uses upstream CosmWasm v2.3.2 as base (lay3r fork URL 404 at exec time) — lay3r-v2.3.2 branch created with Layer customizations applied
 - [Phase 01-foundation]: transmute on raw pointers retained for fat pointer lifetime erasure in make_backend — *ptr not &ref, meaningfully safer than original reference transmute
 - [Phase 01-foundation]: miri blocked by wasmer FFI and file I/O syscalls — documented as expected limitation, functional correctness verified by regular test suite
+- [Phase 02-commonware-consensus]: Commonware 2026.3.0 pinned exactly (ALPHA software; version confirmed via crates.io API 2026-03-19)
+- [Phase 02-commonware-consensus]: HashSet retained in capabilities() at cosmwasm_vm CacheOptions boundary; BTreeSet cannot satisfy impl Into<HashSet<String>>; capabilities() not in certify/verify paths
+- [Phase 02-commonware-consensus]: BTreeMap replaces HashMap in VmStore.iterators (backend.rs) and ValidCoins.seen (bank/keeper.rs) for determinism in App finalize_block paths
 
 ### Pending Todos
 
@@ -88,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T17:41:28.407Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-03-19T16:29:45.986Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
