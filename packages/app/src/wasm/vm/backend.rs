@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, mem::transmute};
+use std::{collections::BTreeMap, fmt, mem::transmute};
 use thiserror::Error;
 
 use cosmwasm_std::{
@@ -52,7 +52,7 @@ pub(crate) unsafe fn make_backend(
     let storage = VmStore {
         storage: storage_ptr,
         meter: meter as *const GasMeter,
-        iterators: HashMap::new(),
+        iterators: BTreeMap::new(),
     };
     let querier = VmQuerier {
         sm: sm as *const StateMachine,
@@ -333,7 +333,7 @@ pub struct VmStore {
     // (passed to get_instance, recycled before returning).
     storage: *mut dyn Storage,
     meter: *const GasMeter,
-    iterators: HashMap<u32, Iter>,
+    iterators: BTreeMap<u32, Iter>,
 }
 
 // SAFETY: VmStore is only used within a single-threaded cache call scope.

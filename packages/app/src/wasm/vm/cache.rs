@@ -37,6 +37,10 @@ pub fn wasmer_gas_to_sdk(gas: u64) -> u64 {
     gas / SDK_TO_WASMER_GAS_FACTOR
 }
 
+// DETERMINISM-SAFE: capabilities() is not called in certify/verify paths, only at VM
+// instantiation (cache init). The HashSet returned here feeds into cosmwasm_vm's structural
+// capability check — it is not iterated for consensus-affecting output. cosmwasm_vm's
+// CacheOptions::new() requires impl Into<HashSet<String>>, so HashSet is kept at this boundary.
 fn capabilities() -> HashSet<String> {
     CAPABILITIES.iter().map(|s| s.to_string()).collect()
 }

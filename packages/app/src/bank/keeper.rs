@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use tracing::debug_span;
 
 use cosmwasm_std::{ensure_eq, from_json, to_json_binary, BlockInfo, Coin, Event, Uint128};
@@ -526,14 +526,14 @@ impl Bank {
 
 struct ValidCoins<'a> {
     coins: std::slice::Iter<'a, Coin>,
-    seen: HashMap<&'a str, bool>,
+    seen: BTreeMap<&'a str, bool>,
 }
 
 impl<'a> ValidCoins<'a> {
     fn new(coins: &'a [Coin]) -> Self {
         ValidCoins {
             coins: coins.iter(),
-            seen: HashMap::new(),
+            seen: BTreeMap::new(),
         }
     }
 }
