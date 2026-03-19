@@ -4,3 +4,4 @@ pub mod block;
 pub mod config;
 pub mod mempool;
 pub mod node;
+pub mod relay;

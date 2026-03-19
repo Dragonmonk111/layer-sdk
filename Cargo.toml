@@ -81,6 +81,10 @@ commonware-p2p           = "2026.3.0"
 commonware-cryptography  = "2026.3.0"
 commonware-runtime       = "2026.3.0"
 commonware-storage       = "2026.3.0"
+commonware-parallel      = "2026.3.0"
+commonware-utils         = "2026.3.0"
+commonware-codec         = "2026.3.0"
+commonware-math          = "2026.3.0"
 tokio-stream = { version = "0.1.15", default-features = false }
 futures = { version = "0.3.30", default-features = false }
 
