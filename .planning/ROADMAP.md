@@ -46,13 +46,14 @@ Plans:
   2. A 3-node local testnet reaches consensus and all nodes produce the same AppHash for the same finalized block (determinism validated — no `HashMap` iteration, `SystemTime`, or floats in consensus-critical paths)
   3. A node that crashes and restarts from its WAL rejoins the testnet and catches up to the current block without manual intervention
   4. Each finalized block carries a BLS12-381 threshold signature certificate produced by Commonware `threshold_simplex`; the certificate is stored in the block header and verifiable by an offline verifier
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Create slay3rd crate with Commonware deps, determinism audit (HashMap -> BTreeMap)
-- [ ] 02-02-PLAN.md — Implement LayerNode CertifiableAutomaton, BlockPayload, Mempool
-- [ ] 02-03-PLAN.md — BLS DKG keygen tool, node config, P2P relay, main.rs consensus runtime
-- [ ] 02-04-PLAN.md — 3-node testnet scripts, crash recovery test, BLS certificate verification
+- [x] 02-01-PLAN.md — Create slay3rd crate with Commonware deps, determinism audit (HashMap -> BTreeMap)
+- [x] 02-02-PLAN.md — Implement LayerNode CertifiableAutomaton, BlockPayload, Mempool
+- [x] 02-03-PLAN.md — BLS DKG keygen tool, node config, P2P relay, main.rs consensus runtime
+- [x] 02-04-PLAN.md — 3-node testnet scripts, crash recovery test, BLS certificate verification
+- [ ] 02-05-PLAN.md — Gap closure: wire BLS certificate from Reporter to persistent storage (CONS-05)
 
 ### Phase 3: Ethereum Types
 **Goal**: Every package uses `alloy_primitives::Address` (20-byte EIP-55) instead of Cosmos bech32 `Addr`; transactions are signed and encoded in Ethereum format; RocksDB storage keys are re-encoded without data loss
@@ -106,7 +107,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-18 |
-| 2. Commonware Consensus | 4/4 | Complete   | 2026-03-19 |
+| 2. Commonware Consensus | 4/5 | Gap closure | 2026-03-19 |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |
 | 5. WAVS Integration | 0/TBD | Not started | - |
