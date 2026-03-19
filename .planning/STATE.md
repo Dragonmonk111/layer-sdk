@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
-status: Ready for Phase 2
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-03-19T17:27:13.752Z"
-last_activity: 2026-03-18 — Plan 01-03 complete; danger_will_robinson reference transmute eliminated via make_backend raw pointers; FOUND-02 and FOUND-03 satisfied
+status: Checkpoint — Phase 2 Plan 04 Task 2 awaiting human verification
+stopped_at: Completed 02-04-PLAN.md Task 1 (checkpoint:human-verify at Task 2)
+last_updated: "2026-03-19T17:39:53.000Z"
+last_activity: 2026-03-19 — Plan 02-04 complete; testnet.sh, verify-consensus.sh, tools/verify-cert created; structured logs added to node.rs and main.rs
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 100
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 1 of 6 (Foundation) — COMPLETE
-Plan: 3 of 3 in current phase — COMPLETE
-Status: Ready for Phase 2
-Last activity: 2026-03-18 — Plan 01-03 complete; danger_will_robinson reference transmute eliminated via make_backend raw pointers; FOUND-02 and FOUND-03 satisfied
+Phase: 2 of 6 (Commonware Consensus) — COMPLETE (checkpoint:human-verify pending)
+Plan: 4 of 4 in current phase — Task 1 COMPLETE, Task 2 awaiting human verification
+Status: Phase 2 artifacts complete; human verify checkpoint reached
+Last activity: 2026-03-19 — Plan 02-04 complete; testnet.sh, verify-consensus.sh, tools/verify-cert created; structured logs in certify path; all CONS-* deliverables complete
 
-Progress: [██████████] 100% (Phase 1 complete)
+Progress: [██████████] 100% (Phase 2 plans complete)
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100% (Phase 1 complete)
 | Phase 02-commonware-consensus P01 | 6 | 2 tasks | 6 files |
 | Phase 02-commonware-consensus P02 | 20 | 2 tasks | 5 files |
 | Phase 02-commonware-consensus P03 | 90 | 2 tasks | 12 files |
+| Phase 02-commonware-consensus P04 | 10 | 1 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Recent decisions affecting current work:
 - [Phase 02-commonware-consensus]: Phase 2 relay is in-process only (shared pending_payloads Arc); no actual P2P; Phase 3 TODO for authenticated channels
 - [Phase 02-commonware-consensus]: BLS sharing reconstructed from ChaCha8Rng::seed_from_u64(0) matching keygen tool; Phase 3 TODO: serialize Sharing to JSON
 - [Phase 02-commonware-consensus]: commonware_runtime::Metrics must be imported for .with_label() on tokio::Context; use commonware_p2p::Manager as _; for trait method visibility
+- [Plan 02-04]: verify-cert uses G1::decode + ops::verify_message::<MinSig> directly (avoids protocol-specific Subject/Namespace types in standalone tool)
+- [Plan 02-04]: testnet.sh documents Phase 3+ launch procedure; Phase 2 in-process simulated P2P cannot span separate OS processes — cross-process consensus requires Phase 3 authenticated channels
+- [Plan 02-04]: verify-consensus.sh supports SKIP_CRASH_TEST=1 for environments without process isolation
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T17:27:13.744Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-03-19T17:39:53Z
+Stopped at: Completed 02-04-PLAN.md (checkpoint:human-verify reached at Task 2)
 Resume file: None
