@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
-status: executing
-stopped_at: "Completed 02.1-01-PLAN.md — NodeConfig + gRPC module"
-last_updated: "2026-03-20T00:47:00.000Z"
+status: completed
+stopped_at: Completed 02.1-02-PLAN.md — authenticated P2P, RocksDB, gRPC, tx deserialization
+last_updated: "2026-03-20T02:33:11.436Z"
 last_activity: 2026-03-20 — Plan 02.1-01 complete; NodeConfig with PeerConfig/data_dir, LayerGrpcService with BroadcastTx and SyncQuery impls
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 11
+  completed_plans: 10
+  percent: 80
 ---
 
 # Project State
@@ -59,6 +59,7 @@ Progress: [████████--] 80% (Phase 2 complete; Phase 2.1 plan 1/3
 | Phase 02-commonware-consensus P04 | 10 | 2 tasks | 6 files |
 | Phase 02-commonware-consensus P05 | 4 | 1 tasks | 3 files |
 | Phase 02.1-functional-node P01 | 45 | 2 tasks | 5 files |
+| Phase 02.1-functional-node P02 | 13 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Plan 02.1-01]: NodeConfig.data_dir replaces both rocksdb_path and wal_path — single field, computed subpaths via wal_path() and app_data_path() methods; PeerConfig struct added for [[peers]] TOML table
 - [Plan 02.1-01]: SyncProvider trait imported as layer_app::SyncProvider — the sync module is private; trait is re-exported from layer_app crate root
 - [Plan 02.1-01]: LayerGrpcService<T> generic over PersistentStorage — same pattern as LayerNode; enables MemoryStore unit tests and RocksDB production use
+- [Phase 02.1-functional-node]: lookup Oracle implements Blocker directly — no oracle.control(pk) needed for simplex config
+- [Phase 02.1-functional-node]: Manual Clone impl required for LayerReporter<T> and LayerGrpcService<T> — Arc wrapping means T: Clone not needed; RockStore doesn't impl Clone
+- [Phase 02.1-functional-node]: Cosmos query HTTP/2 tower layer deferred to Plan 03 — Plan 02 wires handle_cosmos_query import; tower/axum deps available as transitive but not direct
 
 ### Roadmap Evolution
 
@@ -117,6 +121,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T00:47:00.000Z
-Stopped at: Completed 02.1-01-PLAN.md — NodeConfig + gRPC module
-Resume file: .planning/phases/02.1-functional-node/02.1-02-PLAN.md
+Last session: 2026-03-20T02:33:11.434Z
+Stopped at: Completed 02.1-02-PLAN.md — authenticated P2P, RocksDB, gRPC, tx deserialization
+Resume file: None
