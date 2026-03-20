@@ -127,6 +127,7 @@ cmd_start() {
         p2p_port=$((P2P_BASE + i))
         grpc_port=$((GRPC_BASE + i))
 
+        rm -rf "${dir}/data"
         mkdir -p "${dir}/data"
 
         # Read this node's ed25519 public key from key material
