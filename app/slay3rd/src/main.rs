@@ -265,7 +265,7 @@ async fn run_node(
 
     // Phase 2: MemoryStore (no RocksDB persistence yet).
     let storage = MemoryStore::default();
-    let logic = StateMachine::new(&AppConfig::new(&config.wal_path));
+    let logic = StateMachine::new(&AppConfig::new(&config.wal_path()));
     let mut app = App::new(storage, logic);
 
     // Attempt to load state; if none exists, initialize from genesis.
