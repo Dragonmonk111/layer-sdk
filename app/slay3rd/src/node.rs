@@ -268,9 +268,13 @@ where
 
         // Timestamp comes from the consensus context (same on all validators — DETERMINISTIC).
         // We derive a deterministic timestamp from the view number.
-        // In Plan 03 the runtime context will provide proper wall-clock time from the consensus engine.
-        // Using view * 1e9 ns = view seconds — monotonically increasing and deterministic.
-        let timestamp_nanos = context.round.view().get().wrapping_mul(1_000_000_000);
+        // IMPORTANT: Timestamp must be > genesis time (1_673_194_026_078_305_426 ns, Jan 2023).
+        // App::finalize_block() rejects blocks with timestamps <= the previous block's timestamp.
+        // Use genesis_time + view * 1e9 ns: monotonically increasing and deterministic.
+        // Each view adds 1 second, starting from genesis epoch to satisfy the timestamp check.
+        const GENESIS_TIME_NS: u64 = 1_673_194_026_078_305_426;
+        let view_num = context.round.view().get();
+        let timestamp_nanos = GENESIS_TIME_NS.saturating_add(view_num.saturating_mul(1_000_000_000));
 
         // Proposer is the leader's public key bytes from context.
         // PublicKey: Array: AsRef<[u8]> — safe to copy the bytes.

@@ -45,7 +45,7 @@ use commonware_cryptography::bls12381::primitives::{sharing::Mode, variant::MinS
 use commonware_cryptography::{ed25519, sha256};
 use commonware_math::algebra::Random;
 use commonware_p2p::authenticated::lookup::{Config as P2pConfig, Network};
-use commonware_p2p::{Address as P2pAddress, AddressableManager};
+use commonware_p2p::{Address as P2pAddress, AddressableManager, Recipients, Receiver, Sender as P2pSender};
 use commonware_parallel::Sequential;
 use commonware_runtime::{buffer::paged::CacheRef, Metrics, Runner};
 use commonware_utils::{ordered::Map, N3f1, NZU16, NZUsize};
@@ -362,9 +362,20 @@ async fn run_node(
         0,
     );
 
+    // Create an unbounded channel to forward payload bytes from the relay's broadcast()
+    // to the background P2P sender task. The relay serializes payloads and sends them here;
+    // the background task broadcasts them to all peers via the authenticated P2P channel.
+    let (payload_broadcast_tx, payload_broadcast_rx) =
+        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+
+    // Capture pending_payloads BEFORE layer_node is moved into the consensus config.
+    // This Arc is used by the payload relay receive task (Task B) to insert payloads
+    // received from peers so that verify() can find them.
+    let layer_node_pending_payloads = layer_node.pending_payloads();
+
     // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
     // This is what allows non-proposer validators to find payloads in verify().
-    let relay = LayerRelay::new(layer_node.pending_payloads());
+    let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx));
     // CONS-05: Reporter holds the app Arc so it can persist BLS certificates
     // via set_block_certificate() when the Finalization activity fires.
     let reporter = LayerReporter { app: app_arc.clone() };
@@ -374,6 +385,22 @@ async fn run_node(
     // -----------------------------------------------------------------------
     // BLS12-381 threshold scheme from DKG key material
     // -----------------------------------------------------------------------
+
+    // Decode our own Ed25519 public key first (needed to find our sorted position).
+    // This is decoded from km.ed25519_public_hex — the authoritative source for our key.
+    let our_ed25519_pk_early = match hex::decode(&km.ed25519_public_hex) {
+        Ok(bytes) => match ed25519::PublicKey::decode(bytes::Bytes::from(bytes)) {
+            Ok(pk) => pk,
+            Err(e) => {
+                error!(error = %e, "Failed to decode our Ed25519 public key");
+                return;
+            }
+        },
+        Err(e) => {
+            error!(error = %e, "Invalid hex in ed25519_public_hex");
+            return;
+        }
+    };
 
     // Decode all validator Ed25519 public keys.
     let mut participant_keys: Vec<ed25519::PublicKey> = Vec::new();
@@ -394,6 +421,36 @@ async fn run_node(
             }
         }
     }
+
+    // Sort participant_keys into binary order — required by commonware_utils::ordered::Set.
+    // The keygen tool stores keys in validator_index order, NOT sorted binary order.
+    // The sorted position of our key is what determines which BLS share we hold.
+    participant_keys.sort_by(|a, b| {
+        let a_bytes: &[u8] = a.as_ref();
+        let b_bytes: &[u8] = b.as_ref();
+        a_bytes.cmp(b_bytes)
+    });
+
+    // Find our sorted position — this is the index into the BLS shares array.
+    // shares[0] was assigned to the validator whose sorted position is 0, etc.
+    // Using validator_index here would be WRONG if the sorted order differs from
+    // the key generation order (which it does when keys are not pre-sorted).
+    let our_sorted_position = match participant_keys
+        .iter()
+        .position(|pk| pk.as_ref() == our_ed25519_pk_early.as_ref())
+    {
+        Some(pos) => pos,
+        None => {
+            error!("Our Ed25519 key is not present in the validator_public_keys list");
+            return;
+        }
+    };
+
+    info!(
+        validator_index = km.validator_index,
+        our_sorted_position = our_sorted_position,
+        "Ed25519 sorted position determined for BLS share selection"
+    );
 
     let participants = match commonware_utils::ordered::Set::try_from(participant_keys.as_slice()) {
         Ok(s) => s,
@@ -422,15 +479,17 @@ async fn run_node(
     }
     let (sharing, shares) = deal_anonymous::<MinSig, N3f1>(&mut rng, Mode::NonZeroCounter, n);
 
-    if km.validator_index >= shares.len() {
+    if our_sorted_position >= shares.len() {
         error!(
-            validator_index = km.validator_index,
+            our_sorted_position = our_sorted_position,
             total = shares.len(),
-            "validator_index out of range"
+            "sorted position out of range — BLS share count mismatch"
         );
         return;
     }
-    let our_share = shares[km.validator_index].clone();
+    // Use sorted position (not validator_index) to select the correct BLS share.
+    // shares[i] was assigned to the validator whose sorted Ed25519 key position is i.
+    let our_share = shares[our_sorted_position].clone();
 
     // Create the BLS threshold signing Scheme.
     let bls_scheme = match BlsScheme::<ed25519::PublicKey, MinSig>::signer(
@@ -536,7 +595,8 @@ async fn run_node(
         bytes::Bytes::from(ed25519_priv_bytes)
     ).expect("Invalid ed25519 private key bytes");
 
-    let our_ed25519_pk = participant_keys[km.validator_index].clone();
+    // Use the key decoded from km.ed25519_public_hex — already decoded early for sorted-position lookup.
+    let our_ed25519_pk = our_ed25519_pk_early.clone();
     let p2p_listen: SocketAddr = config.p2p_listen.parse()
         .expect("Invalid p2p_listen address in config");
 
@@ -556,6 +616,8 @@ async fn run_node(
     let (vote_sender, vote_receiver) = network.register(0, quota, 128);
     let (cert_sender, cert_receiver) = network.register(1, quota, 128);
     let (res_sender, res_receiver) = network.register(2, quota, 128);
+    // Channel 3: block payload relay (broadcast to peers, receive from peers)
+    let (payload_p2p_sender, mut payload_p2p_receiver) = network.register(3, quota, 128);
 
     // Build peer map: all validators including self
     // Address implements From<SocketAddr>; Map is built via try_into() from array/slice.
@@ -600,6 +662,79 @@ async fn run_node(
     network.start();
 
     info!("Authenticated P2P network initialized ({} peers)", config.peers.len() + 1);
+
+    // -----------------------------------------------------------------------
+    // Payload relay P2P tasks
+    //
+    // Task A (broadcast): reads serialized payload bytes from payload_broadcast_rx
+    //   (written by LayerRelay::broadcast() on the proposer) and sends them to
+    //   all peers via the authenticated P2P channel 3.
+    //
+    // Task B (receive): reads incoming payload bytes from the P2P channel 3 receiver
+    //   and inserts deserialized BlockPayloads into the shared pending_payloads map,
+    //   enabling non-proposer validators to succeed in verify().
+    // -----------------------------------------------------------------------
+
+    // Task A: forward payload bytes from relay to P2P (proposer path)
+    {
+        let mut sender = payload_p2p_sender.clone();
+        let mut rx = payload_broadcast_rx;
+        tokio::spawn(async move {
+            while let Some(payload_bytes) = rx.recv().await {
+                match P2pSender::send(&mut sender, Recipients::All, payload_bytes, true).await {
+                    Ok(sent_to) => {
+                        tracing::info!(
+                            peers = sent_to.len(),
+                            "Payload relay: broadcast to {} peers via P2P",
+                            sent_to.len()
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = ?e, "Payload relay: P2P broadcast failed");
+                    }
+                }
+            }
+            tracing::info!("Payload relay broadcast task exited");
+        });
+    }
+
+    // Task B: receive payload bytes from P2P, insert into pending_payloads (non-proposer path)
+    {
+        let pending_payloads = layer_node_pending_payloads.clone();
+        tokio::spawn(async move {
+            loop {
+                match payload_p2p_receiver.recv().await {
+                    Ok((_sender_pk, message)) => {
+                        // Deserialize the BlockPayload from the received bytes.
+                        // IoBuf implements AsRef<[u8]>.
+                        let payload_bytes: &[u8] = message.as_ref();
+                        match slay3rd::block::BlockPayload::from_bytes(payload_bytes) {
+                            Ok(payload) => {
+                                let digest = payload.digest();
+                                let mut pending = pending_payloads.lock().await;
+                                if !pending.contains_key(&digest) {
+                                    tracing::debug!(
+                                        height = payload.height,
+                                        digest = %hex::encode(digest),
+                                        "Payload relay: received from peer, inserting into pending_payloads"
+                                    );
+                                    pending.insert(digest, payload);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, "Payload relay: received malformed payload bytes");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::info!(error = ?e, "Payload relay receive task: channel closed");
+                        break;
+                    }
+                }
+            }
+            tracing::info!("Payload relay receive task exited");
+        });
+    }
 
     // -----------------------------------------------------------------------
     // Simplex consensus Engine

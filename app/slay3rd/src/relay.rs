@@ -5,15 +5,20 @@
 //! engine (after the proposer calls propose()), it ensures the payload is available in the
 //! shared map so that verify() can look it up.
 //!
-//! In a multi-node deployment, the Relay would also serialize the BlockPayload and transmit
-//! it to peer validators via commonware-p2p. For Phase 2 localhost testing, the relay is
-//! in-process only — all validators share a single process via test fixtures, and the
-//! pending_payloads sharing is the key mechanism.
+//! In a multi-process deployment, the relay must also serialize and transmit the payload to
+//! peer validators via the authenticated P2P channels. The `broadcast_tx` field holds a
+//! tokio mpsc sender that forwards serialized payload bytes to a background task in main.rs
+//! which then calls `p2p_sender.send(Recipients::All, bytes, true)` to broadcast to peers.
 //!
-//! Phase 3+ TODO: Add actual P2P broadcast using commonware-p2p authenticated channels.
-//! When a peer broadcasts a payload, the Relay receives the bytes, deserializes the
-//! BlockPayload, and inserts it into the shared pending_payloads map. This is what enables
-//! non-proposer validators to verify and certify proposals.
+//! When a peer receives a payload broadcast, the background receiver task calls
+//! `receive_payload()` to deserialize and insert into pending_payloads, making the
+//! payload available for verify().
+//!
+//! Wire in main.rs:
+//!   let (broadcast_tx, broadcast_rx) = tokio::sync::mpsc::unbounded_channel();
+//!   let relay = LayerRelay::new(layer_node.pending_payloads(), Some(broadcast_tx));
+//!   // Spawn task: reads broadcast_rx, sends via p2p_payload_sender.send(Recipients::All, ...)
+//!   // Spawn task: reads p2p_payload_receiver, calls relay.receive_payload(...)
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -25,14 +30,16 @@ use tracing::debug;
 
 use crate::block::BlockPayload;
 
-/// Phase 2 in-process relay for Layer consensus.
+/// Layer relay for authenticated cross-process consensus.
 ///
 /// Shares the `pending_payloads` Arc with `LayerNode` so that when the
 /// consensus engine calls `broadcast()` (after the proposer's `propose()`),
-/// any locally-available payload is visible to `verify()`.
+/// the serialized payload bytes are forwarded to a background task that
+/// transmits them to peer validators via the authenticated P2P channel.
 ///
-/// The relay also maintains a separate `payload_store` for serialized payloads
-/// that can be sent to peers (Phase 3 TODO: add P2P sender).
+/// Peer validators receive the bytes via a P2P receiver task that calls
+/// `receive_payload()` to insert the deserialized BlockPayload into the
+/// shared pending_payloads map, enabling verify() to succeed.
 ///
 /// CONSTRUCTION: Always create with `LayerRelay::new(layer_node.pending_payloads(), ...)`
 /// to ensure the correct Arc is shared.
@@ -41,18 +48,21 @@ pub struct LayerRelay {
     /// SHARED with LayerNode::pending_payloads — same Arc instance.
     ///
     /// The proposer's `propose()` inserts payloads into this map.
-    /// The relay's `broadcast()` ensures the local payload (if any) is available here.
     /// Non-proposer validators populate this map when they receive a broadcast from the relay.
     ///
     /// INVARIANT: All validators that receive a broadcast for digest D must have
     /// BlockPayload for D in this map before verify() is called for D.
     pending_payloads: Arc<Mutex<BTreeMap<[u8; 32], BlockPayload>>>,
 
-    /// Local serialized payload store: digest -> bincode-serialized BlockPayload bytes.
+    /// Sender half of an unbounded channel used to forward serialized payload bytes
+    /// to the background P2P broadcast task in main.rs.
     ///
-    /// Used when a peer requests a specific payload by digest (Phase 3+).
-    /// In Phase 2, this is populated but not consumed via P2P.
-    payload_store: Arc<Mutex<BTreeMap<[u8; 32], Vec<u8>>>>,
+    /// When `broadcast(digest)` is called by the consensus engine (proposer only),
+    /// the relay serializes the payload from pending_payloads and sends the bytes here.
+    /// The background task reads bytes and calls p2p_sender.send(Recipients::All, bytes).
+    ///
+    /// `None` when running in unit tests (in-process mode, no P2P needed).
+    broadcast_tx: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
 }
 
 impl LayerRelay {
@@ -65,16 +75,16 @@ impl LayerRelay {
     /// # Arguments
     ///
     /// * `pending_payloads` - The shared pending_payloads Arc from `LayerNode::pending_payloads()`
-    pub fn new(pending_payloads: Arc<Mutex<BTreeMap<[u8; 32], BlockPayload>>>) -> Self {
+    /// * `broadcast_tx` - Optional channel sender for forwarding serialized payload bytes to
+    ///   the P2P broadcast background task. Pass `None` for in-process unit tests.
+    pub fn new(
+        pending_payloads: Arc<Mutex<BTreeMap<[u8; 32], BlockPayload>>>,
+        broadcast_tx: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
+    ) -> Self {
         LayerRelay {
             pending_payloads,
-            payload_store: Arc::new(Mutex::new(BTreeMap::new())),
+            broadcast_tx,
         }
-    }
-
-    /// Access to the payload_store for external use (e.g., serving payloads to peers).
-    pub fn payload_store(&self) -> Arc<Mutex<BTreeMap<[u8; 32], Vec<u8>>>> {
-        self.payload_store.clone()
     }
 
     /// Insert a received payload from a peer into the shared pending_payloads map.
@@ -118,47 +128,50 @@ impl Relay for LayerRelay {
     /// serialized payload bytes to peer validators so they can populate their
     /// own `pending_payloads` before `verify()` is called.
     ///
-    /// Phase 2 (in-process only): The payload is already in pending_payloads
-    /// from `propose()`. We serialize it to the payload_store for future P2P use
-    /// but do not actually transmit to remote peers.
+    /// When `broadcast_tx` is set (multi-process mode), the serialized payload bytes
+    /// are forwarded to the background P2P broadcast task which sends them to all peers
+    /// via `p2p_sender.send(Recipients::All, bytes, true)`.
     ///
-    /// Phase 3+ TODO: Send serialized bytes to all registered peers via
-    /// `commonware-p2p` authenticated channels.
+    /// When `broadcast_tx` is None (unit test / in-process mode), the payload is
+    /// already in pending_payloads from `propose()` and is visible to all in-process
+    /// validators without additional broadcast.
     async fn broadcast(&mut self, payload: Self::Digest) {
         let digest_bytes: [u8; 32] = payload.0;
 
-        // Look up the payload from pending_payloads to serialize for the store.
+        // Look up and serialize the payload from pending_payloads.
         let serialized = {
             let pending = self.pending_payloads.lock().await;
             pending.get(&digest_bytes).map(|p| p.to_bytes())
         };
 
-        if let Some(bytes) = serialized {
-            let mut store = self.payload_store.lock().await;
-            store.insert(digest_bytes, bytes);
-            debug!(
-                digest = hex::encode(digest_bytes),
-                "LayerRelay: broadcast called, payload serialized to store"
-            );
-        } else {
-            // If the payload isn't in pending_payloads, it may be a relay request
-            // for a historical payload. Log for debugging.
-            tracing::warn!(
-                digest = hex::encode(digest_bytes),
-                "LayerRelay: broadcast called for unknown digest — payload not in pending_payloads"
-            );
-        }
+        match serialized {
+            Some(payload_bytes) => {
+                debug!(
+                    digest = hex::encode(digest_bytes),
+                    bytes = payload_bytes.len(),
+                    "LayerRelay: broadcasting payload to peers"
+                );
 
-        // Phase 3+ TODO: Transmit serialized bytes to peer validators via P2P:
-        //
-        //   for peer in &self.peer_senders {
-        //       if let Some(bytes) = payload_bytes.as_ref() {
-        //           peer.send(bytes.clone()).await;
-        //       }
-        //   }
-        //
-        // On the receiving end, call `self.receive_payload(&bytes).await` to
-        // insert the deserialized BlockPayload into the peer's pending_payloads.
+                // Forward bytes to the background P2P broadcast task (if wired).
+                if let Some(tx) = &self.broadcast_tx {
+                    let buf = bytes::Bytes::from(payload_bytes);
+                    if tx.send(buf).is_err() {
+                        tracing::warn!(
+                            digest = hex::encode(digest_bytes),
+                            "LayerRelay: broadcast_tx channel closed — P2P broadcast skipped"
+                        );
+                    }
+                }
+            }
+            None => {
+                // Payload not in pending_payloads — this may happen if the proposer
+                // already removed it (e.g., on re-broadcast of an old view).
+                tracing::warn!(
+                    digest = hex::encode(digest_bytes),
+                    "LayerRelay: broadcast called for unknown digest — payload not in pending_payloads"
+                );
+            }
+        }
     }
 }
 
@@ -178,7 +191,8 @@ mod tests {
 
     fn make_relay() -> (LayerRelay, Arc<Mutex<BTreeMap<[u8; 32], BlockPayload>>>) {
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
-        let relay = LayerRelay::new(pending.clone());
+        // Pass None for broadcast_tx — in-process test mode, no P2P needed.
+        let relay = LayerRelay::new(pending.clone(), None);
         (relay, pending)
     }
 
@@ -211,24 +225,29 @@ mod tests {
     }
 
     #[test]
-    fn test_broadcast_serializes_to_payload_store() {
-        let (mut relay, pending_arc) = make_relay();
+    fn test_broadcast_sends_bytes_to_channel() {
         rt().block_on(async {
+            let pending = Arc::new(Mutex::new(BTreeMap::new()));
+            let (broadcast_tx, mut broadcast_rx) = tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+            let mut relay = LayerRelay::new(pending.clone(), Some(broadcast_tx));
+
             let payload = make_payload(1);
             let digest_bytes = payload.digest();
             let digest = sha256::Digest::from(digest_bytes);
 
             // Insert payload into pending_payloads first (as propose() would)
             {
-                let mut pending = pending_arc.lock().await;
-                pending.insert(digest_bytes, payload.clone());
+                let mut pending_lock = pending.lock().await;
+                pending_lock.insert(digest_bytes, payload.clone());
             }
 
-            // Call broadcast — should serialize to payload_store
+            // Call broadcast — should send serialized bytes to the channel
             relay.broadcast(digest).await;
 
-            let store = relay.payload_store.lock().await;
-            assert!(store.contains_key(&digest_bytes), "payload should be in payload_store after broadcast");
+            // Receive bytes from channel
+            let received = broadcast_rx.try_recv();
+            assert!(received.is_ok(), "broadcast should send serialized payload bytes to channel");
+            assert!(!received.unwrap().is_empty(), "broadcast bytes should be non-empty");
         });
     }
 
