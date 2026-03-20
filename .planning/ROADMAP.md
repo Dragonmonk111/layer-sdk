@@ -15,6 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation** - Clean the codebase, fix the unsafe VM transmute, resolve 2-year-old dependency conflicts, and fork CosmWasm as a git submodule (completed 2026-03-18)
 - [x] **Phase 2: Commonware Consensus** - Replace CometBFT ABCI with Commonware simplex Automaton — multi-node testnet reaches consensus with BLS threshold certificates (completed 2026-03-19)
 - [x] **Phase 2.1: Functional Node** (INSERTED) - Real cross-process P2P, gRPC interface, tx pipeline, RocksDB persistence (gap closure in progress) (completed 2026-03-20)
+- [ ] **Phase 2.2: Node Stability** (INSERTED) - Fix gRPC concurrency bug and Stargate crash
 - [ ] **Phase 3: Ethereum Types** - Replace Cosmos bech32 addresses with Ethereum 20-byte addresses and ABI encoding throughout every package
 - [ ] **Phase 4: WASM Runtime (Ethereum Types)** - Replace the CosmWasm VM with a de-Cosmos'd WASM runtime on wasmtime — Rust contracts using Ethereum-style host functions can deploy and execute end-to-end
 - [ ] **Phase 5: WAVS Integration** - Deploy AVS contracts on Layer and demonstrate the full bidirectional state loop with a WAVS component
@@ -56,6 +57,22 @@ Plans:
 - [x] 02-04-PLAN.md — 3-node testnet scripts, crash recovery test, BLS certificate verification
 - [x] 02-05-PLAN.md — Gap closure: wire BLS certificate from Reporter to persistent storage (CONS-05)
 
+### Phase 02.2: Node Stability — fix gRPC concurrency bug and Stargate crash (INSERTED)
+
+**Goal:** Eliminate gRPC query starvation under concurrent load by migrating App<T> from Mutex to RwLock, and prevent node crashes from unhandled CosmosMsg variants (Stargate, Any, Gov, Distribution) by replacing all todo!()/unimplemented!() panic sites with graceful error returns
+**Requirements**: STAB-01, STAB-02, STAB-03, STAB-04, STAB-05
+**Depends on:** Phase 2.1
+**Success Criteria** (what must be TRUE):
+  1. Concurrent gRPC queries execute without blocking behind finalize_block — all read-only gRPC handlers use `tokio::sync::RwLock::read()`, write paths use `RwLock::write()`
+  2. A WASM contract emitting `CosmosMsg::Stargate` or `CosmosMsg::Any` receives an error response — the node continues running without crashing
+  3. All `todo!()` and `unimplemented!()` calls in `cosmwasm_msg_to_layer()` and `parse_app_query()` are replaced with `Err(...)` returns
+  4. `cargo test -p slay3rd -p layer-app -p layer-cosmos --lib` passes with zero failures
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02.2-01-PLAN.md — Migrate App<T> from Mutex to RwLock across grpc.rs, node.rs, main.rs
+- [ ] 02.2-02-PLAN.md — Replace todo!()/unimplemented!() panic sites with graceful errors in keeper.rs and query.rs
+
 ### Phase 02.1: Functional Node (INSERTED)
 
 **Goal:** Deliver a fully functional Layer node with real cross-process authenticated P2P consensus, a tonic gRPC interface (Cosmos queries, BroadcastTx, state sync streaming), a working transaction pipeline (submit via gRPC to mempool to block to CosmWasm execute), and RocksDB persistence — the minimum viable baseline before the Ethereum type migration begins
@@ -73,7 +90,7 @@ Plans:
 - [x] 02.1-01-PLAN.md — Config + dependencies + gRPC service module
 - [x] 02.1-02-PLAN.md — main.rs integration (authenticated P2P, RocksDB, gRPC wiring, tx pipeline)
 - [x] 02.1-03-PLAN.md — Testnet scripts + Docker Compose + E2E verification
-- [ ] 02.1-04-PLAN.md — Gap closure: Cosmos query dispatch + tx-sender tool + full e2e contract deployment
+- [x] 02.1-04-PLAN.md — Gap closure: Cosmos query dispatch + tx-sender tool + full e2e contract deployment
 
 ### Phase 3: Ethereum Types
 **Goal**: Every package uses `alloy_primitives::Address` (20-byte EIP-55) instead of Cosmos bech32 `Addr`; transactions are signed and encoded in Ethereum format; RocksDB storage keys are re-encoded without data loss
@@ -122,13 +139,14 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-18 |
 | 2. Commonware Consensus | 5/5 | Complete   | 2026-03-19 |
 | 2.1 Functional Node | 4/4 | Complete   | 2026-03-20 |
+| 2.2 Node Stability | 0/2 | Planning complete | - |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |
 | 5. WAVS Integration | 0/TBD | Not started | - |

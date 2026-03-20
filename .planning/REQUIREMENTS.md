@@ -26,6 +26,14 @@
 - [x] **CONS-04**: State transitions are fully deterministic — no `HashMap` iteration, no `SystemTime`, no floats in any code path reachable from `certify()` or `verify()`
 - [x] **CONS-05**: Consensus produces threshold signature certificates (BLS12-381) per block, stored in the block header — prerequisite for zkVM rollup proofs
 
+### Node Stability
+
+- [ ] **STAB-01**: gRPC query endpoints remain responsive under concurrent load — `Arc<RwLock<App<T>>>` allows shared query reads while `finalize_block` holds an exclusive write lock
+- [ ] **STAB-02**: `CosmosMsg::Stargate` emitted by a WASM contract returns a graceful error and fails the contract call cleanly — the node does NOT crash
+- [ ] **STAB-03**: `CosmosMsg::Any` and all other unhandled `CosmosMsg` variants return graceful errors — wildcard arm in `cosmwasm_msg_to_layer` returns `Err`, never panics
+- [ ] **STAB-04**: `/app/version` query path returns `QueryError::UnsupportedPath`, not a panic
+- [ ] **STAB-05**: Concurrent `BroadcastTx` calls while a block is being finalized complete without error — shared read lock in `check_tx` does not block behind `finalize_block` write lock
+
 ### Ethereum Types
 
 - [ ] **TYPES-01**: Cosmos bech32 `Addr` type replaced with `alloy_primitives::Address` (20-byte EIP-55) throughout all packages — auth, bank, wasm keeper, proto, and grpc layers
@@ -100,6 +108,11 @@
 | CONS-03 | Phase 2 | Complete |
 | CONS-04 | Phase 2 | Complete |
 | CONS-05 | Phase 2 | Complete |
+| STAB-01 | Phase 2.2 | Pending |
+| STAB-02 | Phase 2.2 | Pending |
+| STAB-03 | Phase 2.2 | Pending |
+| STAB-04 | Phase 2.2 | Pending |
+| STAB-05 | Phase 2.2 | Pending |
 | TYPES-01 | Phase 3 | Pending |
 | TYPES-02 | Phase 3 | Pending |
 | TYPES-03 | Phase 3 | Pending |
@@ -121,10 +134,10 @@
 | ZKVM-04 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 29 total
-- Mapped to phases: 29
+- v1 requirements: 34 total
+- Mapped to phases: 34
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-18*
-*Last updated: 2026-03-19 — CONS-03 updated to reflect Commonware 2026.3.0 API (Scheme participants + static config, not Supervisor trait); CONS-05 clarified to include "stored in the block header"*
+*Last updated: 2026-03-20 — Added STAB-01 through STAB-05 for Phase 2.2 Node Stability (gRPC concurrency fix and Stargate crash elimination)*
