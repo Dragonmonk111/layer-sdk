@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 02-05-PLAN.md (CONS-05 gap closed; BLS certificates now persisted via LayerReporter)
-last_updated: "2026-03-19T22:31:00.282Z"
+stopped_at: Phase 02.1 context gathered
+last_updated: "2026-03-20T01:13:29.856Z"
 last_activity: 2026-03-19 — Plan 02-04 Task 2 approved; determinism audit confirmed clean (only comments and capabilities() boundary match); all CONS-* deliverables verified
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 2
   total_plans: 8
   completed_plans: 8
@@ -92,9 +92,14 @@ Recent decisions affecting current work:
 - [Phase 02-commonware-consensus]: commonware_runtime::Metrics must be imported for .with_label() on tokio::Context; use commonware_p2p::Manager as _; for trait method visibility
 - [Plan 02-04]: verify-cert uses G1::decode + ops::verify_message::<MinSig> directly (avoids protocol-specific Subject/Namespace types in standalone tool)
 - [Plan 02-04]: testnet.sh documents Phase 3+ launch procedure; Phase 2 in-process simulated P2P cannot span separate OS processes — cross-process consensus requires Phase 3 authenticated channels
+- [Phase 02-CONFIRMED]: commonware_p2p::simulated is designed for commonware_runtime::deterministic only; when paired with commonware_runtime::tokio it calls TcpListener::bind(OsRng.next_u32() as random IPv4) which fails with BindFailed on macOS — Phase 3 MUST switch to commonware_p2p::authenticated
 - [Plan 02-04]: verify-consensus.sh supports SKIP_CRASH_TEST=1 for environments without process isolation
 - [Phase 02-commonware-consensus]: Certificate stored under '_cert/{height}' key with '_' prefix — excluded from app_hash, same as LAST_BLOCK, because certificate delivery timing is asynchronous and must not affect consensus determinism
 - [Phase 02-commonware-consensus]: LayerReporter changed from stateless unit struct to stateful struct holding Arc<Mutex<App<T>>> for post-commit certificate persistence (CONS-05)
+
+### Roadmap Evolution
+
+- Phase 2.1 inserted after Phase 2: Functional Node (URGENT) — get real cross-process P2P, working CosmWasm contract deployment/execution, and a functional gRPC interface before starting the Ethereum type migrations
 
 ### Pending Todos
 
@@ -108,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T19:33:44.051Z
-Stopped at: Completed 02-05-PLAN.md (CONS-05 gap closed; BLS certificates now persisted via LayerReporter)
-Resume file: None
+Last session: 2026-03-20T01:13:29.850Z
+Stopped at: Phase 02.1 context gathered
+Resume file: .planning/phases/02.1-functional-node/02.1-CONTEXT.md
