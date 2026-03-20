@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.3
+milestone: v2.3.2
 milestone_name: milestone
 status: completed
 stopped_at: Completed 02.1-04-PLAN.md — Cosmos query dispatch via axum fallback + tx-sender binary for full contract deployment e2e
-last_updated: "2026-03-20T16:59:03.067Z"
-last_activity: 2026-03-20 — Plan 02.1-01 complete; NodeConfig with PeerConfig/data_dir, LayerGrpcService with BroadcastTx and SyncQuery impls
+last_updated: "2026-03-20T17:50:50.274Z"
+last_activity: 2026-03-20
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 12
   completed_plans: 12
-  percent: 80
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +25,17 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 2.1 of 7 (Functional Node) — COMPLETE
-Plan: 4 of 4 in current phase — COMPLETE
+Phase: 3 of 7 (ethereum types)
+Plan: Not started
 Status: Phase 02.1 all 4 plans complete; Cosmos query dispatch wired, tx-sender binary created, full e2e contract deployment flow enabled
-Last activity: 2026-03-20 — Plan 02.1-04 complete; Cosmos SDK gRPC query dispatch via axum fallback + tools/tx-sender binary (MsgStoreCode/MsgInstantiateContract/MsgExecuteContract) + testnet.sh e2e updated
+Last activity: 2026-03-20
 
 Progress: [██████████] 100% (Phase 2.1 complete — 4/4 plans done)
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 3
 - Average duration: ~93 min
 - Total execution time: ~4.8 hours
@@ -46,6 +47,7 @@ Progress: [██████████] 100% (Phase 2.1 complete — 4/4 plan
 | 01-foundation | 3/3 | ~4.8h | ~96 min |
 
 **Recent Trend:**
+
 - Last 5 plans: 01-01 (workspace cleanup), 01-02 (CosmWasm v2 upgrade), 01-03 (unsafe transmute elimination)
 - Trend: On track
 

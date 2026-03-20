@@ -67,7 +67,7 @@ Plans:
   3. Transactions submitted via gRPC BroadcastTx pass check_tx, enter the mempool, get included in blocks, and execute CosmWasm messages
   4. State persists across node restarts via RocksDB (`RockStore` replacing `MemoryStore`)
   5. End-to-end: deploy contracts/root/ contract (StoreCode + InstantiateContract + ExecuteContract msgs) via gRPC, query resulting state
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 02.1-01-PLAN.md — Config + dependencies + gRPC service module
