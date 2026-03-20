@@ -25,7 +25,7 @@ use layer_app::App;
 use layer_std::api::Block;
 use layer_std::Timestamp;
 use layer_storage::PersistentStorage;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, RwLock, oneshot};
 
 // Cosmos tx deserialization for execute_block()
 use layer_cosmos::parse_cosmos_tx;
@@ -46,7 +46,8 @@ const MAX_BLOCK_TXS: usize = 100;
 /// - `P`: The public key type from the consensus signing scheme (e.g., `bls12381::PublicKey`)
 pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> {
     /// The Layer application state machine, wrapped for shared async access.
-    app: Arc<Mutex<App<T>>>,
+    /// RwLock allows concurrent gRPC reads while finalize_block holds write lock.
+    app: Arc<RwLock<App<T>>>,
     /// Application-managed transaction mempool.
     mempool: Arc<Mutex<Mempool>>,
     /// Pending block payloads keyed by their digest, awaiting verify/certify.
@@ -77,7 +78,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
 }
 
 impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P> {
-    pub fn new(app: Arc<Mutex<App<T>>>, mempool: Arc<Mutex<Mempool>>, initial_height: u64) -> Self {
+    pub fn new(app: Arc<RwLock<App<T>>>, mempool: Arc<Mutex<Mempool>>, initial_height: u64) -> Self {
         LayerNode {
             app,
             mempool,
@@ -89,7 +90,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
     }
 
     /// Access to the app for external callers (e.g., gRPC query handler).
-    pub fn app(&self) -> Arc<Mutex<App<T>>> {
+    pub fn app(&self) -> Arc<RwLock<App<T>>> {
         self.app.clone()
     }
 
@@ -148,11 +149,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         // Each entry in payload.txs is a raw Cosmos proto-encoded tx (cosmos.tx.v1beta1.TxRaw).
         // parse_cosmos_tx() handles the full proto decode + signature extraction.
         let chain_id = {
-            let app = self.app.lock().await;
+            let app = self.app.read().await;  // SHARED read lock — read-only
             app.info()
                 .map(|b| b.chain_id.clone())
                 .unwrap_or_else(|| "slay3r-testnet-1".to_string())
-        };
+        };  // read lock released here
 
         let mut txs: Vec<layer_std::Tx> = Vec::with_capacity(payload.txs.len());
         for raw in &payload.txs {
@@ -186,9 +187,9 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         };
 
         let result = {
-            let mut app = self.app.lock().await;
+            let mut app = self.app.write().await;  // EXCLUSIVE write lock — mutates state
             app.finalize_block(block)
-        };
+        };  // write lock released here
 
         match result {
             Ok(response) => {
@@ -233,7 +234,7 @@ where
         // Return initial app_hash from genesis state as a sha256::Digest.
         // app_hash() returns Vec<u8>; we normalize to [u8; 32] via SHA-256 if needed.
         let app_hash = {
-            let app = self.app.lock().await;
+            let app = self.app.read().await;  // SHARED read lock — read-only
             app.app_hash()
         };
         // If app_hash is already 32 bytes, use it directly as the digest.
@@ -361,7 +362,7 @@ mod tests {
     use layer_app::genesis::{GenesisState, WasmParams};
     use layer_std::api::{InitChainRequest, TmPubKey, ValidatorUpdate};
     use layer_storage::MemoryStore;
-    use tokio::sync::Mutex;
+    use tokio::sync::{Mutex, RwLock};
 
     use crate::block::BlockPayload;
     use crate::mempool::Mempool;
@@ -419,7 +420,7 @@ mod tests {
     fn make_layer_node_locked(
         _guard: &std::sync::MutexGuard<()>,
     ) -> TestNode {
-        let app = Arc::new(Mutex::new(init_app()));
+        let app = Arc::new(RwLock::new(init_app()));
         let mempool = Arc::new(Mutex::new(Mempool::new(1000)));
         // App starts with initial_height=1, meaning first block is height=1.
         // LAST_BLOCK in init() is stored as initial_height - 1 = 0.
@@ -563,7 +564,7 @@ mod tests {
         // Get initial app_hash
         let initial_hash = rt().block_on(async {
             let app_arc = node.app();
-            let app = app_arc.lock().await;
+            let app = app_arc.read().await;
             app.app_hash()
         });
 
@@ -585,7 +586,7 @@ mod tests {
         // App hash should not change after verify (only reads pending_payloads)
         let after_hash = rt().block_on(async {
             let app_arc = node.app();
-            let app = app_arc.lock().await;
+            let app = app_arc.read().await;
             app.app_hash()
         });
         assert_eq!(

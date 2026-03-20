@@ -20,7 +20,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use http::header::CONTENT_TYPE;
 use http_body_util::BodyExt;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tonic::{Request, Response, Status};
 
 use layer_app::App;
@@ -44,12 +44,12 @@ use crate::mempool::Mempool;
 
 /// gRPC service for slay3rd, generic over the persistent storage backend.
 ///
-/// Shared between the gRPC server task and the consensus engine via `Arc<Mutex<_>>`.
-/// Both the `App<T>` and the `Mempool` are behind async mutexes so they can be
-/// accessed from multiple tasks without blocking.
+/// App<T> is behind Arc<RwLock<App<T>>> to allow concurrent gRPC read queries
+/// while finalize_block holds an exclusive write lock. Mempool remains behind
+/// Arc<Mutex<Mempool>> (no concurrent readers needed for the mempool).
 pub struct LayerGrpcService<T: PersistentStorage + Send + Sync + 'static> {
     /// Shared application state — contains the state machine and storage backend.
-    pub app: Arc<Mutex<App<T>>>,
+    pub app: Arc<RwLock<App<T>>>,
     /// Transaction mempool — receives validated txs from BroadcastTx.
     pub mempool: Arc<Mutex<Mempool>>,
     /// Chain ID used to validate incoming tx signatures.
@@ -91,9 +91,9 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         // Step 2 & 3: guard initialization, then check_tx
-        // CRITICAL: lock, call sync method, drop lock before any .await
+        // CRITICAL: read lock (shared), call sync method, drop lock before any .await
         let check = {
-            let app = self.app.lock().await;
+            let app = self.app.read().await;
             if app.info().is_none() {
                 return Err(Status::unavailable("node initializing"));
             }
@@ -196,7 +196,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
         _request: Request<QueryLatestSequenceRequest>,
     ) -> Result<Response<QueryLatestSequenceResponse>, Status> {
         let sequence = {
-            let app = self.app.lock().await;
+            let app = self.app.read().await;
             app.latest_sequence()
         };
         Ok(Response::new(QueryLatestSequenceResponse { sequence }))
@@ -208,7 +208,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
         _request: Request<StreamCurrentStateRequest>,
     ) -> Result<Response<Self::CurrentStateStream>, Status> {
         let stream = {
-            let app = self.app.lock().await;
+            let app = self.app.read().await;
             app.current_state()
         };
         let mapped = stream.map(|r: Result<WriteData, String>| r.map_err(Status::internal));
@@ -222,7 +222,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
     ) -> Result<Response<Self::ChangesSinceStream>, Status> {
         let sequence = request.into_inner().sequence;
         let stream = {
-            let app = self.app.lock().await;
+            let app = self.app.read().await;
             app.changes_since(sequence)
         };
         let mapped =
@@ -246,7 +246,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
 /// Returns `Status::invalid_argument` if the path or query bytes cannot be parsed.
 /// Returns `Status::internal` if the response cannot be encoded.
 pub async fn handle_cosmos_query<T: PersistentStorage + Send + Sync + 'static>(
-    app: &Arc<Mutex<App<T>>>,
+    app: &Arc<RwLock<App<T>>>,
     chain_id: &str,
     path: &str,
     body: Bytes,
@@ -255,7 +255,7 @@ pub async fn handle_cosmos_query<T: PersistentStorage + Send + Sync + 'static>(
         .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
     let response = {
-        let app = app.lock().await;
+        let app = app.read().await;
         app.query(query)
     };
 
@@ -276,7 +276,7 @@ pub async fn handle_cosmos_query<T: PersistentStorage + Send + Sync + 'static>(
 /// Manual Clone impl because T: PersistentStorage does not need to be Clone
 /// (App<T> is behind Arc so we clone the pointer, not T itself).
 pub struct CosmosQueryState<T: PersistentStorage + Send + Sync + 'static> {
-    pub app: Arc<Mutex<App<T>>>,
+    pub app: Arc<RwLock<App<T>>>,
     pub chain_id: String,
 }
 
@@ -462,7 +462,7 @@ mod tests {
     use layer_std::api::{InitChainRequest, TmPubKey, ValidatorUpdate};
     use layer_std::BECH32_PREFIX;
     use layer_storage::MemoryStore;
-    use tokio::sync::Mutex;
+    use tokio::sync::{Mutex, RwLock};
 
     use crate::mempool::Mempool;
 
@@ -505,7 +505,7 @@ mod tests {
 
     fn make_service(app: App<MemoryStore>) -> LayerGrpcService<MemoryStore> {
         LayerGrpcService {
-            app: Arc::new(Mutex::new(app)),
+            app: Arc::new(RwLock::new(app)),
             mempool: Arc::new(Mutex::new(Mempool::new(100))),
             chain_id: "slay3r-testnet-1".to_string(),
         }
