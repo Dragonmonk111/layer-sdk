@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
 status: completed
-stopped_at: Completed 02.1-03-PLAN.md — consensus bug fix, cross-process relay, testnet reaches block 10 with identical app_hash
-last_updated: "2026-03-20T16:04:16.696Z"
+stopped_at: Completed 02.1-04-PLAN.md — Cosmos query dispatch via axum fallback + tx-sender binary for full contract deployment e2e
+last_updated: "2026-03-20T16:59:03.067Z"
 last_activity: 2026-03-20 — Plan 02.1-01 complete; NodeConfig with PeerConfig/data_dir, LayerGrpcService with BroadcastTx and SyncQuery impls
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 12
+  completed_plans: 12
   percent: 80
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 2.1 of 7 (Functional Node) — IN PROGRESS
-Plan: 1 of 3 in current phase — COMPLETE
-Status: Phase 02.1 plan 01 complete; NodeConfig updated, grpc.rs created with BroadcastTx + state sync
-Last activity: 2026-03-20 — Plan 02.1-01 complete; NodeConfig with PeerConfig/data_dir, LayerGrpcService with BroadcastTx and SyncQuery impls
+Phase: 2.1 of 7 (Functional Node) — COMPLETE
+Plan: 4 of 4 in current phase — COMPLETE
+Status: Phase 02.1 all 4 plans complete; Cosmos query dispatch wired, tx-sender binary created, full e2e contract deployment flow enabled
+Last activity: 2026-03-20 — Plan 02.1-04 complete; Cosmos SDK gRPC query dispatch via axum fallback + tools/tx-sender binary (MsgStoreCode/MsgInstantiateContract/MsgExecuteContract) + testnet.sh e2e updated
 
-Progress: [████████--] 80% (Phase 2 complete; Phase 2.1 plan 1/3 done)
+Progress: [██████████] 100% (Phase 2.1 complete — 4/4 plans done)
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████--] 80% (Phase 2 complete; Phase 2.1 plan 1/3
 | Phase 02.1-functional-node P01 | 45 | 2 tasks | 5 files |
 | Phase 02.1-functional-node P02 | 13 | 2 tasks | 4 files |
 | Phase 02.1-functional-node P03 | 144 | 2 tasks | 5 files |
+| Phase 02.1-functional-node P04 | 90 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Recent decisions affecting current work:
 - [Phase 02.1-functional-node]: BLS share selection uses sorted Ed25519 key position not validator_index — keygen assigns shares[i] to the validator whose sorted key position is i; participant_keys must be sorted before ordered::Set construction
 - [Phase 02.1-functional-node]: Cross-process payload relay: LayerRelay holds mpsc sender; background tasks send payload bytes via P2P channel 3 (Recipients::All) to peers; receivers insert into pending_payloads for verify()
 - [Phase 02.1-functional-node]: Block timestamp = GENESIS_TIME_NS + view * 1e9 ns — deterministic, monotonic, always > genesis time; raw view * 1e9 produced pre-genesis timestamps failing DescendingBlockTime check
+- [Phase 02.1-04]: Tower Service + fallback_service() instead of axum Handler — axum 0.7 (tonic) vs 0.8 (commonware-runtime) coexist in dep graph; Handler trait version check crosses boundary
+- [Phase 02.1-04]: tx-sender uses layer-proto (prost 0.13) not cosmos-sdk-proto (prost 0.11) — tonic 0.12 ProstCodec requires prost 0.13 types
+- [Phase 02.1-04]: tx-sender uses manual std::env::args() parsing — proc-macro2 1.0.86 workspace lock cannot satisfy clap 4.5+ requirement of 1.0.106 (blocked by commonware-runtime -> criterion -> clap chain)
 
 ### Roadmap Evolution
 
@@ -125,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T16:04:16.694Z
-Stopped at: Completed 02.1-03-PLAN.md — consensus bug fix, cross-process relay, testnet reaches block 10 with identical app_hash
+Last session: 2026-03-20T16:59:03.065Z
+Stopped at: Completed 02.1-04-PLAN.md — Cosmos query dispatch via axum fallback + tx-sender binary for full contract deployment e2e
 Resume file: None

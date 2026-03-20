@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Clean the codebase, fix the unsafe VM transmute, resolve 2-year-old dependency conflicts, and fork CosmWasm as a git submodule (completed 2026-03-18)
 - [x] **Phase 2: Commonware Consensus** - Replace CometBFT ABCI with Commonware simplex Automaton — multi-node testnet reaches consensus with BLS threshold certificates (completed 2026-03-19)
-- [ ] **Phase 2.1: Functional Node** (INSERTED) - Real cross-process P2P, gRPC interface, tx pipeline, RocksDB persistence (gap closure in progress)
+- [x] **Phase 2.1: Functional Node** (INSERTED) - Real cross-process P2P, gRPC interface, tx pipeline, RocksDB persistence (gap closure in progress) (completed 2026-03-20)
 - [ ] **Phase 3: Ethereum Types** - Replace Cosmos bech32 addresses with Ethereum 20-byte addresses and ABI encoding throughout every package
 - [ ] **Phase 4: WASM Runtime (Ethereum Types)** - Replace the CosmWasm VM with a de-Cosmos'd WASM runtime on wasmtime — Rust contracts using Ethereum-style host functions can deploy and execute end-to-end
 - [ ] **Phase 5: WAVS Integration** - Deploy AVS contracts on Layer and demonstrate the full bidirectional state loop with a WAVS component
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-18 |
 | 2. Commonware Consensus | 5/5 | Complete   | 2026-03-19 |
-| 2.1 Functional Node | 3/4 | Gap closure | - |
+| 2.1 Functional Node | 4/4 | Complete   | 2026-03-20 |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |
 | 5. WAVS Integration | 0/TBD | Not started | - |
