@@ -1,0 +1,38 @@
+[package]
+name = "tx-sender"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tx-sender"
+path = "src/main.rs"
+
+[dependencies]
+# Cosmos tx construction and signing (cosmrs uses cosmos-sdk-proto 0.18 with prost 0.11)
+# We use cosmrs only for tx body signing — it provides the SigningKey and SignDoc types
+cosmrs = { workspace = true }
+
+# Proto types using prost 0.13 (workspace prost) — compatible with tonic 0.12
+# layer-proto has cosmos.bank, cosmos.auth, cosmos.tx, cosmwasm.wasm with tonic service clients
+layer-proto = { workspace = true, features = ["server", "client"] }
+prost = { workspace = true }
+
+# gRPC client
+tonic = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+http = { workspace = true }
+
+# Key derivation (same seed as default_genesis)
+sha2 = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+hex = { workspace = true }
+bytes = { workspace = true }
+
+# CLI: manual argument parsing (no clap — proc-macro2 version conflicts in workspace)
+
+# Layer types
+layer-std = { workspace = true }

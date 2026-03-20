@@ -5004,6 +5004,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "tx-sender"
+version = "0.5.0"
+dependencies = [
+ "bytes",
+ "cosmrs",
+ "hex",
+ "http",
+ "layer-proto",
+ "layer-std",
+ "prost 0.13.3",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "tokio",
+ "tonic 0.12.3",
+]
+
+[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

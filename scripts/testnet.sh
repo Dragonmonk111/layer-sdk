@@ -290,25 +290,18 @@ cmd_e2e() {
 
     # Prerequisites: testnet must be running and nodes must be producing blocks
     local grpc_addr="127.0.0.1:${GRPC_BASE}"
+    local tx_sender_bin="${SDK_ROOT}/target/release/tx-sender"
 
     # Step 1: Check that the testnet is running and producing blocks
     log "Step 1: Verifying testnet is running..."
-    if ! command -v grpcurl &>/dev/null; then
-        err "grpcurl is required for e2e test. Install: brew install grpcurl"
-    fi
 
     # Verify gRPC port is open (tonic doesn't enable server reflection, so grpcurl list
     # returns "server does not support the reflection API" — not a connection failure).
-    # Use nc or a direct TCP check instead.
+    # Use nc for a direct TCP check.
     if ! nc -zv "${grpc_addr%%:*}" "${grpc_addr##*:}" >/dev/null 2>&1; then
         err "gRPC server not responding on ${grpc_addr}. Is the testnet running? (scripts/testnet.sh start)"
     fi
     log "  gRPC server responding on ${grpc_addr} (TCP port open)"
-
-    # List services (may fail if reflection not enabled — that's OK)
-    local services
-    services=$(grpcurl -plaintext "${grpc_addr}" list 2>&1 || true)
-    log "  gRPC reflection: ${services}"
 
     # Step 2: Build the root contract WASM
     log "Step 2: Building contracts/root/ WASM..."
@@ -342,151 +335,92 @@ cmd_e2e() {
     fi
     log "  Contract WASM built: ${wasm_path}"
 
-    # Step 3: Check for tx-sender helper tool
-    log "Step 3: Checking for tx-sender tool..."
-    local tx_sender_manifest="${SDK_ROOT}/tools/tx-sender/Cargo.toml"
-    if [[ ! -f "$tx_sender_manifest" ]]; then
-        log "  tools/tx-sender not found — using grpcurl with base64-encoded proto payloads"
-        log "  NOTE: Full tx signing requires secp256k1 key. This e2e test uses grpcurl for query verification."
-        log "  For full StoreCode/Instantiate/Execute flow, create tools/tx-sender/ with:"
-        log "    1. Read validator key JSON (ed25519_private_hex)"
-        log "    2. Construct StoreCode/Instantiate/Execute MsgStoreCode protos"
-        log "    3. Sign with secp256k1"
-        log "    4. Submit via tonic gRPC BroadcastTx"
-        log "  Proceeding with gRPC connectivity and query verification..."
-    else
-        # Build tx-sender if available
-        log "  Building tools/tx-sender..."
-        cargo build --manifest-path "${tx_sender_manifest}" --release 2>&1 | tail -5
-    fi
+    # Step 3: Build the tx-sender tool
+    log "Step 3: Building tools/tx-sender..."
+    cargo build -p tx-sender --manifest-path "${SDK_ROOT}/Cargo.toml" --release 2>&1 | tail -5
+    [[ -f "$tx_sender_bin" ]] || err "tx-sender binary not found at ${tx_sender_bin} after build"
+    log "  tx-sender built: ${tx_sender_bin}"
 
-    # Step 4: Verify gRPC services are available (StoreCode/Instantiate/Execute flow)
-    log "Step 4: Verifying gRPC service availability..."
-    # Note: tonic does not enable server reflection by default, so grpcurl list may
-    # report "server does not support the reflection API". The TCP port being open (Step 1)
-    # confirms the gRPC server is running.
-    log "  gRPC port ${grpc_addr}: OPEN (server accepting connections)"
-    log "  Note: cosmos.tx.v1beta1.Service/BroadcastTx is registered (Plan 02 wiring)"
-    log "  Note: layer.sync.v1.Query is registered (Plan 02 wiring)"
-    log "  Note: Server reflection not enabled — grpcurl list returns 'no reflection' (expected)"
+    # Step 4: Query deployer balance to confirm funded account is reachable
+    log "Step 4: Querying deployer balance..."
+    "${tx_sender_bin}" balance --grpc "${grpc_addr}" 2>&1 | tee /tmp/balance_result.txt || {
+        log "  WARNING: balance query failed — node may not be accepting requests yet"
+    }
 
-    # Step 5: Submit StoreCode transaction (requires tx-sender or manual proto encoding)
+    # Step 5: Submit StoreCode transaction
     log "Step 5: Submitting StoreCode transaction..."
-    local tx_sender_bin="${SDK_ROOT}/target/release/tx-sender"
-    if [[ -f "$tx_sender_bin" ]]; then
-        local key_json
-        key_json="$(key_file "0")"
-        log "  Using tx-sender with key: ${key_json}"
-        "${tx_sender_bin}" store-code \
+    "${tx_sender_bin}" store-code \
+        --grpc "${grpc_addr}" \
+        --wasm "${wasm_path}" \
+        2>&1 | tee /tmp/store_code_result.txt || {
+        log "  WARNING: StoreCode submission failed — check node logs for details"
+    }
+
+    # Step 6: InstantiateContract (assume code_id=1 on fresh chain)
+    log "Step 6: Submitting InstantiateContract transaction..."
+    local code_id
+    code_id=$(grep -oP 'code_id=\K[0-9]+' /tmp/store_code_result.txt 2>/dev/null || echo "1")
+    log "  Using code_id=${code_id}"
+    "${tx_sender_bin}" instantiate \
+        --grpc "${grpc_addr}" \
+        --code-id "${code_id}" \
+        2>&1 | tee /tmp/instantiate_result.txt || {
+        log "  WARNING: InstantiateContract submission failed — check node logs"
+    }
+
+    # Step 7: ExecuteContract (if contract address is in logs)
+    log "Step 7: Submitting ExecuteContract transaction..."
+    local contract_addr
+    contract_addr=$(grep -oP 'contract_address=\K\S+' /tmp/instantiate_result.txt 2>/dev/null || echo "")
+    if [[ -n "$contract_addr" ]]; then
+        log "  InstantiateContract logged contract_address=${contract_addr}"
+        "${tx_sender_bin}" execute \
             --grpc "${grpc_addr}" \
-            --key "${key_json}" \
-            --wasm "${wasm_path}" \
-            2>&1 | tee /tmp/store_code_result.txt || {
-            log "  WARNING: StoreCode submission failed — tx-sender may need configuration"
+            --contract "${contract_addr}" \
+            --msg '{}' \
+            2>&1 || {
+            log "  WARNING: ExecuteContract submission failed — check node logs"
         }
     else
-        log "  tx-sender not available — StoreCode requires a signing tool"
-        log "  WASM file ready at: ${wasm_path} ($(wc -c < "${wasm_path}") bytes)"
-        log "  To complete e2e test, either:"
-        log "    a) Create tools/tx-sender/ Rust binary for tx signing"
-        log "    b) Use layer-tools CLI if available"
-        log "    c) Use grpcurl with manually-encoded proto bytes:"
-        log "       grpcurl -plaintext -d '<base64_tx>' ${grpc_addr} cosmos.tx.v1beta1.Service/BroadcastTx"
+        log "  contract_address not in instantiate output — check node logs for actual address"
+        log "  (InstantiateContract response is returned in BroadcastTx data, not logged by tx-sender)"
     fi
 
-    # Step 6: InstantiateContract (if StoreCode succeeded)
-    log "Step 6: Submitting InstantiateContract transaction..."
-    if [[ -f "$tx_sender_bin" ]] && [[ -f "/tmp/store_code_result.txt" ]]; then
-        local code_id
-        code_id=$(grep -oP 'code_id=\K[0-9]+' /tmp/store_code_result.txt 2>/dev/null || echo "")
-        if [[ -n "$code_id" ]]; then
-            log "  StoreCode succeeded — code_id=${code_id}"
-            "${tx_sender_bin}" instantiate \
-                --grpc "${grpc_addr}" \
-                --key "$(key_file "0")" \
-                --code-id "${code_id}" \
-                --msg '{}' \
-                2>&1 | tee /tmp/instantiate_result.txt || {
-                log "  WARNING: InstantiateContract submission failed"
-            }
-        else
-            log "  Skipping InstantiateContract — no code_id from StoreCode"
-        fi
-    else
-        log "  Skipping InstantiateContract — requires tx-sender and successful StoreCode"
-    fi
-
-    # Step 7: ExecuteContract (if Instantiate succeeded)
-    log "Step 7: Submitting ExecuteContract transaction..."
-    if [[ -f "$tx_sender_bin" ]] && [[ -f "/tmp/instantiate_result.txt" ]]; then
-        local contract_addr
-        contract_addr=$(grep -oP 'contract_address=\K\S+' /tmp/instantiate_result.txt 2>/dev/null || echo "")
-        if [[ -n "$contract_addr" ]]; then
-            log "  InstantiateContract succeeded — contract_address=${contract_addr}"
-            "${tx_sender_bin}" execute \
-                --grpc "${grpc_addr}" \
-                --key "$(key_file "0")" \
-                --contract "${contract_addr}" \
-                --msg '{}' \
-                2>&1 || {
-                log "  WARNING: ExecuteContract submission failed"
-            }
-        else
-            log "  Skipping ExecuteContract — no contract_address from InstantiateContract"
-        fi
-    else
-        log "  Skipping ExecuteContract — requires tx-sender and successful InstantiateContract"
-    fi
-
-    # Step 8: Query contract state
+    # Step 8: Query contract state (if contract address known)
     log "Step 8: Querying contract state..."
-    if [[ -f "/tmp/instantiate_result.txt" ]]; then
-        local contract_addr
-        contract_addr=$(grep -oP 'contract_address=\K\S+' /tmp/instantiate_result.txt 2>/dev/null || echo "")
-        if [[ -n "$contract_addr" ]]; then
-            # Query contract state via gRPC
-            local query_b64
-            query_b64=$(echo -n '{}' | base64)
-            grpcurl -plaintext \
-                -d "{\"address\":\"${contract_addr}\",\"query_data\":\"${query_b64}\"}" \
-                "${grpc_addr}" \
-                cosmwasm.wasm.v1.Query/SmartContractState 2>&1 || {
-                log "  WARNING: Contract state query failed — may need cosmos query router (Plan 03)"
-            }
-        fi
+    if [[ -n "$contract_addr" ]]; then
+        "${tx_sender_bin}" query \
+            --grpc "${grpc_addr}" \
+            --contract "${contract_addr}" \
+            --msg '{}' \
+            2>&1 || {
+            log "  WARNING: Contract state query failed — check that Cosmos query router is active"
+        }
+    else
+        log "  Skipping query — contract_address not available (check node logs)"
     fi
 
-    # Step 9: Verify results summary
-    log "Step 9: Verifying results..."
+    # Step 9: Summary
     log ""
     log "=== E2E Test Results ==="
     log "  gRPC server: RESPONDING on ${grpc_addr}"
     log "  WASM binary: BUILT at ${wasm_path}"
-    if [[ -f "$tx_sender_bin" ]]; then
-        log "  tx-sender: AVAILABLE"
-        if [[ -f "/tmp/store_code_result.txt" ]]; then
-            local code_id
-            code_id=$(grep -oP 'code_id=\K[0-9]+' /tmp/store_code_result.txt 2>/dev/null || echo "not found")
-            log "  StoreCode: code_id=${code_id}"
-        fi
-        if [[ -f "/tmp/instantiate_result.txt" ]]; then
-            local contract_addr
-            contract_addr=$(grep -oP 'contract_address=\K\S+' /tmp/instantiate_result.txt 2>/dev/null || echo "not found")
-            log "  InstantiateContract: contract_address=${contract_addr}"
-        fi
+    log "  tx-sender: AVAILABLE at ${tx_sender_bin}"
+    if grep -q "StoreCode TX submitted" /tmp/store_code_result.txt 2>/dev/null; then
+        local sc_code_id
+        sc_code_id=$(grep -oP 'code_id=\K[0-9]+' /tmp/store_code_result.txt 2>/dev/null || echo "1")
+        log "  StoreCode: SUBMITTED (code_id=${sc_code_id})"
     else
-        log "  tx-sender: NOT AVAILABLE (create tools/tx-sender/ for full StoreCode->Execute flow)"
-        log "  StoreCode/Instantiate/Execute: REQUIRES tx-sender tool"
+        log "  StoreCode: NOT CONFIRMED (check node logs)"
+    fi
+    if grep -q "InstantiateContract TX submitted" /tmp/instantiate_result.txt 2>/dev/null; then
+        log "  InstantiateContract: SUBMITTED"
+    else
+        log "  InstantiateContract: NOT CONFIRMED (check node logs)"
     fi
     log ""
-
-    if [[ -f "$tx_sender_bin" ]]; then
-        log "E2E test PASSED: contracts/root/ deployed, instantiated, executed, and state queried successfully."
-    else
-        log "E2E test PARTIAL: gRPC connectivity and WASM build verified."
-        log "  Full StoreCode->Instantiate->Execute->Query flow requires tools/tx-sender/ binary."
-        log "  See Plan 03 notes for tx-sender implementation guidance."
-    fi
+    log "E2E test complete. Check node logs for tx execution results:"
+    log "  tail -f ${TESTNET_DIR}/node-0/node.log"
 }
 
 # ---------------------------------------------------------------------------
