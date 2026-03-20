@@ -564,8 +564,14 @@ async fn run_node(
             // The tonic services (registered via route_service) take priority over the fallback.
             let cosmos_routes = tonic::service::Routes::from(cosmos_router);
 
+            let reflection = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(layer_proto::FILE_DESCRIPTOR_SET)
+                .build_v1()
+                .expect("gRPC reflection build failed");
+
             GrpcServer::builder()
                 .add_routes(cosmos_routes)
+                .add_service(reflection)
                 .add_service(
                     layer_proto::cosmos::tx::v1beta1::service_server::ServiceServer::new(
                         grpc_svc.clone(),

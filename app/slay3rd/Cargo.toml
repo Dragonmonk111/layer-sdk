@@ -15,6 +15,7 @@ layer-storage = { workspace = true }
 layer-cosmos = { workspace = true }
 layer-proto = { workspace = true, features = ["server"] }
 tonic = { workspace = true }
+tonic-reflection = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
 axum = "0.7"
