@@ -18,6 +18,8 @@ WAVS programs can read from and write to persistent Layer state — enabling AVS
 - ✓ gRPC service layer (Cosmos SDK compatible) — existing
 - ✓ REST gateway (Go) — existing
 - ✓ Docker-based local node setup — existing
+- ✓ gRPC concurrency safety: Arc<RwLock<App<T>>> — concurrent reads, exclusive writes for finalize_block (Phase 02.2)
+- ✓ Graceful error handling for unhandled CosmosMsg variants (Stargate, Any, BankMsg, WasmMsg) — no node crashes (Phase 02.2)
 
 ### Active
 
@@ -65,4 +67,4 @@ WAVS programs can read from and write to persistent Layer state — enabling AVS
 | zkVM undecided | Must research SP1, Risc Zero, and wreth's native support | — Pending |
 
 ---
-*Last updated: 2026-03-18 after initialization*
+*Last updated: 2026-03-20 after Phase 02.2 — node stability fixes complete*
