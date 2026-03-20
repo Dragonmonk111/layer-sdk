@@ -29,9 +29,9 @@
 ### Node Stability
 
 - [x] **STAB-01**: gRPC query endpoints remain responsive under concurrent load — `Arc<RwLock<App<T>>>` allows shared query reads while `finalize_block` holds an exclusive write lock
-- [ ] **STAB-02**: `CosmosMsg::Stargate` emitted by a WASM contract returns a graceful error and fails the contract call cleanly — the node does NOT crash
-- [ ] **STAB-03**: `CosmosMsg::Any` and all other unhandled `CosmosMsg` variants return graceful errors — wildcard arm in `cosmwasm_msg_to_layer` returns `Err`, never panics
-- [ ] **STAB-04**: `/app/version` query path returns `QueryError::UnsupportedPath`, not a panic
+- [x] **STAB-02**: `CosmosMsg::Stargate` emitted by a WASM contract returns a graceful error and fails the contract call cleanly — the node does NOT crash
+- [x] **STAB-03**: `CosmosMsg::Any` and all other unhandled `CosmosMsg` variants return graceful errors — wildcard arm in `cosmwasm_msg_to_layer` returns `Err`, never panics
+- [x] **STAB-04**: `/app/version` query path returns `QueryError::UnsupportedPath`, not a panic
 - [x] **STAB-05**: Concurrent `BroadcastTx` calls while a block is being finalized complete without error — shared read lock in `check_tx` does not block behind `finalize_block` write lock
 
 ### Ethereum Types
@@ -109,9 +109,9 @@
 | CONS-04 | Phase 2 | Complete |
 | CONS-05 | Phase 2 | Complete |
 | STAB-01 | Phase 2.2 | Complete |
-| STAB-02 | Phase 2.2 | Pending |
-| STAB-03 | Phase 2.2 | Pending |
-| STAB-04 | Phase 2.2 | Pending |
+| STAB-02 | Phase 2.2 | Complete |
+| STAB-03 | Phase 2.2 | Complete |
+| STAB-04 | Phase 2.2 | Complete |
 | STAB-05 | Phase 2.2 | Complete |
 | TYPES-01 | Phase 3 | Pending |
 | TYPES-02 | Phase 3 | Pending |

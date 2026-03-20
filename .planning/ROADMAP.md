@@ -67,11 +67,11 @@ Plans:
   2. A WASM contract emitting `CosmosMsg::Stargate` or `CosmosMsg::Any` receives an error response — the node continues running without crashing
   3. All `todo!()` and `unimplemented!()` calls in `cosmwasm_msg_to_layer()` and `parse_app_query()` are replaced with `Err(...)` returns
   4. `cargo test -p slay3rd -p layer-app -p layer-cosmos --lib` passes with zero failures
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 02.2-01-PLAN.md — Migrate App<T> from Mutex to RwLock across grpc.rs, node.rs, main.rs
-- [ ] 02.2-02-PLAN.md — Replace todo!()/unimplemented!() panic sites with graceful errors in keeper.rs and query.rs
+- [x] 02.2-02-PLAN.md — Replace todo!()/unimplemented!() panic sites with graceful errors in keeper.rs and query.rs
 
 ### Phase 02.1: Functional Node (INSERTED)
 

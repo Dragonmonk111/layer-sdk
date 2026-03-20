@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.3.2
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 02.2-01-PLAN.md — Mutex to RwLock migration for App<T> across grpc.rs, node.rs, main.rs
-last_updated: "2026-03-20T19:12:08.485Z"
+stopped_at: "Completed 02.2-02-PLAN.md — Stargate crash fix: WasmError::UnsupportedCosmosMsg + version query UnsupportedPath"
+last_updated: "2026-03-20T19:16:28.344Z"
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -59,6 +59,7 @@ Plan: 2 of 2
 | Phase 02.1-functional-node P03 | 144 | 2 tasks | 5 files |
 | Phase 02.1-functional-node P04 | 90 | 2 tasks | 8 files |
 | Phase 02.2 P01 | 3 | 2 tasks | 3 files |
+| Phase 02.2 P02 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,8 @@ Recent decisions affecting current work:
 - [Phase 02.1-04]: tx-sender uses manual std::env::args() parsing — proc-macro2 1.0.86 workspace lock cannot satisfy clap 4.5+ requirement of 1.0.106 (blocked by commonware-runtime -> criterion -> clap chain)
 - [Phase 02.2]: Mempool remains Arc<Mutex<Mempool>> — no concurrent readers needed; RwLock reserved for App<T> where gRPC read concurrency matters
 - [Phase 02.2]: execute_block and LayerReporter::report use separate scoped blocks for read/write locks to prevent tokio RwLock deadlock (read dropped before write acquired)
+- [Phase 02.2]: CosmosMsg::Any is a tuple variant (CosmosMsg::Any(AnyMsg)) not a struct variant — pattern must use any_msg.type_url not destructuring with type_url field
+- [Phase 02.2]: CosmosMsg::Stargate kept explicit despite deprecation so contracts using it get descriptive error message; wildcard arm retained last for non_exhaustive safety
 
 ### Roadmap Evolution
 
@@ -129,6 +132,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T19:12:08.483Z
-Stopped at: Completed 02.2-01-PLAN.md — Mutex to RwLock migration for App<T> across grpc.rs, node.rs, main.rs
+Last session: 2026-03-20T19:16:28.342Z
+Stopped at: Completed 02.2-02-PLAN.md — Stargate crash fix: WasmError::UnsupportedCosmosMsg + version query UnsupportedPath
 Resume file: None
