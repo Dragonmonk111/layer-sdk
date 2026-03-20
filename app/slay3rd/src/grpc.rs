@@ -39,7 +39,6 @@ use crate::mempool::Mempool;
 /// Shared between the gRPC server task and the consensus engine via `Arc<Mutex<_>>`.
 /// Both the `App<T>` and the `Mempool` are behind async mutexes so they can be
 /// accessed from multiple tasks without blocking.
-#[derive(Clone)]
 pub struct LayerGrpcService<T: PersistentStorage + Send + Sync + 'static> {
     /// Shared application state — contains the state machine and storage backend.
     pub app: Arc<Mutex<App<T>>>,
@@ -47,6 +46,17 @@ pub struct LayerGrpcService<T: PersistentStorage + Send + Sync + 'static> {
     pub mempool: Arc<Mutex<Mempool>>,
     /// Chain ID used to validate incoming tx signatures.
     pub chain_id: String,
+}
+
+/// Manual Clone implementation — App<T> and Mempool are behind Arc so T does not need Clone.
+impl<T: PersistentStorage + Send + Sync + 'static> Clone for LayerGrpcService<T> {
+    fn clone(&self) -> Self {
+        LayerGrpcService {
+            app: self.app.clone(),
+            mempool: self.mempool.clone(),
+            chain_id: self.chain_id.clone(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
