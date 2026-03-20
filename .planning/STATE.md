@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: milestone
-status: verifying
-stopped_at: Phase 02.1 context gathered
-last_updated: "2026-03-20T01:13:29.856Z"
-last_activity: 2026-03-19 — Plan 02-04 Task 2 approved; determinism audit confirmed clean (only comments and capabilities() boundary match); all CONS-* deliverables verified
+status: executing
+stopped_at: "Completed 02.1-01-PLAN.md — NodeConfig + gRPC module"
+last_updated: "2026-03-20T00:47:00.000Z"
+last_activity: 2026-03-20 — Plan 02.1-01 complete; NodeConfig with PeerConfig/data_dir, LayerGrpcService with BroadcastTx and SyncQuery impls
 progress:
   total_phases: 7
   completed_phases: 2
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 2 of 6 (Commonware Consensus) — FULLY COMPLETE
-Plan: 4 of 4 in current phase — ALL TASKS COMPLETE
-Status: Phase 2 fully complete; Task 2 human-verify checkpoint approved; ready for Phase 3
-Last activity: 2026-03-19 — Plan 02-04 Task 2 approved; determinism audit confirmed clean (only comments and capabilities() boundary match); all CONS-* deliverables verified
+Phase: 2.1 of 7 (Functional Node) — IN PROGRESS
+Plan: 1 of 3 in current phase — COMPLETE
+Status: Phase 02.1 plan 01 complete; NodeConfig updated, grpc.rs created with BroadcastTx + state sync
+Last activity: 2026-03-20 — Plan 02.1-01 complete; NodeConfig with PeerConfig/data_dir, LayerGrpcService with BroadcastTx and SyncQuery impls
 
-Progress: [██████████] 100% (Phase 2 plans complete)
+Progress: [████████--] 80% (Phase 2 complete; Phase 2.1 plan 1/3 done)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100% (Phase 2 plans complete)
 | Phase 02-commonware-consensus P03 | 90 | 2 tasks | 12 files |
 | Phase 02-commonware-consensus P04 | 10 | 2 tasks | 6 files |
 | Phase 02-commonware-consensus P05 | 4 | 1 tasks | 3 files |
+| Phase 02.1-functional-node P01 | 45 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Plan 02-04]: verify-consensus.sh supports SKIP_CRASH_TEST=1 for environments without process isolation
 - [Phase 02-commonware-consensus]: Certificate stored under '_cert/{height}' key with '_' prefix — excluded from app_hash, same as LAST_BLOCK, because certificate delivery timing is asynchronous and must not affect consensus determinism
 - [Phase 02-commonware-consensus]: LayerReporter changed from stateless unit struct to stateful struct holding Arc<Mutex<App<T>>> for post-commit certificate persistence (CONS-05)
+- [Plan 02.1-01]: NodeConfig.data_dir replaces both rocksdb_path and wal_path — single field, computed subpaths via wal_path() and app_data_path() methods; PeerConfig struct added for [[peers]] TOML table
+- [Plan 02.1-01]: SyncProvider trait imported as layer_app::SyncProvider — the sync module is private; trait is re-exported from layer_app crate root
+- [Plan 02.1-01]: LayerGrpcService<T> generic over PersistentStorage — same pattern as LayerNode; enables MemoryStore unit tests and RocksDB production use
 
 ### Roadmap Evolution
 
@@ -113,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T01:13:29.850Z
-Stopped at: Phase 02.1 context gathered
-Resume file: .planning/phases/02.1-functional-node/02.1-CONTEXT.md
+Last session: 2026-03-20T00:47:00.000Z
+Stopped at: Completed 02.1-01-PLAN.md — NodeConfig + gRPC module
+Resume file: .planning/phases/02.1-functional-node/02.1-02-PLAN.md
