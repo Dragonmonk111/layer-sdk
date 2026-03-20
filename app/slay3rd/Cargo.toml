@@ -46,6 +46,7 @@ cosmwasm-std = { workspace = true }
 
 [dev-dependencies]
 cosmwasm-std = { workspace = true }
+cosmrs = { workspace = true }
 
 [features]
 rocksdb = ["layer-storage/rocksdb"]
