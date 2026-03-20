@@ -52,7 +52,7 @@ use commonware_utils::{ordered::Map, N3f1, NZU16, NZUsize};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tonic::transport::Server as GrpcServer;
 use tracing::{error, info, warn};
 
@@ -124,9 +124,8 @@ impl KeyMaterial {
 /// is the correct place to store it.
 struct LayerReporter<T: PersistentStorage + Send + Sync + 'static> {
     /// Shared reference to the Layer application.
-    /// Used to persist BLS certificates via set_block_certificate()
-    /// when the consensus engine delivers a Finalization activity.
-    app: Arc<Mutex<App<T>>>,
+    /// RwLock: read lock for height query, write lock for set_block_certificate().
+    app: Arc<RwLock<App<T>>>,
 }
 
 /// Manual Clone implementation — App<T> is behind Arc so T does not need Clone.
@@ -160,9 +159,9 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                 // Since certify() -> execute_block() -> finalize_block() has already run,
                 // the App's LAST_BLOCK height IS the block that just received its certificate.
                 let height = {
-                    let app = self.app.lock().await;
+                    let app = self.app.read().await;  // SHARED read lock — read-only
                     app.info().map(|b| b.height).unwrap_or(0)
-                };
+                };  // read lock released here
 
                 tracing::info!(
                     height = height,
@@ -179,7 +178,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                 // certificate that the consensus engine produced from the quorum of
                 // certify votes.
                 if !cert_bytes.is_empty() {
-                    let mut app = self.app.lock().await;
+                    let mut app = self.app.write().await;  // EXCLUSIVE write lock — mutates storage
                     match app.set_block_certificate(height, cert_bytes.clone()) {
                         Ok(()) => {
                             tracing::info!(
@@ -346,7 +345,7 @@ async fn run_node(
     // -----------------------------------------------------------------------
 
     let mempool = Arc::new(Mutex::new(Mempool::new(config.mempool_max_pending)));
-    let app_arc = Arc::new(Mutex::new(app));
+    let app_arc = Arc::new(RwLock::new(app));
 
     // initial_height=0 means the next block will be height=1.
     #[cfg(feature = "rocksdb")]

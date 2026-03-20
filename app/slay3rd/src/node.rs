@@ -1,7 +1,7 @@
 //! LayerNode: CertifiableAutomaton bridge between Commonware consensus and Layer App<T>.
 //!
 //! This is the single integration point where consensus callbacks call into
-//! the Layer state machine. LayerNode wraps Arc<Mutex<App<T>>> and translates:
+//! the Layer state machine. LayerNode wraps Arc<RwLock<App<T>>> and translates:
 //! - genesis() -> App::app_hash() (initial state digest)
 //! - propose() -> drain mempool, build BlockPayload, return digest
 //! - verify()  -> structural validation only, NO state mutation
