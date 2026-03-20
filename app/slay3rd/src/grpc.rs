@@ -6,12 +6,20 @@
 //!
 //! Also provides `handle_cosmos_query()` — a helper for dispatching Cosmos SDK
 //! gRPC queries via path matching. Called from a custom tower layer in main.rs.
+//!
+//! Also provides `CosmosQueryState` and `cosmos_query_fallback` — an axum fallback
+//! handler that intercepts Cosmos SDK gRPC query paths and dispatches them to
+//! `handle_cosmos_query()`. Registered as a fallback on the tonic Router so paths
+//! like `/cosmos.bank.v1beta1.Query/Balance` reach the Layer App query handler.
 
 use std::pin::Pin;
 use std::sync::Arc;
 
+use axum::body::Body as AxumBody;
 use bytes::Bytes;
 use futures::StreamExt;
+use http::header::CONTENT_TYPE;
+use http_body_util::BodyExt;
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
@@ -256,6 +264,170 @@ pub async fn handle_cosmos_query<T: PersistentStorage + Send + Sync + 'static>(
         response.map_err(|e| Status::internal(format!("query failed: {e}")))?;
 
     encode_cosmos_response(query_response).map_err(|e| Status::internal(e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// Cosmos query tower Service fallback
+// ---------------------------------------------------------------------------
+
+/// Shared state for the Cosmos query fallback service.
+///
+/// Cloned for each request via the tower Service clone pattern.
+/// Manual Clone impl because T: PersistentStorage does not need to be Clone
+/// (App<T> is behind Arc so we clone the pointer, not T itself).
+pub struct CosmosQueryState<T: PersistentStorage + Send + Sync + 'static> {
+    pub app: Arc<Mutex<App<T>>>,
+    pub chain_id: String,
+}
+
+impl<T: PersistentStorage + Send + Sync + 'static> Clone for CosmosQueryState<T> {
+    fn clone(&self) -> Self {
+        CosmosQueryState {
+            app: self.app.clone(),
+            chain_id: self.chain_id.clone(),
+        }
+    }
+}
+
+/// Tower Service that intercepts Cosmos SDK gRPC query paths and dispatches
+/// them to `handle_cosmos_query()`. Returns properly gRPC-framed responses.
+///
+/// This is registered as the fallback service on the axum Router so that paths like
+/// `/cosmos.bank.v1beta1.Query/Balance` reach the Layer App query handler
+/// instead of returning gRPC UNIMPLEMENTED.
+///
+/// Uses the tower Service trait directly (via `fallback_service`) to avoid
+/// axum Handler trait version compatibility issues when multiple axum versions
+/// are present in the dependency graph.
+///
+/// Manual Clone impl because T: PersistentStorage does not need to be Clone.
+pub struct CosmosQueryService<T: PersistentStorage + Send + Sync + 'static> {
+    pub state: CosmosQueryState<T>,
+}
+
+impl<T: PersistentStorage + Send + Sync + 'static> Clone for CosmosQueryService<T> {
+    fn clone(&self) -> Self {
+        CosmosQueryService {
+            state: self.state.clone(),
+        }
+    }
+}
+
+/// Type alias for the CosmosQueryService future to avoid ambiguity with multiple Service traits.
+pub type CosmosQueryFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<http::Response<AxumBody>, std::convert::Infallible>> + Send>>;
+
+impl<T: PersistentStorage + Send + Sync + 'static> tower_service::Service<http::Request<AxumBody>>
+    for CosmosQueryService<T>
+{
+    type Response = http::Response<AxumBody>;
+    type Error = std::convert::Infallible;
+    type Future = CosmosQueryFuture;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, request: http::Request<AxumBody>) -> CosmosQueryFuture {
+        let state = self.state.clone();
+        Box::pin(async move {
+            Ok(handle_cosmos_request(state, request).await)
+        })
+    }
+}
+
+/// Core async logic for handling a Cosmos gRPC query request.
+///
+/// Extracted from the Service impl to allow sharing between test and production code.
+pub async fn handle_cosmos_request<T: PersistentStorage + Send + Sync + 'static>(
+    state: CosmosQueryState<T>,
+    request: http::Request<AxumBody>,
+) -> http::Response<AxumBody> {
+    let path = request.uri().path().to_string();
+
+    // Only handle Cosmos SDK query paths — return gRPC UNIMPLEMENTED for anything else.
+    let is_cosmos_query = path.starts_with("/cosmos.bank.")
+        || path.starts_with("/cosmos.auth.")
+        || path.starts_with("/cosmwasm.wasm.")
+        || path.starts_with("/cosmos.tx.v1beta1.Service/Simulate");
+
+    if !is_cosmos_query {
+        // Return gRPC UNIMPLEMENTED (status 12) for non-cosmos paths
+        return http::Response::builder()
+            .status(200)
+            .header(CONTENT_TYPE, "application/grpc")
+            .header("grpc-status", "12")
+            .header("grpc-message", "unimplemented")
+            .body(AxumBody::empty())
+            .unwrap();
+    }
+
+    // Collect the request body bytes.
+    // gRPC requests have a 5-byte prefix: 1 byte compressed flag + 4 bytes length.
+    let body_bytes = match request.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => {
+            return http::Response::builder()
+                .status(200)
+                .header(CONTENT_TYPE, "application/grpc")
+                .header("grpc-status", "13")
+                .header("grpc-message", "failed to read request body")
+                .body(AxumBody::empty())
+                .unwrap();
+        }
+    };
+
+    // Strip the gRPC 5-byte frame prefix if present.
+    let proto_bytes = if body_bytes.len() >= 5 {
+        Bytes::copy_from_slice(&body_bytes[5..])
+    } else {
+        body_bytes.clone()
+    };
+
+    // Dispatch to handle_cosmos_query.
+    match handle_cosmos_query(&state.app, &state.chain_id, &path, proto_bytes).await {
+        Ok(response_bytes) => {
+            // Build gRPC-framed response: 1 byte compressed flag (0) + 4 bytes length + payload.
+            let mut frame = Vec::with_capacity(5 + response_bytes.len());
+            frame.push(0u8); // not compressed
+            frame.extend_from_slice(&(response_bytes.len() as u32).to_be_bytes());
+            frame.extend_from_slice(&response_bytes);
+
+            http::Response::builder()
+                .status(200)
+                .header(CONTENT_TYPE, "application/grpc")
+                .header("grpc-status", "0")
+                .body(AxumBody::from(frame))
+                .unwrap()
+        }
+        Err(status) => {
+            // Convert tonic::Status to gRPC error response.
+            let code = status.code() as i32;
+            let message = status.message().to_string();
+            http::Response::builder()
+                .status(200)
+                .header(CONTENT_TYPE, "application/grpc")
+                .header("grpc-status", code.to_string())
+                .header("grpc-message", message)
+                .body(AxumBody::empty())
+                .unwrap()
+        }
+    }
+}
+
+/// Create an axum fallback service for Cosmos SDK query dispatch.
+///
+/// Returns an axum Router with the `CosmosQueryService` registered as the fallback.
+/// The router is intended to be converted to tonic `Routes` and used with
+/// `GrpcServer::builder().add_routes()` before adding tonic services.
+pub fn cosmos_query_router<T: PersistentStorage + Send + Sync + 'static>(
+    state: CosmosQueryState<T>,
+) -> axum::Router {
+    let svc = CosmosQueryService { state };
+    axum::Router::new().fallback_service(svc)
 }
 
 // ---------------------------------------------------------------------------

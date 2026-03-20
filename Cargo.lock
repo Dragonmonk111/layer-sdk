@@ -326,6 +326,8 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "itoa",
  "matchit 0.7.3",
  "memchr",
@@ -334,10 +336,15 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -391,6 +398,7 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -4192,6 +4200,7 @@ name = "slay3rd"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "axum 0.7.6",
  "bincode",
  "bytes",
  "commonware-codec",
@@ -4207,6 +4216,8 @@ dependencies = [
  "cosmwasm-std",
  "futures",
  "hex",
+ "http",
+ "http-body-util",
  "layer-app",
  "layer-cosmos",
  "layer-proto",
@@ -4222,6 +4233,7 @@ dependencies = [
  "tokio-stream",
  "toml 0.8.23",
  "tonic 0.12.3",
+ "tower-service",
  "tracing",
  "tracing-subscriber",
 ]

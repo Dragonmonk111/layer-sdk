@@ -17,6 +17,11 @@ layer-proto = { workspace = true, features = ["server"] }
 tonic = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
+axum = "0.7"
+http-body-util = "0.1"
+http = { workspace = true }
+tower-service = "0.3"
+cosmrs = { workspace = true }
 
 commonware-consensus = { workspace = true }
 commonware-p2p = { workspace = true }

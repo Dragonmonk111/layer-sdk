@@ -58,14 +58,14 @@ use tracing::{error, info, warn};
 
 use slay3rd::{
     config::NodeConfig,
-    grpc::{handle_cosmos_query, LayerGrpcService},
+    grpc::LayerGrpcService,
     mempool::Mempool,
     node::LayerNode,
     relay::LayerRelay,
 };
 
 use layer_app::{
-    genesis::{GenesisState, WasmParams},
+    genesis::{BankAccount, GenesisState, WasmParams},
     App, AppConfig, StateMachine,
 };
 use layer_storage::PersistentStorage;
@@ -519,9 +519,14 @@ async fn run_node(
     //   2. layer.sync.v1.Query (state sync streaming)
     //
     // Cosmos SDK query paths (/cosmos.bank.*, /cosmos.auth.*, /cosmwasm.wasm.*)
-    // are dispatched via handle_cosmos_query() from grpc.rs. This function is wired
-    // here and also accessible from the tonic service for future HTTP/2 routing.
-    // Plan 03 adds the full HTTP/2-level cosmos query interception layer.
+    // are dispatched via an axum fallback handler (cosmos_query_fallback) that
+    // calls handle_cosmos_query() and returns properly gRPC-framed responses.
+    //
+    // Architecture:
+    //   1. Build an axum::Router with cosmos_query_fallback as the fallback handler
+    //   2. Convert it to tonic::service::Routes via From<axum::Router>
+    //   3. Start the tonic server via GrpcServer::builder().add_routes(routes)
+    //   4. Chain add_service() for the tonic services — these take priority over the fallback
     // -----------------------------------------------------------------------
     {
         let grpc_addr: SocketAddr = config.grpc_listen.parse()
@@ -533,41 +538,34 @@ async fn run_node(
             chain_id: config.chain_id.clone(),
         };
 
-        // Wire Cosmos query dispatch: app and chain_id references for handle_cosmos_query().
-        // These are moved into the gRPC server task and available for cosmos query routing.
-        let cosmos_app = app_arc.clone();
-        let cosmos_chain_id = config.chain_id.clone();
+        // Cosmos query dispatch state for the axum fallback handler.
+        // The fallback intercepts /cosmos.bank.*, /cosmos.auth.*, /cosmwasm.wasm.* paths
+        // and dispatches them to handle_cosmos_query() in grpc.rs.
+        #[cfg(feature = "rocksdb")]
+        let cosmos_state = slay3rd::grpc::CosmosQueryState::<layer_storage::RockStore> {
+            app: app_arc.clone(),
+            chain_id: config.chain_id.clone(),
+        };
+        #[cfg(not(feature = "rocksdb"))]
+        let cosmos_state = slay3rd::grpc::CosmosQueryState::<layer_storage::MemoryStore> {
+            app: app_arc.clone(),
+            chain_id: config.chain_id.clone(),
+        };
 
         tokio::spawn(async move {
-            info!(addr = %grpc_addr, "Starting gRPC server");
+            info!(addr = %grpc_addr, "Starting gRPC server with Cosmos query dispatch");
 
-            // Cosmos query dispatch is wired via handle_cosmos_query() from grpc.rs.
-            // This function is captured in this gRPC server task and called for
-            // /cosmos.bank.*, /cosmos.auth.*, and /cosmwasm.wasm.* query paths.
-            // The full HTTP/2-level router that intercepts before tonic routing is
-            // implemented in Plan 03; here we confirm the wiring is in place by
-            // calling handle_cosmos_query with a non-matching path (no-op for routing).
-            //
-            // handle_cosmos_query signature:
-            //   async fn handle_cosmos_query<T: PersistentStorage>(
-            //       app: &Arc<Mutex<App<T>>>, chain_id: &str, path: &str, body: Bytes
-            //   ) -> Result<Vec<u8>, Status>
-            //
-            // The cosmos_app and cosmos_chain_id are moved here so they are available
-            // for the Plan 03 router implementation.
-            // Cosmos query dispatch: handle_cosmos_query() is wired here and available
-            // for routing /cosmos.* gRPC paths to the Layer App query handler.
-            // cosmos_app and cosmos_chain_id are moved into this task scope.
-            // Plan 03 adds the full HTTP/2-level router that intercepts /cosmos.* paths.
-            let _ = (cosmos_app, cosmos_chain_id);
-            // Confirm handle_cosmos_query is referenced (import is in scope).
-            let _cosmos_query_wired: fn() = || {
-                // The function exists and has the right signature.
-                // This block is never executed but confirms the import is correct.
-                let _ = std::mem::size_of_val(&handle_cosmos_query::<layer_storage::MemoryStore>);
-            };
+            // Build an axum Router with the Cosmos query fallback service.
+            // This catches all paths not handled by the tonic services (BroadcastTx, SyncQuery).
+            // Uses fallback_service (tower Service) to avoid axum Handler version conflicts.
+            let cosmos_router = slay3rd::grpc::cosmos_query_router(cosmos_state);
+
+            // Convert the axum router to tonic Routes, then add tonic services on top.
+            // The tonic services (registered via route_service) take priority over the fallback.
+            let cosmos_routes = tonic::service::Routes::from(cosmos_router);
 
             GrpcServer::builder()
+                .add_routes(cosmos_routes)
                 .add_service(
                     layer_proto::cosmos::tx::v1beta1::service_server::ServiceServer::new(
                         grpc_svc.clone(),
@@ -581,7 +579,7 @@ async fn run_node(
                 .expect("gRPC server failed");
         });
 
-        info!(grpc_listen = %config.grpc_listen, "gRPC server spawned");
+        info!(grpc_listen = %config.grpc_listen, "gRPC server spawned with Cosmos query dispatch");
     }
 
     // -----------------------------------------------------------------------
@@ -793,10 +791,32 @@ async fn run_node(
     }
 }
 
-/// Default empty genesis state for testnet bootstrapping.
+/// Default genesis state for testnet bootstrapping.
+///
+/// Includes a pre-funded deployer account for the tx-sender tool.
+/// The deployer's secp256k1 private key is derived deterministically:
+///   SHA256("slay3r-testnet-deployer-v1")[0..32] (32 bytes)
+/// The corresponding bech32 address is computed from the public key.
+///
+/// The tx-sender tool uses the same derivation to sign transactions.
 fn default_genesis() -> GenesisState {
+    use sha2::{Digest, Sha256};
+
+    // Deterministic deployer key — same seed used by tools/tx-sender
+    let seed = Sha256::digest(b"slay3r-testnet-deployer-v1");
+    let deployer_key = cosmrs::crypto::secp256k1::SigningKey::from_slice(&seed[..32])
+        .expect("valid secp256k1 key from SHA256 seed");
+    let deployer_addr = deployer_key
+        .public_key()
+        .account_id(layer_std::BECH32_PREFIX)
+        .expect("valid bech32 address")
+        .to_string();
+
     GenesisState {
-        bank: vec![],
+        bank: vec![BankAccount {
+            address: deployer_addr,
+            balance: vec![cosmwasm_std::coin(1_000_000_000_000, "upulsar")],
+        }],
         wasm: WasmParams {
             gov_account: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug".to_string(),
         },
