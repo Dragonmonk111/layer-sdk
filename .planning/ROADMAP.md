@@ -14,6 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Clean the codebase, fix the unsafe VM transmute, resolve 2-year-old dependency conflicts, and fork CosmWasm as a git submodule (completed 2026-03-18)
 - [x] **Phase 2: Commonware Consensus** - Replace CometBFT ABCI with Commonware simplex Automaton — multi-node testnet reaches consensus with BLS threshold certificates (completed 2026-03-19)
+- [ ] **Phase 2.1: Functional Node** (INSERTED) - Real cross-process P2P, gRPC interface, tx pipeline, RocksDB persistence
 - [ ] **Phase 3: Ethereum Types** - Replace Cosmos bech32 addresses with Ethereum 20-byte addresses and ABI encoding throughout every package
 - [ ] **Phase 4: WASM Runtime (Ethereum Types)** - Replace the CosmWasm VM with a de-Cosmos'd WASM runtime on wasmtime — Rust contracts using Ethereum-style host functions can deploy and execute end-to-end
 - [ ] **Phase 5: WAVS Integration** - Deploy AVS contracts on Layer and demonstrate the full bidirectional state loop with a WAVS component
@@ -53,11 +54,29 @@ Plans:
 - [x] 02-02-PLAN.md — Implement LayerNode CertifiableAutomaton, BlockPayload, Mempool
 - [x] 02-03-PLAN.md — BLS DKG keygen tool, node config, P2P relay, main.rs consensus runtime
 - [x] 02-04-PLAN.md — 3-node testnet scripts, crash recovery test, BLS certificate verification
-- [ ] 02-05-PLAN.md — Gap closure: wire BLS certificate from Reporter to persistent storage (CONS-05)
+- [x] 02-05-PLAN.md — Gap closure: wire BLS certificate from Reporter to persistent storage (CONS-05)
+
+### Phase 02.1: Functional Node (INSERTED)
+
+**Goal:** Deliver a fully functional Layer node with real cross-process authenticated P2P consensus, a tonic gRPC interface (Cosmos queries, BroadcastTx, state sync streaming), a working transaction pipeline (submit via gRPC to mempool to block to CosmWasm execute), and RocksDB persistence — the minimum viable baseline before the Ethereum type migration begins
+**Requirements**: None (gap-closure phase addressing P2P transport, gRPC server, tx pipeline, RocksDB persistence)
+**Depends on:** Phase 2
+**Success Criteria** (what must be TRUE):
+  1. 3 real OS processes communicate via `commonware_p2p::authenticated::lookup` and reach consensus with identical AppHash
+  2. A tonic gRPC server on each node serves Cosmos SDK queries (bank, auth, wasm), BroadcastTx (sync mode), and state sync streaming
+  3. Transactions submitted via gRPC BroadcastTx pass check_tx, enter the mempool, get included in blocks, and execute CosmWasm messages
+  4. State persists across node restarts via RocksDB (`RockStore` replacing `MemoryStore`)
+  5. End-to-end: deploy contracts/root/ contract (StoreCode + InstantiateContract + ExecuteContract msgs) via gRPC, query resulting state
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02.1-01-PLAN.md — Config + dependencies + gRPC service module
+- [ ] 02.1-02-PLAN.md — main.rs integration (authenticated P2P, RocksDB, gRPC wiring, tx pipeline)
+- [ ] 02.1-03-PLAN.md — Testnet scripts + Docker Compose + E2E verification
 
 ### Phase 3: Ethereum Types
 **Goal**: Every package uses `alloy_primitives::Address` (20-byte EIP-55) instead of Cosmos bech32 `Addr`; transactions are signed and encoded in Ethereum format; RocksDB storage keys are re-encoded without data loss
-**Depends on**: Phase 2
+**Depends on**: Phase 2.1 (functional node baseline required before type migration)
 **Requirements**: TYPES-01, TYPES-02, TYPES-03, TYPES-04
 **Success Criteria** (what must be TRUE):
   1. A 20-byte Ethereum address passes through the auth, bank, wasm keeper, proto, and gRPC layers without bech32 encoding or decoding at any point
@@ -102,12 +121,13 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | Complete   | 2026-03-18 |
 | 2. Commonware Consensus | 5/5 | Complete   | 2026-03-19 |
+| 2.1 Functional Node | 0/3 | Planning   | - |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |
 | 5. WAVS Integration | 0/TBD | Not started | - |
