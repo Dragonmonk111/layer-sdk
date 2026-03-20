@@ -1036,7 +1036,9 @@ fn cosmwasm_msg_to_layer(
                 amount,
             }
             .into(),
-            x => unimplemented!("bank msg {:?}", x),
+            other => return Err(WasmError::UnsupportedCosmosMsg(
+                format!("BankMsg variant not supported: {:?}", std::mem::discriminant(&other))
+            ).into()),
         },
         CosmosMsg::Wasm(wasm) => match wasm {
             cosmwasm_std::WasmMsg::Execute {
@@ -1107,7 +1109,9 @@ fn cosmwasm_msg_to_layer(
                 contract_addr: AccountId::parse_string(&contract_addr)?,
             }
             .into(),
-            x => unimplemented!("wasm msg {:?}", x),
+            other => return Err(WasmError::UnsupportedCosmosMsg(
+                format!("WasmMsg variant not supported: {:?}", std::mem::discriminant(&other))
+            ).into()),
         },
         CosmosMsg::Custom(custom) => {
             let root = root_account();
@@ -1156,7 +1160,22 @@ fn cosmwasm_msg_to_layer(
                 .into(),
             }
         }
-        _ => todo!(),
+        CosmosMsg::Stargate { type_url, .. } => {
+            return Err(WasmError::UnsupportedCosmosMsg(
+                format!("Stargate({})", type_url)
+            ).into());
+        }
+        CosmosMsg::Any(any_msg) => {
+            return Err(WasmError::UnsupportedCosmosMsg(
+                format!("Any({})", any_msg.type_url)
+            ).into());
+        }
+        // Wildcard for CosmosMsg::Gov, Distribution, IbcMsg, and future #[non_exhaustive] variants:
+        other => {
+            return Err(WasmError::UnsupportedCosmosMsg(
+                format!("{:?}", std::mem::discriminant(&other))
+            ).into());
+        }
     };
     Ok(res)
 }

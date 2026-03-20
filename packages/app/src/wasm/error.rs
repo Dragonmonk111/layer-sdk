@@ -30,4 +30,7 @@ pub enum WasmError {
 
     #[error("Only root contract call call custom messages")]
     NotRoot,
+
+    #[error("Unsupported CosmosMsg type: {0}")]
+    UnsupportedCosmosMsg(String),
 }
