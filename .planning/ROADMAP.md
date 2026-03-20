@@ -70,7 +70,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02.2-01-PLAN.md — Migrate App<T> from Mutex to RwLock across grpc.rs, node.rs, main.rs
+- [x] 02.2-01-PLAN.md — Migrate App<T> from Mutex to RwLock across grpc.rs, node.rs, main.rs
 - [ ] 02.2-02-PLAN.md — Replace todo!()/unimplemented!() panic sites with graceful errors in keeper.rs and query.rs
 
 ### Phase 02.1: Functional Node (INSERTED)
@@ -146,7 +146,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation | 3/3 | Complete   | 2026-03-18 |
 | 2. Commonware Consensus | 5/5 | Complete   | 2026-03-19 |
 | 2.1 Functional Node | 4/4 | Complete   | 2026-03-20 |
-| 2.2 Node Stability | 0/2 | Planning complete | - |
+| 2.2 Node Stability | 1/2 | In Progress|  |
 | 3. Ethereum Types | 0/TBD | Not started | - |
 | 4. WASM Runtime (Ethereum Types) | 0/TBD | Not started | - |
 | 5. WAVS Integration | 0/TBD | Not started | - |

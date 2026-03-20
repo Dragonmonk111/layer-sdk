@@ -2,16 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.3.2
 milestone_name: milestone
-status: completed
-stopped_at: Completed 02.1-04-PLAN.md — Cosmos query dispatch via axum fallback + tx-sender binary for full contract deployment e2e
-last_updated: "2026-03-20T17:50:50.274Z"
-last_activity: 2026-03-20
+status: unknown
+stopped_at: Completed 02.2-01-PLAN.md — Mutex to RwLock migration for App<T> across grpc.rs, node.rs, main.rs
+last_updated: "2026-03-20T19:12:08.485Z"
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_plans: 14
+  completed_plans: 13
 ---
 
 # Project State
@@ -21,16 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** WAVS programs can read from and write to persistent Layer state — enabling Layer to serve as the stateful backbone of the EigenLayer meta-chain ecosystem, with state anchored to Ethereum via zkVM proofs.
-**Current focus:** Phase 1 — Foundation
+**Current focus:** Phase 02.2 — node-stability-fix-grpc-concurrency-bug-and-stargate-crash
 
 ## Current Position
 
-Phase: 3 of 7 (ethereum types)
-Plan: Not started
-Status: Phase 02.1 all 4 plans complete; Cosmos query dispatch wired, tx-sender binary created, full e2e contract deployment flow enabled
-Last activity: 2026-03-20
-
-Progress: [██████████] 100% (Phase 2.1 complete — 4/4 plans done)
+Phase: 02.2 (node-stability-fix-grpc-concurrency-bug-and-stargate-crash) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -64,6 +58,7 @@ Progress: [██████████] 100% (Phase 2.1 complete — 4/4 plan
 | Phase 02.1-functional-node P02 | 13 | 2 tasks | 4 files |
 | Phase 02.1-functional-node P03 | 144 | 2 tasks | 5 files |
 | Phase 02.1-functional-node P04 | 90 | 2 tasks | 8 files |
+| Phase 02.2 P01 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -114,10 +109,13 @@ Recent decisions affecting current work:
 - [Phase 02.1-04]: Tower Service + fallback_service() instead of axum Handler — axum 0.7 (tonic) vs 0.8 (commonware-runtime) coexist in dep graph; Handler trait version check crosses boundary
 - [Phase 02.1-04]: tx-sender uses layer-proto (prost 0.13) not cosmos-sdk-proto (prost 0.11) — tonic 0.12 ProstCodec requires prost 0.13 types
 - [Phase 02.1-04]: tx-sender uses manual std::env::args() parsing — proc-macro2 1.0.86 workspace lock cannot satisfy clap 4.5+ requirement of 1.0.106 (blocked by commonware-runtime -> criterion -> clap chain)
+- [Phase 02.2]: Mempool remains Arc<Mutex<Mempool>> — no concurrent readers needed; RwLock reserved for App<T> where gRPC read concurrency matters
+- [Phase 02.2]: execute_block and LayerReporter::report use separate scoped blocks for read/write locks to prevent tokio RwLock deadlock (read dropped before write acquired)
 
 ### Roadmap Evolution
 
 - Phase 2.1 inserted after Phase 2: Functional Node (URGENT) — get real cross-process P2P, working CosmWasm contract deployment/execution, and a functional gRPC interface before starting the Ethereum type migrations
+- Phase 2.2 inserted after Phase 2.1: Node Stability — fix gRPC concurrency bug and Stargate crash (URGENT) — address concurrency race under gRPC load (#178/#162) and chain crash on unsupported Stargate messages (#177) before Ethereum type migration begins
 
 ### Pending Todos
 
@@ -131,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T16:59:03.065Z
-Stopped at: Completed 02.1-04-PLAN.md — Cosmos query dispatch via axum fallback + tx-sender binary for full contract deployment e2e
+Last session: 2026-03-20T19:12:08.483Z
+Stopped at: Completed 02.2-01-PLAN.md — Mutex to RwLock migration for App<T> across grpc.rs, node.rs, main.rs
 Resume file: None
