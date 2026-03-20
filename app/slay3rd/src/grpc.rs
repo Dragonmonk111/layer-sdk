@@ -391,16 +391,26 @@ pub async fn handle_cosmos_request<T: PersistentStorage + Send + Sync + 'static>
     match handle_cosmos_query(&state.app, &state.chain_id, &path, proto_bytes).await {
         Ok(response_bytes) => {
             // Build gRPC-framed response: 1 byte compressed flag (0) + 4 bytes length + payload.
-            let mut frame = Vec::with_capacity(5 + response_bytes.len());
-            frame.push(0u8); // not compressed
-            frame.extend_from_slice(&(response_bytes.len() as u32).to_be_bytes());
-            frame.extend_from_slice(&response_bytes);
+            let mut grpc_frame = Vec::with_capacity(5 + response_bytes.len());
+            grpc_frame.push(0u8); // not compressed
+            grpc_frame.extend_from_slice(&(response_bytes.len() as u32).to_be_bytes());
+            grpc_frame.extend_from_slice(&response_bytes);
+
+            // gRPC requires grpc-status in HTTP/2 trailers (a HEADERS frame *after* the DATA
+            // frame), not in the initial HEADERS frame. Putting it in initial headers causes
+            // "server closed the stream without sending trailers" on the client side.
+            let mut trailers = http::HeaderMap::new();
+            trailers.insert(
+                http::header::HeaderName::from_static("grpc-status"),
+                http::header::HeaderValue::from_static("0"),
+            );
+            let body = AxumBody::from(Bytes::from(grpc_frame))
+                .with_trailers(async move { Some(Ok::<_, axum::Error>(trailers)) });
 
             http::Response::builder()
                 .status(200)
                 .header(CONTENT_TYPE, "application/grpc")
-                .header("grpc-status", "0")
-                .body(AxumBody::from(frame))
+                .body(AxumBody::new(body))
                 .unwrap()
         }
         Err(status) => {
