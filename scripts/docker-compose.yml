@@ -1,0 +1,76 @@
+# docker-compose.yml — 3-node Layer testnet (multi-host topology)
+#
+# This demonstrates running slay3rd nodes as separate containers with
+# real network isolation. For localhost testing, use scripts/testnet.sh.
+#
+# Prerequisites:
+#   1. Build: docker build -t slay3rd -f Dockerfile .
+#   2. Generate keys: scripts/testnet.sh start (to create key material)
+#   3. Copy generated key material to ./testnet-keys/ and configs to ./testnet-config/
+#      - Keys: /tmp/layer-testnet/validator-{0,1,2}/keys.json -> testnet-keys/validator-{0,1,2}/keys.json
+#      - Configs: /tmp/layer-testnet/node-{0,1,2}/config.toml -> testnet-config/node{0,1,2}.toml
+#      - Genesis: /tmp/layer-testnet/genesis.json -> testnet-config/genesis.json
+#      NOTE: In container configs, update peer addresses to use Docker service names:
+#            address = "node0:7001" (not 127.0.0.1:7001)
+#   4. Run: docker compose -f scripts/docker-compose.yml up
+#
+# Each node has its own data volume and config. The P2P addresses use
+# Docker service names (node0, node1, node2) resolved via Docker DNS.
+
+services:
+  node0:
+    image: slay3rd:latest
+    container_name: slay3r-node0
+    command: ["/app/slay3rd", "/config/node0.toml"]
+    ports:
+      - "7001:7001"
+      - "9090:9090"
+    volumes:
+      - node0-data:/data
+      - ./testnet-config:/config:ro
+      - ./testnet-keys:/keys:ro
+    environment:
+      - RUST_LOG=info
+    networks:
+      - slay3r-net
+
+  node1:
+    image: slay3rd:latest
+    container_name: slay3r-node1
+    command: ["/app/slay3rd", "/config/node1.toml"]
+    ports:
+      - "7002:7002"
+      - "9091:9091"
+    volumes:
+      - node1-data:/data
+      - ./testnet-config:/config:ro
+      - ./testnet-keys:/keys:ro
+    environment:
+      - RUST_LOG=info
+    networks:
+      - slay3r-net
+
+  node2:
+    image: slay3rd:latest
+    container_name: slay3r-node2
+    command: ["/app/slay3rd", "/config/node2.toml"]
+    ports:
+      - "7003:7003"
+      - "9092:9092"
+    volumes:
+      - node2-data:/data
+      - ./testnet-config:/config:ro
+      - ./testnet-keys:/keys:ro
+    environment:
+      - RUST_LOG=info
+    networks:
+      - slay3r-net
+
+volumes:
+  node0-data:
+  node1-data:
+  node2-data:
+
+networks:
+  slay3r-net:
+    driver: bridge
