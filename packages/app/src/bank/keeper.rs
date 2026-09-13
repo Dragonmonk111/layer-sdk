@@ -411,6 +411,33 @@ impl Bank {
         Ok(())
     }
 
+    pub fn distribute_fees(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        from: &AccountId,
+        to: &AccountId,
+    ) -> PulsarResult<Vec<Coin>> {
+        let balances = {
+            let bank_storage = prefixed(storage, NAMESPACE_BANK);
+            self.get_all_balances(&bank_storage, meter, from)?
+        };
+        let mut distributed = vec![];
+        for coin in balances {
+            if !coin.amount.is_zero() {
+                self.transfer(
+                    storage, meter, block, sm,
+                    from.clone(), to.clone(),
+                    vec![coin.clone()],
+                )?;
+                distributed.push(coin);
+            }
+        }
+        Ok(distributed)
+    }
+
     pub fn init(
         &self,
         storage: &mut dyn Storage,

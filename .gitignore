@@ -22,3 +22,7 @@ package.json
 
 # ignore .env files
 .env
+
+# Large snapshot artifacts (regenerate via snapshot/*.mjs)
+snapshot/merkle-proofs.json
+snapshot/juno-1-snapshot-*.json

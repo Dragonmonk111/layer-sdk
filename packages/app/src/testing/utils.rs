@@ -365,7 +365,7 @@ mod test {
 
     use super::*;
 
-    const DENOM: &str = "uslay";
+    const DENOM: &str = "ujclaw";
 
     // FIXME: use genesis building pattern?
     fn sample_genesis(account: &AccountId) -> GenesisState {

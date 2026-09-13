@@ -1183,10 +1183,14 @@ dependencies = [
 [[package]]
 name = "cosmwasm-core"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f96ba2dd3c228d9e04a901307502096f56e5a547980a30656118503773a25c7c"
 
 [[package]]
 name = "cosmwasm-crypto"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc2040bedb37918da4701f83dd8635749d99d7baa6c0129f290f503dcde90e5c"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -1209,6 +1213,8 @@ dependencies = [
 [[package]]
 name = "cosmwasm-derive"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82e8c609b837282a093d87f45099f648b5c2f36203c6223f67883f13c3c1453a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1218,6 +1224,8 @@ dependencies = [
 [[package]]
 name = "cosmwasm-schema"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61d8debcf3b9cb23ed4c42a8c17fa224a422312d09f123816cc844c18c59246c"
 dependencies = [
  "cosmwasm-schema-derive",
  "schemars",
@@ -1229,6 +1237,8 @@ dependencies = [
 [[package]]
 name = "cosmwasm-schema-derive"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9efbbf2d78ec255fdae93ae363cc67490878fe5682f1266e4951321cd20888ef"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1238,6 +1248,8 @@ dependencies = [
 [[package]]
 name = "cosmwasm-std"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80d40d789c6d5d9b560927712c836237a3f29ea75fb09ef8718d4036bf2b8965"
 dependencies = [
  "base64",
  "bech32 0.11.0",
@@ -1260,6 +1272,8 @@ dependencies = [
 [[package]]
 name = "cosmwasm-vm"
 version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ff4c1fcd5f2e9ab33e4d137205dcd8a3bb36172d14415cb315c915cfa4c0bee"
 dependencies = [
  "bech32 0.11.0",
  "blake2",
@@ -2803,7 +2817,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -5974,3 +5988,31 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "cosmwasm-core"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "cosmwasm-crypto"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "cosmwasm-derive"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "cosmwasm-schema"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "cosmwasm-schema-derive"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "cosmwasm-std"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "cosmwasm-vm"
+version = "0.5.0"

@@ -152,7 +152,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             let app = self.app.read().await;  // SHARED read lock — read-only
             app.info()
                 .map(|b| b.chain_id.clone())
-                .unwrap_or_else(|| "slay3r-testnet-1".to_string())
+                .unwrap_or_else(|| "junoclaw-1".to_string())
         };  // read lock released here
 
         let mut txs: Vec<layer_std::Tx> = Vec::with_capacity(payload.txs.len());
@@ -390,7 +390,7 @@ mod tests {
         GenesisState {
             bank: vec![],
             wasm: WasmParams {
-                gov_account: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug".to_string(),
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
             },
         }
     }
@@ -404,7 +404,7 @@ mod tests {
         let app_state = to_json_binary(&genesis).unwrap();
         let request = InitChainRequest {
             time: CwTimestamp::from_nanos(1_673_194_026_078_305_426),
-            chain_id: "slay3r-testnet-1".into(),
+            chain_id: "junoclaw-1".into(),
             consensus_params: Default::default(),
             validators: vec![ValidatorUpdate {
                 pub_key: TmPubKey::Ed25519(vec![123u8; 32]),
@@ -643,7 +643,7 @@ mod tests {
     /// Build a properly signed Cosmos tx bytes (cosmos.tx.v1beta1.TxRaw encoded) using cosmrs.
     ///
     /// Returns raw bytes that parse_cosmos_tx() can decode. The tx is signed with a random
-    /// secp256k1 key and targets the test chain ("slay3r-testnet-1"). The signer account is
+    /// secp256k1 key and targets the test chain ("junoclaw-1"). The signer account is
     /// not in genesis, so finalize_block may reject it — but the DESERIALIZATION succeeds.
     #[cfg(test)]
     fn build_valid_tx_bytes(chain_id: &str) -> Vec<u8> {
@@ -667,11 +667,11 @@ mod tests {
 
         let amount = Coin {
             amount: 1_000u128,
-            denom: "upulsar".parse().unwrap(),
+            denom: "ujclaw".parse().unwrap(),
         };
         let fee_coin = Coin {
             amount: 100u128,
-            denom: "upulsar".parse().unwrap(),
+            denom: "ujclaw".parse().unwrap(),
         };
 
         let msg_send = MsgSend {
@@ -710,7 +710,7 @@ mod tests {
     fn test_execute_block_with_real_txs() {
         let _guard = APP_TEST_LOCK.lock().unwrap();
 
-        let chain_id = "slay3r-testnet-1";
+        let chain_id = "junoclaw-1";
 
         // Build valid tx bytes
         let valid_tx = bytes::Bytes::from(build_valid_tx_bytes(chain_id));

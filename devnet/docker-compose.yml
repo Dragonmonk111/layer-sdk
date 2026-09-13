@@ -1,0 +1,89 @@
+services:
+  node-0:
+    image: "junoclaw-chain:latest"
+    container_name: junoclaw-node-0
+    hostname: node-0
+    ports:
+      - "9090:9090"
+      - "7001:7001"
+    volumes:
+      - ./config/node-0.toml:/config/node.toml:ro
+      - ./../testnet-keys:/keys:ro
+      - node0_data:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    networks:
+      junoclaw-devnet:
+        ipv4_address: 172.28.0.10
+
+  node-1:
+    image: "junoclaw-chain:latest"
+    container_name: junoclaw-node-1
+    hostname: node-1
+    ports:
+      - "9091:9090"
+      - "7002:7001"
+    volumes:
+      - ./config/node-1.toml:/config/node.toml:ro
+      - ./../testnet-keys:/keys:ro
+      - node1_data:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    networks:
+      junoclaw-devnet:
+        ipv4_address: 172.28.0.11
+
+  node-2:
+    image: "junoclaw-chain:latest"
+    container_name: junoclaw-node-2
+    hostname: node-2
+    ports:
+      - "9092:9090"
+      - "7003:7001"
+    volumes:
+      - ./config/node-2.toml:/config/node.toml:ro
+      - ./../testnet-keys:/keys:ro
+      - node2_data:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    networks:
+      junoclaw-devnet:
+        ipv4_address: 172.28.0.12
+
+  node-3:
+    image: "junoclaw-chain:latest"
+    container_name: junoclaw-node-3
+    hostname: node-3
+    ports:
+      - "9093:9090"
+      - "7004:7001"
+    volumes:
+      - ./config/node-3.toml:/config/node.toml:ro
+      - ./../testnet-keys:/keys:ro
+      - node3_data:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    networks:
+      junoclaw-devnet:
+        ipv4_address: 172.28.0.13
+
+volumes:
+  node0_data:
+  node1_data:
+  node2_data:
+  node3_data:
+
+networks:
+  junoclaw-devnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

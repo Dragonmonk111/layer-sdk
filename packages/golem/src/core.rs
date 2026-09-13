@@ -22,7 +22,7 @@ use crate::{DerivedKey, OrchRegistry};
 /// Mock Chain info for the golem. This is used to get the right wasm
 pub const MOCK_CHAIN_INFO: ChainInfo = ChainInfo {
     chain_id: "slay3r-orch",
-    gas_denom: "uslay",
+    gas_denom: "ujclaw",
     gas_price: 0.025,
     grpc_urls: &[],
     lcd_url: None,
@@ -435,7 +435,7 @@ mod tests {
         // check we initialized balances properly
         let bank_query = chain.bank_querier();
         let balance = bank_query.balance(chain.sender_addr(), None).unwrap();
-        assert_eq!(balance, coins(2_000_000_000u128, "uslay"));
+        assert_eq!(balance, coins(2_000_000_000u128, "ujclaw"));
 
         // check we can send a transaction
         let to_send = 123_456_789u128;
@@ -443,24 +443,24 @@ mod tests {
         let recipient = chain2.sender_addr();
         assert_ne!(chain.sender_addr(), recipient);
         chain
-            .send_tokens(&recipient, coins(to_send, "uslay"))
+            .send_tokens(&recipient, coins(to_send, "ujclaw"))
             .unwrap();
 
         // money arrived
         let balance = bank_query.balance(recipient.clone(), None).unwrap();
-        assert_eq!(balance, coins(2_000_000_000u128 + to_send, "uslay"));
+        assert_eq!(balance, coins(2_000_000_000u128 + to_send, "ujclaw"));
 
         // money sent and gas paid
         let balance = bank_query.balance(chain.sender_addr(), None).unwrap();
-        let gas_fees = 250_000u128; // 10M gas * 0.025 uslay/gas (defaults)
+        let gas_fees = 250_000u128; // 10M gas * 0.025 ujclaw/gas (defaults)
         assert_eq!(
             balance,
-            coins(2_000_000_000u128 - to_send - gas_fees, "uslay")
+            coins(2_000_000_000u128 - to_send - gas_fees, "ujclaw")
         );
 
         // second send fails until we query sequence
         chain
-            .send_tokens(&recipient, coins(to_send, "uslay"))
+            .send_tokens(&recipient, coins(to_send, "ujclaw"))
             .unwrap();
     }
 

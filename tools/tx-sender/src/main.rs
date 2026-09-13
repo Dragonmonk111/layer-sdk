@@ -11,16 +11,16 @@
 //! # Deterministic deployer key
 //!
 //! Both tx-sender and `default_genesis()` derive the deployer key identically:
-//!   1. Compute SHA256("slay3r-testnet-deployer-v1") → 32 bytes
+//!   1. Compute SHA256("junoclaw-deployer-v1") → 32 bytes
 //!   2. Use those bytes as a secp256k1 signing key (cosmrs::crypto::secp256k1)
 //!
 //! # Usage
 //!
-//!   tx-sender balance [--grpc 127.0.0.1:9090] [--address layer1...]
+//!   tx-sender balance [--grpc 127.0.0.1:9090] [--address juno1...]
 //!   tx-sender store-code [--grpc 127.0.0.1:9090] --wasm path/to/contract.wasm [--sequence N]
 //!   tx-sender instantiate [--grpc 127.0.0.1:9090] --code-id 1 [--label root] [--msg '{...}'] [--sequence N]
-//!   tx-sender execute [--grpc 127.0.0.1:9090] --contract layer1... --msg '{...}' [--sequence N]
-//!   tx-sender query [--grpc 127.0.0.1:9090] --contract layer1... [--msg '{}']
+//!   tx-sender execute [--grpc 127.0.0.1:9090] --contract juno1... --msg '{...}' [--sequence N]
+//!   tx-sender query [--grpc 127.0.0.1:9090] --contract juno1... [--msg '{}']
 
 use cosmrs::{
     tx::{self, Fee, SignDoc, SignerInfo},
@@ -47,17 +47,17 @@ use layer_proto::cosmwasm::wasm::v1::{
 };
 
 /// Chain constants — must match the running testnet.
-const CHAIN_ID: &str = "slay3r-testnet-1";
+const CHAIN_ID: &str = "junoclaw-1";
 /// Fixed account number used by the Layer chain (matches FIXED_ACCOUNT_NUMBER in layer_cosmos).
 const FIXED_ACCOUNT_NUMBER: u64 = 17;
 /// Bech32 prefix for the Layer chain.
-const BECH32_PREFIX: &str = "layer";
+const BECH32_PREFIX: &str = "juno";
 /// Gas limit for StoreCode (WASM upload needs generous gas).
 const GAS_LIMIT: u64 = 50_000_000;
-/// Fee amount in upulsar.
+/// Fee amount in ujclaw.
 const FEE_AMOUNT: u128 = 100_000;
 /// Fee denomination.
-const FEE_DENOM: &str = "upulsar";
+const FEE_DENOM: &str = "ujclaw";
 
 // Type URLs for CosmWasm messages — used to construct cosmrs::Any from raw proto bytes.
 const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
@@ -198,9 +198,9 @@ fn parse_args() -> Result<Args, String> {
 /// Derive the deterministic deployer secp256k1 signing key.
 ///
 /// Uses the same seed as `default_genesis()` in `app/slay3rd/src/main.rs`:
-/// SHA256("slay3r-testnet-deployer-v1")[0..32]
+/// SHA256("junoclaw-deployer-v1")[0..32]
 fn deployer_key() -> cosmrs::crypto::secp256k1::SigningKey {
-    let seed = Sha256::digest(b"slay3r-testnet-deployer-v1");
+    let seed = Sha256::digest(b"junoclaw-deployer-v1");
     cosmrs::crypto::secp256k1::SigningKey::from_slice(&seed[..32])
         .expect("valid secp256k1 key from SHA256 seed")
 }

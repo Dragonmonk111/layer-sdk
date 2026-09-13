@@ -1,0 +1,23 @@
+validator_index = 0
+chain_id = "junoclaw-1"
+p2p_listen = "0.0.0.0:7001"
+grpc_listen = "0.0.0.0:9090"
+bls_key_path = "/keys/validator-0/keys.json"
+identity_key_path = "/keys/validator-0/keys.json"
+data_dir = "/data"
+genesis_path = ""
+mempool_max_pending = 10000
+leader_timeout_ms = 3000
+certification_timeout_ms = 5000
+
+[[peers]]
+address = "172.28.0.11:7001"
+public_key = "563757f5310c035a30d16c33cc186474b07451e2434d1e573cd506bc3e22451e"
+
+[[peers]]
+address = "172.28.0.12:7001"
+public_key = "28833a25d511f2e03efca77d87ddc3eedd5f5181adb947143d17e2e87e2fa685"
+
+[[peers]]
+address = "172.28.0.13:7001"
+public_key = "5d25ada62d8910a9e43e3711c5b581b6a0860aa338954fe65a847eea8d48c1a2"

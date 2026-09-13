@@ -13,7 +13,7 @@ use crate::{
 // v1.0.1
 const CW20_BASE: &[u8] = include_bytes!("../../fixtures/cw20_base.wasm");
 
-const DENOM: &str = "uslay";
+const DENOM: &str = "ujclaw";
 
 fn cw20_genesis(account: &AccountId) -> GenesisState {
     GenesisState {

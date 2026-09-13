@@ -476,7 +476,7 @@ mod tests {
         GenesisState {
             bank: vec![],
             wasm: WasmParams {
-                gov_account: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug".to_string(),
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
             },
         }
     }
@@ -490,7 +490,7 @@ mod tests {
         let app_state = to_json_binary(&genesis).unwrap();
         let request = InitChainRequest {
             time: CwTimestamp::from_nanos(1_673_194_026_078_305_426),
-            chain_id: "slay3r-testnet-1".into(),
+            chain_id: "junoclaw-1".into(),
             consensus_params: Default::default(),
             validators: vec![ValidatorUpdate {
                 pub_key: TmPubKey::Ed25519(vec![123u8; 32]),
@@ -507,7 +507,7 @@ mod tests {
         LayerGrpcService {
             app: Arc::new(RwLock::new(app)),
             mempool: Arc::new(Mutex::new(Mempool::new(100))),
-            chain_id: "slay3r-testnet-1".to_string(),
+            chain_id: "junoclaw-1".to_string(),
         }
     }
 
@@ -517,7 +517,7 @@ mod tests {
     /// to confirm the handler correctly distinguishes invalid_argument (parse
     /// failure) from failed_precondition (check_tx rejection).
     fn build_signed_tx_bytes() -> Vec<u8> {
-        let chain_id = "slay3r-testnet-1".parse().unwrap();
+        let chain_id = "junoclaw-1".parse().unwrap();
         let sender_private_key = secp256k1::SigningKey::random();
         let sender_public_key = sender_private_key.public_key();
         let sender_account_id = sender_public_key.account_id(BECH32_PREFIX).unwrap();
@@ -528,11 +528,11 @@ mod tests {
 
         let amount = Coin {
             amount: 1_000u128,
-            denom: "upulsar".parse().unwrap(),
+            denom: "ujclaw".parse().unwrap(),
         };
         let fee_coin = Coin {
             amount: 100u128,
-            denom: "upulsar".parse().unwrap(),
+            denom: "ujclaw".parse().unwrap(),
         };
 
         let msg_send = MsgSend {

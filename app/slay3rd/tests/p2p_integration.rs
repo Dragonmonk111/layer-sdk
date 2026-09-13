@@ -177,7 +177,7 @@ public_key = "{}"
     let genesis = r#"{
   "bank": [],
   "wasm": {
-    "gov_account": "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"
+    "gov_account": "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx"
   }
 }"#;
     std::fs::write(&genesis_path, genesis).expect("Failed to write genesis.json");

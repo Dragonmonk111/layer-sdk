@@ -8,8 +8,9 @@ use cosmwasm_std::{BlockInfo, Event, StdError};
 use layer_std::api::{Block, GasInfo, MsgResponse, TxResponse, TxResult};
 use layer_std::response::QueryResponse;
 use layer_std::{AccountId, GasMeter, Msg, Query, Tx};
-use layer_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage};
+use layer_storage::{AppMeter, Item, ReadonlyStorage, ScratchTx, Storage};
 
+use crate::auth::fee_collector_account;
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
@@ -18,6 +19,8 @@ use crate::{
     auth::{Auth, TxData},
     wasm::WasmConfig,
 };
+
+const PROPOSER_KEY: Item<Vec<u8>> = Item::new("_proposer");
 
 /// This is an immutable State Machine logic that processes incoming transactions.
 /// All mutable state held in Storage, which is passed as an argument to these methods.
@@ -171,26 +174,46 @@ impl StateMachine {
     /// Note: erroring here (including exceeding gas limits) will abort block execution. Be careful.
     pub fn begin_block(
         &self,
-        _storage: &mut dyn Storage,
+        storage: &mut dyn Storage,
         // this is set to the gas limit for begin blockers
-        _meter: &GasMeter,
+        meter: &GasMeter,
         // here we have full block info including proposer and voters (for rewards if needed)
-        _block: &Block,
+        block: &Block,
     ) -> PulsarResult<Vec<Event>> {
-        // FIXME: implement this later
+        PROPOSER_KEY.save(storage, meter, &block.proposer_address.clone())?;
         Ok(vec![])
     }
 
     /// Note: erroring here (including exceeding gas limits) will abort block execution. Be careful.
     pub fn end_block(
         &self,
-        _storage: &mut dyn Storage,
+        storage: &mut dyn Storage,
         // this is set to the gas limit for end blockers
-        _meter: &GasMeter,
+        meter: &GasMeter,
         // this is just block metadata
-        _block: &BlockInfo,
+        block: &BlockInfo,
     ) -> PulsarResult<Vec<Event>> {
-        // FIXME: implement this later
-        Ok(vec![])
+        let proposer_bytes = PROPOSER_KEY.may_load(storage, meter)?.unwrap_or_default();
+        if proposer_bytes.is_empty() {
+            return Ok(vec![]);
+        }
+        let proposer = match AccountId::new(&proposer_bytes) {
+            Ok(addr) => addr,
+            Err(_) => return Ok(vec![]),
+        };
+        let collector = fee_collector_account();
+        let distributed = self.bank.distribute_fees(
+            storage, meter, block, self, &collector, &proposer,
+        )?;
+        let mut events = vec![];
+        if !distributed.is_empty() {
+            let total: String = distributed.iter()
+                .map(|c| format!("{}{}", c.amount, c.denom))
+                .collect::<Vec<_>>().join(", ");
+            events.push(Event::new("fee_distribution")
+                .add_attribute("proposer", proposer.to_string())
+                .add_attribute("amount", total));
+        }
+        Ok(events)
     }
 }

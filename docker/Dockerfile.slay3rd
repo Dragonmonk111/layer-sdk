@@ -1,15 +1,43 @@
-# docker build . -f docker/Dockerfile.slay3rd -t ghcr.io/lay3rlabs/slay3rd:latest
-# docker run --rm -it ghcr.io/lay3rlabs//slay3rd:latest /bin/bash
+# docker build . -f docker/Dockerfile.slay3rd -t junoclaw-chain:latest
+# docker run --rm -it junoclaw-chain:latest /bin/bash
 
 ### BUILDING
 
-FROM rust:1.80-bookworm AS builder
+FROM rust:1.97-bookworm AS builder
 WORKDIR /myapp
 
 RUN apt update && apt install -y clang
 
+# wasmer 4.3.7 references __rust_probestack which was removed from Rust stdlib.
+# Provide a shim so the linker can resolve the symbol.
+COPY docker/shim.c /tmp/shim.c
+RUN cc -c -o /tmp/shim.o /tmp/shim.c
+ENV RUSTFLAGS="-C link-arg=/tmp/shim.o"
+
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
 COPY Cargo.lock Cargo.toml /myapp/
+COPY .cargo/config.toml /myapp/.cargo/config.toml
+
+# CosmWasm fork submodule (patched via [patch.crates-io] in workspace Cargo.toml)
+COPY lib/cosmwasm/Cargo.toml /myapp/lib/cosmwasm/Cargo.toml
+COPY lib/cosmwasm/Cargo.lock /myapp/lib/cosmwasm/Cargo.lock
+# Copy just enough of cosmwasm structure for the patch to resolve
+COPY lib/cosmwasm/packages/std/Cargo.toml /myapp/lib/cosmwasm/packages/std/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/std/src/lib.rs
+COPY lib/cosmwasm/packages/schema/Cargo.toml /myapp/lib/cosmwasm/packages/schema/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/schema/src/lib.rs
+COPY lib/cosmwasm/packages/crypto/Cargo.toml /myapp/lib/cosmwasm/packages/crypto/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/crypto/src/lib.rs
+COPY lib/cosmwasm/packages/vm/Cargo.toml /myapp/lib/cosmwasm/packages/vm/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/vm/src/lib.rs
+COPY lib/cosmwasm/packages/core/Cargo.toml /myapp/lib/cosmwasm/packages/core/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/core/src/lib.rs
+COPY lib/cosmwasm/packages/derive/Cargo.toml /myapp/lib/cosmwasm/packages/derive/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/derive/src/lib.rs
+COPY lib/cosmwasm/packages/schema-derive/Cargo.toml /myapp/lib/cosmwasm/packages/schema-derive/Cargo.toml
+COPY dummy.rs /myapp/lib/cosmwasm/packages/schema-derive/src/lib.rs
+
+# Workspace member Cargo.tomls with dummy source for dependency caching
 COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
 COPY dummy.rs /myapp/app/slay3rd/src/main.rs
 COPY contracts/caller/Cargo.toml /myapp/contracts/caller/Cargo.toml
@@ -18,14 +46,10 @@ COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
 COPY dummy.rs /myapp/contracts/echo/src/lib.rs
 COPY contracts/root/Cargo.toml /myapp/contracts/root/Cargo.toml
 COPY dummy.rs /myapp/contracts/root/src/lib.rs
-COPY packages/abci/Cargo.toml /myapp/packages/abci/Cargo.toml
-COPY dummy.rs /myapp/packages/abci/src/lib.rs
 COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
 COPY dummy.rs /myapp/packages/app/src/lib.rs
 COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
 COPY dummy.rs /myapp/packages/cosmos/src/lib.rs
-COPY packages/golem/Cargo.toml /myapp/packages/golem/Cargo.toml
-COPY dummy.rs /myapp/packages/golem/src/lib.rs
 COPY packages/proto/Cargo.toml /myapp/packages/proto/Cargo.toml
 COPY dummy.rs /myapp/packages/proto/src/lib.rs
 COPY dummy.rs /myapp/packages/proto/examples/sync_test.rs
@@ -33,11 +57,13 @@ COPY packages/std/Cargo.toml /myapp/packages/std/Cargo.toml
 COPY dummy.rs /myapp/packages/std/src/lib.rs
 COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml
 COPY dummy.rs /myapp/packages/storage/src/lib.rs
+COPY tools/tx-sender/Cargo.toml /myapp/tools/tx-sender/Cargo.toml
+COPY dummy.rs /myapp/tools/tx-sender/src/main.rs
 RUN cargo build --release --bin slay3rd
 
 # clean up these fake local deps so we compile for real later
-RUN rm /myapp/*/*/src/*.rs
-RUN rm -rf target/release/.fingerprint/layer-*
+RUN find /myapp -name "*.rs" -path "*/src/*" -delete
+RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3rd-*
 
 # This build step should just compile the local code and be faster
 COPY . .
@@ -50,7 +76,6 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get upgrade -y
 RUN apt install -y libcurl4 wget
 COPY --from=builder /myapp/target/release/slay3rd /usr/local/bin/slay3rd
-# COPY --from=builder /myapp/Cargo.toml /usr/local/bin/slay3rd
 EXPOSE 26658
 CMD ["slay3rd"]
 

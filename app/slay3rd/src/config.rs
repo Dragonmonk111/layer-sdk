@@ -33,7 +33,7 @@ pub struct NodeConfig {
     /// This node's validator index (0-based) in the static validator set.
     pub validator_index: usize,
 
-    /// Chain ID for the Layer network (e.g., "slay3r-testnet-1").
+    /// Chain ID for the JunoClaw network (e.g., "junoclaw-1").
     pub chain_id: String,
 
     /// Listen address for P2P networking (e.g., "0.0.0.0:7001").
@@ -79,7 +79,7 @@ impl Default for NodeConfig {
     fn default() -> Self {
         NodeConfig {
             validator_index: 0,
-            chain_id: "slay3r-testnet-1".to_string(),
+            chain_id: "junoclaw-1".to_string(),
             p2p_listen: "0.0.0.0:7001".to_string(),
             grpc_listen: "0.0.0.0:9090".to_string(),
             peers: vec![],
@@ -125,7 +125,7 @@ mod tests {
     fn test_default_config() {
         let cfg = NodeConfig::default();
         assert_eq!(cfg.validator_index, 0);
-        assert_eq!(cfg.chain_id, "slay3r-testnet-1");
+        assert_eq!(cfg.chain_id, "junoclaw-1");
         assert_eq!(cfg.mempool_max_pending, 10_000);
         assert_eq!(cfg.leader_timeout_ms, 3_000);
         assert_eq!(cfg.certification_timeout_ms, 5_000);
@@ -174,7 +174,7 @@ mod tests {
     fn test_config_with_peers_toml_roundtrip() {
         let toml_str = r#"
 validator_index = 0
-chain_id = "slay3r-testnet-1"
+chain_id = "junoclaw-1"
 p2p_listen = "0.0.0.0:7001"
 grpc_listen = "0.0.0.0:9090"
 data_dir = "./data/node0"

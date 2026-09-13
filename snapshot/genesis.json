@@ -1,0 +1,16 @@
+{
+  "bank": [
+    {
+      "address": "juno18k65at7fkf8elhece0fnhsvuxggqg6cved6trp5fyk3lftfn93xsmpeaac",
+      "balance": [
+        {
+          "denom": "ujclaw",
+          "amount": "54660000000000"
+        }
+      ]
+    }
+  ],
+  "wasm": {
+    "gov_account": "juno18k65at7fkf8elhece0fnhsvuxggqg6cved6trp5fyk3lftfn93xsmpeaac"
+  }
+}

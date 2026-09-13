@@ -1,35 +1,35 @@
 {
   "rpc": "http://localhost:26657",
   "rest": "http://localhost:1317",
-  "chainId": "slay3r-local",
-  "chainName": "Slay3r LocalNet",
+  "chainId": "junoclaw-local",
+  "chainName": "JunoClaw LocalNet",
   "stakeCurrency": {
-    "coinDenom": "SLAY",
-    "coinMinimalDenom": "uslay",
+    "coinDenom": "JCLAW",
+    "coinMinimalDenom": "ujclaw",
     "coinDecimals": 6
   },
   "bech32Config": {
-    "bech32PrefixAccAddr": "slay3r",
-    "bech32PrefixAccPub": "slay3rpub",
-    "bech32PrefixValAddr": "slay3rvaloper",
-    "bech32PrefixValPub": "slay3rvaloperpub",
-    "bech32PrefixConsAddr": "slay3rvalcons",
-    "bech32PrefixConsPub": "slay3rvalconspub"
+    "bech32PrefixAccAddr": "juno",
+    "bech32PrefixAccPub": "junopub",
+    "bech32PrefixValAddr": "junovaloper",
+    "bech32PrefixValPub": "junovaloperpub",
+    "bech32PrefixConsAddr": "junovalcons",
+    "bech32PrefixConsPub": "junovalconspub"
   },
   "bip44": {
     "coinType": 118
   },
   "currencies": [
     {
-      "coinDenom": "SLAY",
-      "coinMinimalDenom": "uslay",
+      "coinDenom": "JCLAW",
+      "coinMinimalDenom": "ujclaw",
       "coinDecimals": 6
     }
   ],
   "feeCurrencies": [
     {
-      "coinDenom": "SLAY",
-      "coinMinimalDenom": "uslay",
+      "coinDenom": "JCLAW",
+      "coinMinimalDenom": "ujclaw",
       "coinDecimals": 6
     }
   ],

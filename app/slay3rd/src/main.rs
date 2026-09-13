@@ -800,7 +800,7 @@ async fn run_node(
 ///
 /// Includes a pre-funded deployer account for the tx-sender tool.
 /// The deployer's secp256k1 private key is derived deterministically:
-///   SHA256("slay3r-testnet-deployer-v1")[0..32] (32 bytes)
+///   SHA256("junoclaw-deployer-v1")[0..32] (32 bytes)
 /// The corresponding bech32 address is computed from the public key.
 ///
 /// The tx-sender tool uses the same derivation to sign transactions.
@@ -808,7 +808,7 @@ fn default_genesis() -> GenesisState {
     use sha2::{Digest, Sha256};
 
     // Deterministic deployer key — same seed used by tools/tx-sender
-    let seed = Sha256::digest(b"slay3r-testnet-deployer-v1");
+    let seed = Sha256::digest(b"junoclaw-deployer-v1");
     let deployer_key = cosmrs::crypto::secp256k1::SigningKey::from_slice(&seed[..32])
         .expect("valid secp256k1 key from SHA256 seed");
     let deployer_addr = deployer_key
@@ -820,10 +820,10 @@ fn default_genesis() -> GenesisState {
     GenesisState {
         bank: vec![BankAccount {
             address: deployer_addr,
-            balance: vec![cosmwasm_std::coin(1_000_000_000_000, "upulsar")],
+            balance: vec![cosmwasm_std::coin(1_000_000_000_000, "ujclaw")],
         }],
         wasm: WasmParams {
-            gov_account: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug".to_string(),
+            gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
         },
     }
 }

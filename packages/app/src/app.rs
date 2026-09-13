@@ -531,7 +531,7 @@ mod tests {
         let app_state = to_json_binary(genesis).unwrap();
         InitChainRequest {
             time: Timestamp::from_nanos(1_673_194_026_078_305_426),
-            chain_id: "slay3r-testnet-1".into(),
+            chain_id: "junoclaw-1".into(),
             consensus_params: Default::default(),
             validators: vec![ValidatorUpdate {
                 pub_key: TmPubKey::Ed25519(vec![123u8; 32]),
@@ -568,9 +568,9 @@ mod tests {
     // run finalize_block
     // query account + balances for update
     fn transaction_workflow<T: PersistentStorage + 'static>(storage: T) {
-        let sender = must_id("layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug");
-        let recipient = must_id("layer1y5hl7x8hxl72dc9gu920eaz6l7vhl0lumcs7zd");
-        let denom: &str = "uslay";
+        let sender = must_id("juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx");
+        let recipient = must_id("juno1y5hl7x8hxl72dc9gu920eaz6l7vhl0luag99fr");
+        let denom: &str = "ujclaw";
 
         let expected_gas = 16_000u64;
 
@@ -630,7 +630,7 @@ mod tests {
                 recipient: recipient.clone(),
                 amount: coins(2_000_000, denom),
             })],
-            signer: must_id("layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug"),
+            signer: must_id("juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx"),
             signing_info: SigningInfo {
                 message_hash: Binary::from(
                     hex!("6d368a4b8436e0b19a2d06069e0b70086ba7c40e91a9d04d31946c10346d79a9")
@@ -670,7 +670,7 @@ mod tests {
 
         // create proper tx (from cosmjs)
         tx.fee = FeeInfo {
-            fee: Some(coin(2500, "uslay")),
+            fee: Some(coin(2500, "ujclaw")),
             gas_limit: 100000,
         };
         tx.signing_info.signature = Binary::from(hex!("e5367dc058d8942bddc453eb1b61119bf71186693d8fd0f1683ff7a1b4666e3b67d32f3ddf52360e365099f72b2417a9d6034883032ad1ac97b48f73e754351c").as_slice());
@@ -765,7 +765,7 @@ mod tests {
         let genesis = GenesisState {
             bank: vec![],
             wasm: WasmParams {
-                gov_account: "layer1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmt53rug".to_string(),
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
             },
         };
         let request = mock_init(&genesis);
