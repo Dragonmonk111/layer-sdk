@@ -24,6 +24,10 @@ const CAPABILITIES: &[&str] = &[
     "cosmwasm_1_3",
     "cosmwasm_1_4",
     "cosmwasm_2_0",
+    // JunoClaw extension: BN254 (alt_bn128) host functions, ported into
+    // lib/cosmwasm (v2.3.2 fork). Contracts built with the cosmwasm_2_3
+    // feature emit `requires_cosmwasm_2_3` and import env.bn254_*.
+    "cosmwasm_2_3",
 ];
 
 // Changed by 1000 in 2.0 upgrade: https://github.com/CosmWasm/cosmwasm/pull/1884
