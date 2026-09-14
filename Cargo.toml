@@ -3,6 +3,14 @@ members = ["app/*", "contracts/*", "packages/*", "tools/tx-sender"]
 exclude = [
   "tools/proto-compiler",
   "packages/golem",  # excluded: cw-orch-core 2.x API migration deferred
+  # lib/cosmwasm is its own workspace (v2.3.2). It must be excluded so the
+  # [patch.crates-io] cosmwasm-* path entries below resolve their
+  # `version = { workspace = true }` against lib/cosmwasm's workspace
+  # (2.3.2), not this one (0.5.0) — otherwise the patches report v0.5.0,
+  # fail the `=2.3.2` requirement, and cargo silently falls back to
+  # crates.io cosmwasm-vm/std (losing the bn254_* host functions and the
+  # metered bulk-memory Gatekeeper).
+  "lib/cosmwasm",
 ]
 resolver = "2"
 

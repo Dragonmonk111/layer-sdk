@@ -24,6 +24,11 @@ const CAPABILITIES: &[&str] = &[
     "cosmwasm_1_3",
     "cosmwasm_1_4",
     "cosmwasm_2_0",
+    // cosmwasm-std 2.3.2 emits requires_cosmwasm_2_1 / requires_cosmwasm_2_2
+    // markers via feature unification; the 2.3.2 VM supports the full 2.x API
+    // surface, so advertise them.
+    "cosmwasm_2_1",
+    "cosmwasm_2_2",
     // JunoClaw extension: BN254 (alt_bn128) host functions, ported into
     // lib/cosmwasm (v2.3.2 fork). Contracts built with the cosmwasm_2_3
     // feature emit `requires_cosmwasm_2_3` and import env.bn254_*.
@@ -689,5 +694,97 @@ mod tests {
         let res = res.unwrap().unwrap();
         let balance: cw20::BalanceResponse = from_json(res).unwrap();
         balance.balance
+    }
+
+    // ── zk-verifier (BN254 / cosmwasm_2_3) gas measurement ────────────────
+    //
+    // The artifact is `zk-verifier` built with `--features bn254-precompile`,
+    // which enables cosmwasm-std's `cosmwasm_2_3` feature. It imports the
+    // `env.bn254_*` host functions and emits metered bulk-memory ops, so it
+    // only loads on the JunoClaw VM (the `cosmwasm_2_3` capability plus the
+    // Gatekeeper length-aware bulk-memory metering in engine.rs). The wasm is
+    // read from `ZK_VERIFIER_WASM` if set, else the sibling-repo build output;
+    // the test skips (rather than fails) when the artifact isn't built.
+    const ZK_VERIFIER_WASM_REL: &str =
+        "/../../../junoclaw/contracts/target/wasm32-unknown-unknown/release/zk_verifier.wasm";
+
+    // Groth16 fixtures for SquareCircuit x=3 (y=9), deterministic seed 42 —
+    // produced by `cargo +1.95 run -p zk-verifier --example generate_proof`.
+    const ZK_VK_B64: &str = "+7zaLtkeRoJtpwW9qmVvnM8XKq8J4eHVdwckLWfnzZaAg/nPhzWQVrH2vuTqFiR063hioTHe3uRjRE64MCijL+vSasFvl7LH3WVrj24QNztXZ6xqgz+XjmeZzAjrEFQT5066KO8NcqkABvqGELowehGmtc/1Qh63BQPs6Te78iyp1Da2e2qJ8qz8L08tkmkeAmJr2iY5qp5vS/xqZMG+K36am/FhHf+1lMz2qDQ/4EPAlCG/widWopwiR8CpXxMBoios4XXu0EO6jWqsXyM2qv4A7AHJa7vQtc9ReNkeOSMCAAAAAAAAAI1L7LGb+PVNcIAlMlW0NpbNad3lEp7FxgdIbRJzrHWi4OxrTbfuKm+axq5NCSEJ4EjViyMziVRXwfsm6DTUWYE=";
+    const ZK_PROOF_B64: &str = "3s0boCztqb+oTya4AmY0uHHYXNwiL8ZD/AAK+qlm7JM4BIMkNmkzUVFEYxjPdlo3qVghx4+MRZKaIEcB7hqNK7Ou+8+ZWzPzeU+MQgiWJ8T1IG1TkTd7m25N4yF9kG6LtYI2V1JjwxNFu20+9TtnPXHuBDBxoqgZfjJGbnut7as=";
+    const ZK_INPUTS_B64: &str = "CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+    #[test]
+    fn zk_verifier_bn254_gas() {
+        let wasm_path = std::env::var("ZK_VERIFIER_WASM").unwrap_or_else(|_| {
+            format!("{}{}", env!("CARGO_MANIFEST_DIR"), ZK_VERIFIER_WASM_REL)
+        });
+        let Ok(wasm) = std::fs::read(&wasm_path) else {
+            eprintln!("skipping zk_verifier_bn254_gas: wasm not found at {wasm_path}");
+            return;
+        };
+
+        let path = "/tmp/slay3r/test-zk-verifier-bn254";
+        let _ = std::fs::remove_dir_all(path);
+        std::fs::create_dir_all(path).unwrap();
+
+        let vm = VmCache::init(path);
+        let (checksum, analysis) = vm.store_code(&wasm).unwrap();
+        // The artifact must declare the cosmwasm_2_3 capability it relies on.
+        assert!(analysis
+            .required_capabilities
+            .contains("cosmwasm_2_3"));
+
+        let env = mock_env();
+        let sender = AccountId::unchecked("deployer");
+        let contract = AccountId::unchecked("zk-verifier");
+        let info = mock_info(&sender.to_string(), &[]);
+        let meter = GasMeter::infinite();
+        let sm = StateMachine::new(&AppConfig::new(path));
+        let store = MemoryStore::new();
+        let mut writer = store.writer();
+
+        // instantiate {"admin":null} -> admin becomes the deployer
+        let (res, g_inst) = vm.instantiate(
+            &checksum,
+            &env,
+            &info,
+            br#"{"admin":null}"#,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
+        );
+        res.unwrap().unwrap();
+
+        // store the verifying key (sender is admin)
+        let store_vk =
+            format!(r#"{{"store_vk":{{"vk_base64":"{ZK_VK_B64}"}}}}"#).into_bytes();
+        let (res, g_vk) = vm.execute(
+            &checksum, &env, &info, &store_vk, &mut writer, &contract, &meter, &sm,
+        );
+        res.unwrap().unwrap();
+
+        // verify the proof — this is the path that exercises bn254_scalar_mul,
+        // bn254_add and bn254_pairing_equality
+        let verify = format!(
+            r#"{{"verify_proof":{{"proof_base64":"{ZK_PROOF_B64}","public_inputs_base64":"{ZK_INPUTS_B64}"}}}}"#
+        )
+        .into_bytes();
+        let (res, g_verify) = vm.execute(
+            &checksum, &env, &info, &verify, &mut writer, &contract, &meter, &sm,
+        );
+        res.unwrap().unwrap();
+
+        eprintln!(
+            "zk-verifier bn254 gas: instantiate={g_inst} store_vk={g_vk} verify_proof={g_verify}"
+        );
+        // Pure-Wasm verification is ~371k SDK gas; the cosmwasm_2_3 host-fn
+        // path targets ~187k. Assert a generous band so the test catches a
+        // regression back to the pure-Wasm path without being flaky.
+        assert!(
+            g_verify < 300_000,
+            "expected precompile verify_proof gas < 300k, got {g_verify}"
+        );
     }
 }
