@@ -37,12 +37,17 @@ use tonic::{
 // Use layer-proto types which are compiled with prost 0.13 (workspace version),
 // compatible with tonic 0.12 ProstCodec.
 use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
-use layer_proto::cosmos::bank::v1beta1::{QueryAllBalancesRequest, QueryAllBalancesResponse};
+use layer_proto::cosmos::bank::v1beta1::{
+    MsgSend, QueryAllBalancesRequest, QueryAllBalancesResponse,
+};
+use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
     service_client::ServiceClient as TxServiceClient, BroadcastTxRequest,
 };
 use layer_proto::cosmwasm::wasm::v1::{
     MsgExecuteContract, MsgInstantiateContract, MsgStoreCode,
+    QueryCodeRequest, QueryCodeResponse,
+    QueryContractsByCodeRequest, QueryContractsByCodeResponse,
     QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
 
@@ -53,7 +58,11 @@ const FIXED_ACCOUNT_NUMBER: u64 = 17;
 /// Bech32 prefix for the Layer chain.
 const BECH32_PREFIX: &str = "juno";
 /// Gas limit for StoreCode (WASM upload needs generous gas).
-const GAS_LIMIT: u64 = 50_000_000;
+// Must stay under the block gas cap (DEFAULT_BLOCK_GAS = 100_000_000) or the tx is
+// rejected with ExceedsRemainingBlockGas before execution. The dominant cost is
+// tx_byte_gas = tx_len * GAS_COST_TX_BYTE(10): a 4.4MB wasm tx needs ~44M gas just
+// for its bytes. 90M covers up to ~9MB txs while leaving headroom under the cap.
+const GAS_LIMIT: u64 = 90_000_000;
 /// Fee amount in ujclaw.
 const FEE_AMOUNT: u128 = 100_000;
 /// Fee denomination.
@@ -63,6 +72,7 @@ const FEE_DENOM: &str = "ujclaw";
 const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
 const TYPE_URL_MSG_INSTANTIATE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgInstantiateContract";
 const TYPE_URL_MSG_EXECUTE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgExecuteContract";
+const TYPE_URL_MSG_SEND: &str = "/cosmos.bank.v1beta1.MsgSend";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing (manual — no clap to avoid proc-macro2 version conflict)
@@ -76,7 +86,10 @@ fn print_usage() {
     eprintln!("  store-code  Upload WASM bytecode (MsgStoreCode)");
     eprintln!("  instantiate Instantiate a contract (MsgInstantiateContract)");
     eprintln!("  execute     Execute a contract (MsgExecuteContract)");
+    eprintln!("  send        Send tokens (MsgSend bank transfer)");
     eprintln!("  query       Query contract state (SmartContractState)");
+    eprintln!("  contracts-by-code  List contract addresses for a code id");
+    eprintln!("  code-info   Query CodeInfo for a code id");
     eprintln!();
     eprintln!("Common flags:");
     eprintln!("  --grpc <host:port>   gRPC server address (default: 127.0.0.1:9090)");
@@ -96,9 +109,21 @@ fn print_usage() {
     eprintln!("  --msg <json>         JSON execute message (required)");
     eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
     eprintln!();
+    eprintln!("send flags:");
+    eprintln!("  --to <addr>          Recipient address (required)");
+    eprintln!("  --amount <N>         Amount to send (required)");
+    eprintln!("  --denom <str>        Denom (default: ujclaw)");
+    eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
+    eprintln!();
     eprintln!("query flags:");
     eprintln!("  --contract <addr>    Contract address (required)");
     eprintln!("  --msg <json>         JSON query message (default: {{}})");
+    eprintln!();
+    eprintln!("contracts-by-code flags:");
+    eprintln!("  --code-id <N>        Code ID to list contracts for (required)");
+    eprintln!();
+    eprintln!("code-info flags:");
+    eprintln!("  --code-id <N>        Code ID to query (required)");
     eprintln!();
     eprintln!("balance flags:");
     eprintln!("  --address <addr>     Address to query (default: deployer address)");
@@ -114,6 +139,9 @@ struct Args {
     msg: String,
     contract: Option<String>,
     address: Option<String>,
+    to: Option<String>,
+    amount: Option<String>,
+    denom: String,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -133,6 +161,9 @@ fn parse_args() -> Result<Args, String> {
     let mut msg = String::new();
     let mut contract: Option<String> = None;
     let mut address: Option<String> = None;
+    let mut to: Option<String> = None;
+    let mut amount: Option<String> = None;
+    let mut denom = "ujclaw".to_string();
 
     let mut i = 1;
     while i < args.len() {
@@ -163,6 +194,14 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 msg = args.get(i).ok_or("--msg requires a value")?.clone();
             }
+            "--msg-file" => {
+                i += 1;
+                let path = args.get(i).ok_or("--msg-file requires a value")?;
+                msg = std::fs::read_to_string(path)
+                    .map_err(|e| format!("failed to read --msg-file {}: {}", path, e))?
+                    .trim()
+                    .to_string();
+            }
             "--contract" => {
                 i += 1;
                 contract = Some(args.get(i).ok_or("--contract requires a value")?.clone());
@@ -170,6 +209,18 @@ fn parse_args() -> Result<Args, String> {
             "--address" => {
                 i += 1;
                 address = Some(args.get(i).ok_or("--address requires a value")?.clone());
+            }
+            "--to" => {
+                i += 1;
+                to = Some(args.get(i).ok_or("--to requires a value")?.clone());
+            }
+            "--amount" => {
+                i += 1;
+                amount = Some(args.get(i).ok_or("--amount requires a value")?.clone());
+            }
+            "--denom" => {
+                i += 1;
+                denom = args.get(i).ok_or("--denom requires a value")?.clone();
             }
             flag => {
                 return Err(format!("unknown flag: {}", flag));
@@ -188,6 +239,9 @@ fn parse_args() -> Result<Args, String> {
         msg,
         contract,
         address,
+        to,
+        amount,
+        denom,
     })
 }
 
@@ -344,7 +398,9 @@ async fn cmd_store_code(
     println!("Signed tx size: {} bytes", tx_bytes.len());
 
     let channel = connect(grpc_addr).await?;
-    let mut client = TxServiceClient::new(channel);
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
 
     let response = client
         .broadcast_tx(BroadcastTxRequest {
@@ -414,7 +470,9 @@ async fn cmd_instantiate(
     println!("Signed tx size: {} bytes", tx_bytes.len());
 
     let channel = connect(grpc_addr).await?;
-    let mut client = TxServiceClient::new(channel);
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
 
     let response = client
         .broadcast_tx(BroadcastTxRequest {
@@ -480,7 +538,9 @@ async fn cmd_execute(
     println!("Signed tx size: {} bytes", tx_bytes.len());
 
     let channel = connect(grpc_addr).await?;
-    let mut client = TxServiceClient::new(channel);
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
 
     let response = client
         .broadcast_tx(BroadcastTxRequest {
@@ -508,6 +568,76 @@ async fn cmd_execute(
 }
 
 // ---------------------------------------------------------------------------
+// Subcommand: send (MsgSend bank transfer)
+// ---------------------------------------------------------------------------
+
+async fn cmd_send(
+    grpc_addr: &str,
+    to: &str,
+    amount: u128,
+    denom: &str,
+    explicit_sequence: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sender = deployer_address().to_string();
+    println!("Deployer address: {}", sender);
+
+    let sequence = match explicit_sequence {
+        Some(seq) => {
+            println!("Using explicit sequence: {}", seq);
+            seq
+        }
+        None => query_account_sequence(grpc_addr, &sender).await?,
+    };
+    println!("Account sequence: {}", sequence);
+
+    let msg = MsgSend {
+        from_address: sender.clone(),
+        to_address: to.to_string(),
+        amount: vec![ProtoCoin {
+            denom: denom.to_string(),
+            amount: amount.to_string(),
+        }],
+    };
+    let proto_bytes = msg.encode_to_vec();
+    let cosmrs_any = cosmrs::Any {
+        type_url: TYPE_URL_MSG_SEND.to_string(),
+        value: proto_bytes,
+    };
+
+    let tx_bytes = sign_tx(cosmrs_any, sequence);
+    println!("Signed tx size: {} bytes", tx_bytes.len());
+
+    let channel = connect(grpc_addr).await?;
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    let response = client
+        .broadcast_tx(BroadcastTxRequest {
+            tx_bytes,
+            mode: 1, // BROADCAST_MODE_SYNC
+        })
+        .await?;
+
+    let tx_response = response.into_inner().tx_response;
+    if let Some(ref resp) = tx_response {
+        println!(
+            "BroadcastTx response: code={}, log={}",
+            resp.code, resp.raw_log
+        );
+        if resp.code == 0 {
+            println!("Send TX submitted successfully: {} {} -> {}", amount, denom, to);
+        } else {
+            println!("Warning: tx returned non-zero code — check node logs");
+        }
+    } else {
+        println!("Send TX submitted (no response body)");
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Subcommand: query (SmartContractState)
 // ---------------------------------------------------------------------------
 
@@ -516,6 +646,7 @@ async fn cmd_query_smart(
     contract: &str,
     query_msg: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    eprintln!("[debug] query_data bytes ({}): {:?}", query_msg.len(), query_msg);
     let req = QuerySmartContractStateRequest {
         address: contract.to_string(),
         query_data: query_msg.as_bytes().to_vec(),
@@ -537,6 +668,81 @@ async fn cmd_query_smart(
     let result = response.into_inner();
     let data_str = String::from_utf8_lossy(&result.data);
     println!("SmartContractState result: {}", data_str);
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: contracts-by-code (ContractsByCode)
+// ---------------------------------------------------------------------------
+
+async fn cmd_contracts_by_code(
+    grpc_addr: &str,
+    code_id: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let req = QueryContractsByCodeRequest {
+        code_id,
+        pagination: None,
+    };
+
+    let channel = connect(grpc_addr).await?;
+    let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
+    grpc_client.ready().await.map_err(|e| {
+        format!("gRPC channel not ready: {}", e)
+    })?;
+
+    let path: http::uri::PathAndQuery = "/cosmwasm.wasm.v1.Query/ContractsByCode"
+        .parse()
+        .expect("valid path");
+    let codec: ProstCodec<QueryContractsByCodeRequest, QueryContractsByCodeResponse> =
+        ProstCodec::default();
+    let response = grpc_client.unary(Request::new(req), path, codec).await?;
+
+    let result = response.into_inner();
+    if result.contracts.is_empty() {
+        println!("No contracts found for code_id={}", code_id);
+    } else {
+        for addr in &result.contracts {
+            println!("contract: {}", addr);
+        }
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: code-info (Code)
+// ---------------------------------------------------------------------------
+
+async fn cmd_code_info(
+    grpc_addr: &str,
+    code_id: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let req = QueryCodeRequest { code_id };
+
+    let channel = connect(grpc_addr).await?;
+    let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+    grpc_client.ready().await.map_err(|e| {
+        format!("gRPC channel not ready: {}", e)
+    })?;
+
+    let path: http::uri::PathAndQuery = "/cosmwasm.wasm.v1.Query/Code"
+        .parse()
+        .expect("valid path");
+    let codec: ProstCodec<QueryCodeRequest, QueryCodeResponse> =
+        ProstCodec::default();
+    let response = grpc_client.unary(Request::new(req), path, codec).await?;
+
+    let result = response.into_inner();
+    match result.code_info {
+        Some(info) => {
+            println!("code_id={} creator={} data_hash={} wasm_bytes={}",
+                info.code_id, info.creator, hex::encode(&info.data_hash), result.data.len());
+        }
+        None => println!("No CodeInfo for code_id={} (wasm_bytes={})", code_id, result.data.len()),
+    }
 
     Ok(())
 }
@@ -636,6 +842,35 @@ async fn main() {
             });
             let msg = if args.msg.is_empty() { "{}".to_string() } else { args.msg };
             cmd_query_smart(&args.grpc, &contract, &msg).await
+        }
+        "contracts-by-code" => {
+            let code_id = args.code_id.unwrap_or_else(|| {
+                eprintln!("Error: --code-id is required for contracts-by-code");
+                std::process::exit(1);
+            });
+            cmd_contracts_by_code(&args.grpc, code_id).await
+        }
+        "code-info" => {
+            let code_id = args.code_id.unwrap_or_else(|| {
+                eprintln!("Error: --code-id is required for code-info");
+                std::process::exit(1);
+            });
+            cmd_code_info(&args.grpc, code_id).await
+        }
+        "send" => {
+            let to = args.to.unwrap_or_else(|| {
+                eprintln!("Error: --to is required for send");
+                std::process::exit(1);
+            });
+            let amount_str = args.amount.unwrap_or_else(|| {
+                eprintln!("Error: --amount is required for send");
+                std::process::exit(1);
+            });
+            let amount: u128 = amount_str.parse().unwrap_or_else(|_| {
+                eprintln!("Error: invalid --amount: {}", amount_str);
+                std::process::exit(1);
+            });
+            cmd_send(&args.grpc, &to, amount, &args.denom, args.sequence).await
         }
         "balance" => {
             let addr = args
