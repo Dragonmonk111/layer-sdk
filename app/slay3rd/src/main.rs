@@ -574,7 +574,9 @@ async fn run_node(
                 .add_service(
                     layer_proto::cosmos::tx::v1beta1::service_server::ServiceServer::new(
                         grpc_svc.clone(),
-                    ),
+                    )
+                    .max_decoding_message_size(10 * 1024 * 1024)
+                    .max_encoding_message_size(10 * 1024 * 1024),
                 )
                 .add_service(
                     layer_proto::layer::sync::v1::query_server::QueryServer::new(grpc_svc),
@@ -608,7 +610,7 @@ async fn run_node(
         ed25519_private_key.clone(),
         b"slay3r-p2p-v1",
         p2p_listen,
-        1024 * 1024,  // 1MB max message size
+        10 * 1024 * 1024,  // 10MB max message size (accommodates large store-code txs)
     );
 
     let p2p_ctx = context.with_label("p2p");
@@ -684,16 +686,18 @@ async fn run_node(
         let mut rx = payload_broadcast_rx;
         tokio::spawn(async move {
             while let Some(payload_bytes) = rx.recv().await {
+                let psize = payload_bytes.len();
                 match P2pSender::send(&mut sender, Recipients::All, payload_bytes, true).await {
                     Ok(sent_to) => {
                         tracing::info!(
                             peers = sent_to.len(),
+                            payload_bytes = psize,
                             "Payload relay: broadcast to {} peers via P2P",
                             sent_to.len()
                         );
                     }
                     Err(e) => {
-                        tracing::warn!(error = ?e, "Payload relay: P2P broadcast failed");
+                        tracing::warn!(error = ?e, payload_bytes = psize, "Payload relay: P2P broadcast failed");
                     }
                 }
             }
@@ -708,24 +712,24 @@ async fn run_node(
             loop {
                 match payload_p2p_receiver.recv().await {
                     Ok((_sender_pk, message)) => {
-                        // Deserialize the BlockPayload from the received bytes.
-                        // IoBuf implements AsRef<[u8]>.
                         let payload_bytes: &[u8] = message.as_ref();
+                        let psize = payload_bytes.len();
                         match slay3rd::block::BlockPayload::from_bytes(payload_bytes) {
                             Ok(payload) => {
                                 let digest = payload.digest();
                                 let mut pending = pending_payloads.lock().await;
                                 if !pending.contains_key(&digest) {
-                                    tracing::debug!(
+                                    tracing::info!(
                                         height = payload.height,
                                         digest = %hex::encode(digest),
+                                        payload_bytes = psize,
                                         "Payload relay: received from peer, inserting into pending_payloads"
                                     );
                                     pending.insert(digest, payload);
                                 }
                             }
                             Err(e) => {
-                                tracing::warn!(error = %e, "Payload relay: received malformed payload bytes");
+                                tracing::warn!(error = %e, payload_bytes = psize, "Payload relay: received malformed payload bytes");
                             }
                         }
                     }

@@ -4,7 +4,7 @@ use thiserror::Error;
 use tracing::{
     debug, debug_span,
     field::{debug as dbg, display, Empty},
-    info_span,
+    info, info_span,
 };
 
 use cosmwasm_schema::cw_serde;
@@ -373,6 +373,21 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // return result
         let gas = GasInfo::from_meter(&meter);
+        // Log the error string on failure so the cause is visible at info level
+        // (the detailed debug! above is filtered out under RUST_LOG=info).
+        let err_str = match &result {
+            Ok(_) => String::new(),
+            Err(e) => e.to_string(),
+        };
+        info!(
+            tx_hash = %HexEncode::new(&tx_hash),
+            height = block.height,
+            gas_used = gas.gas_used,
+            gas_wanted = gas.gas_wanted,
+            success = result.is_ok(),
+            error = %err_str,
+            "tx executed"
+        );
         TxResult { gas, result }
     }
 

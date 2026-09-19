@@ -15,6 +15,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use commonware_consensus::{Automaton, CertifiableAutomaton};
 use commonware_consensus::simplex::types::Context;
@@ -281,6 +282,14 @@ where
         // PublicKey: Array: AsRef<[u8]> — safe to copy the bytes.
         let proposer = context.leader.as_ref().to_vec();
 
+        let total_tx_bytes: usize = raw_txs.iter().map(|t| t.len()).sum();
+        tracing::info!(
+            tx_count = raw_txs.len(),
+            total_tx_bytes = total_tx_bytes,
+            height = height,
+            "propose: drained mempool"
+        );
+
         let payload = BlockPayload {
             height,
             timestamp_nanos,
@@ -289,7 +298,12 @@ where
             parent_digest: last_digest,
         };
 
+        let payload_bytes = payload.to_bytes().len();
         let digest_bytes = Self::compute_digest(&payload);
+        tracing::info!(
+            payload_bytes = payload_bytes,
+            "propose: built BlockPayload"
+        );
         let digest = sha256::Digest::from(digest_bytes);
 
         // Store in pending map so verify() can look it up.
@@ -316,14 +330,41 @@ where
         //   (a) This node's own propose() when it is the leader.
         //   (b) The Relay (Plan 03) when it receives payloads from the proposing validator.
         //
-        // For Phase 2 unit tests, only (a) is wired; Relay wiring is added in Plan 03.
+        // The proposal digest (32 bytes, consensus vote channel) can reach this
+        // validator before the full block payload finishes propagating over the
+        // payload relay channel — especially for large store-code txs (~4.4MB).
+        // Poll pending_payloads for a bounded window so verify() tolerates the
+        // relay delay instead of rejecting the proposal outright. The wait runs
+        // in a spawned task so the receiver returns immediately and the voter's
+        // select loop is not blocked; the window stays under leader_timeout so
+        // the result lands within the view's verification deadline.
         let digest_bytes: [u8; 32] = payload.0;
-        let found = {
-            let pending = self.pending_payloads.lock().await;
-            pending.contains_key(&digest_bytes)
-        };
+        let pending_payloads = self.pending_payloads.clone();
+        tokio::spawn(async move {
+            const VERIFY_POLL_INTERVAL: Duration = Duration::from_millis(25);
+            const VERIFY_WAIT_MAX: Duration = Duration::from_millis(2_500);
+            let start = Instant::now();
+            let found = loop {
+                {
+                    let pending = pending_payloads.lock().await;
+                    if pending.contains_key(&digest_bytes) {
+                        break true;
+                    }
+                }
+                if start.elapsed() >= VERIFY_WAIT_MAX {
+                    break false;
+                }
+                tokio::time::sleep(VERIFY_POLL_INTERVAL).await;
+            };
+            if !found {
+                tracing::debug!(
+                    digest = %hex::encode(digest_bytes),
+                    "verify: payload not received within wait window"
+                );
+            }
+            tx.send(found).ok();
+        });
 
-        tx.send(found).ok();
         rx
     }
 }

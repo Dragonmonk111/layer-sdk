@@ -16,7 +16,7 @@ use crate::error::CosmosError;
 use crate::unzip::unzip_if_needed;
 use crate::utils::parse_sdk_coins;
 
-const MAX_WASM_SIZE: usize = 1024 * 1024 * 2; // 2 MB
+const MAX_WASM_SIZE: usize = 1024 * 1024 * 8; // 8 MB (raised for jolt-cw-verifier full-verification + future Akita/lattice path)
 
 pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
     let _span = trace_span!("parse_cosmos_msg").entered();
@@ -112,5 +112,37 @@ pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
         }
 
         _ => Err(MsgError::UnsupportedAnyType(msg.type_url.clone())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Reproduce the devnet store_vk path: encode a real proto MsgExecuteContract,
+    // decode via parse_cosmos_msg, and confirm the contract msg bytes survive intact.
+    #[test]
+    fn execute_msg_bytes_survive_proto_decode() {
+        let msg_json = br#"{"store_vk":{"vk_base64":"AAAA"}}"#;
+        let proto = MsgExecuteContract {
+            sender: "juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992".to_string(),
+            contract: "juno17c5ucyukaf9heseh7gnyjgmwd3jtz6gegm039ezkjhnx6zx526hqq0738c"
+                .to_string(),
+            msg: msg_json.to_vec(),
+            funds: vec![],
+        };
+        let any = proto.to_any().expect("to_any");
+        let parsed = parse_cosmos_msg(&any).expect("parse_cosmos_msg");
+        match parsed {
+            Msg::Wasm(WasmMsg::Execute { msg, .. }) => {
+                assert_eq!(
+                    msg.as_slice(),
+                    &msg_json[..],
+                    "contract msg bytes were corrupted in proto decode: {:?}",
+                    String::from_utf8_lossy(msg.as_slice())
+                );
+            }
+            other => panic!("expected WasmMsg::Execute, got {:?}", other),
+        }
     }
 }

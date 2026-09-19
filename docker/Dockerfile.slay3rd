@@ -18,24 +18,13 @@ ENV RUSTFLAGS="-C link-arg=/tmp/shim.o"
 COPY Cargo.lock Cargo.toml /myapp/
 COPY .cargo/config.toml /myapp/.cargo/config.toml
 
-# CosmWasm fork submodule (patched via [patch.crates-io] in workspace Cargo.toml)
+# CosmWasm fork submodule (patched via [patch.crates-io] in workspace Cargo.toml).
+# Copy REAL sources — external crates (cw-utils, cw2, ...) compile against
+# cosmwasm-std / cosmwasm-schema, so they cannot be stubbed with dummy lib.rs.
+# (lib/cosmwasm/target is excluded via .dockerignore **/target/.)
 COPY lib/cosmwasm/Cargo.toml /myapp/lib/cosmwasm/Cargo.toml
 COPY lib/cosmwasm/Cargo.lock /myapp/lib/cosmwasm/Cargo.lock
-# Copy just enough of cosmwasm structure for the patch to resolve
-COPY lib/cosmwasm/packages/std/Cargo.toml /myapp/lib/cosmwasm/packages/std/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/std/src/lib.rs
-COPY lib/cosmwasm/packages/schema/Cargo.toml /myapp/lib/cosmwasm/packages/schema/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/schema/src/lib.rs
-COPY lib/cosmwasm/packages/crypto/Cargo.toml /myapp/lib/cosmwasm/packages/crypto/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/crypto/src/lib.rs
-COPY lib/cosmwasm/packages/vm/Cargo.toml /myapp/lib/cosmwasm/packages/vm/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/vm/src/lib.rs
-COPY lib/cosmwasm/packages/core/Cargo.toml /myapp/lib/cosmwasm/packages/core/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/core/src/lib.rs
-COPY lib/cosmwasm/packages/derive/Cargo.toml /myapp/lib/cosmwasm/packages/derive/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/derive/src/lib.rs
-COPY lib/cosmwasm/packages/schema-derive/Cargo.toml /myapp/lib/cosmwasm/packages/schema-derive/Cargo.toml
-COPY dummy.rs /myapp/lib/cosmwasm/packages/schema-derive/src/lib.rs
+COPY lib/cosmwasm/packages /myapp/lib/cosmwasm/packages
 
 # Workspace member Cargo.tomls with dummy source for dependency caching
 COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
@@ -62,7 +51,7 @@ COPY dummy.rs /myapp/tools/tx-sender/src/main.rs
 RUN cargo build --release --bin slay3rd
 
 # clean up these fake local deps so we compile for real later
-RUN find /myapp -name "*.rs" -path "*/src/*" -delete
+RUN find /myapp -name "*.rs" -path "*/src/*" -not -path "*/lib/cosmwasm/*" -delete
 RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3rd-*
 
 # This build step should just compile the local code and be faster

@@ -1,5 +1,7 @@
 target/
+**/target/
 .git/
+**/.git/
 .vscode/
 .idea/
 artifacts/

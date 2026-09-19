@@ -714,6 +714,45 @@ mod tests {
     const ZK_PROOF_B64: &str = "3s0boCztqb+oTya4AmY0uHHYXNwiL8ZD/AAK+qlm7JM4BIMkNmkzUVFEYxjPdlo3qVghx4+MRZKaIEcB7hqNK7Ou+8+ZWzPzeU+MQgiWJ8T1IG1TkTd7m25N4yF9kG6LtYI2V1JjwxNFu20+9TtnPXHuBDBxoqgZfjJGbnut7as=";
     const ZK_INPUTS_B64: &str = "CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
+    // ── jolt-cw-verifier (full-verification) check_wasm smoke test ─────────
+    //
+    // The artifact is jolt-cw-verifier built with `--features full-verification`,
+    // which produces a ~4.6MB wasm with BN254 sumcheck + Dory PCS verification.
+    // This test checks that it passes check_wasm (function count, params, etc.)
+    // and can be stored in the VM cache. It skips if the artifact isn't built.
+    const JOLT_VERIFIER_WASM_REL: &str =
+        "/../../../junoclaw/contracts/target/wasm32-unknown-unknown/release/jolt_cw_verifier.wasm";
+
+    #[test]
+    fn jolt_cw_verifier_check_wasm() {
+        let wasm_path = std::env::var("JOLT_VERIFIER_WASM").unwrap_or_else(|_| {
+            format!("{}{}", env!("CARGO_MANIFEST_DIR"), JOLT_VERIFIER_WASM_REL)
+        });
+        let Ok(wasm) = std::fs::read(&wasm_path) else {
+            eprintln!("skipping jolt_cw_verifier_check_wasm: wasm not found at {wasm_path}");
+            return;
+        };
+
+        eprintln!("jolt-cw-verifier wasm size: {} bytes ({:.2} MB)", wasm.len(), wasm.len() as f64 / (1024.0 * 1024.0));
+
+        let path = "/tmp/slay3r/test-jolt-cw-verifier-check";
+        let _ = std::fs::remove_dir_all(path);
+        std::fs::create_dir_all(path).unwrap();
+
+        let vm = VmCache::init(path);
+        let result = vm.store_code(&wasm);
+        match &result {
+            Ok((checksum, analysis)) => {
+                eprintln!("jolt-cw-verifier store_code OK, checksum={:?}", checksum);
+                eprintln!("required_capabilities: {:?}", analysis.required_capabilities);
+            }
+            Err(e) => {
+                eprintln!("jolt-cw-verifier store_code FAILED: {e}");
+            }
+        }
+        assert!(result.is_ok(), "jolt-cw-verifier should pass check_wasm with current limits");
+    }
+
     #[test]
     fn zk_verifier_bn254_gas() {
         let wasm_path = std::env::var("ZK_VERIFIER_WASM").unwrap_or_else(|_| {

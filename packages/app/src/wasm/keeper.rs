@@ -371,6 +371,15 @@ impl Wasm {
                 }
                 let info = build_info(&sender, funds);
 
+                // TEMP DEBUG: dump the raw contract msg bytes to diagnose the
+                // "Invalid type" ExecuteMsg parse failure on devnet.
+                tracing::info!(
+                    contract = %contract_addr,
+                    msg_len = msg.len(),
+                    msg_utf8 = %String::from_utf8_lossy(&msg),
+                    "wasm execute msg"
+                );
+
                 // call execute on cache
                 let env = build_env(block, &contract_addr);
                 let checksum = code.get_checksum_to_execute(meter)?;
