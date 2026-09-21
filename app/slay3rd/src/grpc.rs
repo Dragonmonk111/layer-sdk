@@ -39,6 +39,10 @@ use layer_proto::layer::sync::v1::{
     query_server::Query as SyncQuery, BlockWrites, QueryLatestSequenceRequest,
     QueryLatestSequenceResponse, StreamChangesSinceRequest, StreamCurrentStateRequest, WriteData,
 };
+use layer_proto::layer::lightclient::v1::{
+    query_server::Query as LightClientQuery, QueryBlockRequest, QueryBlockResponse,
+    QueryLatestHeightRequest, QueryLatestHeightResponse,
+};
 
 use crate::mempool::Mempool;
 
@@ -228,6 +232,75 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
         let mapped =
             stream.map(|r: Result<BlockWrites, String>| r.map_err(Status::internal));
         Ok(Response::new(Box::pin(mapped)))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// layer.lightclient.v1.Query implementation
+// ---------------------------------------------------------------------------
+
+#[tonic::async_trait]
+impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrpcService<T> {
+    /// Latest committed height and its timestamp — the relayer's polling
+    /// anchor for detecting new finalized blocks to relay.
+    async fn latest_height(
+        &self,
+        _request: Request<QueryLatestHeightRequest>,
+    ) -> Result<Response<QueryLatestHeightResponse>, Status> {
+        let (height, timestamp_nanos) = {
+            let app = self.app.read().await;
+            app.info()
+                .map(|b| (b.height, b.time.nanos()))
+                .unwrap_or((0, 0))
+        };
+        Ok(Response::new(QueryLatestHeightResponse {
+            height,
+            timestamp_nanos,
+        }))
+    }
+
+    /// The three header components for a finalized height: consensus
+    /// Proposal bytes, BLS12-381 threshold certificate, and the block
+    /// timestamp. All three are persisted by the Reporter after finalization;
+    /// a `not_found` means the height is not finalized yet (or the node is
+    /// catching up from a peer that has not delivered the certificate).
+    async fn block(
+        &self,
+        request: Request<QueryBlockRequest>,
+    ) -> Result<Response<QueryBlockResponse>, Status> {
+        let height = request.into_inner().height;
+
+        let (proposal_bytes, certificate_bytes, timestamp_nanos) = {
+            let app = self.app.read().await;
+            (
+                app.get_block_proposal(height),
+                app.get_block_certificate(height),
+                app.get_block_timestamp(height),
+            )
+        };
+
+        let proposal_bytes = proposal_bytes.ok_or_else(|| {
+            Status::not_found(format!(
+                "no proposal stored for height {height} — block not finalized yet?"
+            ))
+        })?;
+        let certificate_bytes = certificate_bytes.ok_or_else(|| {
+            Status::not_found(format!(
+                "no certificate stored for height {height} — block not finalized yet?"
+            ))
+        })?;
+        let timestamp_nanos = timestamp_nanos.ok_or_else(|| {
+            Status::not_found(format!(
+                "no timestamp stored for height {height} — block not finalized yet?"
+            ))
+        })?;
+
+        Ok(Response::new(QueryBlockResponse {
+            height,
+            timestamp_nanos,
+            proposal_bytes,
+            certificate_bytes,
+        }))
     }
 }
 
@@ -551,7 +624,87 @@ mod tests {
         tx_signed.to_bytes().unwrap()
     }
 
-    /// Validates that the BroadcastTx gRPC handler:
+    /// Validates the layer.lightclient.v1.Query service:
+    ///
+    /// 1. `block()` returns NOT_FOUND before the Reporter persists the
+    ///    certificate/proposal/timestamp for a height
+    /// 2. After persistence, `block()` returns all three header components
+    /// 3. `latest_height()` returns the committed block info
+    #[test]
+    fn test_lightclient_query_block_roundtrip() {
+        let _guard = APP_TEST_LOCK.lock().unwrap();
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let svc = make_service(init_app());
+
+            // --- Not found before persistence ---
+            let result = svc
+                .block(Request::new(QueryBlockRequest { height: 1 }))
+                .await;
+            assert!(result.is_err(), "block() should fail before persistence");
+            let err = result.unwrap_err();
+            assert_eq!(
+                err.code(),
+                tonic::Code::NotFound,
+                "unpersisted height should produce NotFound, got: {:?}",
+                err
+            );
+
+            // --- Persist the header components as the Reporter would ---
+            {
+                let mut app = svc.app.write().await;
+                app.set_block_certificate(1, vec![0xAA; 48]).unwrap();
+                app.set_block_proposal(1, vec![0xBB; 32]).unwrap();
+                app.set_block_timestamp(1, 1_700_000_000_000_000_000).unwrap();
+            }
+
+            // --- Full header after persistence ---
+            let response = svc
+                .block(Request::new(QueryBlockRequest { height: 1 }))
+                .await
+                .expect("block() should succeed after persistence");
+            let block = response.into_inner();
+            assert_eq!(block.height, 1);
+            assert_eq!(block.timestamp_nanos, 1_700_000_000_000_000_000);
+            assert_eq!(block.proposal_bytes, vec![0xBB; 32]);
+            assert_eq!(block.certificate_bytes, vec![0xAA; 48]);
+
+            // --- Partial persistence is still not found ---
+            {
+                let mut app = svc.app.write().await;
+                app.set_block_certificate(2, vec![0xCC; 48]).unwrap();
+                // no proposal / timestamp for height 2
+            }
+            let result = svc
+                .block(Request::new(QueryBlockRequest { height: 2 }))
+                .await;
+            assert!(
+                result.is_err(),
+                "block() should fail with partial persistence"
+            );
+            assert_eq!(
+                result.unwrap_err().code(),
+                tonic::Code::NotFound,
+                "partial persistence should produce NotFound"
+            );
+
+            // --- latest_height reflects the committed block info ---
+            let response = svc
+                .latest_height(Request::new(QueryLatestHeightRequest {}))
+                .await
+                .expect("latest_height() should succeed");
+            let latest = response.into_inner();
+            // init() sets LAST_BLOCK to initial_height - 1 = 0
+            assert_eq!(latest.height, 0);
+        });
+    }
+
+    /// Validates that BroadcastTx gRPC handler:
     ///
     /// 1. Correctly routes parse errors to `Status::invalid_argument`
     /// 2. Correctly routes check_tx failures to `Status::failed_precondition`

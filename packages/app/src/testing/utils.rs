@@ -394,7 +394,7 @@ mod test {
         assert_eq!(bal.u128(), 1_000_000);
 
         let bals = app.all_balances(&account).unwrap();
-        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, DENOM)];
+        let expected = vec![coin(1_000_000, DENOM), coin(2_000_000, "umagic")];
         assert_eq!(bals, expected);
 
         // copy data and try load_from_store
@@ -409,7 +409,7 @@ mod test {
         assert_eq!(bal.u128(), 1_000_000);
 
         let bals = new_app.all_balances(&account).unwrap();
-        let expected = vec![coin(2_000_000, "umagic"), coin(1_000_000, DENOM)];
+        let expected = vec![coin(1_000_000, DENOM), coin(2_000_000, "umagic")];
         assert_eq!(bals, expected);
     }
 

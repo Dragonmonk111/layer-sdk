@@ -102,6 +102,13 @@ const BLOCK_CERTIFICATE_KEY_PREFIX: &str = "_cert/";
 /// and BLOCK_CERTIFICATE_KEY_PREFIX.
 const BLOCK_PROPOSAL_KEY_PREFIX: &str = "_proposal/";
 
+/// Storage key prefix for block timestamps (nanoseconds since UNIX epoch),
+/// keyed by block height. Served to light client relayers alongside the
+/// certificate and proposal so they can build 08-wasm headers (IBC
+/// timestamp semantics: nanoseconds). Same "_" app_hash-exclusion
+/// convention as the certificate and proposal prefixes.
+const BLOCK_TIMESTAMP_KEY_PREFIX: &str = "_ts/";
+
 #[cw_serde]
 pub struct AppState {
     pub chain_id: String,
@@ -558,6 +565,44 @@ impl<T: PersistentStorage + 'static> App<T> {
         let key = format!("{}{}", BLOCK_PROPOSAL_KEY_PREFIX, height);
         let proposal_item: Item<Vec<u8>> = Item::new(&key);
         let result = proposal_item.may_load(&reader, &meter).ok().flatten();
+        reader.abort();
+        result
+    }
+
+    /// Store the block timestamp (nanoseconds since UNIX epoch) for a
+    /// previously committed block, alongside its BLS certificate and
+    /// consensus proposal.
+    ///
+    /// The 08-wasm light client header carries the block timestamp in IBC
+    /// nanosecond semantics; relayers fetch it via this record to build
+    /// `update_state` headers (packet timeout bookkeeping on the
+    /// counterparty chain needs it).
+    ///
+    /// # Arguments
+    /// * `height` - The block height this timestamp belongs to
+    /// * `timestamp_nanos` - Block timestamp in nanoseconds since UNIX epoch
+    ///
+    /// # Returns
+    /// `Ok(())` on success, or an error if the storage write fails.
+    pub fn set_block_timestamp(&mut self, height: u64, timestamp_nanos: u64) -> PulsarResult<()> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let key = format!("{}{}", BLOCK_TIMESTAMP_KEY_PREFIX, height);
+        let ts_item: Item<u64> = Item::new(&key);
+        ts_item.save(&mut writer, &meter, &timestamp_nanos)?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
+    /// Retrieve the block timestamp (nanoseconds) for a block at the given
+    /// height, if stored. Returns `None` if no timestamp has been stored for
+    /// this height yet.
+    pub fn get_block_timestamp(&self, height: u64) -> Option<u64> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let key = format!("{}{}", BLOCK_TIMESTAMP_KEY_PREFIX, height);
+        let ts_item: Item<u64> = Item::new(&key);
+        let result = ts_item.may_load(&reader, &meter).ok().flatten();
         reader.abort();
         result
     }

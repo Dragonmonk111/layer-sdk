@@ -107,4 +107,10 @@ pub mod layer {
             include!("protos/layer.sync.v1.rs");
         }
     }
+
+    pub mod lightclient {
+        pub mod v1 {
+            include!("protos/layer.lightclient.v1.rs");
+        }
+    }
 }

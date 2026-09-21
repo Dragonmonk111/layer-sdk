@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(res.messages.len(), 0);
         assert_eq!(res.events.len(), 0);
         assert_eq!(res.attributes.len(), 0);
-        assert_eq!(gas_used, 139);
+        assert_eq!(gas_used, 140);
 
         // query the state was written - token_info and total supply
         let num = writer

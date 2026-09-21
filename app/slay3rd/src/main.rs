@@ -167,12 +167,14 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                 let proposal_bytes = finalization.proposal.encode().to_vec();
                 let payload_digest: [u8; 32] = finalization.proposal.payload.0;
 
-                // Determine the block height: query the App's last committed block.
-                // Since certify() -> execute_block() -> finalize_block() has already run,
+                // Determine the block height and timestamp: query the App's last committed
+                // block. Since certify() -> execute_block() -> finalize_block() has already run,
                 // the App's LAST_BLOCK height IS the block that just received its certificate.
-                let height = {
+                let (height, timestamp_nanos) = {
                     let app = self.app.read().await;  // SHARED read lock — read-only
-                    app.info().map(|b| b.height).unwrap_or(0)
+                    app.info()
+                        .map(|b| (b.height, b.time.nanos()))
+                        .unwrap_or((0, 0))
                 };  // read lock released here
 
                 tracing::info!(
@@ -227,6 +229,26 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                                 height = height,
                                 error = ?e,
                                 "Failed to store proposal bytes — light client verification will be impossible for this height"
+                            );
+                        }
+                    }
+
+                    // Light client header completeness: persist the block timestamp
+                    // (nanos). The 08-wasm header carries it for IBC packet-timeout
+                    // bookkeeping on the counterparty chain.
+                    match app.set_block_timestamp(height, timestamp_nanos) {
+                        Ok(()) => {
+                            tracing::debug!(
+                                height = height,
+                                timestamp_nanos = timestamp_nanos,
+                                "Block timestamp stored in block record (light client)"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                height = height,
+                                error = ?e,
+                                "Failed to store block timestamp — light client headers for this height will lack a timestamp"
                             );
                         }
                     }
@@ -656,7 +678,10 @@ async fn run_node(
                     .max_encoding_message_size(10 * 1024 * 1024),
                 )
                 .add_service(
-                    layer_proto::layer::sync::v1::query_server::QueryServer::new(grpc_svc),
+                    layer_proto::layer::sync::v1::query_server::QueryServer::new(grpc_svc.clone()),
+                )
+                .add_service(
+                    layer_proto::layer::lightclient::v1::query_server::QueryServer::new(grpc_svc),
                 )
                 .serve(grpc_addr)
                 .await

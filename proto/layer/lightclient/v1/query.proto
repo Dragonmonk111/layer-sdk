@@ -1,0 +1,46 @@
+syntax = "proto3";
+package layer.lightclient.v1;
+
+import "google/api/annotations.proto";
+
+// Query serves the data a BLS light client relayer needs to construct
+// 08-wasm headers: the consensus Proposal bytes, the BLS12-381 threshold
+// certificate, and the block timestamp — all keyed by finalized height.
+service Query {
+  // LatestHeight returns the latest committed height and its timestamp.
+  rpc LatestHeight(QueryLatestHeightRequest) returns (QueryLatestHeightResponse) {
+    option (google.api.http).get = "/layer/lightclient/v1/latest_height";
+  }
+
+  // Block returns the light client header components for a finalized height:
+  // the commonware-codec encoded consensus Proposal (round, parent, payload),
+  // the raw aggregated BLS12-381 threshold certificate (48-byte compressed G1),
+  // and the block timestamp in nanoseconds.
+  rpc Block(QueryBlockRequest) returns (QueryBlockResponse) {
+    option (google.api.http).get = "/layer/lightclient/v1/block/{height}";
+  }
+}
+
+message QueryLatestHeightRequest {
+}
+
+message QueryLatestHeightResponse {
+  uint64 height = 1;
+  // Block timestamp in nanoseconds since the UNIX epoch (0 if unknown).
+  uint64 timestamp_nanos = 2;
+}
+
+message QueryBlockRequest {
+  uint64 height = 1;
+}
+
+message QueryBlockResponse {
+  uint64 height = 1;
+  // Block timestamp in nanoseconds since the UNIX epoch.
+  uint64 timestamp_nanos = 2;
+  // commonware-codec encoded consensus Proposal { round, parent, payload } —
+  // the exact message the threshold signature covers.
+  bytes proposal_bytes = 3;
+  // Raw aggregated BLS12-381 threshold signature (48-byte compressed G1).
+  bytes certificate_bytes = 4;
+}
