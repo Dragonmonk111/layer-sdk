@@ -51,6 +51,10 @@ message QueryBlockResponse {
   bytes proposal_bytes = 3;
   // Raw aggregated BLS12-381 threshold signature (48-byte compressed G1).
   bytes certificate_bytes = 4;
+  // bincode-serialized BlockPayload — sha256(payload_bytes) equals the
+  // digest inside proposal_bytes. Carried so relayers can assemble
+  // membership proofs (the payload embeds state_root).
+  bytes payload_bytes = 5;
 }
 
 message QueryProofRequest {

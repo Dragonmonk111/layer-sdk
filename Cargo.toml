@@ -1,5 +1,5 @@
 [workspace]
-members = ["app/*", "contracts/*", "packages/*", "tools/tx-sender"]
+members = ["app/*", "contracts/*", "packages/*", "tools/tx-sender", "tools/bls-relayer"]
 exclude = [
   "tools/proto-compiler",
   "packages/golem",  # excluded: cw-orch-core 2.x API migration deferred

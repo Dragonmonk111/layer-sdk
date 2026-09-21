@@ -1,0 +1,757 @@
+//! bls-relayer — relays JunoClaw BLS finality to an 08-wasm light client on a
+//! counterparty Cosmos chain (e.g. uni-7 / Juno testnet).
+//!
+//! JunoClaw side: queries `layer.lightclient.v1.Query` for proposal bytes,
+//! certificates, timestamps, payloads, and Merkle membership proofs.
+//!
+//! Counterparty side: builds and broadcasts `MsgCreateClient`,
+//! `MsgUpdateClient`, and gov `MsgSubmitProposal(MsgStoreCode)` — the ibc-go
+//! wire types are hand-defined prost messages below (the repo does not vendor
+//! ibc-go protos; these messages are small and stable across ibc-go v8+).
+//!
+//! # Usage
+//!
+//!   bls-relayer fetch --layer-grpc 127.0.0.1:9090 --height 42
+//!   bls-relayer create-client --layer-grpc 127.0.0.1:9090 --grpc uni-7-grpc:9090 \
+//!       --key-hex <secp256k1> --wasm light_client.wasm --height 42 \
+//!       --group-pubkey-hex <96B> --chain-id junoclaw-1
+//!   bls-relayer update-client --layer-grpc 127.0.0.1:9090 --grpc uni-7-grpc:9090 \
+//!       --key-hex <secp256k1> --client-id 08-wasm-0 --height 43
+//!   bls-relayer store-code --grpc uni-7-grpc:9090 --key-hex <secp256k1> \
+//!       --wasm light_client.wasm --title "BLS light client" --summary "..."
+//!   bls-relayer assemble-proof --layer-grpc 127.0.0.1:9090 --storage-key-hex <hex>
+
+use cosmrs::{
+    crypto::secp256k1::SigningKey,
+    tendermint::chain::Id as ChainId,
+    tx::{self, Fee, SignDoc, SignerInfo},
+    Coin,
+};
+use prost::Message;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use tonic::{codec::ProstCodec, transport::Channel, Request};
+
+use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
+use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
+use layer_proto::cosmos::tx::v1beta1::{
+    service_client::ServiceClient as TxServiceClient, BroadcastMode, BroadcastTxRequest,
+};
+use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
+use layer_proto::layer::lightclient::v1::{
+    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest, QueryProofRequest,
+};
+
+// ---------------------------------------------------------------------------
+// ibc-go wire types (hand-defined — wire-compatible with ibc-go v8+ protos)
+// ---------------------------------------------------------------------------
+
+/// ibc.core.client.v1.Height
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct IbcHeight {
+    #[prost(uint64, tag = "1")]
+    pub revision_number: u64,
+    #[prost(uint64, tag = "2")]
+    pub revision_height: u64,
+}
+
+/// ibc.lightclients.wasm.v1.ClientState — wraps the contract's JSON state.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct WasmClientState {
+    #[prost(bytes = "vec", tag = "1")]
+    pub data: Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub checksum: Vec<u8>,
+    #[prost(message, optional, tag = "3")]
+    pub latest_height: Option<IbcHeight>,
+}
+
+/// ibc.lightclients.wasm.v1.ConsensusState — wraps the contract's JSON state.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct WasmConsensusState {
+    #[prost(bytes = "vec", tag = "1")]
+    pub data: Vec<u8>,
+    /// Timestamp of the consensus state in nanoseconds.
+    #[prost(uint64, tag = "2")]
+    pub timestamp: u64,
+}
+
+/// ibc.lightclients.wasm.v1.ClientMessage — wraps the contract's Header JSON.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct WasmClientMessage {
+    #[prost(bytes = "vec", tag = "1")]
+    pub data: Vec<u8>,
+}
+
+/// ibc.core.client.v1.MsgCreateClient
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct MsgCreateClient {
+    #[prost(message, optional, tag = "1")]
+    pub client_state: Option<prost_types::Any>,
+    #[prost(message, optional, tag = "2")]
+    pub consensus_state: Option<prost_types::Any>,
+    #[prost(string, tag = "3")]
+    pub signer: String,
+}
+
+/// ibc.core.client.v1.MsgUpdateClient
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct MsgUpdateClient {
+    #[prost(string, tag = "1")]
+    pub client_id: String,
+    #[prost(message, optional, tag = "2")]
+    pub client_message: Option<prost_types::Any>,
+    #[prost(string, tag = "3")]
+    pub signer: String,
+}
+
+/// cosmos.gov.v1.MsgSubmitProposal (SDK 0.47+ gov v1)
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct MsgSubmitProposal {
+    #[prost(message, repeated, tag = "1")]
+    pub messages: Vec<prost_types::Any>,
+    #[prost(message, repeated, tag = "2")]
+    pub initial_deposit: Vec<ProtoCoin>,
+    #[prost(string, tag = "3")]
+    pub proposer: String,
+    #[prost(string, tag = "4")]
+    pub metadata: String,
+    #[prost(string, tag = "5")]
+    pub title: String,
+    #[prost(string, tag = "6")]
+    pub summary: String,
+    #[prost(bool, tag = "7")]
+    pub expedited: bool,
+}
+
+// Type URLs
+const TYPE_URL_WASM_CLIENT_STATE: &str = "/ibc.lightclients.wasm.v1.ClientState";
+const TYPE_URL_WASM_CONSENSUS_STATE: &str = "/ibc.lightclients.wasm.v1.ConsensusState";
+const TYPE_URL_WASM_CLIENT_MESSAGE: &str = "/ibc.lightclients.wasm.v1.ClientMessage";
+const TYPE_URL_MSG_CREATE_CLIENT: &str = "/ibc.core.client.v1.MsgCreateClient";
+const TYPE_URL_MSG_UPDATE_CLIENT: &str = "/ibc.core.client.v1.MsgUpdateClient";
+const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
+const TYPE_URL_MSG_SUBMIT_PROPOSAL: &str = "/cosmos.gov.v1.MsgSubmitProposal";
+
+// ---------------------------------------------------------------------------
+// Contract JSON mirrors — must match contracts/light-client serde exactly
+// (Binary fields serialize as base64 strings, Option<Binary> as b64-or-null)
+// ---------------------------------------------------------------------------
+
+mod b64 {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &[u8], s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&STANDARD.encode(v))
+    }
+    #[allow(dead_code)]
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
+        let s = String::deserialize(d)?;
+        STANDARD.decode(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+mod b64_opt_vec {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &[Option<Vec<u8>>], s: S) -> Result<S::Ok, S::Error> {
+        s.collect_seq(v.iter().map(|o| o.as_ref().map(|b| STANDARD.encode(b))))
+    }
+    #[allow(dead_code)]
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Option<Vec<u8>>>, D::Error> {
+        let v: Vec<Option<String>> = Vec::deserialize(d)?;
+        v.into_iter()
+            .map(|o| {
+                o.map(|s| STANDARD.decode(&s).map_err(serde::de::Error::custom))
+                    .transpose()
+            })
+            .collect()
+    }
+}
+
+/// Contract `Height` (state.rs)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContractHeight {
+    pub revision_number: u64,
+    pub revision_height: u64,
+}
+
+/// Contract `ClientState` (state.rs) — stored as `WasmClientState.data`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContractClientState {
+    pub chain_id: String,
+    pub group_public_key_hex: String,
+    pub latest_height: ContractHeight,
+    pub frozen_height: Option<ContractHeight>,
+}
+
+/// Contract `ConsensusState` (state.rs) — stored as `WasmConsensusState.data`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContractConsensusState {
+    pub payload_digest_hex: String,
+    pub timestamp: u64,
+    pub epoch: u64,
+    pub view: u64,
+    pub parent: u64,
+}
+
+/// Contract `Header` (msg.rs) — stored as `WasmClientMessage.data`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContractHeader {
+    pub height: ContractHeight,
+    pub timestamp: u64,
+    #[serde(with = "b64")]
+    pub proposal_bytes: Vec<u8>,
+    #[serde(with = "b64")]
+    pub certificate_bytes: Vec<u8>,
+}
+
+/// Contract `MembershipProof` (msg.rs) — the JSON inside `proof` bytes.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContractMembershipProof {
+    #[serde(with = "b64")]
+    pub payload_bytes: Vec<u8>,
+    pub leaf_index: u64,
+    #[serde(with = "b64_opt_vec")]
+    pub siblings: Vec<Option<Vec<u8>>>,
+}
+
+// ---------------------------------------------------------------------------
+// Proposal decoding — commonware-codec layout:
+//   uvarint(epoch) || uvarint(view) || uvarint(parent) || payload(32 bytes)
+// (mirrors contracts/light-client/src/verify.rs::decode_proposal)
+// ---------------------------------------------------------------------------
+
+struct DecodedProposal {
+    epoch: u64,
+    view: u64,
+    parent: u64,
+    payload: [u8; 32],
+}
+
+fn read_uvarint(buf: &[u8], pos: &mut usize) -> Result<u64, String> {
+    let mut value: u64 = 0;
+    let mut shift = 0u32;
+    loop {
+        let byte = *buf.get(*pos).ok_or("varint: unexpected end of input")?;
+        *pos += 1;
+        if shift == 63 && byte > 1 {
+            return Err("varint: overflow".into());
+        }
+        value |= ((byte & 0x7f) as u64) << shift;
+        if byte & 0x80 == 0 {
+            return Ok(value);
+        }
+        shift += 7;
+    }
+}
+
+fn decode_proposal(bytes: &[u8]) -> Result<DecodedProposal, String> {
+    let mut pos = 0usize;
+    let epoch = read_uvarint(bytes, &mut pos)?;
+    let view = read_uvarint(bytes, &mut pos)?;
+    let parent = read_uvarint(bytes, &mut pos)?;
+    let payload: [u8; 32] = bytes
+        .get(pos..pos + 32)
+        .ok_or("proposal: missing 32-byte payload digest")?
+        .try_into()
+        .unwrap();
+    Ok(DecodedProposal {
+        epoch,
+        view,
+        parent,
+        payload,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+
+struct Args {
+    cmd: String,
+    layer_grpc: String,
+    grpc: String,
+    key_hex: Option<String>,
+    wasm: Option<String>,
+    height: Option<u64>,
+    client_id: Option<String>,
+    group_pubkey_hex: Option<String>,
+    chain_id: String,
+    cp_chain_id: String,
+    fee_denom: String,
+    fee_amount: u128,
+    gas: u64,
+    title: Option<String>,
+    summary: Option<String>,
+    deposit: Option<String>,
+    storage_key_hex: Option<String>,
+    bech32_prefix: String,
+}
+
+fn print_usage() {
+    eprintln!("Usage: bls-relayer <subcommand> [flags]");
+    eprintln!();
+    eprintln!("Subcommands:");
+    eprintln!("  fetch           Fetch block header components from the JunoClaw node");
+    eprintln!("  create-client   Create the 08-wasm client on the counterparty chain");
+    eprintln!("  update-client   Submit a new finalized header to the client");
+    eprintln!("  store-code      Gov-propose the contract wasm on the counterparty");
+    eprintln!("  assemble-proof  Build a MembershipProof JSON for a storage key");
+    eprintln!();
+    eprintln!("Common flags:");
+    eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
+    eprintln!("  --grpc <host:port>         Counterparty gRPC (default 127.0.0.1:9190)");
+    eprintln!("  --key-hex <hex>            Counterparty secp256k1 private key (or RELAYER_KEY_HEX env)");
+    eprintln!("  --cp-chain-id <id>         Counterparty chain id (default uni-7)");
+    eprintln!("  --bech32-prefix <p>        Counterparty bech32 prefix (default juno)");
+    eprintln!("  --fee-denom <d>            Fee denom (default ujunox)");
+    eprintln!("  --fee-amount <n>           Fee amount (default 5000)");
+    eprintln!("  --gas <n>                  Gas limit (default 4000000)");
+    eprintln!();
+    eprintln!("fetch:            --height <N>");
+    eprintln!("create-client:    --height <N> --wasm <path> --group-pubkey-hex <hex> --chain-id <id>");
+    eprintln!("update-client:    --height <N> --client-id <id>");
+    eprintln!("store-code:       --wasm <path> --title <t> --summary <s> [--deposit <amt><denom>]");
+    eprintln!("assemble-proof:   --storage-key-hex <hex>");
+}
+
+fn parse_args() -> Result<Args, String> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        return Err("missing subcommand".into());
+    }
+    let mut a = Args {
+        cmd: args[1].clone(),
+        layer_grpc: "127.0.0.1:9090".into(),
+        grpc: "127.0.0.1:9190".into(),
+        key_hex: std::env::var("RELAYER_KEY_HEX").ok(),
+        wasm: None,
+        height: None,
+        client_id: None,
+        group_pubkey_hex: None,
+        chain_id: "junoclaw-1".into(),
+        cp_chain_id: "uni-7".into(),
+        fee_denom: "ujunox".into(),
+        fee_amount: 5000,
+        gas: 4_000_000,
+        title: None,
+        summary: None,
+        deposit: None,
+        storage_key_hex: None,
+        bech32_prefix: "juno".into(),
+    };
+    let mut i = 2;
+    while i < args.len() {
+        let flag = args[i].as_str();
+        let val = |i: &mut usize| -> Result<String, String> {
+            *i += 1;
+            args.get(*i)
+                .cloned()
+                .ok_or_else(|| format!("{flag} requires a value"))
+        };
+        match flag {
+            "--layer-grpc" => a.layer_grpc = val(&mut i)?,
+            "--grpc" => a.grpc = val(&mut i)?,
+            "--key-hex" => a.key_hex = Some(val(&mut i)?),
+            "--wasm" => a.wasm = Some(val(&mut i)?),
+            "--height" => {
+                a.height = Some(val(&mut i)?.parse().map_err(|_| "invalid --height")?)
+            }
+            "--client-id" => a.client_id = Some(val(&mut i)?),
+            "--group-pubkey-hex" => a.group_pubkey_hex = Some(val(&mut i)?),
+            "--chain-id" => a.chain_id = val(&mut i)?,
+            "--cp-chain-id" => a.cp_chain_id = val(&mut i)?,
+            "--fee-denom" => a.fee_denom = val(&mut i)?,
+            "--fee-amount" => {
+                a.fee_amount = val(&mut i)?.parse().map_err(|_| "invalid --fee-amount")?
+            }
+            "--gas" => a.gas = val(&mut i)?.parse().map_err(|_| "invalid --gas")?,
+            "--title" => a.title = Some(val(&mut i)?),
+            "--summary" => a.summary = Some(val(&mut i)?),
+            "--deposit" => a.deposit = Some(val(&mut i)?),
+            "--storage-key-hex" => a.storage_key_hex = Some(val(&mut i)?),
+            "--bech32-prefix" => a.bech32_prefix = val(&mut i)?,
+            other => return Err(format!("unknown flag: {other}")),
+        }
+        i += 1;
+    }
+    Ok(a)
+}
+
+// ---------------------------------------------------------------------------
+// gRPC helpers
+// ---------------------------------------------------------------------------
+
+async fn connect(addr: &str) -> Result<Channel, Box<dyn std::error::Error>> {
+    let url = if addr.starts_with("http") {
+        addr.to_string()
+    } else {
+        format!("http://{addr}")
+    };
+    Ok(Channel::from_shared(url)?.connect().await?)
+}
+
+async fn layer_client(
+    addr: &str,
+) -> Result<LightClientQueryClient<Channel>, Box<dyn std::error::Error>> {
+    Ok(LightClientQueryClient::new(connect(addr).await?)
+        .max_decoding_message_size(32 * 1024 * 1024)
+        .max_encoding_message_size(32 * 1024 * 1024))
+}
+
+struct AccountInfo {
+    account_number: u64,
+    sequence: u64,
+}
+
+/// Query account_number + sequence via cosmos.auth.v1beta1.Query/Account.
+async fn query_account(
+    grpc: &str,
+    address: &str,
+) -> Result<AccountInfo, Box<dyn std::error::Error>> {
+    let channel = connect(grpc).await?;
+    let mut client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
+    client.ready().await?;
+    let path: http::uri::PathAndQuery = "/cosmos.auth.v1beta1.Query/Account".parse()?;
+    let codec: ProstCodec<QueryAccountRequest, QueryAccountResponse> = ProstCodec::default();
+    let resp = client
+        .unary(
+            Request::new(QueryAccountRequest {
+                address: address.to_string(),
+            }),
+            path,
+            codec,
+        )
+        .await?
+        .into_inner();
+    let any = resp.account.ok_or("account query returned no account")?;
+    let base = BaseAccount::decode(&any.value[..])?;
+    Ok(AccountInfo {
+        account_number: base.account_number,
+        sequence: base.sequence,
+    })
+}
+
+fn signer_key(a: &Args) -> Result<SigningKey, Box<dyn std::error::Error>> {
+    let hex_key = a
+        .key_hex
+        .as_ref()
+        .ok_or("missing --key-hex (or RELAYER_KEY_HEX env)")?;
+    let bytes = hex::decode(hex_key.trim_start_matches("0x"))?;
+    Ok(SigningKey::from_slice(&bytes)?)
+}
+
+fn sign_and_encode(
+    key: &SigningKey,
+    msg: cosmrs::Any,
+    a: &Args,
+    account: &AccountInfo,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let chain_id: ChainId = a.cp_chain_id.parse()?;
+    let fee_coin = Coin {
+        amount: a.fee_amount,
+        denom: a.fee_denom.parse()?,
+    };
+    let body = tx::Body::new(vec![msg], "", 0u16);
+    let info = SignerInfo::single_direct(Some(key.public_key()), account.sequence);
+    let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, a.gas));
+    let doc = SignDoc::new(&body, &auth, &chain_id, account.account_number)?;
+    Ok(doc.sign(key)?.to_bytes()?)
+}
+
+async fn broadcast(grpc: &str, tx_bytes: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+    let mut client = TxServiceClient::new(connect(grpc).await?)
+        .max_decoding_message_size(32 * 1024 * 1024)
+        .max_encoding_message_size(32 * 1024 * 1024);
+    let resp = client
+        .broadcast_tx(BroadcastTxRequest {
+            tx_bytes,
+            mode: BroadcastMode::Sync as i32,
+        })
+        .await?
+        .into_inner();
+    let tx_resp = resp.tx_response.ok_or("empty broadcast response")?;
+    if tx_resp.code != 0 {
+        return Err(format!(
+            "tx failed (code {}): {}",
+            tx_resp.code, tx_resp.raw_log
+        )
+        .into());
+    }
+    Ok(tx_resp.txhash)
+}
+
+fn any_of<M: prost::Message>(type_url: &str, msg: &M) -> cosmrs::Any {
+    cosmrs::Any {
+        type_url: type_url.to_string(),
+        value: msg.encode_to_vec(),
+    }
+}
+
+fn proto_any_of<M: prost::Message>(type_url: &str, msg: &M) -> prost_types::Any {
+    prost_types::Any {
+        type_url: type_url.to_string(),
+        value: msg.encode_to_vec(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Subcommands
+// ---------------------------------------------------------------------------
+
+async fn cmd_fetch(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let height = a.height.ok_or("fetch requires --height")?;
+    let mut client = layer_client(&a.layer_grpc).await?;
+    let resp = client
+        .block(QueryBlockRequest { height })
+        .await?
+        .into_inner();
+
+    let proposal = decode_proposal(&resp.proposal_bytes)?;
+    println!("height:            {}", resp.height);
+    println!("timestamp_nanos:   {}", resp.timestamp_nanos);
+    println!("epoch/view/parent: {}/{}/{}", proposal.epoch, proposal.view, proposal.parent);
+    println!("payload_digest:    {}", hex::encode(proposal.payload));
+    println!("proposal_bytes:    {} bytes (b64 {})", resp.proposal_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.proposal_bytes));
+    println!("certificate_bytes: {} bytes (b64 {})", resp.certificate_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.certificate_bytes));
+    println!("payload_bytes:     {} bytes", resp.payload_bytes.len());
+    Ok(())
+}
+
+async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let height = a.height.ok_or("create-client requires --height")?;
+    let wasm_path = a.wasm.as_ref().ok_or("create-client requires --wasm")?;
+    let group_pk = a
+        .group_pubkey_hex
+        .as_ref()
+        .ok_or("create-client requires --group-pubkey-hex")?;
+
+    // 1. Fetch the anchor block from the JunoClaw node.
+    let mut client = layer_client(&a.layer_grpc).await?;
+    let block = client
+        .block(QueryBlockRequest { height })
+        .await?
+        .into_inner();
+    let proposal = decode_proposal(&block.proposal_bytes)?;
+
+    // 2. Contract JSON states.
+    let client_state = ContractClientState {
+        chain_id: a.chain_id.clone(),
+        group_public_key_hex: group_pk.clone(),
+        latest_height: ContractHeight {
+            revision_number: 0,
+            revision_height: height,
+        },
+        frozen_height: None,
+    };
+    let consensus_state = ContractConsensusState {
+        payload_digest_hex: hex::encode(proposal.payload),
+        timestamp: block.timestamp_nanos,
+        epoch: proposal.epoch,
+        view: proposal.view,
+        parent: proposal.parent,
+    };
+
+    // 3. Wrap in the 08-wasm protos.
+    let checksum = Sha256::digest(std::fs::read(wasm_path)?).to_vec();
+    let wasm_cs = WasmClientState {
+        data: serde_json::to_vec(&client_state)?,
+        checksum,
+        latest_height: Some(IbcHeight {
+            revision_number: 0,
+            revision_height: height,
+        }),
+    };
+    let wasm_cons = WasmConsensusState {
+        data: serde_json::to_vec(&consensus_state)?,
+        timestamp: block.timestamp_nanos,
+    };
+
+    // 4. MsgCreateClient → sign → broadcast.
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = MsgCreateClient {
+        client_state: Some(proto_any_of(TYPE_URL_WASM_CLIENT_STATE, &wasm_cs)),
+        consensus_state: Some(proto_any_of(TYPE_URL_WASM_CONSENSUS_STATE, &wasm_cons)),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    println!("signer: {signer} (account_number {}, sequence {})", account.account_number, account.sequence);
+    let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_CREATE_CLIENT, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgCreateClient broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_update_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let height = a.height.ok_or("update-client requires --height")?;
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("update-client requires --client-id")?;
+
+    // 1. Fetch the finalized header components.
+    let mut client = layer_client(&a.layer_grpc).await?;
+    let block = client
+        .block(QueryBlockRequest { height })
+        .await?
+        .into_inner();
+
+    // 2. Contract Header JSON → WasmClientMessage.
+    let header = ContractHeader {
+        height: ContractHeight {
+            revision_number: 0,
+            revision_height: height,
+        },
+        timestamp: block.timestamp_nanos,
+        proposal_bytes: block.proposal_bytes,
+        certificate_bytes: block.certificate_bytes,
+    };
+    let wasm_msg = WasmClientMessage {
+        data: serde_json::to_vec(&header)?,
+    };
+
+    // 3. MsgUpdateClient → sign → broadcast.
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = MsgUpdateClient {
+        client_id: client_id.clone(),
+        client_message: Some(proto_any_of(TYPE_URL_WASM_CLIENT_MESSAGE, &wasm_msg)),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_UPDATE_CLIENT, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgUpdateClient({client_id} @ {height}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let wasm_path = a.wasm.as_ref().ok_or("store-code requires --wasm")?;
+    let wasm_bytes = std::fs::read(wasm_path)?;
+    println!("wasm: {} bytes, checksum {}", wasm_bytes.len(), hex::encode(Sha256::digest(&wasm_bytes)));
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+
+    // MsgStoreCode wrapped in a gov v1 proposal (uni-7 wasm is permissioned).
+    let store = MsgStoreCode {
+        sender: signer.clone(),
+        wasm_byte_code: wasm_bytes,
+    };
+    let deposit = a
+        .deposit
+        .clone()
+        .unwrap_or_else(|| format!("1000000{}", a.fee_denom));
+    let (amount, denom) = deposit
+        .find(|c: char| c.is_alphabetic())
+        .map(|i| deposit.split_at(i))
+        .ok_or("invalid --deposit (expected <amount><denom>)")?;
+    let proposal = MsgSubmitProposal {
+        messages: vec![proto_any_of(TYPE_URL_MSG_STORE_CODE, &store)],
+        initial_deposit: vec![ProtoCoin {
+            denom: denom.to_string(),
+            amount: amount.to_string(),
+        }],
+        proposer: signer.clone(),
+        metadata: String::new(),
+        title: a.title.clone().unwrap_or_else(|| "Upload JunoClaw BLS light client".into()),
+        summary: a
+            .summary
+            .clone()
+            .unwrap_or_else(|| "Stores the 08-wasm BLS light client contract.".into()),
+        expedited: false,
+    };
+
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(
+        &key,
+        any_of(TYPE_URL_MSG_SUBMIT_PROPOSAL, &proposal),
+        a,
+        &account,
+    )?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgSubmitProposal(MsgStoreCode) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_assemble_proof(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let key_hex = a
+        .storage_key_hex
+        .as_ref()
+        .ok_or("assemble-proof requires --storage-key-hex")?;
+    let key = hex::decode(key_hex.trim_start_matches("0x"))?;
+
+    let mut client = layer_client(&a.layer_grpc).await?;
+
+    // 1. Membership proof over the latest committed state.
+    let proof = client
+        .proof(QueryProofRequest { key: key.clone() })
+        .await?
+        .into_inner();
+    let proof_height = proof.state_height + 1;
+
+    // 2. The payload at state_height+1 carries the state_root this proof
+    //    verifies against (app-hash semantics).
+    let block = client
+        .block(QueryBlockRequest {
+            height: proof_height,
+        })
+        .await?
+        .into_inner();
+    if block.payload_bytes.is_empty() {
+        return Err(format!(
+            "node has no payload_bytes for height {proof_height} — cannot assemble proof"
+        )
+        .into());
+    }
+
+    // 3. Emit the contract-side MembershipProof JSON.
+    let contract_proof = ContractMembershipProof {
+        payload_bytes: block.payload_bytes,
+        leaf_index: proof.leaf_index,
+        siblings: proof
+            .siblings
+            .iter()
+            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
+            .collect(),
+    };
+    let out = serde_json::json!({
+        "proof_height": proof_height,
+        "state_height": proof.state_height,
+        "key": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &proof.key),
+        "value": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &proof.value),
+        "proof": contract_proof,
+    });
+    println!("{}", serde_json::to_string_pretty(&out)?);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let a = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("error: {e}\n");
+            print_usage();
+            std::process::exit(2);
+        }
+    };
+    match a.cmd.as_str() {
+        "fetch" => cmd_fetch(&a).await,
+        "create-client" => cmd_create_client(&a).await,
+        "update-client" => cmd_update_client(&a).await,
+        "store-code" => cmd_store_code(&a).await,
+        "assemble-proof" => cmd_assemble_proof(&a).await,
+        other => {
+            eprintln!("unknown subcommand: {other}\n");
+            print_usage();
+            std::process::exit(2);
+        }
+    }
+}

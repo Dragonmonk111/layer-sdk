@@ -685,6 +685,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "bls-relayer"
+version = "0.5.0"
+dependencies = [
+ "base64",
+ "bytes",
+ "cosmrs",
+ "hex",
+ "http",
+ "layer-proto",
+ "prost 0.13.3",
+ "prost-types 0.13.3",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "tokio",
+ "tonic 0.12.3",
+]
+
+[[package]]
 name = "bls12_381"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

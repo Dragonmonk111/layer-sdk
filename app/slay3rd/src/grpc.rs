@@ -270,12 +270,13 @@ impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrp
     ) -> Result<Response<QueryBlockResponse>, Status> {
         let height = request.into_inner().height;
 
-        let (proposal_bytes, certificate_bytes, timestamp_nanos) = {
+        let (proposal_bytes, certificate_bytes, timestamp_nanos, payload_bytes) = {
             let app = self.app.read().await;
             (
                 app.get_block_proposal(height),
                 app.get_block_certificate(height),
                 app.get_block_timestamp(height),
+                app.get_block_payload(height),
             )
         };
 
@@ -294,12 +295,17 @@ impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrp
                 "no timestamp stored for height {height} — block not finalized yet?"
             ))
         })?;
+        // Payload bytes are required for membership proofs but optional for
+        // header relay — an empty payload_bytes means this node predates the
+        // _payload sidecar for that height.
+        let payload_bytes = payload_bytes.unwrap_or_default();
 
         Ok(Response::new(QueryBlockResponse {
             height,
             timestamp_nanos,
             proposal_bytes,
             certificate_bytes,
+            payload_bytes,
         }))
     }
 

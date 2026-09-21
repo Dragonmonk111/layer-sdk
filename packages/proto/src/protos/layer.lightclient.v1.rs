@@ -28,6 +28,11 @@ pub struct QueryBlockResponse {
     /// Raw aggregated BLS12-381 threshold signature (48-byte compressed G1).
     #[prost(bytes = "vec", tag = "4")]
     pub certificate_bytes: ::prost::alloc::vec::Vec<u8>,
+    /// bincode-serialized BlockPayload — sha256(payload_bytes) equals the
+    /// digest inside proposal_bytes. Carried so relayers can assemble
+    /// membership proofs (the payload embeds state_root).
+    #[prost(bytes = "vec", tag = "5")]
+    pub payload_bytes: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryProofRequest {

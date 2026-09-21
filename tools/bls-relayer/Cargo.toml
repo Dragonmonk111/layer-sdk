@@ -1,0 +1,36 @@
+[package]
+name = "bls-relayer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bls-relayer"
+path = "src/main.rs"
+
+[dependencies]
+# Cosmos tx construction and signing (same pattern as tx-sender)
+cosmrs = { workspace = true }
+
+# Proto types using prost 0.13 — layer.lightclient.v1 client stubs plus
+# cosmos.auth / cosmos.tx / cosmwasm.wasm for the counterparty side.
+layer-proto = { workspace = true, features = ["client"] }
+prost = { workspace = true }
+prost-types = { workspace = true }
+
+# gRPC client
+tonic = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+http = { workspace = true }
+
+# Hashing / encoding
+sha2 = { workspace = true }
+hex = { workspace = true }
+bytes = { workspace = true }
+base64 = "0.22"
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# CLI: manual argument parsing (no clap — proc-macro2 version conflicts in workspace)
