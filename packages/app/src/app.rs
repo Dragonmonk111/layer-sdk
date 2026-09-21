@@ -94,6 +94,14 @@ const LAST_BLOCK: Item<BlockInfo> = Item::new("_last_block");
 /// differs across validators and must not affect consensus determinism.
 const BLOCK_CERTIFICATE_KEY_PREFIX: &str = "_cert/";
 
+/// Storage key prefix for encoded consensus `Proposal` bytes, keyed by block
+/// height. Persisted alongside the BLS certificate so that light clients
+/// (08-wasm BLS light client) can reconstruct the exact signed message
+/// (`encode(Proposal { round, parent, payload })`) without re-deriving it
+/// from separate fields. Same "_" app_hash-exclusion convention as LAST_BLOCK
+/// and BLOCK_CERTIFICATE_KEY_PREFIX.
+const BLOCK_PROPOSAL_KEY_PREFIX: &str = "_proposal/";
+
 #[cw_serde]
 pub struct AppState {
     pub chain_id: String,
@@ -511,6 +519,45 @@ impl<T: PersistentStorage + 'static> App<T> {
         let key = format!("{}{}", BLOCK_CERTIFICATE_KEY_PREFIX, height);
         let cert_item: Item<Vec<u8>> = Item::new(&key);
         let result = cert_item.may_load(&reader, &meter).ok().flatten();
+        reader.abort();
+        result
+    }
+
+    /// Store the encoded consensus `Proposal` bytes for a previously committed
+    /// block, alongside its BLS certificate.
+    ///
+    /// The `Proposal` (`round`, `parent`, `payload`) is exactly the message a
+    /// BLS light client must reconstruct to verify `get_block_certificate`'s
+    /// signature: `ops::verify_message::<MinSig>(pubkey, namespace,
+    /// proposal_bytes, certificate)`. Without this, the light client cannot
+    /// re-derive the signed message from height/timestamp/batch_hash alone.
+    ///
+    /// # Arguments
+    /// * `height` - The block height this proposal belongs to
+    /// * `proposal` - The commonware-codec encoded `Proposal<Sha256Digest>` bytes
+    ///
+    /// # Returns
+    /// `Ok(())` on success, or an error if the storage write fails.
+    pub fn set_block_proposal(&mut self, height: u64, proposal: Vec<u8>) -> PulsarResult<()> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let key = format!("{}{}", BLOCK_PROPOSAL_KEY_PREFIX, height);
+        let proposal_item: Item<Vec<u8>> = Item::new(&key);
+        proposal_item.save(&mut writer, &meter, &proposal)?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
+    /// Retrieve the encoded `Proposal` bytes for a block at the given height,
+    /// if stored. Returns `None` if no proposal has been stored for this
+    /// height yet (e.g., the Reporter hasn't fired yet, or this is a genesis
+    /// block).
+    pub fn get_block_proposal(&self, height: u64) -> Option<Vec<u8>> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let key = format!("{}{}", BLOCK_PROPOSAL_KEY_PREFIX, height);
+        let proposal_item: Item<Vec<u8>> = Item::new(&key);
+        let result = proposal_item.may_load(&reader, &meter).ok().flatten();
         reader.abort();
         result
     }

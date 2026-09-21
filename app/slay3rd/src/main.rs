@@ -36,12 +36,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use commonware_codec::extensions::DecodeExt;
+use commonware_codec::Read;
 use commonware_consensus::simplex::elector::RoundRobin;
 use commonware_consensus::simplex::scheme::bls12381_threshold::standard::Scheme as BlsScheme;
 use commonware_consensus::simplex::{config::Config as SimplexConfig, Engine};
 use commonware_consensus::Reporter;
 use commonware_cryptography::bls12381::dkg::deal_anonymous;
-use commonware_cryptography::bls12381::primitives::{sharing::Mode, variant::MinSig};
+use commonware_cryptography::bls12381::primitives::{
+    group::Share,
+    sharing::{Mode, ModeVersion, Sharing},
+    variant::MinSig,
+};
 use commonware_cryptography::{ed25519, sha256};
 use commonware_math::algebra::Random;
 use commonware_p2p::authenticated::lookup::{Config as P2pConfig, Network};
@@ -99,6 +104,12 @@ struct KeyMaterial {
     ed25519_private_hex: String,
     ed25519_public_hex: String,
     validator_public_keys: Vec<String>,
+    /// Serialized `Sharing` + `Share` from a Phase A ceremony (finalize).
+    /// When present, the node uses them directly instead of re-dealing.
+    #[serde(default)]
+    sharing_hex: Option<String>,
+    #[serde(default)]
+    share_hex: Option<String>,
 }
 
 impl KeyMaterial {
@@ -153,6 +164,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                 // The certificate bytes are produced by the consensus engine after a quorum
                 // of validators certify. They are NOT available at certify() time.
                 let cert_bytes = finalization.certificate.encode().to_vec();
+                let proposal_bytes = finalization.proposal.encode().to_vec();
                 let payload_digest: [u8; 32] = finalization.proposal.payload.0;
 
                 // Determine the block height: query the App's last committed block.
@@ -192,6 +204,29 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                                 height = height,
                                 error = ?e,
                                 "Failed to store BLS certificate — CONS-05 gap"
+                            );
+                        }
+                    }
+
+                    // BLS light client: persist the raw encoded Proposal alongside the
+                    // certificate. A light client verifies the certificate via
+                    // ops::verify_message::<MinSig>(group_pubkey, namespace, proposal_bytes,
+                    // certificate) and needs the exact signed bytes — reconstructing them
+                    // from height/timestamp/payload_digest alone is not possible (round and
+                    // parent view are not otherwise exposed).
+                    match app.set_block_proposal(height, proposal_bytes.clone()) {
+                        Ok(()) => {
+                            tracing::info!(
+                                height = height,
+                                proposal_len = proposal_bytes.len(),
+                                "Proposal bytes stored in block record (light client)"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                height = height,
+                                error = ?e,
+                                "Failed to store proposal bytes — light client verification will be impossible for this height"
                             );
                         }
                     }
@@ -459,9 +494,13 @@ async fn run_node(
         }
     };
 
-    // Reconstruct the BLS sharing polynomial.
-    // Phase 2 uses deal_anonymous with a fixed seed (matching the keygen tool).
-    // Phase 3+ TODO: Serialize and load Sharing directly from the key material JSON.
+    // Reconstruct the BLS sharing polynomial and our share.
+    //
+    // Phase A ceremony key files carry serialized `Sharing` + `Share`
+    // (sharing_hex/share_hex, written by `generate-testnet-keys finalize`) —
+    // load them directly. Legacy devnet key files lack these fields, so we
+    // reproduce the keygen tool's deterministic deal (seeded RNG) and pick
+    // our share by sorted Ed25519 position.
     let n = match NonZeroU32::new(km.threshold_total) {
         Some(n) => n,
         None => {
@@ -470,25 +509,63 @@ async fn run_node(
         }
     };
 
-    // Use the same seeded RNG as the keygen tool to reproduce the same DKG output.
-    let mut rng = ChaCha8Rng::seed_from_u64(0);
-    // Skip Ed25519 key generation (same as keygen tool does first) to advance RNG state.
-    for _ in 0..km.threshold_total {
-        let _ = ed25519::PrivateKey::random(&mut rng);
-    }
-    let (sharing, shares) = deal_anonymous::<MinSig, N3f1>(&mut rng, Mode::NonZeroCounter, n);
+    let (sharing, our_share) = if let (Some(sharing_hex), Some(share_hex)) =
+        (&km.sharing_hex, &km.share_hex)
+    {
+        let sharing_bytes = match hex::decode(sharing_hex) {
+            Ok(b) => b,
+            Err(e) => {
+                error!(error = %e, "Invalid hex in sharing_hex");
+                return;
+            }
+        };
+        let share_bytes = match hex::decode(share_hex) {
+            Ok(b) => b,
+            Err(e) => {
+                error!(error = %e, "Invalid hex in share_hex");
+                return;
+            }
+        };
+        let sharing = match Sharing::<MinSig>::read_cfg(
+            &mut &sharing_bytes[..],
+            &(n, ModeVersion::v0()),
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(error = %e, "Failed to decode sharing from keys.json");
+                return;
+            }
+        };
+        let share = match Share::read_cfg(&mut &share_bytes[..], &()) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(error = %e, "Failed to decode share from keys.json");
+                return;
+            }
+        };
+        info!("BLS share loaded from keys.json (ceremony key material)");
+        (sharing, share)
+    } else {
+        // Use the same seeded RNG as the keygen tool to reproduce the same DKG output.
+        let mut rng = ChaCha8Rng::seed_from_u64(0);
+        // Skip Ed25519 key generation (same as keygen tool does first) to advance RNG state.
+        for _ in 0..km.threshold_total {
+            let _ = ed25519::PrivateKey::random(&mut rng);
+        }
+        let (sharing, shares) = deal_anonymous::<MinSig, N3f1>(&mut rng, Mode::NonZeroCounter, n);
 
-    if our_sorted_position >= shares.len() {
-        error!(
-            our_sorted_position = our_sorted_position,
-            total = shares.len(),
-            "sorted position out of range — BLS share count mismatch"
-        );
-        return;
-    }
-    // Use sorted position (not validator_index) to select the correct BLS share.
-    // shares[i] was assigned to the validator whose sorted Ed25519 key position is i.
-    let our_share = shares[our_sorted_position].clone();
+        if our_sorted_position >= shares.len() {
+            error!(
+                our_sorted_position = our_sorted_position,
+                total = shares.len(),
+                "sorted position out of range — BLS share count mismatch"
+            );
+            return;
+        }
+        // Use sorted position (not validator_index) to select the correct BLS share.
+        // shares[i] was assigned to the validator whose sorted Ed25519 key position is i.
+        (sharing, shares[our_sorted_position].clone())
+    };
 
     // Create the BLS threshold signing Scheme.
     let bls_scheme = match BlsScheme::<ed25519::PublicKey, MinSig>::signer(

@@ -1,0 +1,37 @@
+[package]
+name = "junoclaw-light-client"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cosmwasm-schema = { workspace = true }
+cosmwasm-std = { workspace = true }
+cw-storage-plus = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+# bls12_381's `experimental` hash-to-curve module (ExpandMsgXmd) is built
+# against the older `digest` 0.9 API — a separate sha2 release line from the
+# workspace's sha2 0.10.x. Both can coexist under a package rename.
+sha2-09 = { package = "sha2", version = "0.9" }
+bls12_381 = { version = "0.8", default-features = false, features = ["groups", "pairings", "alloc", "experimental"] }
+group = { version = "0.13", default-features = false }
+pairing = { version = "0.23", default-features = false }
+
+[dev-dependencies]
+cw-multi-test = { workspace = true }
+commonware-cryptography = "2026.3.0"
+commonware-codec = "2026.3.0"
+commonware-utils = "2026.3.0"
+commonware-parallel = "2026.3.0"
+rand = "0.8"

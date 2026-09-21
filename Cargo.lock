@@ -685,6 +685,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bls12_381"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7bc6d6292be3a19e6379786dac800f551e5865a5bb51ebbe3064ab80433f403"
+dependencies = [
+ "digest 0.9.0",
+ "ff",
+ "group",
+ "pairing",
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
 name = "blst"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2825,6 +2839,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "junoclaw-light-client"
+version = "0.5.0"
+dependencies = [
+ "bls12_381",
+ "commonware-codec",
+ "commonware-cryptography",
+ "commonware-parallel",
+ "commonware-utils",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-multi-test",
+ "cw-storage-plus",
+ "group",
+ "hex",
+ "pairing",
+ "rand 0.8.5",
+ "serde",
+ "sha2 0.10.8",
+ "sha2 0.9.9",
+ "thiserror 1.0.64",
+]
+
+[[package]]
 name = "k256"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2980,7 +3017,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -3384,6 +3421,15 @@ dependencies = [
  "elliptic-curve",
  "primeorder",
  "sha2 0.10.8",
+]
+
+[[package]]
+name = "pairing"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
+dependencies = [
+ "group",
 ]
 
 [[package]]
@@ -4377,6 +4423,7 @@ name = "slay3rd"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "aws-lc-rs",
  "axum 0.7.6",
  "bincode",
  "bytes",
