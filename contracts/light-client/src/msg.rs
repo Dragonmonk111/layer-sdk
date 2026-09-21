@@ -57,6 +57,27 @@ pub struct MerklePath {
     pub key_path: Vec<Binary>,
 }
 
+/// The contents of `VerifyMembership.proof` — our own format (the field is
+/// opaque bytes to ibc-go). JSON, consistent with the rest of the ABI.
+///
+/// Verification chain: `sha256(payload_bytes)` must equal the consensus
+/// state's `payload_digest` (binding the proof to the signed certificate
+/// chain) → bincode-parse the payload → `state_root` → walk `siblings`
+/// from the leaf `sha256(0x00 || key || value)` to that root.
+///
+/// The leaf key is the concatenation of `merkle_path.key_path` elements —
+/// the chain stores IBC commitments under keys equal to their ICS-24 path.
+#[cw_serde]
+pub struct MembershipProof {
+    /// Full bincode-serialized `BlockPayload` of the block at `height`.
+    pub payload_bytes: Binary,
+    /// Index of the proven leaf in the sorted leaf list.
+    pub leaf_index: u64,
+    /// Sibling hashes bottom-up; `null` marks a promotion level (odd node
+    /// count — the node moves up unchanged, no hash is applied).
+    pub siblings: Vec<Option<Binary>>,
+}
+
 /// Sent to the contract's `query` entry point. Externally tagged enum —
 /// matches Go's `omitempty`-single-field struct marshaling.
 #[cw_serde]

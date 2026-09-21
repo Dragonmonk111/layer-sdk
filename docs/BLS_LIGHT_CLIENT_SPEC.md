@@ -204,19 +204,72 @@ off-chain accountability.
 
 ## 8. State Proofs (membership / non-membership)
 
-The `payload_digest` commits to the block's batch. To prove a specific
-message, packet commitment, or acknowledgement:
+The signed `BlockPayload` carries a `state_root` field — a Merkle root over
+the application's post-state after the **previous** block (Tendermint
+app-hash semantics: the proposer cannot know its own post-state, so block
+H commits to the state root of H-1).
 
-```text
-verify_membership(consensus_state, proof, path, value):
-    1. proof = Merkle path from the leaf to the batch root.
-    2. Recompute root; require == consensus_state.payload_digest
-       (or a sub-commitment within the batch — see Open Questions §11).
+**Commitment layout** (implemented in `packages/app/src/app.rs`):
+
+- Leaves: every committed KV entry whose raw key does **not** start with
+  `'_'` (the sidecar convention — certificates, proposals, timestamps,
+  payloads, and the root itself are excluded, matching `FastHasher`'s
+  app_hash exclusion).
+- `leaf = sha256(0x00 || key || value)`; `node = sha256(0x01 || l || r)`;
+  odd nodes promote unchanged; the empty tree is `sha256("")`.
+- The app recomputes the root at the end of every `finalize_block` (and at
+  `init` for genesis) and stores it in the `_state_root` sidecar item;
+  `propose()` reads it into `BlockPayload.state_root`.
+
+**Proof wire format** — the `proof` field of `verify_membership` is opaque
+to ibc-go; we carry JSON `MembershipProof`:
+
+```json
+{
+  "payload_bytes": "<b64 bincode BlockPayload at proof height>",
+  "leaf_index": 1,
+  "siblings": ["<b64 32-byte sibling>", null, "..."]
+}
 ```
 
-v1 assumes the batch hash is a Merkle root over `messages[]` /
-`breaker_actions[]` — the exact commitment layout is pinned down when the
-first proof consumer (ICS-20-style transfer or message-passing) is built.
+`siblings[i]` is the sibling at tree level `i`, bottom-up; `null` marks a
+promotion level (odd node count — the node moves up unchanged).
+
+**Verification** (`contracts/light-client/src/contract.rs`):
+
+```text
+verify_membership(height, proof, merkle_path, value):
+    1. consensus = consensus_states[height]            (else NotFound)
+    2. require sha256(proof.payload_bytes)
+              == consensus.payload_digest              (binds proof to
+                                                        the certificate)
+    3. payload = bincode::deserialize(payload_bytes)
+       state_root = payload.state_root                 (post-state of
+                                                        height-1)
+    4. key = concat(merkle_path.key_path)              (ICS-24 path =
+                                                        storage key)
+    5. leaf = sha256(0x00 || key || value)
+    6. walk siblings → root; require == state_root
+```
+
+**Height convention:** to prove state at height X the relayer submits
+`proof_height = X + 1` — the consensus state at X+1 stores the payload
+whose `state_root` covers post-state(X). Same off-by-one as Tendermint's
+`app_hash`.
+
+**Serving:** `layer.lightclient.v1.Query/Proof(key)` builds the path over
+the latest committed state in one storage snapshot and returns
+`{ state_height, key, value, leaf_index, siblings }`. The relayer pairs it
+with `Block(state_height + 1)` to fetch `payload_bytes` and assembles the
+contract-side proof. The node also persists every block's full payload
+under `_payload/{height}` (written in `execute_block`) so `payload_bytes`
+is always available for finalized heights.
+
+**Non-membership** is not supported in v1 — proving a key's absence needs
+a versioned/range-provable tree (JMT/IAVL-style), which is the documented
+scaling path once state size or timeout flows require it. ICS-20
+recv/ack flows only need membership; timeout flows need non-membership
+and are deferred.
 
 ## 9. 08-wasm Integration
 
@@ -237,7 +290,8 @@ stores the initial consensus state at `latest_height`.
 |---|---|---|
 | `update_state` | §6 + monotonicity + equivocation guard; stores consensus state, bumps `latest_height`, returns `{ "heights": [Height] }`. Idempotent on the same header; rejects a conflicting header at a stored height (route it to misbehaviour instead). | ✅ |
 | `update_state_on_misbehaviour` | §7 — two valid certs that equivocate → sets `frozen_height` = min height, returns `{}`. | ✅ |
-| `verify_membership` / `verify_non_membership` | §8 — returns an explicit error; the batch commitment layout (§11.1) is not pinned down yet. | ⏳ |
+| `verify_membership` | §8 — digest binding + bincode `state_root` extraction + Merkle path walk; returns `{}` on success. | ✅ |
+| `verify_non_membership` | §8 — explicit error; needs a versioned tree (deferred). | ⏳ |
 | `verify_upgrade_and_update_state` | Not supported in v1 (returns error). | ❌ |
 | `migrate_client_store` | No-op `{}` (v1 layouts are stable). | ✅ |
 
@@ -285,9 +339,10 @@ In every deployment the trust root is identical: the Phase A group public key.
 
 ## 11. Open Questions
 
-1. **Batch commitment layout** — is `payload_digest` a Merkle root over
-   messages, or a flat hash? Membership proofs need the former; if the batch
-   hash is flat today, we add a `messages_root` field to the block record.
+1. ~~**Batch commitment layout**~~ — **resolved:** `BlockPayload.state_root`
+   commits to a domain-separated Merkle root over all non-`'_'` KV entries
+   of the previous block's post-state (§8). `payload_digest` remains a flat
+   `sha256(bincode(payload))`; the state root rides inside it.
 2. **Equivocation → operator mapping** — since certificates carry no signer
    bitmap, identifying which validators contributed to a forged quorum after
    the fact for slashing requires falling back to the DKG dealer logs /
@@ -300,10 +355,10 @@ In every deployment the trust root is identical: the Phase A group public key.
 4. **Epoch transitions** — Phase B (dynamic validator set / re-sharing) will
    need a `NextGroupPublicKey` commitment signed by the outgoing group.
    Designed out of v1 deliberately.
-5. **Coordination API wiring** — `App::get_block_proposal` exists node-side
-   (packages/app/src/app.rs) but is not yet exposed through the
-   `junoclaw-coordination` REST API consumed by relayers/miners. Needs a
-   `proposal_hex` field added to `StoredBlock` (mirrors `certificate`).
+5. ~~**Coordination API wiring**~~ — **resolved:** the node now serves
+   `layer.lightclient.v1.Query` over gRPC (`LatestHeight`, `Block`,
+   `Proof`) — proposal bytes, certificate, timestamp, and Merkle
+   membership proofs for every finalized height.
 
 ## 12. Implementation Plan
 
@@ -313,5 +368,5 @@ In every deployment the trust root is identical: the Phase A group public key.
 | 1 | `junoclaw-light-client` CosmWasm contract: §6 verification via the pure-Rust `bls12_381` crate (in-contract, no host precompile); unit tests with real ceremony-dry-run certificates via `tools/verify-cert`-equivalent fixtures. |
 | 2 | Relayer path: fetch `cert_bytes` by height → submit `Header` → `UpdateState`. |
 | 3 | 08-wasm deployment on uni-7 (Juno testnet) + first verified header. |
-| 4 | Membership proofs + ICS-20-style transfer demo. |
+| 4 | ~~Membership proofs~~ **done** — `state_root` in `BlockPayload`, `verify_membership` implemented, `Proof` RPC live. Next: ICS-20-style transfer demo. |
 | 5 | EVM adapter (EIP-2537) for Avalanche C-Chain. |

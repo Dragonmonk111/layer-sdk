@@ -199,6 +199,23 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 *h = height;
                 let mut last = self.last_digest.lock().await;
                 *last = digest;
+                drop(h);
+                drop(last);
+
+                // Persist the full payload bytes — membership proofs carry
+                // them so the light client can recompute the signed digest
+                // and extract state_root. The payload was just removed from
+                // pending_payloads, so this is the only durable copy.
+                {
+                    let mut app = self.app.write().await;
+                    if let Err(e) = app.set_block_payload(height, payload.to_bytes()) {
+                        tracing::error!(
+                            height = height,
+                            error = ?e,
+                            "Failed to persist block payload — membership proofs for this height will be unavailable"
+                        );
+                    }
+                }
 
                 // Structured log: height, app_hash, digest (CONS-04, CONS-05 audit support)
                 // The certificate bytes are set in Block.certificate by the Reporter after
@@ -268,6 +285,14 @@ where
             *d
         };
 
+        // State root committed by this payload: the Merkle root over the
+        // app's post-state after the PREVIOUS block (app-hash semantics).
+        // Stored by finalize_block/init; [0;32] only before the first commit.
+        let state_root = {
+            let app = self.app.read().await;
+            app.state_root().unwrap_or([0u8; 32])
+        };
+
         // Timestamp comes from the consensus context (same on all validators — DETERMINISTIC).
         // We derive a deterministic timestamp from the view number.
         // IMPORTANT: Timestamp must be > genesis time (1_673_194_026_078_305_426 ns, Jan 2023).
@@ -296,6 +321,7 @@ where
             proposer,
             txs: raw_txs,
             parent_digest: last_digest,
+            state_root,
         };
 
         let payload_bytes = payload.to_bytes().len();
@@ -484,6 +510,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![],
             parent_digest,
+            state_root: [0u8; 32],
         }
     }
 
@@ -527,6 +554,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         };
         let digest_bytes = insert_payload_sync(&node, payload);
 
@@ -616,6 +644,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         };
         let digest = insert_payload_sync(&node, payload);
         let _found = rt().block_on(async {
@@ -649,6 +678,7 @@ mod tests {
             proposer: vec![2u8; 32],
             txs: vec![],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         };
         let digest = payload.digest();
         rt().block_on(async {
@@ -785,6 +815,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![valid_tx.clone()],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         };
         let digest = insert_payload_sync(&node, payload);
         // execute_block may return false if finalize_block fails (tx signer not in genesis),
@@ -800,6 +831,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![valid_tx.clone(), invalid_tx.clone(), valid_tx.clone()],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         };
         let digest2 = insert_payload_sync(&node2, payload_mixed);
         // Must not panic even with mixed valid/invalid bytes.
@@ -813,6 +845,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         };
         let digest3 = insert_payload_sync(&node3, payload_empty);
         let result3 = rt().block_on(node3.execute_block(digest3));

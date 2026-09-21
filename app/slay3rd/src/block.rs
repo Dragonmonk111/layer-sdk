@@ -23,6 +23,19 @@ pub struct BlockPayload {
     pub txs: Vec<Bytes>,
     /// SHA-256 digest of the parent block's payload (chain linkage)
     pub parent_digest: [u8; 32],
+    /// Merkle root over the app's post-state after the PREVIOUS committed
+    /// block (Tendermint app-hash semantics: the proposer cannot know its own
+    /// post-state, so block H commits to the state root of H-1).
+    ///
+    /// Computed by `App::compute_state_root()` over all non-`'_'`-prefixed KV
+    /// entries — a domain-separated binary Merkle tree
+    /// (leaf = sha256(0x00 || key || value), node = sha256(0x01 || l || r)).
+    /// This is what makes IBC membership proofs possible: the threshold
+    /// certificate signs the payload digest, the payload carries the state
+    /// root, and a Merkle path binds (key, value) to that root.
+    ///
+    /// Genesis block carries the root of the post-init state.
+    pub state_root: [u8; 32],
 }
 
 impl BlockPayload {
@@ -60,6 +73,7 @@ mod tests {
                 Bytes::from("tx2"),
             ],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         }
     }
 

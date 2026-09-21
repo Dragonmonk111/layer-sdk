@@ -29,6 +29,33 @@ pub struct QueryBlockResponse {
     #[prost(bytes = "vec", tag = "4")]
     pub certificate_bytes: ::prost::alloc::vec::Vec<u8>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryProofRequest {
+    /// Raw storage key to prove (e.g. an IBC packet-commitment key).
+    #[prost(bytes = "vec", tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryProofResponse {
+    /// Height whose post-state this proof covers. The proof verifies against
+    /// the consensus state at state_height + 1 (the next block's payload
+    /// carries this state root — Tendermint app-hash semantics).
+    #[prost(uint64, tag = "1")]
+    pub state_height: u64,
+    /// The proven storage key (echo of the request).
+    #[prost(bytes = "vec", tag = "2")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+    /// The proven value at `key`.
+    #[prost(bytes = "vec", tag = "3")]
+    pub value: ::prost::alloc::vec::Vec<u8>,
+    /// Index of the leaf in the sorted leaf list.
+    #[prost(uint64, tag = "4")]
+    pub leaf_index: u64,
+    /// Sibling hashes bottom-up; an empty entry marks a promotion level
+    /// (odd node count — the node moves up unchanged, no hash is applied).
+    #[prost(bytes = "vec", repeated, tag = "5")]
+    pub siblings: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
 /// Generated client implementations.
 #[cfg(feature = "client")]
 pub mod query_client {
@@ -144,10 +171,9 @@ pub mod query_client {
                 .insert(GrpcMethod::new("layer.lightclient.v1.Query", "LatestHeight"));
             self.inner.unary(req, path, codec).await
         }
-        /// Block returns the light client header components for a finalized height:
-        /// the commonware-codec encoded consensus Proposal (round, parent, payload),
-        /// the raw aggregated BLS12-381 threshold certificate (48-byte compressed G1),
-        /// and the block timestamp in nanoseconds.
+        /// Block returns the components needed to construct an 08-wasm
+        /// ClientMessage for a finalized block height: the consensus Proposal
+        /// bytes, the BLS12-381 threshold certificate, and the block timestamp.
         pub async fn block(
             &mut self,
             request: impl tonic::IntoRequest<super::QueryBlockRequest>,
@@ -173,6 +199,36 @@ pub mod query_client {
                 .insert(GrpcMethod::new("layer.lightclient.v1.Query", "Block"));
             self.inner.unary(req, path, codec).await
         }
+        /// Proof returns a Merkle membership proof for a storage key in the
+        /// latest committed application state. The proof verifies against
+        /// `state_root` carried by the payload of the block at
+        /// `state_height + 1` — the relayer pairs this response with
+        /// `Block(state_height + 1)` to assemble the contract-side proof.
+        pub async fn proof(
+            &mut self,
+            request: impl tonic::IntoRequest<super::QueryProofRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::QueryProofResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/layer.lightclient.v1.Query/Proof",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("layer.lightclient.v1.Query", "Proof"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -191,15 +247,26 @@ pub mod query_server {
             tonic::Response<super::QueryLatestHeightResponse>,
             tonic::Status,
         >;
-        /// Block returns the light client header components for a finalized height:
-        /// the commonware-codec encoded consensus Proposal (round, parent, payload),
-        /// the raw aggregated BLS12-381 threshold certificate (48-byte compressed G1),
-        /// and the block timestamp in nanoseconds.
+        /// Block returns the components needed to construct an 08-wasm
+        /// ClientMessage for a finalized block height: the consensus Proposal
+        /// bytes, the BLS12-381 threshold certificate, and the block timestamp.
         async fn block(
             &self,
             request: tonic::Request<super::QueryBlockRequest>,
         ) -> std::result::Result<
             tonic::Response<super::QueryBlockResponse>,
+            tonic::Status,
+        >;
+        /// Proof returns a Merkle membership proof for a storage key in the
+        /// latest committed application state. The proof verifies against
+        /// `state_root` carried by the payload of the block at
+        /// `state_height + 1` — the relayer pairs this response with
+        /// `Block(state_height + 1)` to assemble the contract-side proof.
+        async fn proof(
+            &self,
+            request: tonic::Request<super::QueryProofRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::QueryProofResponse>,
             tonic::Status,
         >;
     }
@@ -355,6 +422,49 @@ pub mod query_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = BlockSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/layer.lightclient.v1.Query/Proof" => {
+                    #[allow(non_camel_case_types)]
+                    struct ProofSvc<T: Query>(pub Arc<T>);
+                    impl<T: Query> tonic::server::UnaryService<super::QueryProofRequest>
+                    for ProofSvc<T> {
+                        type Response = super::QueryProofResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::QueryProofRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Query>::proof(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ProofSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -2842,6 +2842,7 @@ dependencies = [
 name = "junoclaw-light-client"
 version = "0.5.0"
 dependencies = [
+ "bincode",
  "bls12_381",
  "commonware-codec",
  "commonware-cryptography",

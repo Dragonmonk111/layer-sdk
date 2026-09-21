@@ -7,10 +7,12 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{from_json, to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError};
+use sha2::{Digest, Sha256};
 
 use crate::error::ContractError;
+use crate::merkle::{self, BlockPayloadMirror};
 use crate::msg::{
-    CheckForMisbehaviourResponse, Header, InstantiateMsg, Misbehaviour, QueryMsg,
+    CheckForMisbehaviourResponse, Header, InstantiateMsg, MembershipProof, Misbehaviour, QueryMsg,
     StatusResponse, SudoMsg, TimestampAtHeightResponse, UpdateStateResponse,
 };
 use crate::state::{ClientState, ConsensusState, Height, CLIENT_STATE, CONSENSUS_STATES};
@@ -184,13 +186,71 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
             Ok(Response::new())
         }
         SudoMsg::VerifyMembership {
-            height: _,
+            height,
             delay_time_period: _,
             delay_block_period: _,
-            proof: _,
-            merkle_path: _,
-            value: _,
-        } => Err(ContractError::MembershipProofsUnsupported),
+            proof,
+            merkle_path,
+            value,
+        } => {
+            // 1. Consensus state at the proof height → expected payload
+            //    digest. The proof verifies against the state committed by
+            //    THIS height's payload (post-state of height-1 — app-hash
+            //    semantics), so relayers pass proof_height = state_height+1.
+            let consensus = CONSENSUS_STATES
+                .may_load(
+                    deps.storage,
+                    (height.revision_number, height.revision_height),
+                )?
+                .ok_or(ContractError::ConsensusStateNotFound(
+                    height.revision_height,
+                ))?;
+
+            // 2. Parse our proof format (JSON inside the opaque proof bytes).
+            let proof: MembershipProof = from_json(proof.as_slice())?;
+
+            // 3. Bind the proof to the signed certificate chain:
+            //    sha256(payload_bytes) must equal the stored payload digest.
+            let digest = Sha256::digest(proof.payload_bytes.as_slice());
+            if hex::encode(digest) != consensus.payload_digest_hex {
+                return Err(ContractError::InvalidMembershipProof);
+            }
+
+            // 4. Extract state_root from the signed payload — the root is
+            //    only trustworthy because it came from inside the bytes the
+            //    threshold certificate covers.
+            let payload: BlockPayloadMirror =
+                bincode::deserialize(proof.payload_bytes.as_slice())
+                    .map_err(|_| ContractError::InvalidMembershipProof)?;
+
+            // 5. Leaf key = concatenated key_path elements (the chain stores
+            //    IBC commitments under keys equal to their ICS-24 path).
+            let key: Vec<u8> = merkle_path
+                .key_path
+                .iter()
+                .flat_map(|p| p.as_slice().iter().copied())
+                .collect();
+            let leaf = merkle::leaf_hash(&key, value.as_slice());
+
+            // 6. Walk the sibling path to the state root.
+            let mut siblings = Vec::with_capacity(proof.siblings.len());
+            for s in &proof.siblings {
+                siblings.push(match s {
+                    Some(b) => Some(
+                        <[u8; 32]>::try_from(b.as_slice())
+                            .map_err(|_| ContractError::InvalidMembershipProof)?,
+                    ),
+                    None => None,
+                });
+            }
+            let root = merkle::compute_root(leaf, proof.leaf_index, &siblings);
+            if root != payload.state_root {
+                return Err(ContractError::InvalidMembershipProof);
+            }
+
+            // EmptyResult — ibc-go treats success as membership proven.
+            Ok(Response::new())
+        }
         SudoMsg::VerifyNonMembership {
             height: _,
             delay_time_period: _,
@@ -537,8 +597,145 @@ mod tests {
         assert!(res.found_misbehaviour);
     }
 
+    /// Build a 3-leaf state tree and a signed payload committing to its
+    /// root. Returns (payload_bytes, proof for k1 at index 1, k1, v1).
+    ///
+    /// Tree:  N0 = H(0x01||l0||l1); l2 promotes; root = H(0x01||N0||l2).
+    /// Proof for index 1: siblings = [l0, l2].
+    fn membership_fixture() -> (Binary, MembershipProof, Vec<u8>, Vec<u8>) {
+        let k0 = b"commitments/ports/transfer/channels/channel-0/sequences/0".to_vec();
+        let k1 = b"commitments/ports/transfer/channels/channel-0/sequences/1".to_vec();
+        let k2 = b"commitments/ports/transfer/channels/channel-0/sequences/2".to_vec();
+        let v1 = b"packet-commitment-1".to_vec();
+        let l0 = merkle::leaf_hash(&k0, b"packet-commitment-0");
+        let l1 = merkle::leaf_hash(&k1, &v1);
+        let l2 = merkle::leaf_hash(&k2, b"packet-commitment-2");
+
+        let mut h = Sha256::new();
+        h.update([0x01u8]);
+        h.update(l0);
+        h.update(l1);
+        let n0: [u8; 32] = h.finalize().into();
+        let mut h = Sha256::new();
+        h.update([0x01u8]);
+        h.update(n0);
+        h.update(l2);
+        let root: [u8; 32] = h.finalize().into();
+
+        let payload = BlockPayloadMirror {
+            height: 7,
+            timestamp_nanos: 42,
+            proposer: vec![9u8; 32],
+            txs: vec![vec![1, 2, 3]],
+            parent_digest: [5u8; 32],
+            state_root: root,
+        };
+        let payload_bytes = Binary::new(bincode::serialize(&payload).unwrap());
+        let proof = MembershipProof {
+            payload_bytes: payload_bytes.clone(),
+            leaf_index: 1,
+            siblings: vec![Some(Binary::from(l0)), Some(Binary::from(l2))],
+        };
+        (payload_bytes, proof, k1, v1)
+    }
+
     #[test]
-    fn membership_unsupported_returns_error() {
+    fn verify_membership_valid_proof() {
+        let (payload_bytes, proof, key, value) = membership_fixture();
+        let digest = Sha256::digest(payload_bytes.as_slice());
+        let cs = ConsensusState {
+            payload_digest_hex: hex::encode(digest),
+            timestamp: 42,
+            epoch: 0,
+            view: 7,
+            parent: 6,
+        };
+        let (_header, pubkey_hex) = make_header(7, 42, [0u8; 32]);
+        let mut deps = setup(&pubkey_hex, 7, &cs);
+
+        let res = sudo(
+            deps.as_mut(),
+            mock_env(),
+            SudoMsg::VerifyMembership {
+                height: Height::from_block_height(7),
+                delay_time_period: 0,
+                delay_block_period: 0,
+                proof: Binary::new(to_json_vec(&proof).unwrap()),
+                merkle_path: MerklePath {
+                    key_path: vec![Binary::from(key)],
+                },
+                value: Binary::from(value),
+            },
+        );
+        assert!(res.is_ok(), "valid proof rejected: {:?}", res.err());
+    }
+
+    #[test]
+    fn verify_membership_wrong_value_fails() {
+        let (payload_bytes, proof, key, _value) = membership_fixture();
+        let digest = Sha256::digest(payload_bytes.as_slice());
+        let cs = ConsensusState {
+            payload_digest_hex: hex::encode(digest),
+            timestamp: 42,
+            epoch: 0,
+            view: 7,
+            parent: 6,
+        };
+        let (_header, pubkey_hex) = make_header(7, 42, [0u8; 32]);
+        let mut deps = setup(&pubkey_hex, 7, &cs);
+
+        let res = sudo(
+            deps.as_mut(),
+            mock_env(),
+            SudoMsg::VerifyMembership {
+                height: Height::from_block_height(7),
+                delay_time_period: 0,
+                delay_block_period: 0,
+                proof: Binary::new(to_json_vec(&proof).unwrap()),
+                merkle_path: MerklePath {
+                    key_path: vec![Binary::from(key)],
+                },
+                value: Binary::from(b"forged-commitment".to_vec()),
+            },
+        );
+        assert!(matches!(res, Err(ContractError::InvalidMembershipProof)));
+    }
+
+    #[test]
+    fn verify_membership_digest_mismatch_fails() {
+        let (_payload_bytes, proof, key, value) = membership_fixture();
+        // Consensus state commits to a DIFFERENT payload digest — the proof's
+        // payload_bytes won't match, so the binding check must reject.
+        let cs = ConsensusState {
+            payload_digest_hex: hex::encode([0xdeu8; 32]),
+            timestamp: 42,
+            epoch: 0,
+            view: 7,
+            parent: 6,
+        };
+        let (_header, pubkey_hex) = make_header(7, 42, [0u8; 32]);
+        let mut deps = setup(&pubkey_hex, 7, &cs);
+
+        let res = sudo(
+            deps.as_mut(),
+            mock_env(),
+            SudoMsg::VerifyMembership {
+                height: Height::from_block_height(7),
+                delay_time_period: 0,
+                delay_block_period: 0,
+                proof: Binary::new(to_json_vec(&proof).unwrap()),
+                merkle_path: MerklePath {
+                    key_path: vec![Binary::from(key)],
+                },
+                value: Binary::from(value),
+            },
+        );
+        assert!(matches!(res, Err(ContractError::InvalidMembershipProof)));
+    }
+
+    #[test]
+    fn verify_membership_missing_consensus_fails() {
+        let (_payload_bytes, proof, key, value) = membership_fixture();
         let cs = ConsensusState {
             payload_digest_hex: hex::encode([0u8; 32]),
             timestamp: 0,
@@ -553,6 +750,35 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             SudoMsg::VerifyMembership {
+                height: Height::from_block_height(99),
+                delay_time_period: 0,
+                delay_block_period: 0,
+                proof: Binary::new(to_json_vec(&proof).unwrap()),
+                merkle_path: MerklePath {
+                    key_path: vec![Binary::from(key)],
+                },
+                value: Binary::from(value),
+            },
+        );
+        assert!(matches!(res, Err(ContractError::ConsensusStateNotFound(99))));
+    }
+
+    #[test]
+    fn non_membership_unsupported_returns_error() {
+        let cs = ConsensusState {
+            payload_digest_hex: hex::encode([0u8; 32]),
+            timestamp: 0,
+            epoch: 0,
+            view: 0,
+            parent: 0,
+        };
+        let (_header, pubkey_hex) = make_header(6, 0, [0u8; 32]);
+        let mut deps = setup(&pubkey_hex, 6, &cs);
+
+        let res = sudo(
+            deps.as_mut(),
+            mock_env(),
+            SudoMsg::VerifyNonMembership {
                 height: Height::from_block_height(6),
                 delay_time_period: 0,
                 delay_block_period: 0,
@@ -560,7 +786,6 @@ mod tests {
                 merkle_path: MerklePath {
                     key_path: vec![],
                 },
-                value: Binary::default(),
             },
         );
         assert!(matches!(res, Err(ContractError::MembershipProofsUnsupported)));

@@ -1,5 +1,6 @@
 use core::str;
 
+use sha2::{Digest as Sha2Digest, Sha256};
 use thiserror::Error;
 use tracing::{
     debug, debug_span,
@@ -109,11 +110,47 @@ const BLOCK_PROPOSAL_KEY_PREFIX: &str = "_proposal/";
 /// convention as the certificate and proposal prefixes.
 const BLOCK_TIMESTAMP_KEY_PREFIX: &str = "_ts/";
 
+/// Storage key prefix for the full bincode-serialized `BlockPayload`, keyed
+/// by block height. Persisted at execute_block time so that membership
+/// proofs can carry the exact payload bytes — the light client recomputes
+/// `sha256(payload_bytes)` and compares it to the consensus state's
+/// `payload_digest`, then extracts `state_root` from the parsed payload.
+/// Same "_" app_hash-exclusion convention.
+const BLOCK_PAYLOAD_KEY_PREFIX: &str = "_payload/";
+
+/// Storage item holding the latest committed state root — the Merkle root
+/// over all non-`'_'`-prefixed KV entries, recomputed at the end of every
+/// `finalize_block` (and at `init` for the genesis state). The next block's
+/// `BlockPayload.state_root` carries this value, giving the signed payload
+/// a commitment to the application state one block back (Tendermint
+/// app-hash semantics). "_" prefix excludes it from app_hash and from the
+/// state root computation itself.
+const STATE_ROOT: Item<[u8; 32]> = Item::new("_state_root");
+
 #[cw_serde]
 pub struct AppState {
     pub chain_id: String,
 
     pub params: BlockParams,
+}
+
+/// A Merkle membership proof for a single key in committed app state.
+/// Served by the `layer.lightclient.v1.Query/Proof` RPC; the relayer pairs
+/// it with `BlockPayload.state_root` from the block at `state_height + 1`
+/// to assemble the contract-side proof.
+#[derive(Debug, Clone)]
+pub struct StateProof {
+    /// Height whose post-state this proof covers. The proof verifies
+    /// against the consensus state at `state_height + 1`.
+    pub state_height: u64,
+    /// The proven storage key.
+    pub key: Vec<u8>,
+    /// The proven value at `key`.
+    pub value: Vec<u8>,
+    /// Index of the leaf in the sorted leaf list.
+    pub leaf_index: u64,
+    /// Sibling hashes bottom-up; `None` = promotion level (odd node count).
+    pub siblings: Vec<Option<[u8; 32]>>,
 }
 
 // First step to creation
@@ -204,6 +241,11 @@ impl<T: PersistentStorage + 'static> App<T> {
             chain_id: state.chain_id,
             params: state.params,
         });
+
+        // Genesis state root — the first block's payload carries this so
+        // membership proofs work from height 1 onward.
+        self.store_state_root()?;
+
         Ok(InitChainResponse {
             consensus_params: request.consensus_params,
             validators: request.validators,
@@ -475,6 +517,12 @@ impl<T: PersistentStorage + 'static> App<T> {
         // update block in cache
         self.data.as_mut().unwrap().block = block;
 
+        // Recompute the state root over the just-committed state. The NEXT
+        // block's payload carries this root (app-hash semantics), which is
+        // what binds IBC membership proofs to the signed certificate chain.
+        // Sidecar write — excluded from app_hash and from the root itself.
+        self.store_state_root()?;
+
         Ok(FinalizeBlockResponse {
             events,
             tx_results,
@@ -607,10 +655,231 @@ impl<T: PersistentStorage + 'static> App<T> {
         result
     }
 
+    /// Store the full bincode-serialized `BlockPayload` for a committed
+    /// block. Called from `execute_block` (node.rs) after `finalize_block`
+    /// succeeds — the payload is removed from `pending_payloads` there, so
+    /// this is the only durable copy.
+    ///
+    /// Membership proofs carry these bytes: the light client recomputes
+    /// `sha256(payload_bytes)` to match the consensus state's
+    /// `payload_digest`, then parses the payload to extract `state_root`.
+    pub fn set_block_payload(&mut self, height: u64, payload: Vec<u8>) -> PulsarResult<()> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let key = format!("{}{}", BLOCK_PAYLOAD_KEY_PREFIX, height);
+        let payload_item: Item<Vec<u8>> = Item::new(&key);
+        payload_item.save(&mut writer, &meter, &payload)?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
+    /// Retrieve the serialized `BlockPayload` for a block at the given
+    /// height, if stored.
+    pub fn get_block_payload(&self, height: u64) -> Option<Vec<u8>> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let key = format!("{}{}", BLOCK_PAYLOAD_KEY_PREFIX, height);
+        let payload_item: Item<Vec<u8>> = Item::new(&key);
+        let result = payload_item.may_load(&reader, &meter).ok().flatten();
+        reader.abort();
+        result
+    }
+
+    /// The latest committed state root (Merkle root over all non-`'_'` KV
+    /// entries), as stored by the most recent `finalize_block`/`init`.
+    /// `propose()` reads this to fill `BlockPayload.state_root`.
+    /// Returns `None` before the first block is committed.
+    pub fn state_root(&self) -> Option<[u8; 32]> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let result = STATE_ROOT.may_load(&reader, &meter).ok().flatten();
+        reader.abort();
+        result
+    }
+
+    /// Compute the Merkle root over all committed application state.
+    ///
+    /// Iterates every KV entry in the store, skipping `'_'`-prefixed sidecar
+    /// keys (certificates, proposals, timestamps, payloads, the state root
+    /// itself — the same exclusion `FastHasher` uses for app_hash), and
+    /// builds a domain-separated binary Merkle tree over the sorted entries:
+    ///
+    ///   leaf = sha256(0x00 || key || value)
+    ///   node = sha256(0x01 || left || right)   (odd nodes promote unchanged)
+    ///
+    /// The empty tree hashes to sha256 of the empty input. This MUST match
+    /// the verifier in `contracts/light-client/src/merkle.rs` byte-for-byte.
+    ///
+    /// Cost is O(state size) per call — fine at devnet scale; the upgrade
+    /// path is a versioned Merkle store (JMT/IAVL-style) when state grows.
+    pub fn compute_state_root(&self) -> PulsarResult<[u8; 32]> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let iter = reader
+            .range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+
+        let mut leaves: Vec<[u8; 32]> = Vec::new();
+        for entry in iter {
+            let (key, value) = entry?;
+            if key.first() == Some(&b'_') {
+                continue; // sidecar keys are not consensus state
+            }
+            let mut h = Sha256::new();
+            h.update([0x00u8]);
+            h.update(&key);
+            h.update(&value);
+            leaves.push(h.finalize().into());
+        }
+        reader.abort();
+
+        Ok(merkle_root(&leaves))
+    }
+
+    /// Recompute the state root over committed state and persist it to the
+    /// `_state_root` sidecar item. Called at the end of `finalize_block`
+    /// (post-commit) and at `init` (post-genesis).
+    fn store_state_root(&mut self) -> PulsarResult<()> {
+        let root = self.compute_state_root()?;
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        STATE_ROOT.save(&mut writer, &meter, &root)?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
+    /// Build a Merkle membership proof for `key` over the latest committed
+    /// state, all within one storage snapshot (the reported `state_height`
+    /// comes from `LAST_BLOCK` in the same reader, so it always matches the
+    /// proven state even if a block commits mid-request).
+    ///
+    /// Returns `None` if the key does not exist in committed state
+    /// (non-membership proofs are not supported — they need a versioned
+    /// tree; see BLS_LIGHT_CLIENT_SPEC §8).
+    ///
+    /// The proof verifies against `BlockPayload.state_root` of the block at
+    /// `state_height + 1` — the relayer fetches that payload via the
+    /// `Block` RPC and assembles the contract-side proof.
+    pub fn state_proof(&self, key: &[u8]) -> PulsarResult<Option<StateProof>> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+
+        // Height at snapshot time — read from the same reader as the leaves
+        // so the proof and the height can never disagree.
+        let state_height = LAST_BLOCK
+            .may_load(&reader, &meter)?
+            .map(|b| b.height)
+            .unwrap_or(0);
+
+        let iter = reader.range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+
+        let mut leaves: Vec<[u8; 32]> = Vec::new();
+        let mut found: Option<(usize, Vec<u8>)> = None;
+        for entry in iter {
+            let (k, v) = entry?;
+            if k.first() == Some(&b'_') {
+                continue; // sidecar keys are not consensus state
+            }
+            if k == key {
+                found = Some((leaves.len(), v.clone()));
+            }
+            let mut h = Sha256::new();
+            h.update([0x00u8]);
+            h.update(&k);
+            h.update(&v);
+            leaves.push(h.finalize().into());
+        }
+        reader.abort();
+
+        let (leaf_index, value) = match found {
+            Some(f) => f,
+            None => return Ok(None),
+        };
+
+        Ok(Some(StateProof {
+            state_height,
+            key: key.to_vec(),
+            value,
+            leaf_index: leaf_index as u64,
+            siblings: merkle_path(&leaves, leaf_index),
+        }))
+    }
+
     #[cfg(test)]
     pub fn copy_storage_to_memory(&self) -> layer_storage::MemoryStore {
         layer_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
     }
+}
+
+/// Compute the root of a domain-separated binary Merkle tree over sorted
+/// leaf hashes. Odd nodes promote unchanged; a single leaf is its own root;
+/// the empty tree hashes to sha256 of the empty input.
+///
+/// Shared by `compute_state_root` (full-state root) and the proof-serving
+/// path in grpc.rs (path extraction over the same leaf list). The contract
+/// verifier in `contracts/light-client/src/merkle.rs` mirrors this exactly.
+pub(crate) fn merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
+    if leaves.is_empty() {
+        return Sha256::digest([]).into();
+    }
+    let mut level: Vec<[u8; 32]> = leaves.to_vec();
+    while level.len() > 1 {
+        let mut next = Vec::with_capacity((level.len() + 1) / 2);
+        let mut i = 0;
+        while i < level.len() {
+            if i + 1 < level.len() {
+                let mut h = Sha256::new();
+                h.update([0x01u8]);
+                h.update(level[i]);
+                h.update(level[i + 1]);
+                next.push(h.finalize().into());
+                i += 2;
+            } else {
+                next.push(level[i]);
+                i += 1;
+            }
+        }
+        level = next;
+    }
+    level[0]
+}
+
+/// Build the sibling path for the leaf at `index` in the same tree
+/// `merkle_root` constructs. Returns one entry per level, bottom-up:
+/// `Some(sibling)` means hash `sha256(0x01 || cur || sibling)` (or the
+/// mirrored order when the index bit is odd); `None` means the node
+/// promotes unchanged to the next level (odd node count — no sibling).
+pub(crate) fn merkle_path(leaves: &[[u8; 32]], index: usize) -> Vec<Option<[u8; 32]>> {
+    let mut siblings = Vec::new();
+    let mut level: Vec<[u8; 32]> = leaves.to_vec();
+    let mut idx = index;
+    while level.len() > 1 {
+        let sibling = if idx % 2 == 0 { idx + 1 } else { idx - 1 };
+        if sibling < level.len() {
+            siblings.push(Some(level[sibling]));
+        } else {
+            // Odd node count — this node promotes unchanged (no sibling).
+            siblings.push(None);
+        }
+        // build next level
+        let mut next = Vec::with_capacity((level.len() + 1) / 2);
+        let mut i = 0;
+        while i < level.len() {
+            if i + 1 < level.len() {
+                let mut h = Sha256::new();
+                h.update([0x01u8]);
+                h.update(level[i]);
+                h.update(level[i + 1]);
+                next.push(h.finalize().into());
+                i += 2;
+            } else {
+                next.push(level[i]);
+                i += 1;
+            }
+        }
+        level = next;
+        idx /= 2;
+    }
+    siblings
 }
 
 #[cfg(test)]

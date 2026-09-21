@@ -12,12 +12,20 @@ service Query {
     option (google.api.http).get = "/layer/lightclient/v1/latest_height";
   }
 
-  // Block returns the light client header components for a finalized height:
-  // the commonware-codec encoded consensus Proposal (round, parent, payload),
-  // the raw aggregated BLS12-381 threshold certificate (48-byte compressed G1),
-  // and the block timestamp in nanoseconds.
+  // Block returns the components needed to construct an 08-wasm
+  // ClientMessage for a finalized block height: the consensus Proposal
+  // bytes, the BLS12-381 threshold certificate, and the block timestamp.
   rpc Block(QueryBlockRequest) returns (QueryBlockResponse) {
-    option (google.api.http).get = "/layer/lightclient/v1/block/{height}";
+    option (google.api.http).get = "/layer/lightclient/v1/blocks/{height}";
+  }
+
+  // Proof returns a Merkle membership proof for a storage key in the
+  // latest committed application state. The proof verifies against
+  // `state_root` carried by the payload of the block at
+  // `state_height + 1` — the relayer pairs this response with
+  // `Block(state_height + 1)` to assemble the contract-side proof.
+  rpc Proof(QueryProofRequest) returns (QueryProofResponse) {
+    option (google.api.http).get = "/layer/lightclient/v1/proof";
   }
 }
 
@@ -43,4 +51,25 @@ message QueryBlockResponse {
   bytes proposal_bytes = 3;
   // Raw aggregated BLS12-381 threshold signature (48-byte compressed G1).
   bytes certificate_bytes = 4;
+}
+
+message QueryProofRequest {
+  // Raw storage key to prove (e.g. an IBC packet-commitment key).
+  bytes key = 1;
+}
+
+message QueryProofResponse {
+  // Height whose post-state this proof covers. The proof verifies against
+  // the consensus state at state_height + 1 (the next block's payload
+  // carries this state root — Tendermint app-hash semantics).
+  uint64 state_height = 1;
+  // The proven storage key (echo of the request).
+  bytes key = 2;
+  // The proven value at `key`.
+  bytes value = 3;
+  // Index of the leaf in the sorted leaf list.
+  uint64 leaf_index = 4;
+  // Sibling hashes bottom-up; an empty entry marks a promotion level
+  // (odd node count — the node moves up unchanged, no hash is applied).
+  repeated bytes siblings = 5;
 }

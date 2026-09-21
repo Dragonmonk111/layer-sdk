@@ -1,5 +1,6 @@
 mod contract;
 mod error;
+mod merkle;
 mod msg;
 mod state;
 mod verify;

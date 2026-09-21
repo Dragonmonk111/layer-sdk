@@ -203,6 +203,7 @@ mod tests {
             proposer: vec![1u8; 32],
             txs: vec![],
             parent_digest: [0u8; 32],
+            state_root: [0u8; 32],
         }
     }
 

@@ -41,7 +41,7 @@ use layer_proto::layer::sync::v1::{
 };
 use layer_proto::layer::lightclient::v1::{
     query_server::Query as LightClientQuery, QueryBlockRequest, QueryBlockResponse,
-    QueryLatestHeightRequest, QueryLatestHeightResponse,
+    QueryLatestHeightRequest, QueryLatestHeightResponse, QueryProofRequest, QueryProofResponse,
 };
 
 use crate::mempool::Mempool;
@@ -300,6 +300,47 @@ impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrp
             timestamp_nanos,
             proposal_bytes,
             certificate_bytes,
+        }))
+    }
+
+    /// Merkle membership proof for a storage key over the latest committed
+    /// state. The proof verifies against `state_root` in the payload of the
+    /// block at `state_height + 1` — the relayer fetches that payload via
+    /// `Block` and assembles the contract-side proof.
+    ///
+    /// `not_found` means the key does not exist in committed state
+    /// (non-membership proofs are not supported — they need a versioned
+    /// tree; see BLS_LIGHT_CLIENT_SPEC §8).
+    async fn proof(
+        &self,
+        request: Request<QueryProofRequest>,
+    ) -> Result<Response<QueryProofResponse>, Status> {
+        let key = request.into_inner().key;
+        if key.is_empty() {
+            return Err(Status::invalid_argument("key must not be empty"));
+        }
+
+        let proof = {
+            let app = self.app.read().await;
+            app.state_proof(&key)
+                .map_err(|e| Status::internal(format!("state proof failed: {e}")))?
+        };
+
+        let proof = proof.ok_or_else(|| {
+            Status::not_found("key does not exist in committed state — non-membership proofs are not supported")
+        })?;
+
+        Ok(Response::new(QueryProofResponse {
+            state_height: proof.state_height,
+            key: proof.key,
+            value: proof.value,
+            leaf_index: proof.leaf_index,
+            // Option<[u8;32]> → bytes; None (promotion level) → empty bytes.
+            siblings: proof
+                .siblings
+                .iter()
+                .map(|s| s.map(|h| h.to_vec()).unwrap_or_default())
+                .collect(),
         }))
     }
 }

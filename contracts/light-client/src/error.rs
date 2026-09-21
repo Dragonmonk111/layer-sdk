@@ -41,6 +41,9 @@ pub enum ContractError {
     #[error("membership/non-membership proofs are not yet supported: the batch commitment layout (spec §8, §11.1) is not yet pinned down")]
     MembershipProofsUnsupported,
 
+    #[error("membership proof verification failed")]
+    InvalidMembershipProof,
+
     #[error("operation is not supported by this client (v1)")]
     Unsupported,
 }
