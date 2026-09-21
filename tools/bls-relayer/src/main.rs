@@ -30,7 +30,11 @@ use cosmrs::{
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tonic::{codec::ProstCodec, transport::Channel, Request};
+use tonic::{
+    codec::ProstCodec,
+    transport::{Channel, ClientTlsConfig},
+    Request,
+};
 
 use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
@@ -299,7 +303,9 @@ fn print_usage() {
     eprintln!("  create-client   Create the 08-wasm client on the counterparty chain");
     eprintln!("  update-client   Submit a new finalized header to the client");
     eprintln!("  store-code      Gov-propose the contract wasm on the counterparty");
-    eprintln!("  assemble-proof  Build a MembershipProof JSON for a storage key");
+    eprintln!("  assemble-proof  Build a MembershipProof JSON for a storage key
+  keygen          Generate a secp256k1 key + print the juno address
+  account         Query account_number/sequence on the counterparty");
     eprintln!();
     eprintln!("Common flags:");
     eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
@@ -386,12 +392,22 @@ fn parse_args() -> Result<Args, String> {
 // ---------------------------------------------------------------------------
 
 async fn connect(addr: &str) -> Result<Channel, Box<dyn std::error::Error>> {
-    let url = if addr.starts_with("http") {
-        addr.to_string()
+    // Scheme handling: "https://" (or bare host ending in :443) → TLS with
+    // native roots; "http://" or bare host:port → plaintext (local node).
+    let (url, tls) = if addr.starts_with("https://") {
+        (addr.to_string(), true)
+    } else if addr.starts_with("http://") {
+        (addr.to_string(), false)
+    } else if addr.ends_with(":443") {
+        (format!("https://{addr}"), true)
     } else {
-        format!("http://{addr}")
+        (format!("http://{addr}"), false)
     };
-    Ok(Channel::from_shared(url)?.connect().await?)
+    let mut endpoint = Channel::from_shared(url)?;
+    if tls {
+        endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
+    }
+    Ok(endpoint.connect().await?)
 }
 
 async fn layer_client(
@@ -730,6 +746,37 @@ async fn cmd_assemble_proof(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+/// Generate a fresh secp256k1 key and print the hex + bech32 address.
+/// Fund the printed address via the uni-7 faucet, then pass the hex to the
+/// other subcommands via --key-hex or RELAYER_KEY_HEX.
+fn cmd_keygen(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    use cosmrs::crypto::secp256k1::SigningKey;
+    // 32 bytes of OS entropy → secp256k1 signing key.
+    let mut secret = [0u8; 32];
+    getrandom::getrandom(&mut secret)?;
+    let key = SigningKey::from_slice(&secret)?;
+    let addr = key.public_key().account_id(&a.bech32_prefix)?;
+    println!("key_hex: {}", hex::encode(secret));
+    println!("address: {addr}");
+    println!("fund via the uni-7 faucet, then: export RELAYER_KEY_HEX=<key_hex>");
+    Ok(())
+}
+
+/// Query the counterparty account (account_number + sequence) — also serves
+/// as a connectivity check against the uni-7 gRPC endpoint.
+async fn cmd_account(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let key = signer_key(a)?;
+    let addr = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    match query_account(&a.grpc, &addr).await {
+        Ok(info) => println!(
+            "{addr}: account_number={} sequence={}",
+            info.account_number, info.sequence
+        ),
+        Err(e) => println!("{addr}: query failed — {e}"),
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 
 #[tokio::main]
@@ -748,6 +795,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "update-client" => cmd_update_client(&a).await,
         "store-code" => cmd_store_code(&a).await,
         "assemble-proof" => cmd_assemble_proof(&a).await,
+        "keygen" => cmd_keygen(&a),
+        "account" => cmd_account(&a).await,
         other => {
             eprintln!("unknown subcommand: {other}\n");
             print_usage();
