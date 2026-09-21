@@ -4,7 +4,7 @@ mod msg;
 mod state;
 mod verify;
 
-pub use contract::{execute, instantiate, query};
+pub use contract::{instantiate, query, sudo};
 pub use error::ContractError;
 
 #[cfg(feature = "library")]

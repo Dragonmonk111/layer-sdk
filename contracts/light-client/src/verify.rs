@@ -159,7 +159,7 @@ pub fn verify_certificate(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     use commonware_codec::Encode;
@@ -188,7 +188,7 @@ mod tests {
     /// recovers a real threshold signature — the exact same code path
     /// `slay3rd` uses — then verifies it with our pure-Rust contract-side
     /// verifier. This is the cross-implementation check that de-risks §6.
-    fn build_certified_proposal(
+    pub(crate) fn build_certified_proposal(
         seed: u64,
         height_epoch: u64,
         height_view: u64,

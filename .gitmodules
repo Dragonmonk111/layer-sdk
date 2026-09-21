@@ -1,3 +1,3 @@
 [submodule "lib/cosmwasm"]
 	path = lib/cosmwasm
-	url = git@github.com:CosmWasm/cosmwasm.git
+	url = git@github.com:Dragonmonk111/cosmwasm.git

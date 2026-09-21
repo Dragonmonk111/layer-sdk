@@ -1,11 +1,45 @@
 use cosmwasm_schema::cw_serde;
 use cw_storage_plus::{Item, Map};
 
+/// IBC height — matches `ibc-go`'s `clienttypes.Height` wire format
+/// (proto-generated Go json tags are snake_case, marshaled with
+/// `encoding/json` by the 08-wasm module).
+///
+/// JunoClaw v1 maps block height `h` to `revision_number: 0,
+/// revision_height: h`.
+#[cw_serde]
+#[derive(Copy)]
+pub struct Height {
+    pub revision_number: u64,
+    pub revision_height: u64,
+}
+
+impl Height {
+    pub const fn new(revision_number: u64, revision_height: u64) -> Self {
+        Self {
+            revision_number,
+            revision_height,
+        }
+    }
+
+    pub const fn from_block_height(height: u64) -> Self {
+        Self {
+            revision_number: 0,
+            revision_height: height,
+        }
+    }
+}
+
 /// Client state for the JunoClaw BLS threshold light client.
 ///
 /// The validator set is static (Phase A DKG) so the group public key never
 /// changes — there is no validator-set-update path in v1. See
 /// `docs/BLS_LIGHT_CLIENT_SPEC.md` §4.
+///
+/// Wire format: this struct is JSON-encoded into the `client_state` bytes
+/// of the 08-wasm `InstantiateMessage` and into the `Data` field of the
+/// Go-side `WasmClientState` proto (whose `LatestHeight` must be kept in
+/// sync by the relayer when constructing `MsgCreateClient`).
 #[cw_serde]
 pub struct ClientState {
     /// Chain identifier, e.g. "junoclaw-1".
@@ -14,9 +48,9 @@ pub struct ClientState {
     /// compressed, hex-encoded.
     pub group_public_key_hex: String,
     /// Latest verified height.
-    pub latest_height: u64,
+    pub latest_height: Height,
     /// Frozen on detected misbehaviour (§7). None while active.
-    pub frozen_height: Option<u64>,
+    pub frozen_height: Option<Height>,
 }
 
 /// Per-height consensus state derived from a verified header.
@@ -24,7 +58,8 @@ pub struct ClientState {
 pub struct ConsensusState {
     /// sha256 payload digest from the finalized proposal, hex-encoded.
     pub payload_digest_hex: String,
-    /// Block timestamp carried alongside the header (unsigned — see spec §11.3).
+    /// Block timestamp in **nanoseconds** (IBC convention) — carried
+    /// alongside the header by the relayer (unsigned — see spec §11.3).
     pub timestamp: u64,
     /// Consensus epoch the block was finalized in.
     pub epoch: u64,
@@ -35,4 +70,5 @@ pub struct ConsensusState {
 }
 
 pub const CLIENT_STATE: Item<ClientState> = Item::new("client_state");
-pub const CONSENSUS_STATES: Map<u64, ConsensusState> = Map::new("consensus_states");
+/// Keyed by (revision_number, revision_height).
+pub const CONSENSUS_STATES: Map<(u64, u64), ConsensusState> = Map::new("consensus_states");

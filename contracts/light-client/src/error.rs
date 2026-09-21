@@ -37,4 +37,10 @@ pub enum ContractError {
 
     #[error("no equivocation found between the two supplied headers")]
     NoEquivocation,
+
+    #[error("membership/non-membership proofs are not yet supported: the batch commitment layout (spec §8, §11.1) is not yet pinned down")]
+    MembershipProofsUnsupported,
+
+    #[error("operation is not supported by this client (v1)")]
+    Unsupported,
 }

@@ -95,49 +95,61 @@ trusting-period drift) is designed out entirely.
 pub struct ClientState {
     /// Chain identifier, e.g. "junoclaw-1".
     pub chain_id: String,
-    /// BLS12-381 G2 group public key from the Phase A ceremony (96 bytes).
-    pub group_public_key: Vec<u8>,
-    /// Total shares n and quorum threshold (N3f1: n = 3f+1, quorum = 2f+1).
-    pub share_count: u32,
-    pub quorum: u32,
-    /// Latest verified height.
-    pub latest_height: u64,
+    /// BLS12-381 G2 group public key from the Phase A ceremony (96 bytes, hex).
+    pub group_public_key_hex: String,
+    /// Latest verified height (IBC Height: revision 0, block height).
+    pub latest_height: Height,
     /// Frozen on detected misbehaviour.
-    pub frozen_height: Option<u64>,
+    pub frozen_height: Option<Height>,
 }
 ```
 
+`Height` is the IBC wire type `{ revision_number: u64, revision_height: u64 }`
+— JunoClaw maps block height `h` to `(0, h)`. The Go-side
+`WasmClientState.LatestHeight` must be kept in sync by the relayer when
+constructing `MsgCreateClient`.
+
 ```rust
 pub struct ConsensusState {
-    /// sha256 payload digest from the finalized proposal.
-    pub payload_digest: [u8; 32],
-    /// Block timestamp (from the batch, for packet timeouts).
+    /// sha256 payload digest from the finalized proposal (hex).
+    pub payload_digest_hex: String,
+    /// Block timestamp in nanoseconds (IBC convention) — carried by the relayer.
     pub timestamp: u64,
-    /// Consensus round the block was finalized in.
+    /// Consensus epoch / view the block was finalized in.
     pub epoch: u64,
     pub view: u64,
+    /// Parent view.
+    pub parent: u64,
 }
 ```
 
 ## 5. Header (what the relayer submits)
 
+The header is JSON-encoded inside the 08-wasm `client_message` bytes
+(base64 `[]byte` on the Go side):
+
 ```rust
 pub struct Header {
-    /// Block height on JunoClaw.
-    pub height: u64,
-    /// commonware-codec encoded Proposal { round, parent, payload } —
-    /// exactly App::get_block_proposal(height).
-    pub proposal_bytes: Vec<u8>,
-    /// Raw 48-byte compressed G1 threshold signature —
-    /// exactly App::get_block_certificate(height).
-    pub certificate_bytes: Vec<u8>,
-    /// Block timestamp carried alongside (from StoredBlock).
+    /// IBC height — { revision_number: 0, revision_height: block height }.
+    pub height: Height,
+    /// Block timestamp in nanoseconds (IBC convention).
     pub timestamp: u64,
+    /// commonware-codec encoded Proposal { round, parent, payload } —
+    /// exactly App::get_block_proposal(height). Base64.
+    pub proposal_bytes: Binary,
+    /// Raw 48-byte compressed G1 threshold signature —
+    /// exactly App::get_block_certificate(height). Base64.
+    pub certificate_bytes: Binary,
 }
 ```
 
 Both `proposal_bytes` and `certificate_bytes` are passed through verbatim —
-the relayer does not re-encode or transform either field.
+the relayer does not re-encode or transform either field. Field names and
+encodings match `ibc-go`'s `contract_api.go` payloads, which are marshaled
+with `encoding/json` (`[]byte` → base64, proto structs → snake_case tags).
+
+A misbehaviour report is `{ "header_a": Header, "header_b": Header }`
+(same round or same height, conflicting payloads — see §7).
 
 ## 6. Verification Algorithm
 
@@ -208,21 +220,51 @@ first proof consumer (ICS-20-style transfer or message-passing) is built.
 
 ## 9. 08-wasm Integration
 
-The contract implements the standard 08-wasm light client entrypoints so
-`ibc-go`'s wasm module can drive it:
+The contract implements the exact `ibc-go` `08-wasm` contract ABI (verified
+against `modules/light-clients/08-wasm/types/contract_api.go` on ibc-go
+main — API-identical to v8.3+/v9/v10/v11 for these payloads). Field names
+match the Go `encoding/json` marshaling of the payload structs:
 
-| Entrypoint | Behaviour |
-|---|---|
-| `Initialize` | Store `ClientState` (group pubkey, chain-id, quorum params). |
-| `VerifyClientMessage` | Run §6 on a submitted `Header`. |
-| `CheckForMisbehaviour` | Run §7. |
-| `UpdateState` | Store new `ConsensusState` at `header.height`; bump `latest_height`. |
-| `VerifyMembership` / `VerifyNonMembership` | Run §8. |
-| `Status` | `Active` unless frozen or expired. |
-| `ExportMetadata` / `TimestampAtHeight` | Standard. |
+**`instantiate`** — payload `InstantiateMessage`:
+`{ "client_state": <b64 JSON §4 ClientState>,
+   "consensus_state": <b64 JSON §4 ConsensusState>,
+   "checksum": <b64> }`. Validates the group public key (96 bytes) eagerly,
+stores the initial consensus state at `latest_height`.
 
-On Juno, the contract is uploaded once and instantiated per counterparty
-connection. The same wasm blob can serve any chain running 08-wasm.
+**`sudo`** — `SudoMsg` variants:
+
+| Variant | Behaviour | Status |
+|---|---|---|
+| `update_state` | §6 + monotonicity + equivocation guard; stores consensus state, bumps `latest_height`, returns `{ "heights": [Height] }`. Idempotent on the same header; rejects a conflicting header at a stored height (route it to misbehaviour instead). | ✅ |
+| `update_state_on_misbehaviour` | §7 — two valid certs that equivocate → sets `frozen_height` = min height, returns `{}`. | ✅ |
+| `verify_membership` / `verify_non_membership` | §8 — returns an explicit error; the batch commitment layout (§11.1) is not pinned down yet. | ⏳ |
+| `verify_upgrade_and_update_state` | Not supported in v1 (returns error). | ❌ |
+| `migrate_client_store` | No-op `{}` (v1 layouts are stable). | ✅ |
+
+**`query`** — `QueryMsg` variants:
+
+| Variant | Response | Status |
+|---|---|---|
+| `status` | `{ "status": "Active" \| "Frozen" }` | ✅ |
+| `timestamp_at_height` | `{ "timestamp": <nanos> }` from the stored consensus state | ✅ |
+| `verify_client_message` | Dry-runs §6 (header) or §7 (misbehaviour) without mutating state; errors on invalid input | ✅ |
+| `check_for_misbehaviour` | `{ "found_misbehaviour": bool }` — parses as a misbehaviour report, verifies, never errors | ✅ |
+
+**Toolchain note:** the contract builds for `wasm32-unknown-unknown` via
+`cargo build -p junoclaw-light-client --release --target
+wasm32-unknown-unknown`. This required a one-line fix in the vendored
+cosmwasm fork (`lib/cosmwasm/packages/std/src/imports.rs`): modern rust-lld
+no longer maps bare `extern "C"` blocks to implicit `env`-module imports,
+which broke **every** contract build (`undefined symbol: db_read`, …). The
+extern block now carries `#[cfg_attr(target_arch = "wasm32",
+link(wasm_import_module = "env"))]`, matching the VM's
+`register_namespace("env", …)` and the fix other ecosystems adopted for
+the same toolchain change (e.g. near/near-sdk-rs#1550).
+
+On any chain running 08-wasm, the contract is instantiated per client via
+`MsgCreateClient`; the relayer constructs the outer `WasmClientState` proto
+with `Data` = the §4 client-state JSON and `LatestHeight` in sync. The same
+wasm blob serves all counterparties.
 
 ## 10. Beyond IBC — Avalanche, Solana, EVM
 
