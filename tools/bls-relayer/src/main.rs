@@ -43,7 +43,8 @@ use layer_proto::cosmos::tx::v1beta1::{
 };
 use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
 use layer_proto::layer::lightclient::v1::{
-    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest, QueryProofRequest,
+    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest, QueryLatestHeightRequest,
+    QueryProofRequest,
 };
 
 // ---------------------------------------------------------------------------
@@ -518,9 +519,25 @@ fn proto_any_of<M: prost::Message>(type_url: &str, msg: &M) -> prost_types::Any 
 // Subcommands
 // ---------------------------------------------------------------------------
 
+/// Resolve the target height: explicit --height N wins; 0 or omitted queries
+/// LatestHeight so the common case is "just give me the tip".
+async fn resolve_height(
+    client: &mut LightClientQueryClient<Channel>,
+    requested: Option<u64>,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    match requested {
+        Some(h) if h > 0 => Ok(h),
+        _ => Ok(client
+            .latest_height(QueryLatestHeightRequest {})
+            .await?
+            .into_inner()
+            .height),
+    }
+}
+
 async fn cmd_fetch(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let height = a.height.ok_or("fetch requires --height")?;
     let mut client = layer_client(&a.layer_grpc).await?;
+    let height = resolve_height(&mut client, a.height).await?;
     let resp = client
         .block(QueryBlockRequest { height })
         .await?
@@ -538,7 +555,6 @@ async fn cmd_fetch(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let height = a.height.ok_or("create-client requires --height")?;
     let wasm_path = a.wasm.as_ref().ok_or("create-client requires --wasm")?;
     let group_pk = a
         .group_pubkey_hex
@@ -547,6 +563,7 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Fetch the anchor block from the JunoClaw node.
     let mut client = layer_client(&a.layer_grpc).await?;
+    let height = resolve_height(&mut client, a.height).await?;
     let block = client
         .block(QueryBlockRequest { height })
         .await?
@@ -603,7 +620,6 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn cmd_update_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let height = a.height.ok_or("update-client requires --height")?;
     let client_id = a
         .client_id
         .as_ref()
@@ -611,6 +627,7 @@ async fn cmd_update_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Fetch the finalized header components.
     let mut client = layer_client(&a.layer_grpc).await?;
+    let height = resolve_height(&mut client, a.height).await?;
     let block = client
         .block(QueryBlockRequest { height })
         .await?

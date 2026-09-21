@@ -35,6 +35,8 @@ COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
 COPY dummy.rs /myapp/contracts/echo/src/lib.rs
 COPY contracts/root/Cargo.toml /myapp/contracts/root/Cargo.toml
 COPY dummy.rs /myapp/contracts/root/src/lib.rs
+COPY contracts/light-client/Cargo.toml /myapp/contracts/light-client/Cargo.toml
+COPY dummy.rs /myapp/contracts/light-client/src/lib.rs
 COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
 COPY dummy.rs /myapp/packages/app/src/lib.rs
 COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
@@ -48,6 +50,8 @@ COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml
 COPY dummy.rs /myapp/packages/storage/src/lib.rs
 COPY tools/tx-sender/Cargo.toml /myapp/tools/tx-sender/Cargo.toml
 COPY dummy.rs /myapp/tools/tx-sender/src/main.rs
+COPY tools/bls-relayer/Cargo.toml /myapp/tools/bls-relayer/Cargo.toml
+COPY dummy.rs /myapp/tools/bls-relayer/src/main.rs
 RUN cargo build --release --bin slay3rd
 
 # clean up these fake local deps so we compile for real later
