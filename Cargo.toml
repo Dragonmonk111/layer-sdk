@@ -137,3 +137,19 @@ incremental = false
 # rpath = false
 # lto = true
 # panic = 'abort'
+
+# Size-optimized profile for the 08-wasm light-client contract. The ibcwasm
+# store charges WritePerByte gas (~150/byte), so a 760KB blob needs ~114M gas —
+# over the per-tx cap on osmo-test-5. Aggressive size opts keep it under.
+# Build: cargo +1.86.0 build --profile wasm --lib --target wasm32-unknown-unknown -p junoclaw-light-client
+[profile.wasm]
+inherits       = "release"
+opt-level      = "z"
+lto            = "fat"
+codegen-units  = 1
+panic          = "abort"
+strip          = true
+debug          = false
+debug-assertions = false
+overflow-checks  = false
+incremental    = false

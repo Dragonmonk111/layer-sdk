@@ -147,3 +147,15 @@ pub struct TimestampAtHeightResponse {
 pub struct CheckForMisbehaviourResponse {
     pub found_misbehaviour: bool,
 }
+
+/// `EmptyResult` — the default return type of any contract call/query that
+/// does not require a custom return type (`verify_client_message`,
+/// `update_state_on_misbehaviour`, `verify_membership`,
+/// `verify_non_membership`, `migrate_client_store`).
+///
+/// ibc-go unmarshals the response bytes into `EmptyResult{}` via
+/// `encoding/json`, so the contract must return the serialized empty object
+/// `{}` — **not** empty bytes (which fail with "unexpected end of JSON
+/// input"). See `contract_api.go`: `ContractResult = EmptyResult | …`.
+#[cw_serde]
+pub struct EmptyResult {}

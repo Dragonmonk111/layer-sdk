@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Cosmos tx construction and signing (same pattern as tx-sender)
-cosmrs = { workspace = true }
+cosmrs = { workspace = true, features = ["bip32"] }
 
 # Proto types using prost 0.13 — layer.lightclient.v1 client stubs plus
 # cosmos.auth / cosmos.tx / cosmwasm.wasm for the counterparty side.
@@ -30,6 +30,7 @@ hex = { workspace = true }
 bytes = { workspace = true }
 base64 = "0.22"
 getrandom = "0.2"
+bip39 = "2"
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }

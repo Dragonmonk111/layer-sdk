@@ -4,6 +4,7 @@ mod merkle;
 mod msg;
 mod state;
 mod verify;
+mod wasmstore;
 
 pub use contract::{instantiate, query, sudo};
 pub use error::ContractError;

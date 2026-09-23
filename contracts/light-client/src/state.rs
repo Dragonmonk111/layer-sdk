@@ -1,5 +1,4 @@
 use cosmwasm_schema::cw_serde;
-use cw_storage_plus::{Item, Map};
 
 /// IBC height — matches `ibc-go`'s `clienttypes.Height` wire format
 /// (proto-generated Go json tags are snake_case, marshaled with
@@ -68,7 +67,3 @@ pub struct ConsensusState {
     /// Parent view.
     pub parent: u64,
 }
-
-pub const CLIENT_STATE: Item<ClientState> = Item::new("client_state");
-/// Keyed by (revision_number, revision_height).
-pub const CONSENSUS_STATES: Map<(u64, u64), ConsensusState> = Map::new("consensus_states");

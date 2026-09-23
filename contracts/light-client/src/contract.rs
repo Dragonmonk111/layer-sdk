@@ -10,13 +10,15 @@ use cosmwasm_std::{from_json, to_json_binary, Binary, Deps, DepsMut, Env, Messag
 use sha2::{Digest, Sha256};
 
 use crate::error::ContractError;
-use crate::merkle::{self, BlockPayloadMirror};
+use crate::merkle;
 use crate::msg::{
-    CheckForMisbehaviourResponse, Header, InstantiateMsg, MembershipProof, Misbehaviour, QueryMsg,
-    StatusResponse, SudoMsg, TimestampAtHeightResponse, UpdateStateResponse,
+    CheckForMisbehaviourResponse, EmptyResult, Header, InstantiateMsg, MembershipProof,
+    Misbehaviour, QueryMsg, StatusResponse, SudoMsg, TimestampAtHeightResponse,
+    UpdateStateResponse,
 };
-use crate::state::{ClientState, ConsensusState, Height, CLIENT_STATE, CONSENSUS_STATES};
+use crate::state::{ClientState, ConsensusState, Height};
 use crate::verify::{verify_certificate, DecodedProposal};
+use crate::wasmstore;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -36,19 +38,21 @@ pub fn instantiate(
         return Err(ContractError::InvalidPublicKeyLength(pk_bytes.len()));
     }
 
-    CONSENSUS_STATES.save(
+    // Store under the 08-wasm host keys so the module's post-execution check
+    // finds a valid `clientState` (Any-wrapped wasm ClientState proto) and the
+    // consensus state at `consensusStates/{rev}-{height}`. The contract's JSON
+    // state is carried inside each wrapper's `data` field.
+    wasmstore::save_consensus_state(
         deps.storage,
-        (
-            client_state.latest_height.revision_number,
-            client_state.latest_height.revision_height,
-        ),
+        &client_state.latest_height,
         &consensus_state,
     )?;
-    CLIENT_STATE.save(deps.storage, &client_state)?;
+    wasmstore::save_client_state(deps.storage, &client_state, &msg.checksum)?;
 
-    Ok(Response::new()
-        .add_attribute("action", "instantiate")
-        .add_attribute("chain_id", &client_state.chain_id))
+    // NOTE: the 08-wasm VM forbids contract responses carrying attributes/events
+    // ("returning attributes from a contract is not allowed"). Return a bare
+    // Response — no .add_attribute / .add_event anywhere in this contract.
+    Ok(Response::new())
 }
 
 /// Runs §6 verification for a header against the current client state.
@@ -85,14 +89,7 @@ fn check_update_header(
         // replay by a relayer); reject anything strictly older or a
         // conflicting header at the same height.
         if header.height.revision_height == client_state.latest_height.revision_height {
-            let existing = CONSENSUS_STATES
-                .may_load(
-                    deps.storage,
-                    (
-                        header.height.revision_number,
-                        header.height.revision_height,
-                    ),
-                )?
+            let existing = wasmstore::may_load_consensus_state(deps.storage, &header.height)?
                 .ok_or(ContractError::ConsensusStateNotFound(
                     header.height.revision_height,
                 ))?;
@@ -109,10 +106,7 @@ fn check_update_header(
     // Equivocation guard: a conflicting but otherwise valid header at a
     // height we already store is misbehaviour, not an update — the caller
     // must submit it via update_state_on_misbehaviour instead.
-    if let Some(existing) = CONSENSUS_STATES.may_load(
-        deps.storage,
-        (header.height.revision_number, header.height.revision_height),
-    )? {
+    if let Some(existing) = wasmstore::may_load_consensus_state(deps.storage, &header.height)? {
         if existing.payload_digest_hex != hex::encode(decoded.payload) {
             return Err(ContractError::VerificationFailed);
         }
@@ -145,7 +139,7 @@ fn check_misbehaviour(
 pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
         SudoMsg::UpdateState { client_message } => {
-            let mut client_state = CLIENT_STATE.load(deps.storage)?;
+            let (mut client_state, checksum) = wasmstore::load_client_state(deps.storage)?;
             let header: Header = from_json(client_message.as_slice())?;
             let decoded = check_update_header(deps.as_ref(), &client_state, &header)?;
 
@@ -156,13 +150,9 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
                 view: decoded.view,
                 parent: decoded.parent,
             };
-            CONSENSUS_STATES.save(
-                deps.storage,
-                (header.height.revision_number, header.height.revision_height),
-                &consensus_state,
-            )?;
+            wasmstore::save_consensus_state(deps.storage, &header.height, &consensus_state)?;
             client_state.latest_height = header.height;
-            CLIENT_STATE.save(deps.storage, &client_state)?;
+            wasmstore::save_client_state(deps.storage, &client_state, &checksum)?;
 
             let result = UpdateStateResponse {
                 heights: vec![header.height],
@@ -170,7 +160,7 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
             Ok(Response::new().set_data(to_json_binary(&result)?))
         }
         SudoMsg::UpdateStateOnMisbehaviour { client_message } => {
-            let mut client_state = CLIENT_STATE.load(deps.storage)?;
+            let (mut client_state, checksum) = wasmstore::load_client_state(deps.storage)?;
             let misbehaviour: Misbehaviour = from_json(client_message.as_slice())?;
             check_misbehaviour(&client_state, &misbehaviour)?;
 
@@ -180,10 +170,11 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
                 .revision_height
                 .min(misbehaviour.header_b.height.revision_height);
             client_state.frozen_height = Some(Height::new(0, freeze_height));
-            CLIENT_STATE.save(deps.storage, &client_state)?;
+            wasmstore::save_client_state(deps.storage, &client_state, &checksum)?;
 
-            // EmptyResult
-            Ok(Response::new())
+            // EmptyResult — ibc-go unmarshals Response.data into EmptyResult{},
+            // which requires the serialized empty object `{}` (not empty bytes).
+            Ok(Response::new().set_data(to_json_binary(&EmptyResult {})?))
         }
         SudoMsg::VerifyMembership {
             height,
@@ -197,11 +188,7 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
             //    digest. The proof verifies against the state committed by
             //    THIS height's payload (post-state of height-1 — app-hash
             //    semantics), so relayers pass proof_height = state_height+1.
-            let consensus = CONSENSUS_STATES
-                .may_load(
-                    deps.storage,
-                    (height.revision_number, height.revision_height),
-                )?
+            let consensus = wasmstore::may_load_consensus_state(deps.storage, &height)?
                 .ok_or(ContractError::ConsensusStateNotFound(
                     height.revision_height,
                 ))?;
@@ -218,10 +205,15 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
 
             // 4. Extract state_root from the signed payload — the root is
             //    only trustworthy because it came from inside the bytes the
-            //    threshold certificate covers.
-            let payload: BlockPayloadMirror =
-                bincode::deserialize(proof.payload_bytes.as_slice())
-                    .map_err(|_| ContractError::InvalidMembershipProof)?;
+            //    threshold certificate covers. `state_root` is the last field
+            //    of `BlockPayload` and bincode serializes fields in order, so
+            //    it is simply the trailing 32 bytes — no full decode needed.
+            let pb = proof.payload_bytes.as_slice();
+            if pb.len() < 32 {
+                return Err(ContractError::InvalidMembershipProof);
+            }
+            let mut state_root = [0u8; 32];
+            state_root.copy_from_slice(&pb[pb.len() - 32..]);
 
             // 5. Leaf key = concatenated key_path elements (the chain stores
             //    IBC commitments under keys equal to their ICS-24 path).
@@ -244,12 +236,12 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
                 });
             }
             let root = merkle::compute_root(leaf, proof.leaf_index, &siblings);
-            if root != payload.state_root {
+            if root != state_root {
                 return Err(ContractError::InvalidMembershipProof);
             }
 
             // EmptyResult — ibc-go treats success as membership proven.
-            Ok(Response::new())
+            Ok(Response::new().set_data(to_json_binary(&EmptyResult {})?))
         }
         SudoMsg::VerifyNonMembership {
             height: _,
@@ -262,7 +254,7 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
         SudoMsg::MigrateClientStore {} => {
             // No store migration needed for this client (v1 layouts are
             // stable); acknowledge with EmptyResult.
-            Ok(Response::new())
+            Ok(Response::new().set_data(to_json_binary(&EmptyResult {})?))
         }
     }
 }
@@ -271,7 +263,7 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
     match msg {
         QueryMsg::Status {} => {
-            let client_state = CLIENT_STATE.load(deps.storage)?;
+            let (client_state, _) = wasmstore::load_client_state(deps.storage)?;
             let status = if client_state.frozen_height.is_some() {
                 "Frozen"
             } else {
@@ -282,15 +274,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
             })
         }
         QueryMsg::TimestampAtHeight { height } => {
-            let consensus_state = CONSENSUS_STATES
-                .load(deps.storage, (height.revision_number, height.revision_height))
-                .map_err(|_| StdError::not_found("ConsensusState"))?;
+            let consensus_state = wasmstore::may_load_consensus_state(deps.storage, &height)?
+                .ok_or_else(|| StdError::not_found("ConsensusState"))?;
             to_json_binary(&TimestampAtHeightResponse {
                 timestamp: consensus_state.timestamp,
             })
         }
         QueryMsg::VerifyClientMessage { client_message } => {
-            let client_state = CLIENT_STATE.load(deps.storage)?;
+            let (client_state, _) = wasmstore::load_client_state(deps.storage)?;
             // Either a header (§6) or a misbehaviour report (§7) is valid.
             let result: Result<(), ContractError> = if let Ok(header) =
                 from_json::<Header>(client_message.as_slice())
@@ -304,12 +295,13 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
                 Err(ContractError::InvalidProposal)
             };
             match result {
-                Ok(()) => Ok(Binary::default()),
+                // EmptyResult — must serialize to `{}`, not empty bytes.
+                Ok(()) => to_json_binary(&EmptyResult {}),
                 Err(e) => Err(StdError::generic_err(e.to_string())),
             }
         }
         QueryMsg::CheckForMisbehaviour { client_message } => {
-            let client_state = CLIENT_STATE.load(deps.storage)?;
+            let (client_state, _) = wasmstore::load_client_state(deps.storage)?;
             let found = match from_json::<Misbehaviour>(client_message.as_slice()) {
                 Ok(misbehaviour) => check_misbehaviour(&client_state, &misbehaviour).is_ok(),
                 Err(_) => false,
@@ -324,6 +316,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::merkle::BlockPayloadMirror;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
     use cosmwasm_std::to_json_vec;
     use crate::msg::MerklePath;
@@ -400,11 +393,11 @@ mod tests {
         let _ = header;
         let deps = setup(&pubkey_hex, 10, &cs);
 
-        let loaded = CLIENT_STATE.load(&deps.storage).unwrap();
+        let (loaded, _) = wasmstore::load_client_state(&deps.storage).unwrap();
         assert_eq!(loaded.latest_height.revision_height, 10);
         assert!(loaded.frozen_height.is_none());
-        let stored_cs = CONSENSUS_STATES
-            .load(&deps.storage, (0, 10))
+        let stored_cs = wasmstore::may_load_consensus_state(&deps.storage, &Height::new(0, 10))
+            .unwrap()
             .unwrap();
         assert_eq!(stored_cs.timestamp, 1);
     }
@@ -428,9 +421,11 @@ mod tests {
         let parsed: UpdateStateResponse = from_json(res.data.unwrap()).unwrap();
         assert_eq!(parsed.heights, vec![Height::from_block_height(11)]);
 
-        let client = CLIENT_STATE.load(&deps.storage).unwrap();
+        let (client, _) = wasmstore::load_client_state(&deps.storage).unwrap();
         assert_eq!(client.latest_height.revision_height, 11);
-        let stored_cs = CONSENSUS_STATES.load(&deps.storage, (0, 11)).unwrap();
+        let stored_cs = wasmstore::may_load_consensus_state(&deps.storage, &Height::new(0, 11))
+            .unwrap()
+            .unwrap();
         assert_eq!(stored_cs.timestamp, 2_000_000_000);
         assert_eq!(stored_cs.payload_digest_hex, hex::encode([9u8; 32]));
     }
@@ -479,9 +474,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(res.data.is_none());
+        // EmptyResult serializes to `{}` for the host's ContractResult unmarshal.
+        assert_eq!(res.data.unwrap().as_slice(), "{}".as_bytes());
 
-        let client = CLIENT_STATE.load(&deps.storage).unwrap();
+        let (client, _) = wasmstore::load_client_state(&deps.storage).unwrap();
         assert_eq!(client.frozen_height.unwrap().revision_height, 12);
 
         // Status query now reports Frozen.

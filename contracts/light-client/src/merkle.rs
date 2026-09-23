@@ -58,7 +58,10 @@ pub fn compute_root(leaf: [u8; 32], leaf_index: u64, siblings: &[Option<[u8; 32]
 /// wire bytes (u64 length + raw bytes).
 ///
 /// Only `state_root` is read by the verifier; the other fields exist to
-/// keep the decode aligned.
+/// keep the decode aligned. Test-only: the production verifier reads the
+/// trailing 32 bytes directly (state_root is the last bincode field), so
+/// this struct is only needed to *build* fixture payloads in tests.
+#[cfg(test)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockPayloadMirror {
     #[allow(dead_code)]

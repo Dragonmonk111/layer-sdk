@@ -1,0 +1,7 @@
+# Scoped rustflags for the 08-wasm light-client contract.
+# The 08-wasm VM (wasmvm) rejects bulk-memory ops ("bulk memory support is not
+# enabled") and the cosmwasm_* capability markers. Rust 1.98 emits bulk-memory
+# (memory.copy/fill/init) by default via rust-lld's memcpy lowering, so we pin
+# the target features off here. Applies when building from this package dir.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=-bulk-memory,-mutable-globals,-sign-ext,-nontrapping-fptoint,-multivalue,-reference-types"]

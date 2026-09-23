@@ -37,9 +37,11 @@ use tonic::{
 };
 
 use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
+use layer_proto::cosmos::bank::v1beta1::MsgSend;
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
     service_client::ServiceClient as TxServiceClient, BroadcastMode, BroadcastTxRequest,
+    SimulateRequest,
 };
 use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
 use layer_proto::layer::lightclient::v1::{
@@ -72,13 +74,12 @@ pub struct WasmClientState {
 }
 
 /// ibc.lightclients.wasm.v1.ConsensusState — wraps the contract's JSON state.
+/// NOTE: ibc-go v8's proto has ONLY `data` (field 1) — no timestamp field.
+/// The timestamp lives inside the contract's consensus-state JSON in `data`.
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct WasmConsensusState {
     #[prost(bytes = "vec", tag = "1")]
     pub data: Vec<u8>,
-    /// Timestamp of the consensus state in nanoseconds.
-    #[prost(uint64, tag = "2")]
-    pub timestamp: u64,
 }
 
 /// ibc.lightclients.wasm.v1.ClientMessage — wraps the contract's Header JSON.
@@ -110,6 +111,17 @@ pub struct MsgUpdateClient {
     pub signer: String,
 }
 
+/// ibc.lightclients.wasm.v1.MsgStoreCode — stores a light-client contract
+/// in the ibcwasm module store. Authority-gated: `signer` must be the gov
+/// module account, so it only executes inside a passed gov proposal.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct IbcWasmMsgStoreCode {
+    #[prost(string, tag = "1")]
+    pub signer: String,
+    #[prost(bytes = "vec", tag = "2")]
+    pub wasm_byte_code: Vec<u8>,
+}
+
 /// cosmos.gov.v1.MsgSubmitProposal (SDK 0.47+ gov v1)
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct MsgSubmitProposal {
@@ -136,6 +148,7 @@ const TYPE_URL_WASM_CLIENT_MESSAGE: &str = "/ibc.lightclients.wasm.v1.ClientMess
 const TYPE_URL_MSG_CREATE_CLIENT: &str = "/ibc.core.client.v1.MsgCreateClient";
 const TYPE_URL_MSG_UPDATE_CLIENT: &str = "/ibc.core.client.v1.MsgUpdateClient";
 const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
+const TYPE_URL_IBCWASM_MSG_STORE_CODE: &str = "/ibc.lightclients.wasm.v1.MsgStoreCode";
 const TYPE_URL_MSG_SUBMIT_PROPOSAL: &str = "/cosmos.gov.v1.MsgSubmitProposal";
 
 // ---------------------------------------------------------------------------
@@ -280,6 +293,9 @@ struct Args {
     layer_grpc: String,
     grpc: String,
     key_hex: Option<String>,
+    mnemonic: Option<String>,
+    to: Option<String>,
+    amount: Option<String>,
     wasm: Option<String>,
     height: Option<u64>,
     client_id: Option<String>,
@@ -294,6 +310,10 @@ struct Args {
     deposit: Option<String>,
     storage_key_hex: Option<String>,
     bech32_prefix: String,
+    direct: bool,
+    ibcwasm: bool,
+    simulate: bool,
+    sequence: Option<u64>,
 }
 
 fn print_usage() {
@@ -305,6 +325,7 @@ fn print_usage() {
     eprintln!("  update-client   Submit a new finalized header to the client");
     eprintln!("  store-code      Gov-propose the contract wasm on the counterparty");
     eprintln!("  assemble-proof  Build a MembershipProof JSON for a storage key
+  send            MsgSend tokens on the counterparty (fund the relayer key)
   keygen          Generate a secp256k1 key + print the juno address
   account         Query account_number/sequence on the counterparty");
     eprintln!();
@@ -312,6 +333,7 @@ fn print_usage() {
     eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
     eprintln!("  --grpc <host:port>         Counterparty gRPC (default 127.0.0.1:9190)");
     eprintln!("  --key-hex <hex>            Counterparty secp256k1 private key (or RELAYER_KEY_HEX env)");
+    eprintln!("  --mnemonic <words>         Counterparty BIP39 mnemonic (or RELAYER_MNEMONIC env)");
     eprintln!("  --cp-chain-id <id>         Counterparty chain id (default uni-7)");
     eprintln!("  --bech32-prefix <p>        Counterparty bech32 prefix (default juno)");
     eprintln!("  --fee-denom <d>            Fee denom (default ujunox)");
@@ -323,6 +345,7 @@ fn print_usage() {
     eprintln!("update-client:    --height <N> --client-id <id>");
     eprintln!("store-code:       --wasm <path> --title <t> --summary <s> [--deposit <amt><denom>]");
     eprintln!("assemble-proof:   --storage-key-hex <hex>");
+    eprintln!("send:             --to <addr> --amount <n><denom>");
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -335,6 +358,9 @@ fn parse_args() -> Result<Args, String> {
         layer_grpc: "127.0.0.1:9090".into(),
         grpc: "127.0.0.1:9190".into(),
         key_hex: std::env::var("RELAYER_KEY_HEX").ok(),
+        mnemonic: std::env::var("RELAYER_MNEMONIC").ok(),
+        to: None,
+        amount: None,
         wasm: None,
         height: None,
         client_id: None,
@@ -349,6 +375,10 @@ fn parse_args() -> Result<Args, String> {
         deposit: None,
         storage_key_hex: None,
         bech32_prefix: "juno".into(),
+        direct: false,
+        ibcwasm: false,
+        simulate: false,
+        sequence: None,
     };
     let mut i = 2;
     while i < args.len() {
@@ -363,6 +393,9 @@ fn parse_args() -> Result<Args, String> {
             "--layer-grpc" => a.layer_grpc = val(&mut i)?,
             "--grpc" => a.grpc = val(&mut i)?,
             "--key-hex" => a.key_hex = Some(val(&mut i)?),
+            "--mnemonic" => a.mnemonic = Some(val(&mut i)?),
+            "--to" => a.to = Some(val(&mut i)?),
+            "--amount" => a.amount = Some(val(&mut i)?),
             "--wasm" => a.wasm = Some(val(&mut i)?),
             "--height" => {
                 a.height = Some(val(&mut i)?.parse().map_err(|_| "invalid --height")?)
@@ -381,6 +414,12 @@ fn parse_args() -> Result<Args, String> {
             "--deposit" => a.deposit = Some(val(&mut i)?),
             "--storage-key-hex" => a.storage_key_hex = Some(val(&mut i)?),
             "--bech32-prefix" => a.bech32_prefix = val(&mut i)?,
+            "--direct" => a.direct = true,
+            "--ibcwasm" => a.ibcwasm = true,
+            "--simulate" => a.simulate = true,
+            "--sequence" => {
+                a.sequence = Some(val(&mut i)?.parse().map_err(|_| "invalid --sequence")?)
+            }
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
@@ -453,10 +492,17 @@ async fn query_account(
 }
 
 fn signer_key(a: &Args) -> Result<SigningKey, Box<dyn std::error::Error>> {
+    if let Some(mnemonic) = a.mnemonic.as_ref() {
+        // BIP39 mnemonic → BIP32 m/44'/118'/0'/0/0 (Cosmos coin type 118).
+        let m = bip39::Mnemonic::parse(mnemonic.trim())?;
+        let seed = m.to_seed("");
+        let path: cosmrs::bip32::DerivationPath = "m/44'/118'/0'/0/0".parse()?;
+        return Ok(SigningKey::derive_from_path(seed, &path)?);
+    }
     let hex_key = a
         .key_hex
         .as_ref()
-        .ok_or("missing --key-hex (or RELAYER_KEY_HEX env)")?;
+        .ok_or("missing --key-hex/--mnemonic (or RELAYER_KEY_HEX/RELAYER_MNEMONIC env)")?;
     let bytes = hex::decode(hex_key.trim_start_matches("0x"))?;
     Ok(SigningKey::from_slice(&bytes)?)
 }
@@ -473,7 +519,8 @@ fn sign_and_encode(
         denom: a.fee_denom.parse()?,
     };
     let body = tx::Body::new(vec![msg], "", 0u16);
-    let info = SignerInfo::single_direct(Some(key.public_key()), account.sequence);
+    let sequence = a.sequence.unwrap_or(account.sequence);
+    let info = SignerInfo::single_direct(Some(key.public_key()), sequence);
     let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, a.gas));
     let doc = SignDoc::new(&body, &auth, &chain_id, account.account_number)?;
     Ok(doc.sign(key)?.to_bytes()?)
@@ -501,6 +548,26 @@ async fn broadcast(grpc: &str, tx_bytes: Vec<u8>) -> Result<String, Box<dyn std:
     Ok(tx_resp.txhash)
 }
 
+/// Dry-run the tx via the gRPC Simulate endpoint — returns the exact gas_used
+/// the chain would charge, without consuming a sequence number or paying a fee.
+async fn simulate(grpc: &str, tx_bytes: Vec<u8>) -> Result<u64, Box<dyn std::error::Error>> {
+    let mut client = TxServiceClient::new(connect(grpc).await?)
+        .max_decoding_message_size(32 * 1024 * 1024)
+        .max_encoding_message_size(32 * 1024 * 1024);
+    let resp = client
+        .simulate(SimulateRequest {
+            tx_bytes,
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    let used = resp
+        .gas_info
+        .map(|g| g.gas_used)
+        .ok_or("simulate returned no gas_info")?;
+    Ok(used)
+}
+
 fn any_of<M: prost::Message>(type_url: &str, msg: &M) -> cosmrs::Any {
     cosmrs::Any {
         type_url: type_url.to_string(),
@@ -513,6 +580,14 @@ fn proto_any_of<M: prost::Message>(type_url: &str, msg: &M) -> prost_types::Any 
         type_url: type_url.to_string(),
         value: msg.encode_to_vec(),
     }
+}
+
+/// Gov module account address for the counterparty chain — the authority
+/// required by ibcwasm's MsgStoreCode. Derived as sha256("gov")[:20]
+/// bech32-encoded with the chain prefix (same bytes on every SDK chain).
+fn gov_authority(prefix: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let digest = Sha256::digest(b"gov");
+    Ok(cosmrs::AccountId::new(prefix, &digest[..20])?.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -600,7 +675,6 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     };
     let wasm_cons = WasmConsensusState {
         data: serde_json::to_vec(&consensus_state)?,
-        timestamp: block.timestamp_nanos,
     };
 
     // 4. MsgCreateClient → sign → broadcast.
@@ -670,11 +744,43 @@ async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let key = signer_key(a)?;
     let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
 
-    // MsgStoreCode wrapped in a gov v1 proposal (uni-7 wasm is permissioned).
-    let store = MsgStoreCode {
-        sender: signer.clone(),
-        wasm_byte_code: wasm_bytes,
+    // --direct: broadcast cosmwasm MsgStoreCode straight (permissionless
+    // chains like Juno). Default: wrap in a gov v1 proposal. --ibcwasm wraps
+    // ibc.lightclients.wasm.v1.MsgStoreCode instead — the ibcwasm store is
+    // authority-gated, so the inner signer is the gov module account.
+    if a.direct {
+        let store = MsgStoreCode {
+            sender: signer.clone(),
+            wasm_byte_code: wasm_bytes,
+        };
+        let account = query_account(&a.grpc, &signer).await?;
+        println!("signer: {signer} (account_number {}, sequence {})", account.account_number, account.sequence);
+        let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_STORE_CODE, &store), a, &account)?;
+        let hash = broadcast(&a.grpc, tx_bytes).await?;
+        println!("MsgStoreCode broadcast OK — txhash {hash}");
+        return Ok(());
+    }
+
+    let inner = if a.ibcwasm {
+        let authority = gov_authority(&a.bech32_prefix)?;
+        println!("ibcwasm store via gov authority {authority}");
+        proto_any_of(
+            TYPE_URL_IBCWASM_MSG_STORE_CODE,
+            &IbcWasmMsgStoreCode {
+                signer: authority,
+                wasm_byte_code: wasm_bytes,
+            },
+        )
+    } else {
+        proto_any_of(
+            TYPE_URL_MSG_STORE_CODE,
+            &MsgStoreCode {
+                sender: signer.clone(),
+                wasm_byte_code: wasm_bytes,
+            },
+        )
     };
+
     let deposit = a
         .deposit
         .clone()
@@ -684,7 +790,7 @@ async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .map(|i| deposit.split_at(i))
         .ok_or("invalid --deposit (expected <amount><denom>)")?;
     let proposal = MsgSubmitProposal {
-        messages: vec![proto_any_of(TYPE_URL_MSG_STORE_CODE, &store)],
+        messages: vec![inner],
         initial_deposit: vec![ProtoCoin {
             denom: denom.to_string(),
             amount: amount.to_string(),
@@ -706,6 +812,11 @@ async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         a,
         &account,
     )?;
+    if a.simulate {
+        let used = simulate(&a.grpc, tx_bytes).await?;
+        println!("simulate: gas_used={used} (tx {} bytes)", std::fs::metadata(wasm_path)?.len());
+        return Ok(());
+    }
     let hash = broadcast(&a.grpc, tx_bytes).await?;
     println!("MsgSubmitProposal(MsgStoreCode) broadcast OK — txhash {hash}");
     Ok(())
@@ -763,6 +874,32 @@ async fn cmd_assemble_proof(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+async fn cmd_send(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let to = a.to.as_ref().ok_or("send requires --to <address>")?;
+    let amount = a.amount.as_ref().ok_or("send requires --amount <n><denom>")?;
+    let split = amount
+        .find(|c: char| c.is_alphabetic())
+        .ok_or("invalid --amount (expected <amount><denom>)")?;
+    let (amt, denom) = amount.split_at(split);
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = MsgSend {
+        from_address: signer.clone(),
+        to_address: to.clone(),
+        amount: vec![ProtoCoin {
+            denom: denom.to_string(),
+            amount: amt.to_string(),
+        }],
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    println!("signer: {signer} (account_number {}, sequence {})", account.account_number, account.sequence);
+    let tx_bytes = sign_and_encode(&key, any_of("/cosmos.bank.v1beta1.MsgSend", &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgSend broadcast OK — txhash {hash}");
+    Ok(())
+}
+
 /// Generate a fresh secp256k1 key and print the hex + bech32 address.
 /// Fund the printed address via the uni-7 faucet, then pass the hex to the
 /// other subcommands via --key-hex or RELAYER_KEY_HEX.
@@ -812,6 +949,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "update-client" => cmd_update_client(&a).await,
         "store-code" => cmd_store_code(&a).await,
         "assemble-proof" => cmd_assemble_proof(&a).await,
+        "send" => cmd_send(&a).await,
         "keygen" => cmd_keygen(&a),
         "account" => cmd_account(&a).await,
         other => {
