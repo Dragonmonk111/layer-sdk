@@ -158,4 +158,12 @@ pub enum TxError {
     /// Or remove all info
     #[error("Parse: {0}")]
     ParseError(String),
+
+    #[error("Insufficient fee: required at least {required}{denom} for {gas_wanted} gas, provided {provided}")]
+    InsufficientFee {
+        required: u128,
+        provided: u128,
+        denom: String,
+        gas_wanted: u64,
+    },
 }

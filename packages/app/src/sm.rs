@@ -14,6 +14,7 @@ use crate::auth::fee_collector_account;
 use crate::bank::Bank;
 use crate::error::{PulsarError, PulsarResult};
 use crate::genesis::GenesisState;
+use crate::ibc::Ibc;
 use crate::wasm::Wasm;
 use crate::{
     auth::{Auth, TxData},
@@ -29,6 +30,7 @@ pub struct StateMachine {
     pub auth: Auth,
     pub bank: Bank,
     pub wasm: Wasm,
+    pub ibc: Ibc,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +55,7 @@ impl StateMachine {
             auth: Auth::new(),
             bank: Bank::new(),
             wasm: Wasm::new(&config.wasm),
+            ibc: Ibc::new(),
         }
     }
 
@@ -150,6 +153,11 @@ impl StateMachine {
                 let mut metered = AppMeter::new(storage);
                 self.wasm
                     .process_msg(&mut metered, gas, block, self, sender, wasm)
+            }
+            Msg::Ibc(ibc) => {
+                let mut metered = AppMeter::new(storage);
+                self.ibc
+                    .process_msg(&mut metered, gas, block, self, sender, ibc)
             }
         };
         match &res {

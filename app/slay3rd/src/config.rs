@@ -73,6 +73,17 @@ pub struct NodeConfig {
     /// Certification timeout in milliseconds.
     /// Time to wait for certification progress in a view before attempting to skip.
     pub certification_timeout_ms: u64,
+
+    /// Validator-local minimum gas price, as `<decimal><denom>` (e.g.
+    /// "0.001ujclaw"). Enforced as a mempool admission filter in `check_tx`
+    /// only — NOT a consensus rule, so validators may differ safely. Prevents
+    /// fee-less spam and prices block space. "0<denom>" disables the floor.
+    #[serde(default = "default_min_gas_price")]
+    pub min_gas_price: String,
+}
+
+fn default_min_gas_price() -> String {
+    "0.001ujclaw".to_string()
 }
 
 impl Default for NodeConfig {
@@ -90,6 +101,7 @@ impl Default for NodeConfig {
             mempool_max_pending: 10_000,
             leader_timeout_ms: 3_000,
             certification_timeout_ms: 5_000,
+            min_gas_price: default_min_gas_price(),
         }
     }
 }
@@ -114,6 +126,20 @@ impl NodeConfig {
     /// Returns the app data directory path, computed as `{data_dir}/app`.
     pub fn app_data_path(&self) -> String {
         format!("{}/app", self.data_dir)
+    }
+
+    /// Returns the consensus journal directory, `{data_dir}/consensus`.
+    ///
+    /// The commonware `tokio::Runner` writes the simplex consensus journal
+    /// (votes, notarizations, finalized heights) under its `storage_directory`.
+    /// `Runner::default()` points that at a RANDOM temp dir inside the
+    /// container's writable layer — it survives `docker compose restart` (same
+    /// container) but is wiped by `--force-recreate` (new container), which
+    /// resets consensus to height 1 and desyncs it from the persisted app
+    /// state (`BadBlockHeight`). Pointing it under `data_dir` keeps the journal
+    /// in the named volume so a binary-swap upgrade resumes cleanly.
+    pub fn consensus_storage_path(&self) -> String {
+        format!("{}/consensus", self.data_dir)
     }
 }
 

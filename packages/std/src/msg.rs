@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 use crate::account_id::{AccountId, AccountIdError};
+use crate::ibc::{IbcMsg, IbcMsgData};
 
 // 2.0: use cosmwasm_std::Checksum
 type Checksum = Binary;
@@ -15,6 +16,7 @@ type Checksum = Binary;
 pub enum Msg {
     Bank(BankMsg),
     Wasm(WasmMsg),
+    Ibc(IbcMsg),
 }
 
 impl From<BankMsg> for Msg {
@@ -215,6 +217,16 @@ impl Msg {
                 WasmMsg::Pin { sender, .. } => sender.clone(),
                 WasmMsg::Unpin { sender, .. } => sender.clone(),
             },
+            Msg::Ibc(ibc) => match ibc {
+                IbcMsg::CreateClient { sender, .. } => sender.clone(),
+                IbcMsg::UpdateClient { sender, .. } => sender.clone(),
+                IbcMsg::ConnectionOpenInit { sender, .. } => sender.clone(),
+                IbcMsg::ConnectionOpenAck { sender, .. } => sender.clone(),
+                IbcMsg::ChannelOpenInit { sender, .. } => sender.clone(),
+                IbcMsg::ChannelOpenAck { sender, .. } => sender.clone(),
+                IbcMsg::Transfer { sender, .. } => sender.clone(),
+                IbcMsg::Acknowledgement { sender, .. } => sender.clone(),
+            },
         }
     }
 }
@@ -233,6 +245,7 @@ pub fn required_signer(msgs: &[Msg]) -> Result<AccountId, MsgError> {
 pub enum MsgData {
     Wasm(WasmMsgData),
     Bank(BankMsgData),
+    Ibc(IbcMsgData),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

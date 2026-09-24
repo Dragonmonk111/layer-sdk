@@ -3,12 +3,13 @@ mod auth;
 mod bank;
 mod error;
 pub mod genesis;
+mod ibc;
 mod sm;
 mod sync;
 pub(crate) mod testing;
 mod wasm;
 
-pub use app::{App, AppLoadError};
+pub use app::{App, AppLoadError, MinGasPrice};
 pub use error::{PulsarError, PulsarResult};
 pub use sm::{AppConfig, StateMachine};
 pub use sync::SyncProvider;

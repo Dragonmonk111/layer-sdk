@@ -9,7 +9,7 @@ use tracing::{
 };
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::BlockInfo;
+use cosmwasm_std::{BlockInfo, Coin, Decimal, Uint128};
 
 use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
@@ -23,7 +23,7 @@ use layer_std::{
         Block, BlockParams, FinalizeBlockResponse, GasInfo, InitChainRequest, InitChainResponse,
         TxResponse, TxResult,
     },
-    HexEncode,
+    HexEncode, TxError,
 };
 use layer_std::{GasMeter, Query, Rfc3339, Tx};
 use layer_storage::{
@@ -43,6 +43,77 @@ const MAX_END_BLOCK_GAS: u64 = 10_000_000;
 
 pub const GAS_COST_TX_BYTE: u64 = 10;
 
+/// Validator-local minimum gas price — a mempool admission filter applied in
+/// `check_tx` only (NOT in deliver). This mirrors Cosmos SDK `minimum-gas-prices`:
+/// it is a per-validator policy, not a consensus rule, so validators may set
+/// different floors without diverging. It prevents fee-less spam from entering
+/// the mempool and prices block space. DeliverTx still deducts whatever fee was
+/// set; it does not re-check the floor.
+///
+/// Parsed from a `<decimal><denom>` string like `"0.001ujclaw"`. A zero price
+/// disables the floor (accepts any fee, including none).
+#[derive(Debug, Clone)]
+pub struct MinGasPrice {
+    /// Fee per unit of gas (e.g. 0.001 ujclaw/gas).
+    pub price: Decimal,
+    /// The denom the fee must be paid in.
+    pub denom: String,
+}
+
+impl MinGasPrice {
+    /// Parse `"<decimal><denom>"` (e.g. `"0.001ujclaw"`). Returns `None` if the
+    /// string is empty or malformed. A `"0<denom>"` price yields a struct whose
+    /// `required_fee` is always 0 (floor disabled).
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
+        // Split at the first non-numeric, non-dot character => "<decimal><denom>".
+        let split = s
+            .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .unwrap_or(s.len());
+        let (price_str, denom) = s.split_at(split);
+        if denom.is_empty() {
+            return None;
+        }
+        let price = if price_str.is_empty() {
+            Decimal::zero()
+        } else {
+            price_str.parse::<Decimal>().ok()?
+        };
+        Some(MinGasPrice {
+            price,
+            denom: denom.to_string(),
+        })
+    }
+
+    /// Minimum fee (in `denom`) required for `gas_wanted` gas: ceil(price * gas).
+    pub fn required_fee(&self, gas_wanted: u64) -> Uint128 {
+        // price.atomics() = price * 10^18. required = ceil(atomics * gas / 10^18).
+        // Decimal::one().atomics() == 10^18 (DECIMAL_FRACTIONAL is private).
+        let frac = Decimal::one().atomics().u128();
+        let atomics = self.price.atomics().u128();
+        let req = (atomics.saturating_mul(gas_wanted as u128) + (frac - 1)) / frac;
+        Uint128::from(req)
+    }
+
+    /// Returns `Err(InsufficientFee)` if `fee` does not cover the floor for
+    /// `gas_wanted` gas in the expected denom.
+    pub fn check(&self, fee: &Option<Coin>, gas_wanted: u64) -> Result<(), TxError> {
+        let required = self.required_fee(gas_wanted);
+        let provided = fee.as_ref().map(|c| c.amount.u128()).unwrap_or(0);
+        let denom_ok = fee.as_ref().map(|c| c.denom == self.denom).unwrap_or(false);
+        if required.is_zero() || (denom_ok && provided >= required.u128()) {
+            Ok(())
+        } else {
+            Err(TxError::InsufficientFee {
+                required: required.u128(),
+                provided,
+                denom: self.denom.clone(),
+                gas_wanted,
+            })
+        }
+    }
+}
+
 /// This maintains all application global state and is a framework-agnostic entrypoint for the
 /// application. It *should* be able to run inside an ABCI app as well as an Avalanche Subnet.
 ///
@@ -59,6 +130,10 @@ pub struct App<T: PersistentStorage> {
 
     // State Machine Logic
     pub(crate) logic: StateMachine,
+
+    /// Validator-local minimum gas price (mempool admission filter, CheckTx
+    /// only). `None` disables the floor. Not part of consensus state.
+    min_gas_price: Option<MinGasPrice>,
 
     data: Option<InnerData>,
 }
@@ -159,8 +234,15 @@ impl<T: PersistentStorage + 'static> App<T> {
         App {
             storage,
             logic,
+            min_gas_price: None,
             data: None,
         }
+    }
+
+    /// Set the validator-local minimum gas price (mempool admission filter).
+    /// Call after `new`, before serving `check_tx`. `None` disables the floor.
+    pub fn set_min_gas_price(&mut self, min_gas_price: Option<MinGasPrice>) {
+        self.min_gas_price = min_gas_price;
     }
 }
 
@@ -312,6 +394,10 @@ impl<T: PersistentStorage + 'static> App<T> {
 
     pub fn check_tx(&self, tx: Tx) -> TxResult<PulsarError> {
         let _span = debug_span!("check_tx").entered();
+        // capture the declared fee before `tx` is moved into validate_tx
+        let fee = match &tx {
+            Tx::Signed(s) => s.fee.fee.clone(),
+        };
         // temporary cache we will throw away
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
@@ -326,6 +412,17 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         match res {
             Ok(TxData { gas_wanted, .. }) => {
+                // Mempool admission: enforce the validator-local min gas price.
+                // This is NOT a consensus rule — deliver does not re-check it.
+                if let Some(mgp) = &self.min_gas_price {
+                    if let Err(e) = mgp.check(&fee, gas_wanted) {
+                        debug!(error = %e, "check_tx: below min gas price");
+                        return TxResult {
+                            gas: GasInfo::zero(),
+                            result: Err(e.into()),
+                        };
+                    }
+                }
                 let gas_used = meter.used();
                 let gas = GasInfo {
                     gas_used,

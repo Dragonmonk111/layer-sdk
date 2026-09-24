@@ -6,7 +6,8 @@
 FROM rust:1.97-bookworm AS builder
 WORKDIR /myapp
 
-RUN apt update && apt install -y clang
+# clang for wasmer shim; g++ + libclang for the rocksdb C++/bindgen build.
+RUN apt update && apt install -y clang g++ libclang-dev
 
 # wasmer 4.3.7 references __rust_probestack which was removed from Rust stdlib.
 # Provide a shim so the linker can resolve the symbol.
@@ -52,7 +53,9 @@ COPY tools/tx-sender/Cargo.toml /myapp/tools/tx-sender/Cargo.toml
 COPY dummy.rs /myapp/tools/tx-sender/src/main.rs
 COPY tools/bls-relayer/Cargo.toml /myapp/tools/bls-relayer/Cargo.toml
 COPY dummy.rs /myapp/tools/bls-relayer/src/main.rs
-RUN cargo build --release --bin slay3rd
+# rocksdb feature => persistent RockStore at {data_dir}/app (survives restarts).
+# Build it here too so the dep cache covers the rocksdb C++ compile.
+RUN cargo build --release --bin slay3rd --features rocksdb
 
 # clean up these fake local deps so we compile for real later
 RUN find /myapp -name "*.rs" -path "*/src/*" -not -path "*/lib/cosmwasm/*" -delete
@@ -60,7 +63,7 @@ RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3
 
 # This build step should just compile the local code and be faster
 COPY . .
-RUN cargo build --release --bin slay3rd
+RUN cargo build --release --bin slay3rd --features rocksdb
 
 ### PRODUCTION
 

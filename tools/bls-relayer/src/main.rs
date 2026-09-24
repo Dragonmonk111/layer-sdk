@@ -41,13 +41,17 @@ use layer_proto::cosmos::bank::v1beta1::MsgSend;
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
     service_client::ServiceClient as TxServiceClient, BroadcastMode, BroadcastTxRequest,
-    SimulateRequest,
+    GetTxRequest, SimulateRequest,
 };
 use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
 use layer_proto::layer::lightclient::v1::{
     query_client::QueryClient as LightClientQueryClient, QueryBlockRequest, QueryLatestHeightRequest,
     QueryProofRequest,
 };
+
+mod ibc;
+
+use layer_std::IbcMsg;
 
 // ---------------------------------------------------------------------------
 // ibc-go wire types (hand-defined — wire-compatible with ibc-go v8+ protos)
@@ -150,6 +154,18 @@ const TYPE_URL_MSG_UPDATE_CLIENT: &str = "/ibc.core.client.v1.MsgUpdateClient";
 const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
 const TYPE_URL_IBCWASM_MSG_STORE_CODE: &str = "/ibc.lightclients.wasm.v1.MsgStoreCode";
 const TYPE_URL_MSG_SUBMIT_PROPOSAL: &str = "/cosmos.gov.v1.MsgSubmitProposal";
+
+/// Revision number stamped on every IBC `Height` this relayer emits.
+///
+/// WORKAROUND: ibc-go marshals `clienttypes.Height` with `omitempty`, so a
+/// `revision_number` of 0 is dropped from the `VerifyMembership`/`UpdateState`
+/// sudo payloads. The currently-deployed 08-wasm contract declares the field
+/// required (no `serde(default)`), so a 0 revision fails to deserialize. Using
+/// a non-zero revision keeps the field present end-to-end; the contract only
+/// asserts `header.revision_number == latest_height.revision_number`, so a
+/// consistent non-zero value is sufficient. Set back to 0 once the
+/// `#[serde(default)]` contract build is stored on-chain.
+const HEIGHT_REVISION_NUMBER: u64 = 1;
 
 // ---------------------------------------------------------------------------
 // Contract JSON mirrors — must match contracts/light-client serde exactly
@@ -314,6 +330,20 @@ struct Args {
     ibcwasm: bool,
     simulate: bool,
     sequence: Option<u64>,
+    // IBC handshake / transfer fields
+    jc_key_hex: Option<String>,
+    connection_id: Option<String>,
+    port_id: Option<String>,
+    channel_id: Option<String>,
+    cp_client_id: Option<String>,
+    cp_connection_id: Option<String>,
+    cp_port_id: Option<String>,
+    cp_channel_id: Option<String>,
+    ordering: Option<String>,
+    version: Option<String>,
+    proof_height: Option<u64>,
+    timeout_height: Option<u64>,
+    timeout_timestamp: Option<u64>,
 }
 
 fn print_usage() {
@@ -328,6 +358,22 @@ fn print_usage() {
   send            MsgSend tokens on the counterparty (fund the relayer key)
   keygen          Generate a secp256k1 key + print the juno address
   account         Query account_number/sequence on the counterparty");
+    eprintln!();
+    eprintln!("JunoClaw sovereign IBC (signs with deployer key, or --jc-key-hex):");
+    eprintln!("  jc-create-client  Register a nominal client for the counterparty");
+    eprintln!("  jc-conn-init      ConnectionOpenInit on JunoClaw");
+    eprintln!("  jc-conn-ack       ConnectionOpenAck on JunoClaw (INIT->OPEN)");
+    eprintln!("  jc-chan-init      ChannelOpenInit on JunoClaw");
+    eprintln!("  jc-chan-ack       ChannelOpenAck on JunoClaw (INIT->OPEN)");
+    eprintln!("  jc-transfer       ICS-20 transfer (escrow + packet commitment)");
+    eprintln!("  jc-ack            Acknowledgement (clear packet commitment)");
+    eprintln!();
+    eprintln!("Counterparty ibc-go handshake + packet relay (signs with --key-hex):");
+    eprintln!("  conn-try          MsgConnectionOpenTry (proof of JunoClaw conn INIT)");
+    eprintln!("  conn-confirm      MsgConnectionOpenConfirm (proof of JunoClaw conn OPEN)");
+    eprintln!("  chan-try          MsgChannelOpenTry (proof of JunoClaw chan INIT)");
+    eprintln!("  chan-confirm      MsgChannelOpenConfirm (proof of JunoClaw chan OPEN)");
+    eprintln!("  recv-packet       MsgRecvPacket (proof of JunoClaw packet commitment)");
     eprintln!();
     eprintln!("Common flags:");
     eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
@@ -346,6 +392,13 @@ fn print_usage() {
     eprintln!("store-code:       --wasm <path> --title <t> --summary <s> [--deposit <amt><denom>]");
     eprintln!("assemble-proof:   --storage-key-hex <hex>");
     eprintln!("send:             --to <addr> --amount <n><denom>");
+    eprintln!();
+    eprintln!("IBC proof commands auto-update the 08-wasm client to proof_height first:");
+    eprintln!("  conn-try:       --client-id <08-wasm-N> --cp-client-id <id> --cp-connection-id <id>");
+    eprintln!("  conn-confirm:   --client-id <id> --connection-id <id> --cp-connection-id <id>");
+    eprintln!("  chan-try:       --client-id <id> --connection-id <id> --cp-channel-id <id> [--cp-port-id <p>] [--version <v>]");
+    eprintln!("  chan-confirm:   --client-id <id> --channel-id <id> --cp-channel-id <id> [--cp-port-id <p>]");
+    eprintln!("  recv-packet:    --client-id <id> --channel-id <id> --cp-channel-id <id> --sequence <n> --to <rcpt> --amount <n><denom>");
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -379,6 +432,19 @@ fn parse_args() -> Result<Args, String> {
         ibcwasm: false,
         simulate: false,
         sequence: None,
+        jc_key_hex: std::env::var("JUNOCLAW_KEY_HEX").ok(),
+        connection_id: None,
+        port_id: None,
+        channel_id: None,
+        cp_client_id: None,
+        cp_connection_id: None,
+        cp_port_id: None,
+        cp_channel_id: None,
+        ordering: None,
+        version: None,
+        proof_height: None,
+        timeout_height: None,
+        timeout_timestamp: None,
     };
     let mut i = 2;
     while i < args.len() {
@@ -419,6 +485,31 @@ fn parse_args() -> Result<Args, String> {
             "--simulate" => a.simulate = true,
             "--sequence" => {
                 a.sequence = Some(val(&mut i)?.parse().map_err(|_| "invalid --sequence")?)
+            }
+            "--jc-key-hex" => a.jc_key_hex = Some(val(&mut i)?),
+            "--connection-id" => a.connection_id = Some(val(&mut i)?),
+            "--port-id" => a.port_id = Some(val(&mut i)?),
+            "--channel-id" => a.channel_id = Some(val(&mut i)?),
+            "--cp-client-id" => a.cp_client_id = Some(val(&mut i)?),
+            "--cp-connection-id" => a.cp_connection_id = Some(val(&mut i)?),
+            "--cp-port-id" => a.cp_port_id = Some(val(&mut i)?),
+            "--cp-channel-id" => a.cp_channel_id = Some(val(&mut i)?),
+            "--ordering" => a.ordering = Some(val(&mut i)?),
+            "--version" => a.version = Some(val(&mut i)?),
+            "--proof-height" => {
+                a.proof_height =
+                    Some(val(&mut i)?.parse().map_err(|_| "invalid --proof-height")?)
+            }
+            "--timeout-height" => {
+                a.timeout_height =
+                    Some(val(&mut i)?.parse().map_err(|_| "invalid --timeout-height")?)
+            }
+            "--timeout-timestamp" => {
+                a.timeout_timestamp = Some(
+                    val(&mut i)?
+                        .parse()
+                        .map_err(|_| "invalid --timeout-timestamp")?,
+                )
             }
             other => return Err(format!("unknown flag: {other}")),
         }
@@ -519,7 +610,9 @@ fn sign_and_encode(
         denom: a.fee_denom.parse()?,
     };
     let body = tx::Body::new(vec![msg], "", 0u16);
-    let sequence = a.sequence.unwrap_or(account.sequence);
+    // NOTE: `a.sequence` is the IBC *packet* sequence (recv-packet/jc-ack), not
+    // an account-sequence override — always sign with the queried sequence.
+    let sequence = account.sequence;
     let info = SignerInfo::single_direct(Some(key.public_key()), sequence);
     let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, a.gas));
     let doc = SignDoc::new(&body, &auth, &chain_id, account.account_number)?;
@@ -546,6 +639,77 @@ async fn broadcast(grpc: &str, tx_bytes: Vec<u8>) -> Result<String, Box<dyn std:
         .into());
     }
     Ok(tx_resp.txhash)
+}
+
+/// Poll `GetTx` until the tx is committed. `BroadcastMode::Sync` only waits for
+/// CheckTx, so a dependent message (e.g. an ibc-go proof that needs the
+/// consensus state an update-client just landed) must wait for real inclusion.
+async fn wait_tx(grpc: &str, txhash: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = TxServiceClient::new(connect(grpc).await?)
+        .max_decoding_message_size(32 * 1024 * 1024)
+        .max_encoding_message_size(32 * 1024 * 1024);
+    for _ in 0..300 {
+        match client
+            .get_tx(GetTxRequest {
+                hash: txhash.to_string(),
+            })
+            .await
+        {
+            Ok(resp) => {
+                if let Some(tr) = resp.into_inner().tx_response {
+                    if tr.code == 0 {
+                        return Ok(());
+                    }
+                    return Err(
+                        format!("tx {txhash} failed (code {}): {}", tr.code, tr.raw_log).into(),
+                    );
+                }
+                return Ok(());
+            }
+            Err(_) => tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+        }
+    }
+    Err(format!("tx {txhash} not committed after polling").into())
+}
+
+/// Submit `MsgUpdateClient` for `client_id` anchored at `height`, then wait for
+/// it to commit. Used by the standalone `update-client` subcommand and internally
+/// by the proof-carrying handshake/packet commands, which must land a consensus
+/// state at exactly `proof_height` before the ibc-go message verifies.
+async fn update_client_to(
+    a: &Args,
+    client_id: &str,
+    height: u64,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut client = layer_client(&a.layer_grpc).await?;
+    let block = client
+        .block(QueryBlockRequest { height })
+        .await?
+        .into_inner();
+    let header = ContractHeader {
+        height: ContractHeight {
+            revision_number: HEIGHT_REVISION_NUMBER,
+            revision_height: height,
+        },
+        timestamp: block.timestamp_nanos,
+        proposal_bytes: block.proposal_bytes,
+        certificate_bytes: block.certificate_bytes,
+    };
+    let wasm_msg = WasmClientMessage {
+        data: serde_json::to_vec(&header)?,
+    };
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = MsgUpdateClient {
+        client_id: client_id.to_string(),
+        client_message: Some(proto_any_of(TYPE_URL_WASM_CLIENT_MESSAGE, &wasm_msg)),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_UPDATE_CLIENT, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    wait_tx(&a.grpc, &hash).await?;
+    Ok(hash)
 }
 
 /// Dry-run the tx via the gRPC Simulate endpoint — returns the exact gas_used
@@ -650,7 +814,7 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         chain_id: a.chain_id.clone(),
         group_public_key_hex: group_pk.clone(),
         latest_height: ContractHeight {
-            revision_number: 0,
+            revision_number: HEIGHT_REVISION_NUMBER,
             revision_height: height,
         },
         frozen_height: None,
@@ -669,7 +833,7 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         data: serde_json::to_vec(&client_state)?,
         checksum,
         latest_height: Some(IbcHeight {
-            revision_number: 0,
+            revision_number: HEIGHT_REVISION_NUMBER,
             revision_height: height,
         }),
     };
@@ -698,40 +862,9 @@ async fn cmd_update_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .client_id
         .as_ref()
         .ok_or("update-client requires --client-id")?;
-
-    // 1. Fetch the finalized header components.
     let mut client = layer_client(&a.layer_grpc).await?;
     let height = resolve_height(&mut client, a.height).await?;
-    let block = client
-        .block(QueryBlockRequest { height })
-        .await?
-        .into_inner();
-
-    // 2. Contract Header JSON → WasmClientMessage.
-    let header = ContractHeader {
-        height: ContractHeight {
-            revision_number: 0,
-            revision_height: height,
-        },
-        timestamp: block.timestamp_nanos,
-        proposal_bytes: block.proposal_bytes,
-        certificate_bytes: block.certificate_bytes,
-    };
-    let wasm_msg = WasmClientMessage {
-        data: serde_json::to_vec(&header)?,
-    };
-
-    // 3. MsgUpdateClient → sign → broadcast.
-    let key = signer_key(a)?;
-    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
-    let msg = MsgUpdateClient {
-        client_id: client_id.clone(),
-        client_message: Some(proto_any_of(TYPE_URL_WASM_CLIENT_MESSAGE, &wasm_msg)),
-        signer: signer.clone(),
-    };
-    let account = query_account(&a.grpc, &signer).await?;
-    let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_UPDATE_CLIENT, &msg), a, &account)?;
-    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    let hash = update_client_to(a, client_id, height).await?;
     println!("MsgUpdateClient({client_id} @ {height}) broadcast OK — txhash {hash}");
     Ok(())
 }
@@ -932,6 +1065,567 @@ async fn cmd_account(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
+// JunoClaw-side IBC (sovereign IbcMsg → /junoclaw.ibc.v1.Msg)
+// ---------------------------------------------------------------------------
+
+// JunoClaw signing constants — mirror tools/tx-sender.
+const LAYER_CHAIN_ID: &str = "junoclaw-1";
+const LAYER_FEE_DENOM: &str = "ujclaw";
+const LAYER_ACCOUNT_NUMBER: u64 = 17;
+const LAYER_GAS: u64 = 4_000_000;
+const LAYER_BECH32: &str = "juno";
+
+/// JunoClaw signer — the funded deployer account by default; --jc-key-hex
+/// (or JUNOCLAW_KEY_HEX env) overrides for a different funded account.
+fn layer_signer_key(a: &Args) -> Result<SigningKey, Box<dyn std::error::Error>> {
+    if let Some(h) = a.jc_key_hex.as_ref() {
+        let bytes = hex::decode(h.trim_start_matches("0x"))?;
+        return Ok(SigningKey::from_slice(&bytes)?);
+    }
+    let seed = Sha256::digest(b"junoclaw-deployer-v1");
+    Ok(SigningKey::from_slice(&seed[..32])?)
+}
+
+/// The JunoClaw sender as a `layer_std::AccountId` (bech32 "juno1…").
+fn layer_sender(a: &Args) -> Result<layer_std::AccountId, Box<dyn std::error::Error>> {
+    let key = layer_signer_key(a)?;
+    let addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    Ok(layer_std::AccountId::parse_string(&addr)?)
+}
+
+fn sign_and_encode_layer(
+    key: &SigningKey,
+    msg: cosmrs::Any,
+    account: &AccountInfo,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let chain_id: ChainId = LAYER_CHAIN_ID.parse()?;
+    let fee_coin = Coin {
+        amount: 5000u128,
+        denom: LAYER_FEE_DENOM.parse()?,
+    };
+    let body = tx::Body::new(vec![msg], "", 0u16);
+    let info = SignerInfo::single_direct(Some(key.public_key()), account.sequence);
+    let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, LAYER_GAS));
+    let doc = SignDoc::new(&body, &auth, &chain_id, account.account_number)?;
+    Ok(doc.sign(key)?.to_bytes()?)
+}
+
+/// JSON-encode an `IbcMsg` into a single `Any` and broadcast it to JunoClaw.
+async fn submit_ibc_msg(a: &Args, msg: IbcMsg) -> Result<String, Box<dyn std::error::Error>> {
+    let key = layer_signer_key(a)?;
+    let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let any = cosmrs::Any {
+        type_url: ibc::TYPE_URL_JUNOCLAW_IBC.to_string(),
+        value: serde_json::to_vec(&msg)?,
+    };
+    let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
+    if account.account_number == 0 {
+        account.account_number = LAYER_ACCOUNT_NUMBER;
+    }
+    let tx_bytes = sign_and_encode_layer(&key, any, &account)?;
+    broadcast(&a.layer_grpc, tx_bytes).await
+}
+
+/// Query JunoClaw for a Merkle membership proof over `key` and return the
+/// contract-side `MembershipProof` JSON bytes plus the `proof_height`
+/// (`state_height + 1`) the counterparty's 08-wasm client must already have a
+/// consensus state for.
+async fn assemble_membership_proof(
+    layer_grpc: &str,
+    key: Vec<u8>,
+) -> Result<(Vec<u8>, u64), Box<dyn std::error::Error>> {
+    let mut client = layer_client(layer_grpc).await?;
+    let proof = client
+        .proof(QueryProofRequest { key })
+        .await?
+        .into_inner();
+    let proof_height = proof.state_height + 1;
+    // Block `proof_height` carries the state_root for the proven state, but it
+    // is the unfinalized tip at query time — poll until it commits.
+    let block = {
+        let mut attempts = 0u32;
+        loop {
+            match client
+                .block(QueryBlockRequest {
+                    height: proof_height,
+                })
+                .await
+            {
+                Ok(b) => break b.into_inner(),
+                Err(e) => {
+                    attempts += 1;
+                    if attempts >= 200 {
+                        return Err(format!(
+                            "block {proof_height} not finalized after {attempts} tries: {e}"
+                        )
+                        .into());
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+        }
+    };
+    if block.payload_bytes.is_empty() {
+        return Err(format!("node has no payload_bytes at height {proof_height}").into());
+    }
+    let contract_proof = ContractMembershipProof {
+        payload_bytes: block.payload_bytes,
+        leaf_index: proof.leaf_index,
+        siblings: proof
+            .siblings
+            .iter()
+            .map(|s| if s.is_empty() { None } else { Some(s.clone()) })
+            .collect(),
+    };
+    Ok((serde_json::to_vec(&contract_proof)?, proof_height))
+}
+
+fn height(h: u64) -> Option<IbcHeight> {
+    Some(IbcHeight {
+        revision_number: HEIGHT_REVISION_NUMBER,
+        revision_height: h,
+    })
+}
+
+/// Height for fields JunoClaw encodes itself — the packet `timeout_height` it
+/// hashes into the ICS-20 commitment. JunoClaw's keeper always uses revision 0
+/// there, so this must NOT use `HEIGHT_REVISION_NUMBER` (that constant is only
+/// for heights the 08-wasm *client* consumes: proof/consensus/latest). Using
+/// rev=1 here would make ibc-go compute a different commitment than the one
+/// JunoClaw stored. Note a non-zero rev=0 timeout_height reads as "already
+/// timed out" against the rev=1 client/Osmosis height, so pass
+/// `--timeout-height 0` and rely on `--timeout-timestamp`.
+fn commitment_height(h: u64) -> Option<IbcHeight> {
+    Some(IbcHeight {
+        revision_number: 0,
+        revision_height: h,
+    })
+}
+
+// ---- JunoClaw IbcMsg subcommands ----
+
+async fn cmd_jc_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a.client_id.as_ref().ok_or("jc-create-client requires --client-id")?;
+    let msg = IbcMsg::CreateClient {
+        sender: layer_sender(a)?,
+        client_id: client_id.clone(),
+        chain_id: a.cp_chain_id.clone(),
+        latest_height: a.height.unwrap_or(0),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::CreateClient({client_id} -> {}) broadcast OK — txhash {hash}", a.cp_chain_id);
+    Ok(())
+}
+
+async fn cmd_jc_conn_init(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a.client_id.as_ref().ok_or("jc-conn-init requires --client-id")?;
+    let connection_id = a
+        .connection_id
+        .as_ref()
+        .ok_or("jc-conn-init requires --connection-id")?;
+    let cp_client_id = a
+        .cp_client_id
+        .as_ref()
+        .ok_or("jc-conn-init requires --cp-client-id")?;
+    let msg = IbcMsg::ConnectionOpenInit {
+        sender: layer_sender(a)?,
+        client_id: client_id.clone(),
+        connection_id: connection_id.clone(),
+        counterparty_client_id: cp_client_id.clone(),
+        counterparty_connection_id: a.cp_connection_id.clone().unwrap_or_default(),
+        // The counterparty (Osmosis) commitment prefix stored in our
+        // ConnectionEnd — ibc-go expects the standard "ibc" store prefix.
+        counterparty_prefix: "ibc".to_string(),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::ConnectionOpenInit({connection_id}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_jc_conn_ack(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let connection_id = a
+        .connection_id
+        .as_ref()
+        .ok_or("jc-conn-ack requires --connection-id")?;
+    let cp_connection_id = a
+        .cp_connection_id
+        .as_ref()
+        .ok_or("jc-conn-ack requires --cp-connection-id")?;
+    let msg = IbcMsg::ConnectionOpenAck {
+        sender: layer_sender(a)?,
+        connection_id: connection_id.clone(),
+        counterparty_connection_id: cp_connection_id.clone(),
+        proof: cosmwasm_std::Binary::default(),
+        proof_height: a.proof_height.unwrap_or(0),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::ConnectionOpenAck({connection_id}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_jc_chan_init(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let channel_id = a
+        .channel_id
+        .as_ref()
+        .ok_or("jc-chan-init requires --channel-id")?;
+    let connection_id = a
+        .connection_id
+        .as_ref()
+        .ok_or("jc-chan-init requires --connection-id")?;
+    let msg = IbcMsg::ChannelOpenInit {
+        sender: layer_sender(a)?,
+        port_id: port_id.clone(),
+        channel_id: channel_id.clone(),
+        connection_id: connection_id.clone(),
+        counterparty_port_id: a.cp_port_id.clone().unwrap_or_else(|| "transfer".into()),
+        counterparty_channel_id: a.cp_channel_id.clone().unwrap_or_default(),
+        ordering: a.ordering.clone().unwrap_or_else(|| "UNORDERED".into()),
+        version: a.version.clone().unwrap_or_else(|| "ics20-1".into()),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::ChannelOpenInit({port_id}/{channel_id}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_jc_chan_ack(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let channel_id = a
+        .channel_id
+        .as_ref()
+        .ok_or("jc-chan-ack requires --channel-id")?;
+    let cp_channel_id = a
+        .cp_channel_id
+        .as_ref()
+        .ok_or("jc-chan-ack requires --cp-channel-id")?;
+    let msg = IbcMsg::ChannelOpenAck {
+        sender: layer_sender(a)?,
+        port_id: port_id.clone(),
+        channel_id: channel_id.clone(),
+        counterparty_channel_id: cp_channel_id.clone(),
+        counterparty_version: a.version.clone().unwrap_or_else(|| "ics20-1".into()),
+        proof: cosmwasm_std::Binary::default(),
+        proof_height: a.proof_height.unwrap_or(0),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::ChannelOpenAck({port_id}/{channel_id}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_jc_transfer(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let channel_id = a
+        .channel_id
+        .as_ref()
+        .ok_or("jc-transfer requires --channel-id")?;
+    let receiver = a.to.as_ref().ok_or("jc-transfer requires --to <receiver>")?;
+    let amount = a
+        .amount
+        .as_ref()
+        .ok_or("jc-transfer requires --amount <n><denom>")?;
+    let split = amount
+        .find(|c: char| c.is_alphabetic())
+        .ok_or("invalid --amount (expected <amount><denom>)")?;
+    let (amt, denom) = amount.split_at(split);
+    let msg = IbcMsg::Transfer {
+        sender: layer_sender(a)?,
+        port_id: port_id.clone(),
+        channel_id: channel_id.clone(),
+        token: cosmwasm_std::Coin {
+            denom: denom.to_string(),
+            amount: cosmwasm_std::Uint128::from(amt.parse::<u128>()?),
+        },
+        receiver: receiver.clone(),
+        timeout_height: a.timeout_height.unwrap_or(0),
+        timeout_timestamp: a.timeout_timestamp.unwrap_or(0),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::Transfer({amount} {port_id}/{channel_id} -> {receiver}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_jc_ack(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let channel_id = a
+        .channel_id
+        .as_ref()
+        .ok_or("jc-ack requires --channel-id")?;
+    let sequence = a.sequence.ok_or("jc-ack requires --sequence")?;
+    let msg = IbcMsg::Acknowledgement {
+        sender: layer_sender(a)?,
+        port_id: port_id.clone(),
+        channel_id: channel_id.clone(),
+        sequence,
+        acknowledgement: cosmwasm_std::Binary::default(),
+        proof: cosmwasm_std::Binary::default(),
+        proof_height: a.proof_height.unwrap_or(0),
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("IbcMsg::Acknowledgement({port_id}/{channel_id} seq {sequence}) broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+// ---- Counterparty ibc-go handshake / packet subcommands ----
+
+async fn cmd_conn_try(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("conn-try requires --client-id (the 08-wasm client)")?;
+    let cp_client_id = a
+        .cp_client_id
+        .as_ref()
+        .ok_or("conn-try requires --cp-client-id")?;
+    let cp_connection_id = a
+        .cp_connection_id
+        .as_ref()
+        .ok_or("conn-try requires --cp-connection-id")?;
+
+    // Proof of JunoClaw's ConnectionEnd{INIT} at ibc/connections/<cp_conn>.
+    let key = format!("ibc/connections/{cp_connection_id}").into_bytes();
+    let (proof_init, proof_height) = assemble_membership_proof(&a.layer_grpc, key).await?;
+    println!("proof_init over ibc/connections/{cp_connection_id} @ height {proof_height}");
+
+    // The 08-wasm client needs a consensus state at exactly proof_height.
+    let h = update_client_to(a, client_id, proof_height).await?;
+    println!("MsgUpdateClient({client_id} @ {proof_height}) broadcast OK — txhash {h}");
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = ibc::MsgConnectionOpenTry {
+        client_id: client_id.clone(),
+        previous_connection_id: String::new(),
+        client_state: None, // devnet: skip counterparty client/consensus proofs
+        counterparty: Some(ibc::ConnectionCounterparty {
+            client_id: cp_client_id.clone(),
+            connection_id: cp_connection_id.clone(),
+            prefix: Some(ibc::MerklePrefix {
+                key_prefix: ibc::COUNTERPARTY_PREFIX.to_vec(),
+            }),
+        }),
+        delay_period: 0,
+        counterparty_versions: vec![ibc::Version {
+            identifier: "1".into(),
+            features: vec!["ORDER_ORDERED".into(), "ORDER_UNORDERED".into()],
+        }],
+        proof_height: height(proof_height),
+        proof_init,
+        proof_client: vec![],
+        proof_consensus: vec![],
+        consensus_height: height(proof_height),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_CONN_OPEN_TRY, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgConnectionOpenTry broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_conn_confirm(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("conn-confirm requires --client-id (the 08-wasm client)")?;
+    let connection_id = a
+        .connection_id
+        .as_ref()
+        .ok_or("conn-confirm requires --connection-id")?;
+    let cp_connection_id = a
+        .cp_connection_id
+        .as_ref()
+        .ok_or("conn-confirm requires --cp-connection-id")?;
+
+    // Proof of JunoClaw's ConnectionEnd{OPEN} at ibc/connections/<cp_conn>.
+    let key = format!("ibc/connections/{cp_connection_id}").into_bytes();
+    let (proof_ack, proof_height) = assemble_membership_proof(&a.layer_grpc, key).await?;
+    println!("proof_ack over ibc/connections/{cp_connection_id} @ height {proof_height}");
+
+    // The 08-wasm client needs a consensus state at exactly proof_height.
+    let h = update_client_to(a, client_id, proof_height).await?;
+    println!("MsgUpdateClient({client_id} @ {proof_height}) broadcast OK — txhash {h}");
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = ibc::MsgConnectionOpenConfirm {
+        connection_id: connection_id.clone(),
+        proof_ack,
+        proof_height: height(proof_height),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_CONN_OPEN_CONFIRM, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgConnectionOpenConfirm broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_chan_try(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("chan-try requires --client-id (the 08-wasm client)")?;
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let connection_id = a
+        .connection_id
+        .as_ref()
+        .ok_or("chan-try requires --connection-id")?;
+    let cp_port_id = a.cp_port_id.clone().unwrap_or_else(|| "transfer".into());
+    let cp_channel_id = a
+        .cp_channel_id
+        .as_ref()
+        .ok_or("chan-try requires --cp-channel-id")?;
+    let version = a.version.clone().unwrap_or_else(|| "ics20-1".into());
+
+    // Proof of JunoClaw's Channel{INIT} at ibc/channelEnds/ports/<cp_port>/channels/<cp_chan>.
+    let key = format!("ibc/channelEnds/ports/{cp_port_id}/channels/{cp_channel_id}").into_bytes();
+    let (proof_init, proof_height) = assemble_membership_proof(&a.layer_grpc, key).await?;
+    println!("proof_init over channel {cp_port_id}/{cp_channel_id} @ height {proof_height}");
+
+    // The 08-wasm client needs a consensus state at exactly proof_height.
+    let h = update_client_to(a, client_id, proof_height).await?;
+    println!("MsgUpdateClient({client_id} @ {proof_height}) broadcast OK — txhash {h}");
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = ibc::MsgChannelOpenTry {
+        port_id: port_id.clone(),
+        previous_channel_id: String::new(),
+        channel: Some(ibc::Channel {
+            state: ibc::ChannelState::TryOpen as i32,
+            ordering: ibc::ChannelOrder::Unordered as i32,
+            counterparty: Some(ibc::ChannelCounterparty {
+                port_id: cp_port_id.clone(),
+                channel_id: cp_channel_id.clone(),
+            }),
+            connection_hops: vec![connection_id.clone()],
+            version: version.clone(),
+        }),
+        counterparty_version: version,
+        proof_init,
+        proof_height: height(proof_height),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_CHAN_OPEN_TRY, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgChannelOpenTry broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_chan_confirm(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("chan-confirm requires --client-id (the 08-wasm client)")?;
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let channel_id = a
+        .channel_id
+        .as_ref()
+        .ok_or("chan-confirm requires --channel-id")?;
+    let cp_port_id = a.cp_port_id.clone().unwrap_or_else(|| "transfer".into());
+    let cp_channel_id = a
+        .cp_channel_id
+        .as_ref()
+        .ok_or("chan-confirm requires --cp-channel-id")?;
+
+    // Proof of JunoClaw's Channel{OPEN} at ibc/channelEnds/ports/<cp_port>/channels/<cp_chan>.
+    let key = format!("ibc/channelEnds/ports/{cp_port_id}/channels/{cp_channel_id}").into_bytes();
+    let (proof_ack, proof_height) = assemble_membership_proof(&a.layer_grpc, key).await?;
+    println!("proof_ack over channel {cp_port_id}/{cp_channel_id} @ height {proof_height}");
+
+    // The 08-wasm client needs a consensus state at exactly proof_height.
+    let h = update_client_to(a, client_id, proof_height).await?;
+    println!("MsgUpdateClient({client_id} @ {proof_height}) broadcast OK — txhash {h}");
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = ibc::MsgChannelOpenConfirm {
+        port_id: port_id.clone(),
+        channel_id: channel_id.clone(),
+        proof_ack,
+        proof_height: height(proof_height),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_CHAN_OPEN_CONFIRM, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgChannelOpenConfirm broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+async fn cmd_recv_packet(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("recv-packet requires --client-id (the 08-wasm client)")?;
+    let port_id = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let channel_id = a
+        .channel_id
+        .as_ref()
+        .ok_or("recv-packet requires --channel-id")?;
+    let cp_port_id = a.cp_port_id.clone().unwrap_or_else(|| "transfer".into());
+    let cp_channel_id = a
+        .cp_channel_id
+        .as_ref()
+        .ok_or("recv-packet requires --cp-channel-id")?;
+    let sequence = a.sequence.ok_or("recv-packet requires --sequence")?;
+    let receiver = a.to.as_ref().ok_or("recv-packet requires --to <receiver>")?;
+    let amount = a
+        .amount
+        .as_ref()
+        .ok_or("recv-packet requires --amount <n><denom>")?;
+    let split = amount
+        .find(|c: char| c.is_alphabetic())
+        .ok_or("invalid --amount (expected <amount><denom>)")?;
+    let (amt, denom) = amount.split_at(split);
+
+    // Reconstruct the exact ICS-20 packet data JunoClaw committed.
+    let jc_sender = layer_sender(a)?.to_string();
+    let packet_data = format!(
+        "{{\"amount\":\"{}\",\"denom\":\"{}\",\"receiver\":\"{}\",\"sender\":\"{}\"}}",
+        amt, denom, receiver, jc_sender
+    )
+    .into_bytes();
+
+    // Proof of JunoClaw's packet commitment at
+    // ibc/commitments/ports/<src_port>/channels/<src_chan>/sequences/<seq>.
+    let key = format!(
+        "ibc/commitments/ports/{cp_port_id}/channels/{cp_channel_id}/sequences/{sequence}"
+    )
+    .into_bytes();
+    let (proof_commitment, proof_height) = assemble_membership_proof(&a.layer_grpc, key).await?;
+    println!("proof_commitment over packet seq {sequence} @ height {proof_height}");
+
+    // The 08-wasm client needs a consensus state at exactly proof_height.
+    let h = update_client_to(a, client_id, proof_height).await?;
+    println!("MsgUpdateClient({client_id} @ {proof_height}) broadcast OK — txhash {h}");
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = ibc::MsgRecvPacket {
+        packet: Some(ibc::Packet {
+            sequence,
+            source_port: cp_port_id.clone(),
+            source_channel: cp_channel_id.clone(),
+            destination_port: port_id.clone(),
+            destination_channel: channel_id.clone(),
+            data: packet_data,
+            timeout_height: commitment_height(a.timeout_height.unwrap_or(0)),
+            timeout_timestamp: a.timeout_timestamp.unwrap_or(0),
+        }),
+        proof_commitment,
+        proof_height: height(proof_height),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_RECV_PACKET, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    println!("MsgRecvPacket broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -952,6 +1646,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "send" => cmd_send(&a).await,
         "keygen" => cmd_keygen(&a),
         "account" => cmd_account(&a).await,
+        // JunoClaw sovereign IbcMsg
+        "jc-create-client" => cmd_jc_create_client(&a).await,
+        "jc-conn-init" => cmd_jc_conn_init(&a).await,
+        "jc-conn-ack" => cmd_jc_conn_ack(&a).await,
+        "jc-chan-init" => cmd_jc_chan_init(&a).await,
+        "jc-chan-ack" => cmd_jc_chan_ack(&a).await,
+        "jc-transfer" => cmd_jc_transfer(&a).await,
+        "jc-ack" => cmd_jc_ack(&a).await,
+        // Counterparty ibc-go handshake + packet relay
+        "conn-try" => cmd_conn_try(&a).await,
+        "conn-confirm" => cmd_conn_confirm(&a).await,
+        "chan-try" => cmd_chan_try(&a).await,
+        "chan-confirm" => cmd_chan_confirm(&a).await,
+        "recv-packet" => cmd_recv_packet(&a).await,
         other => {
             eprintln!("unknown subcommand: {other}\n");
             print_usage();

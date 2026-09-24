@@ -683,6 +683,7 @@ dependencies = [
 name = "generate-testnet-keys"
 version = "0.1.0"
 dependencies = [
+ "aws-lc-rs",
  "commonware-codec",
  "commonware-cryptography",
  "commonware-math",

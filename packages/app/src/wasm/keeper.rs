@@ -1257,6 +1257,12 @@ pub fn encode_cosmwasm_response(data: MsgData) -> (&'static str, Vec<u8>) {
             WasmMsgData::PinCode {} => unknown_cosmwasm_response(),
             WasmMsgData::UnpinCode {} => unknown_cosmwasm_response(),
         },
+        // Sovereign IBC response: JSON-encoded IbcMsgData so the relayer reads back
+        // the assigned client/connection/channel ids and packet sequence.
+        MsgData::Ibc(ibc) => (
+            "/junoclaw.ibc.v1.MsgResponse",
+            cosmwasm_std::to_json_vec(&ibc).unwrap_or_default(),
+        ),
     }
 }
 

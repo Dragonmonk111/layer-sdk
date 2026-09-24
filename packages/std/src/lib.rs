@@ -2,6 +2,7 @@ mod account_id;
 pub mod api;
 mod encode;
 mod gas;
+mod ibc;
 mod msg;
 mod pubkey;
 mod query;
@@ -14,6 +15,7 @@ pub use account_id::{must_id, AccountId, AccountIdError, BECH32_PREFIX};
 use cosmwasm_std::Binary;
 pub use encode::{CoinEncode, HexEncode};
 pub use gas::{GasError, GasMeter, GasResult};
+pub use ibc::{IbcMsg, IbcMsgData};
 pub use msg::{
     required_signer, BankMsg, BankMsgData, Msg, MsgData, MsgError, WasmMsg, WasmMsgData,
 };

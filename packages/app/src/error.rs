@@ -5,6 +5,7 @@ use thiserror::Error;
 
 use crate::auth::AuthError;
 use crate::bank::BankError;
+use crate::ibc::IbcError;
 use crate::wasm::WasmError;
 
 pub type PulsarResult<T> = Result<T, PulsarError>;
@@ -25,6 +26,9 @@ pub enum PulsarError {
 
     #[error("{0}")]
     Wasm(#[from] WasmError),
+
+    #[error("{0}")]
+    Ibc(#[from] IbcError),
 
     #[error("{0}")]
     Query(#[from] QueryError),

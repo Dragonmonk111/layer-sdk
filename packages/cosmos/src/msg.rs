@@ -10,7 +10,7 @@ use cosmos_sdk_proto::{
 use cosmrs::Any;
 use tracing::trace_span;
 
-use layer_std::{AccountId, BankMsg, Msg, MsgError, WasmMsg};
+use layer_std::{AccountId, BankMsg, IbcMsg, Msg, MsgError, WasmMsg};
 
 use crate::error::CosmosError;
 use crate::unzip::unzip_if_needed;
@@ -109,6 +109,14 @@ pub fn parse_cosmos_msg(msg: &Any) -> Result<Msg, MsgError> {
                 contract_addr: AccountId::parse_string(&parsed.contract)?,
             }
             .into())
+        }
+
+        // JunoClaw sovereign IBC message: the Any value is a JSON-encoded IbcMsg.
+        // The relayer constructs these; the chain decodes + routes to the ibc keeper.
+        "/junoclaw.ibc.v1.Msg" => {
+            let ibc: IbcMsg = serde_json::from_slice(&msg.value)
+                .map_err(|e| MsgError::ParseError(format!("ibc msg decode: {e}")))?;
+            Ok(ibc.into())
         }
 
         _ => Err(MsgError::UnsupportedAnyType(msg.type_url.clone())),

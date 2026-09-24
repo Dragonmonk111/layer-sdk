@@ -331,7 +331,17 @@ fn main() {
 
     // Use commonware_runtime::tokio::Runner to provide the Context needed by Engine::new().
     // Runner::start() blocks until the future completes.
-    let runner = commonware_runtime::tokio::Runner::default();
+    //
+    // IMPORTANT: Runner::default() stores the consensus journal under a RANDOM
+    // temp dir in the container's writable layer — lost on --force-recreate,
+    // which resets consensus to height 1 and desyncs it from persisted app
+    // state (BadBlockHeight). Point storage_directory at the persistent
+    // {data_dir}/consensus so a binary-swap upgrade resumes cleanly.
+    let consensus_dir = config.consensus_storage_path();
+    std::fs::create_dir_all(&consensus_dir).expect("Failed to create consensus directory");
+    let runner_cfg = commonware_runtime::tokio::Config::new()
+        .with_storage_directory(std::path::PathBuf::from(&consensus_dir));
+    let runner = commonware_runtime::tokio::Runner::new(runner_cfg);
     runner.start(|context| async move {
         run_node(context, config, km).await
     });
@@ -361,6 +371,18 @@ async fn run_node(
 
     let logic = StateMachine::new(&AppConfig::new(&wal_path));
     let mut app = App::new(storage, logic);
+
+    // Validator-local min gas price (mempool admission filter, CheckTx only).
+    // e.g. "0.001ujclaw"; "0<denom>" disables the floor.
+    match layer_app::MinGasPrice::parse(&config.min_gas_price) {
+        Some(mgp) => {
+            info!(min_gas_price = %config.min_gas_price, "Min gas price set");
+            app.set_min_gas_price(Some(mgp));
+        }
+        None => {
+            warn!(min_gas_price = %config.min_gas_price, "Invalid min_gas_price — fee floor disabled");
+        }
+    }
 
     // Attempt to load state; if none exists, initialize from genesis.
     use layer_app::AppLoadError;
@@ -402,20 +424,26 @@ async fn run_node(
     // -----------------------------------------------------------------------
 
     let mempool = Arc::new(Mutex::new(Mempool::new(config.mempool_max_pending)));
+
+    // Resume block production at the app's persisted height. LayerNode tracks
+    // current_height in memory and proposes current_height+1; passing 0 always
+    // restarts at height 1, which desyncs from persisted app state on
+    // restart/recreate (BadBlockHeight). After genesis init info().height==0
+    // (next block = 1); after load_from_storage it's the last committed height.
+    let resume_height = app.info().map(|b| b.height).unwrap_or(0);
     let app_arc = Arc::new(RwLock::new(app));
 
-    // initial_height=0 means the next block will be height=1.
     #[cfg(feature = "rocksdb")]
     let layer_node = LayerNode::<RockStore, ed25519::PublicKey>::new(
         app_arc.clone(),
         mempool.clone(),
-        0,
+        resume_height,
     );
     #[cfg(not(feature = "rocksdb"))]
     let layer_node = LayerNode::<MemoryStore, ed25519::PublicKey>::new(
         app_arc.clone(),
         mempool.clone(),
-        0,
+        resume_height,
     );
 
     // Create an unbounded channel to forward payload bytes from the relay's broadcast()

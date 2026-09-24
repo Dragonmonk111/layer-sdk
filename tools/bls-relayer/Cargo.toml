@@ -18,6 +18,11 @@ layer-proto = { workspace = true, features = ["client"] }
 prost = { workspace = true }
 prost-types = { workspace = true }
 
+# JunoClaw message types — the real IbcMsg so the relayer's JSON encoding
+# matches the chain's serde format exactly (single source of truth).
+layer-std = { workspace = true }
+cosmwasm-std = { workspace = true }
+
 # gRPC client — tls-native-roots for public counterparty endpoints (uni-7
 # gRPC is TLS-only on :443); plaintext still used for the local JunoClaw node.
 tonic = { workspace = true, features = ["tls-native-roots"] }
