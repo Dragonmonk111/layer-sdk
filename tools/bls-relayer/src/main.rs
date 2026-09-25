@@ -344,6 +344,9 @@ struct Args {
     proof_height: Option<u64>,
     timeout_height: Option<u64>,
     timeout_timestamp: Option<u64>,
+    // relay daemon
+    interval: u64,
+    update_cadence: u64,
 }
 
 fn print_usage() {
@@ -374,6 +377,7 @@ fn print_usage() {
     eprintln!("  chan-try          MsgChannelOpenTry (proof of JunoClaw chan INIT)");
     eprintln!("  chan-confirm      MsgChannelOpenConfirm (proof of JunoClaw chan OPEN)");
     eprintln!("  recv-packet       MsgRecvPacket (proof of JunoClaw packet commitment)");
+    eprintln!("  relay             Daemon: auto update-client + relay/ack pending packets");
     eprintln!();
     eprintln!("Common flags:");
     eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
@@ -399,6 +403,9 @@ fn print_usage() {
     eprintln!("  chan-try:       --client-id <id> --connection-id <id> --cp-channel-id <id> [--cp-port-id <p>] [--version <v>]");
     eprintln!("  chan-confirm:   --client-id <id> --channel-id <id> --cp-channel-id <id> [--cp-port-id <p>]");
     eprintln!("  recv-packet:    --client-id <id> --channel-id <id> --cp-channel-id <id> --sequence <n> --to <rcpt> --amount <n><denom>");
+    eprintln!();
+    eprintln!("relay (daemon, JunoClaw-centric: --channel-id = JunoClaw source, --cp-channel-id = dest):");
+    eprintln!("  relay:          --client-id <08-wasm-N> --channel-id <jc-chan> --cp-channel-id <cp-chan> [--interval <s>] [--update-cadence <blocks>]");
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -445,6 +452,8 @@ fn parse_args() -> Result<Args, String> {
         proof_height: None,
         timeout_height: None,
         timeout_timestamp: None,
+        interval: 6,
+        update_cadence: 50,
     };
     let mut i = 2;
     while i < args.len() {
@@ -510,6 +519,14 @@ fn parse_args() -> Result<Args, String> {
                         .parse()
                         .map_err(|_| "invalid --timeout-timestamp")?,
                 )
+            }
+            "--interval" => {
+                a.interval = val(&mut i)?.parse().map_err(|_| "invalid --interval")?
+            }
+            "--update-cadence" => {
+                a.update_cadence = val(&mut i)?
+                    .parse()
+                    .map_err(|_| "invalid --update-cadence")?
             }
             other => return Err(format!("unknown flag: {other}")),
         }
@@ -1626,6 +1643,237 @@ async fn cmd_recv_packet(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
+// relay daemon — automatic update-client cadence + packet recv/ack loop
+// ---------------------------------------------------------------------------
+
+/// JunoClaw ICS-24 storage keys (mirror `packages/app/src/ibc/paths.rs`).
+fn jc_next_seq_key(port: &str, chan: &str) -> Vec<u8> {
+    format!("ibc/nextSequenceSend/ports/{port}/channels/{chan}").into_bytes()
+}
+fn jc_commitment_key(port: &str, chan: &str, seq: u64) -> Vec<u8> {
+    format!("ibc/commitments/ports/{port}/channels/{chan}/sequences/{seq}").into_bytes()
+}
+fn jc_packet_data_key(port: &str, chan: &str, seq: u64) -> Vec<u8> {
+    format!("ibc/packetData/ports/{port}/channels/{chan}/sequences/{seq}").into_bytes()
+}
+
+/// Read a committed storage value via the lightclient `Proof` query — returns
+/// `Some(value)` if the key exists, `None` if absent (non-membership proofs
+/// aren't supported, so absence surfaces as `not_found`).
+async fn query_value(
+    layer_grpc: &str,
+    key: Vec<u8>,
+) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+    let mut client = layer_client(layer_grpc).await?;
+    match client.proof(QueryProofRequest { key }).await {
+        Ok(resp) => Ok(Some(resp.into_inner().value)),
+        Err(e) if e.code() == tonic::Code::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Latest committed JunoClaw height.
+async fn latest_height(layer_grpc: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    let mut client = layer_client(layer_grpc).await?;
+    Ok(client
+        .latest_height(QueryLatestHeightRequest {})
+        .await?
+        .into_inner()
+        .height)
+}
+
+/// Does the counterparty hold a written acknowledgement for this packet? `true`
+/// means it was received + acked on the dest chain, so JunoClaw's commitment is
+/// safe to clear. `false` (including a query error) means "still needs recv" —
+/// a conservative default that self-heals on the next tick.
+async fn cp_has_ack(grpc: &str, port: &str, chan: &str, seq: u64) -> bool {
+    let res: Result<bool, Box<dyn std::error::Error>> = async {
+        let channel = connect(grpc).await?;
+        let mut client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
+        client.ready().await?;
+        let path: http::uri::PathAndQuery =
+            "/ibc.core.channel.v1.Query/PacketAcknowledgement".parse()?;
+        let codec: ProstCodec<
+            ibc::QueryPacketAcknowledgementRequest,
+            ibc::QueryPacketAcknowledgementResponse,
+        > = ProstCodec::default();
+        let resp = client
+            .unary(
+                Request::new(ibc::QueryPacketAcknowledgementRequest {
+                    port_id: port.to_string(),
+                    channel_id: chan.to_string(),
+                    sequence: seq,
+                }),
+                path,
+                codec,
+            )
+            .await?;
+        Ok(!resp.into_inner().acknowledgement.is_empty())
+    }
+    .await;
+    res.unwrap_or(false)
+}
+
+/// Deliver one stored packet to the counterparty: prove JunoClaw's commitment,
+/// advance the 08-wasm client to the proof height, then `MsgRecvPacket`.
+async fn relay_recv_packet(
+    a: &Args,
+    client_id: &str,
+    jc_port: &str,
+    jc_channel: &str,
+    packet: ibc::Packet,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let seq = packet.sequence;
+    let (proof_commitment, proof_height) =
+        assemble_membership_proof(&a.layer_grpc, jc_commitment_key(jc_port, jc_channel, seq))
+            .await?;
+    let h = update_client_to(a, client_id, proof_height).await?;
+    println!("relay: update-client {client_id}@{proof_height} txhash {h}");
+
+    let key = signer_key(a)?;
+    let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
+    let msg = ibc::MsgRecvPacket {
+        packet: Some(packet),
+        proof_commitment,
+        proof_height: height(proof_height),
+        signer: signer.clone(),
+    };
+    let account = query_account(&a.grpc, &signer).await?;
+    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_RECV_PACKET, &msg), a, &account)?;
+    let hash = broadcast(&a.grpc, tx_bytes).await?;
+    wait_tx(&a.grpc, &hash).await?;
+    println!("relay: recv-packet seq {seq} txhash {hash}");
+    Ok(())
+}
+
+/// Clear JunoClaw's packet commitment once the counterparty has acked.
+async fn relay_ack(
+    a: &Args,
+    jc_port: &str,
+    jc_channel: &str,
+    seq: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let msg = IbcMsg::Acknowledgement {
+        sender: layer_sender(a)?,
+        port_id: jc_port.to_string(),
+        channel_id: jc_channel.to_string(),
+        sequence: seq,
+        acknowledgement: cosmwasm_std::Binary::default(),
+        proof: cosmwasm_std::Binary::default(),
+        proof_height: 0,
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("relay: jc-ack seq {seq} txhash {hash}");
+    Ok(())
+}
+
+/// One daemon iteration: relay pending packets, then keepalive-update the client.
+async fn relay_tick(
+    a: &Args,
+    client_id: &str,
+    jc_port: &str,
+    jc_channel: &str,
+    cp_port: &str,
+    cp_channel: &str,
+    last_client_height: &mut u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Relay any pending outbound packets on the JunoClaw channel.
+    let next = match query_value(&a.layer_grpc, jc_next_seq_key(jc_port, jc_channel)).await? {
+        Some(v) if v.len() >= 8 => u64::from_be_bytes(v[..8].try_into().unwrap()),
+        _ => 1,
+    };
+    for seq in 1..next {
+        // Commitment still present => not yet acked on JunoClaw.
+        if query_value(&a.layer_grpc, jc_commitment_key(jc_port, jc_channel, seq))
+            .await?
+            .is_none()
+        {
+            continue;
+        }
+        // Already received + acked on the counterparty? Just clear locally.
+        if cp_has_ack(&a.grpc, cp_port, cp_channel, seq).await {
+            relay_ack(a, jc_port, jc_channel, seq).await?;
+            continue;
+        }
+        // Read the stored packet and deliver it.
+        let packet = match query_value(&a.layer_grpc, jc_packet_data_key(jc_port, jc_channel, seq))
+            .await?
+        {
+            Some(v) => ibc::Packet::decode(v.as_slice())?,
+            None => {
+                eprintln!("relay: seq {seq} has a commitment but no stored packet — skipping");
+                continue;
+            }
+        };
+        relay_recv_packet(a, client_id, jc_port, jc_channel, packet).await?;
+        relay_ack(a, jc_port, jc_channel, seq).await?;
+        *last_client_height = latest_height(&a.layer_grpc).await.unwrap_or(*last_client_height);
+    }
+
+    // 2. Keepalive: advance the 08-wasm client on cadence so it never goes stale.
+    let latest = latest_height(&a.layer_grpc).await?;
+    if latest >= *last_client_height + a.update_cadence {
+        let hash = update_client_to(a, client_id, latest).await?;
+        *last_client_height = latest;
+        println!("relay: keepalive update-client {client_id}@{latest} txhash {hash}");
+    }
+    Ok(())
+}
+
+/// `relay` — run the relayer as a daemon. Watches the JunoClaw outbound channel
+/// for committed packets, delivers each to the counterparty (`MsgRecvPacket`),
+/// clears the commitment (`jc-ack`), and keeps the 08-wasm client fresh.
+///
+/// Flags (JunoClaw-centric: `--channel-id` is the JunoClaw source channel,
+/// `--cp-channel-id` the counterparty dest channel):
+///   --client-id <08-wasm-N>   client on the counterparty (required)
+///   --channel-id <id>         JunoClaw source channel (required)
+///   --cp-channel-id <id>      counterparty dest channel (required)
+///   --port-id / --cp-port-id  ports (default "transfer")
+///   --interval <secs>         tick period (default 6)
+///   --update-cadence <blocks> keepalive update-client every N blocks (default 50)
+async fn cmd_relay(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("relay requires --client-id (the 08-wasm client on the counterparty)")?;
+    let jc_port = a.port_id.clone().unwrap_or_else(|| "transfer".into());
+    let jc_channel = a
+        .channel_id
+        .as_ref()
+        .ok_or("relay requires --channel-id (the JunoClaw source channel)")?;
+    let cp_port = a.cp_port_id.clone().unwrap_or_else(|| "transfer".into());
+    let cp_channel = a
+        .cp_channel_id
+        .as_ref()
+        .ok_or("relay requires --cp-channel-id (the counterparty dest channel)")?;
+    let interval = std::time::Duration::from_secs(a.interval.max(1));
+
+    println!(
+        "relay: watching {jc_port}/{jc_channel} -> {cp_port}/{cp_channel}, client {client_id}, tick {}s, keepalive every {} blocks",
+        interval.as_secs(),
+        a.update_cadence
+    );
+    let mut last_client_height = 0u64;
+    loop {
+        if let Err(e) = relay_tick(
+            a,
+            client_id,
+            &jc_port,
+            jc_channel,
+            &cp_port,
+            cp_channel,
+            &mut last_client_height,
+        )
+        .await
+        {
+            eprintln!("relay tick: {e}");
+        }
+        tokio::time::sleep(interval).await;
+    }
+}
+
+// ---------------------------------------------------------------------------
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1660,6 +1908,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "chan-try" => cmd_chan_try(&a).await,
         "chan-confirm" => cmd_chan_confirm(&a).await,
         "recv-packet" => cmd_recv_packet(&a).await,
+        // Daemon: auto update-client cadence + packet recv/ack loop
+        "relay" => cmd_relay(&a).await,
         other => {
             eprintln!("unknown subcommand: {other}\n");
             print_usage();

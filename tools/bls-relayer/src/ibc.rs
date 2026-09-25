@@ -211,6 +211,30 @@ pub struct MsgRecvPacket {
     pub signer: String,
 }
 
+/// ibc.core.channel.v1.QueryPacketAcknowledgementRequest — queries whether the
+/// counterparty has written an ack for a packet (i.e. it was received). Used by
+/// the relay daemon to decide between "still needs recv" and "safe to clear".
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct QueryPacketAcknowledgementRequest {
+    #[prost(string, tag = "1")]
+    pub port_id: String,
+    #[prost(string, tag = "2")]
+    pub channel_id: String,
+    #[prost(uint64, tag = "3")]
+    pub sequence: u64,
+}
+
+/// ibc.core.channel.v1.QueryPacketAcknowledgementResponse
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct QueryPacketAcknowledgementResponse {
+    #[prost(bytes = "vec", tag = "1")]
+    pub acknowledgement: Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub proof: Vec<u8>,
+    #[prost(message, optional, tag = "3")]
+    pub proof_height: Option<IbcHeight>,
+}
+
 // Type URLs (ibc-go v8+)
 pub const TYPE_URL_CONN_OPEN_TRY: &str = "/ibc.core.connection.v1.MsgConnectionOpenTry";
 pub const TYPE_URL_CONN_OPEN_CONFIRM: &str = "/ibc.core.connection.v1.MsgConnectionOpenConfirm";

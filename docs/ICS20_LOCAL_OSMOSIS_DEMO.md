@@ -100,6 +100,43 @@ bls-relayer recv-packet --client-id 08-wasm-5 --channel-id <OSMO_CHAN> --cp-chan
 bls-relayer jc-ack --channel-id channel-0 --sequence 1
 ```
 
+## Relay daemon (unattended)
+
+Steps 10–11 above are the manual path. The `relay` subcommand runs the same
+logic as a loop so the bridge operates without babysitting:
+
+```bash
+bls-relayer relay \
+  --client-id 08-wasm-5 \
+  --channel-id channel-0 --cp-channel-id channel-2 \
+  --port-id transfer --cp-port-id transfer \
+  --interval 6 --update-cadence 50
+```
+
+Each tick it:
+
+1. Reads `ibc/nextSequenceSend/ports/transfer/channels/<JC_CHAN>` via the
+   lightclient `Proof` query's `value` to learn how many packets were sent.
+2. For every sequence whose `ibc/commitments/...` key is still present (not yet
+   acked), checks the counterparty `Query/PacketAcknowledgement`:
+   - ack already written → just `jc-ack` to clear JunoClaw's commitment;
+   - otherwise → reads the stored packet at `ibc/packetData/...`, proves the
+     commitment, auto-updates the client, and submits `MsgRecvPacket`, then
+     `jc-ack`.
+3. Keepalive: advances the 08-wasm client every `--update-cadence` blocks so it
+   never goes stale.
+
+Flag convention is **JunoClaw-centric** (opposite of `recv-packet`):
+`--channel-id` is the JunoClaw *source* channel, `--cp-channel-id` the
+counterparty *dest* channel.
+
+> Requires the keeper change that stores the full packet at `ibc/packetData/...`
+> (the commitment path only holds `sha256(packet)`, which is not reversible).
+> Deploy via the state-preserving binary swap; packets sent before the upgrade
+> have no stored `packetData` and are skipped (relay them once via the manual
+> `recv-packet` path). Packet **timeout** handling is not yet implemented — it
+> needs an `IbcMsg::Timeout` variant + escrow refund in the keeper.
+
 ## Wire-format notes
 
 - **JunoClaw txs** carry the `IbcMsg` JSON-encoded in a single `Any` under

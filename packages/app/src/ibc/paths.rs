@@ -76,3 +76,18 @@ pub fn next_sequence_send_path(port_id: &str, channel_id: &str) -> Vec<u8> {
     )
     .into_bytes()
 }
+
+/// `ibc/packetData/ports/{port_id}/channels/{channel_id}/sequences/{sequence}`
+///
+/// NOT an ICS-24 commitment path — relayer bookkeeping. The commitment path
+/// stores only `sha256(packet)` (not reversible), so the full proto-encoded
+/// `Packet` is kept here for the relay daemon to read via the `proof` query's
+/// `value` and reconstruct `MsgRecvPacket`. Cleared alongside the commitment
+/// on acknowledgement.
+pub fn packet_data_path(port_id: &str, channel_id: &str, sequence: u64) -> Vec<u8> {
+    format!(
+        "{}packetData/ports/{}/channels/{}/sequences/{}",
+        STORE_PREFIX, port_id, channel_id, sequence
+    )
+    .into_bytes()
+}

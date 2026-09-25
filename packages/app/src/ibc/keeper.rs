@@ -9,6 +9,7 @@ use cosmos_sdk_proto::ibc::core::commitment::v1::MerklePrefix;
 use cosmos_sdk_proto::ibc::core::connection::v1::{
     ConnectionEnd, Counterparty as ConnectionCounterparty, State as ConnectionState, Version,
 };
+use cosmos_sdk_proto::ibc::core::channel::v1::Packet;
 use cosmos_sdk_proto::prost::Message;
 
 use layer_std::api::MsgResponse;
@@ -530,6 +531,37 @@ impl Ibc {
         )?;
         self.write_raw(storage, meter, &seq_key, &(sequence + 1).to_be_bytes())?;
 
+        // Store the full packet for the relay daemon — the commitment above is
+        // a sha256 hash (not reversible), so the relayer reads the packet itself
+        // here via the `proof` query's `value` to rebuild `MsgRecvPacket`.
+        let packet = Packet {
+            sequence,
+            source_port: port_id.to_string(),
+            source_channel: channel_id.to_string(),
+            destination_port: chan
+                .counterparty
+                .as_ref()
+                .map(|c| c.port_id.clone())
+                .unwrap_or_default(),
+            destination_channel: chan
+                .counterparty
+                .as_ref()
+                .map(|c| c.channel_id.clone())
+                .unwrap_or_default(),
+            data: packet_data.clone(),
+            timeout_height: Some(Height {
+                revision_number: 0,
+                revision_height: timeout_height,
+            }),
+            timeout_timestamp,
+        };
+        self.write_raw(
+            storage,
+            meter,
+            &paths::packet_data_path(port_id, channel_id, sequence),
+            &packet.encode_to_vec(),
+        )?;
+
         Ok((sequence, packet_data))
     }
 
@@ -544,11 +576,8 @@ impl Ibc {
         sequence: u64,
     ) -> PulsarResult<()> {
         // Clear the packet commitment (devnet: ack proof carried, not verified).
-        let key = paths::packet_commitment_path(port_id, channel_id, sequence);
-        if self.read_raw(storage, meter, &key)?.is_none() {
-            return Err(IbcError::InvalidCommitment.into());
-        }
-        storage.remove(meter, &key)?;
+        storage.remove(meter, &paths::packet_commitment_path(port_id, channel_id, sequence))?;
+        storage.remove(meter, &paths::packet_data_path(port_id, channel_id, sequence))?;
         Ok(())
     }
 
