@@ -110,32 +110,99 @@ bls-relayer relay \
   --client-id 08-wasm-5 \
   --channel-id channel-0 --cp-channel-id channel-2 \
   --port-id transfer --cp-port-id transfer \
-  --interval 6 --update-cadence 50
+  --interval 6 --update-cadence 50 \
+  --max-retries 60 --min-fee-balance 0 --health-addr 127.0.0.1:8080
 ```
 
 Each tick it:
 
-1. Reads `ibc/nextSequenceSend/ports/transfer/channels/<JC_CHAN>` via the
-   lightclient `Proof` query's `value` to learn how many packets were sent.
-2. For every sequence whose `ibc/commitments/...` key is still present (not yet
-   acked), checks the counterparty `Query/PacketAcknowledgement`:
-   - ack already written → just `jc-ack` to clear JunoClaw's commitment;
-   - otherwise → reads the stored packet at `ibc/packetData/...`, proves the
-     commitment, auto-updates the client, and submits `MsgRecvPacket`, then
-     `jc-ack`.
-3. Keepalive: advances the 08-wasm client every `--update-cadence` blocks so it
-   never goes stale.
+1. **Fee preflight** — queries the counterparty `cosmos.bank.v1beta1` balance of
+   the relayer key and pauses the tick (with a PAUSED log) if it can't cover one
+   tx fee (`--min-fee-balance`; `0` = auto = `--fee-amount`). The JunoClaw side
+   gets the same check best-effort (warns only — its gRPC may not expose bank).
+2. Reads `ibc/nextSequenceSend/ports/transfer/channels/<JC_CHAN>` via the
+   lightclient `Proof` query's `value`, and the counterparty tip
+   (`GetLatestBlock`) for timeout detection.
+3. For every sequence from the scan floor whose `ibc/commitments/...` key is
+   still present, resolves it in order:
+   - **acked on the counterparty** (`Query/PacketAcknowledgement`) → `jc-ack`
+     to clear JunoClaw's commitment;
+   - **timeout elapsed** (packet `timeout_height`/`timeout_timestamp` vs cp tip)
+     → `IbcMsg::Timeout` on JunoClaw: the keeper refunds the escrowed tokens to
+     the *original sender* (read from the stored packet, never the message) and
+     clears commitment + packet data;
+   - **otherwise** → reads the stored packet at `ibc/packetData/...`, proves the
+     commitment, auto-updates the client, submits `MsgRecvPacket`, then `jc-ack`.
+     A sequence that keeps failing is skipped after `--max-retries` attempts
+     (`0` = unlimited) and reported once — resolve it manually (`jc-ack` or let
+     it time out).
+4. **Keepalive**: advances the 08-wasm client every `--update-cadence` blocks.
+
+The scan floor advances to the lowest still-pending sequence each tick, so a
+healthy daemon does O(1) storage reads per tick instead of rescanning history.
 
 Flag convention is **JunoClaw-centric** (opposite of `recv-packet`):
 `--channel-id` is the JunoClaw *source* channel, `--cp-channel-id` the
 counterparty *dest* channel.
 
+**Robustness** — the tick loop is hardened for unattended operation:
+
+- each tick runs inside `catch_unwind`; a panic is counted and logged, never
+  kills the daemon;
+- consecutive tick errors back off exponentially (interval ×2ⁿ, capped at 60s);
+- a `heartbeat` line logs ~once a minute with tick/packet/error counters;
+- `--health-addr` serves stats JSON on every request — wire it to your monitor
+  and alert on `last_tick_unix` staleness, `errors`/`panics` growth, or
+  `packets_pending` accumulation.
+
 > Requires the keeper change that stores the full packet at `ibc/packetData/...`
 > (the commitment path only holds `sha256(packet)`, which is not reversible).
 > Deploy via the state-preserving binary swap; packets sent before the upgrade
 > have no stored `packetData` and are skipped (relay them once via the manual
-> `recv-packet` path). Packet **timeout** handling is not yet implemented — it
-> needs an `IbcMsg::Timeout` variant + escrow refund in the keeper.
+> `recv-packet` path). Timeout refund requires the `IbcMsg::Timeout` keeper
+> handler — deploy both in the same swap.
+
+### Supervision
+
+The daemon never exits on its own; pair it with a restart policy so a host or
+process-level failure recovers automatically.
+
+**Docker** — `docker-compose.yml` service:
+
+```yaml
+relayer:
+  image: junoclaw-bls-relayer:latest
+  restart: unless-stopped
+  command: >
+    relay --client-id 08-wasm-5
+    --channel-id channel-0 --cp-channel-id channel-2
+    --interval 6 --update-cadence 50
+    --health-addr 0.0.0.0:8080
+  ports: ["127.0.0.1:8080:8080"]
+```
+
+**systemd** — `/etc/systemd/system/junoclaw-relayer.service`:
+
+```ini
+[Unit]
+Description=JunoClaw IBC relay daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/bls-relayer relay \
+  --client-id 08-wasm-5 --channel-id channel-0 --cp-channel-id channel-2 \
+  --interval 6 --update-cadence 50 --health-addr 127.0.0.1:8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+The in-process `catch_unwind` + backoff already handles per-tick failures; the
+restart policy is the backstop for process exit (OOM, unrecoverable runtime
+state). Keep `RestartSec` small — on restart the daemon re-derives all state
+from on-chain commitments, so a crash mid-tick just re-runs idempotently.
 
 ## Wire-format notes
 

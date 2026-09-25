@@ -98,6 +98,18 @@ pub enum IbcMsg {
         proof: Binary,
         proof_height: u64,
     },
+    /// ICS-4: a packet's timeout elapsed on the counterparty — refund the
+    /// escrowed token to the original sender and clear the commitment + stored
+    /// packet data (devnet: timeout proof carried, not verified).
+    Timeout {
+        sender: AccountId,
+        port_id: String,
+        channel_id: String,
+        sequence: u64,
+        /// Counterparty non-receipt / timeout proof (devnet: carried, not verified).
+        proof: Binary,
+        proof_height: u64,
+    },
 }
 
 impl From<IbcMsg> for crate::Msg {
@@ -117,6 +129,7 @@ impl Display for IbcMsg {
             IbcMsg::ChannelOpenAck { .. } => f.write_str("IbcMsg::ChannelOpenAck"),
             IbcMsg::Transfer { .. } => f.write_str("IbcMsg::Transfer"),
             IbcMsg::Acknowledgement { .. } => f.write_str("IbcMsg::Acknowledgement"),
+            IbcMsg::Timeout { .. } => f.write_str("IbcMsg::Timeout"),
         }
     }
 }
@@ -134,6 +147,7 @@ pub enum IbcMsgData {
     ChannelOpenAck {},
     Transfer { sequence: u64 },
     Acknowledgement {},
+    Timeout {},
 }
 
 impl From<IbcMsgData> for crate::MsgData {

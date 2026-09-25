@@ -226,6 +226,7 @@ impl Msg {
                 IbcMsg::ChannelOpenAck { sender, .. } => sender.clone(),
                 IbcMsg::Transfer { sender, .. } => sender.clone(),
                 IbcMsg::Acknowledgement { sender, .. } => sender.clone(),
+                IbcMsg::Timeout { sender, .. } => sender.clone(),
             },
         }
     }

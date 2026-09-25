@@ -27,9 +27,16 @@ use cosmrs::{
     tx::{self, Fee, SignDoc, SignerInfo},
     Coin,
 };
+use futures::future::FutureExt;
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tonic::{
     codec::ProstCodec,
     transport::{Channel, ClientTlsConfig},
@@ -37,16 +44,19 @@ use tonic::{
 };
 
 use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
-use layer_proto::cosmos::bank::v1beta1::MsgSend;
+use layer_proto::cosmos::bank::v1beta1::{MsgSend, query_client::QueryClient as BankQueryClient, QueryBalanceRequest};
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
     service_client::ServiceClient as TxServiceClient, BroadcastMode, BroadcastTxRequest,
     GetTxRequest, SimulateRequest,
 };
+use layer_proto::cosmos::base::tendermint::v1beta1::{
+    service_client::ServiceClient as TmServiceClient, GetLatestBlockRequest,
+};
 use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
 use layer_proto::layer::lightclient::v1::{
-    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest, QueryLatestHeightRequest,
-    QueryProofRequest,
+    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest,
+    QueryLatestHeightRequest, QueryProofRequest,
 };
 
 mod ibc;
@@ -347,6 +357,9 @@ struct Args {
     // relay daemon
     interval: u64,
     update_cadence: u64,
+    min_fee_balance: u128,
+    health_addr: Option<String>,
+    max_retries: u32,
 }
 
 fn print_usage() {
@@ -405,7 +418,9 @@ fn print_usage() {
     eprintln!("  recv-packet:    --client-id <id> --channel-id <id> --cp-channel-id <id> --sequence <n> --to <rcpt> --amount <n><denom>");
     eprintln!();
     eprintln!("relay (daemon, JunoClaw-centric: --channel-id = JunoClaw source, --cp-channel-id = dest):");
-    eprintln!("  relay:          --client-id <08-wasm-N> --channel-id <jc-chan> --cp-channel-id <cp-chan> [--interval <s>] [--update-cadence <blocks>]");
+    eprintln!("  relay:          --client-id <08-wasm-N> --channel-id <jc-chan> --cp-channel-id <cp-chan>");
+    eprintln!("                  [--interval <s>] [--update-cadence <blocks>] [--max-retries <n>]");
+    eprintln!("                  [--min-fee-balance <n>] [--health-addr <host:port>]");
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -454,6 +469,9 @@ fn parse_args() -> Result<Args, String> {
         timeout_timestamp: None,
         interval: 6,
         update_cadence: 50,
+        min_fee_balance: 0,
+        health_addr: None,
+        max_retries: 60,
     };
     let mut i = 2;
     while i < args.len() {
@@ -527,6 +545,17 @@ fn parse_args() -> Result<Args, String> {
                 a.update_cadence = val(&mut i)?
                     .parse()
                     .map_err(|_| "invalid --update-cadence")?
+            }
+            "--min-fee-balance" => {
+                a.min_fee_balance = val(&mut i)?
+                    .parse()
+                    .map_err(|_| "invalid --min-fee-balance")?
+            }
+            "--health-addr" => a.health_addr = Some(val(&mut i)?),
+            "--max-retries" => {
+                a.max_retries = val(&mut i)?
+                    .parse()
+                    .map_err(|_| "invalid --max-retries")?
             }
             other => return Err(format!("unknown flag: {other}")),
         }
@@ -1686,7 +1715,7 @@ async fn latest_height(layer_grpc: &str) -> Result<u64, Box<dyn std::error::Erro
 /// means it was received + acked on the dest chain, so JunoClaw's commitment is
 /// safe to clear. `false` (including a query error) means "still needs recv" —
 /// a conservative default that self-heals on the next tick.
-async fn cp_has_ack(grpc: &str, port: &str, chan: &str, seq: u64) -> bool {
+async fn cp_acked(grpc: &str, port: &str, chan: &str, seq: u64) -> bool {
     let res: Result<bool, Box<dyn std::error::Error>> = async {
         let channel = connect(grpc).await?;
         let mut client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
@@ -1712,6 +1741,62 @@ async fn cp_has_ack(grpc: &str, port: &str, chan: &str, seq: u64) -> bool {
     }
     .await;
     res.unwrap_or(false)
+}
+
+/// Counterparty tip: (block height, block time in unix-nanos). Used to detect
+/// elapsed packet timeouts — ibc-go rejects recv on an expired packet, so the
+/// daemon must catch that case and submit IbcMsg::Timeout on JunoClaw instead.
+async fn cp_latest(grpc: &str) -> Result<(u64, u64), Box<dyn std::error::Error>> {
+    let mut client = TmServiceClient::new(connect(grpc).await?);
+    let resp = client
+        .get_latest_block(GetLatestBlockRequest {})
+        .await?
+        .into_inner();
+    // SDK >=0.47 fills sdk_block (bech32 header); older chains fill the
+    // deprecated tendermint block — same height/time fields either way.
+    let header = resp
+        .sdk_block
+        .and_then(|b| b.header.map(|h| (h.height, h.time)))
+        .or_else(|| resp.block.and_then(|b| b.header.map(|h| (h.height, h.time))));
+    let (height, time) = header.ok_or("GetLatestBlock returned no header")?;
+    let nanos = time
+        .map(|t| t.seconds.max(0) as u64 * 1_000_000_000 + t.nanos.max(0) as u64)
+        .unwrap_or(0);
+    Ok((height.max(0) as u64, nanos))
+}
+
+/// Fee-token balance for `address` on `grpc` (cosmos.bank.v1beta1.Query).
+/// Works on both the counterparty and JunoClaw if its gRPC exposes the same
+/// service — callers treat a query error as "unknown", not "empty".
+async fn bank_balance(
+    grpc: &str,
+    address: &str,
+    denom: &str,
+) -> Result<u128, Box<dyn std::error::Error>> {
+    let mut client = BankQueryClient::new(connect(grpc).await?);
+    let resp = client
+        .balance(QueryBalanceRequest {
+            address: address.to_string(),
+            denom: denom.to_string(),
+        })
+        .await?
+        .into_inner();
+    let amount = resp.balance.map(|c| c.amount).unwrap_or_default();
+    Ok(amount.parse().unwrap_or(0))
+}
+
+/// True if the packet's timeout has already elapsed on the counterparty.
+/// `cp_height`/`cp_time_nanos` of 0 mean "no data" — a packet is never timed
+/// out on missing information (conservative: keep trying recv).
+fn packet_timed_out(packet: &ibc::Packet, cp_height: u64, cp_time_nanos: u64) -> bool {
+    // Height timeout applies to the counterparty's revision height.
+    let height_elapsed = packet
+        .timeout_height
+        .as_ref()
+        .map(|h| h.revision_height != 0 && cp_height >= h.revision_height)
+        .unwrap_or(false);
+    let time_elapsed = packet.timeout_timestamp != 0 && cp_time_nanos >= packet.timeout_timestamp;
+    height_elapsed || time_elapsed
 }
 
 /// Deliver one stored packet to the counterparty: prove JunoClaw's commitment,
@@ -1767,7 +1852,114 @@ async fn relay_ack(
     Ok(())
 }
 
-/// One daemon iteration: relay pending packets, then keepalive-update the client.
+/// Refund a timed-out packet on JunoClaw: `IbcMsg::Timeout` refunds the escrow
+/// to the original sender and clears commitment + stored packet.
+async fn relay_timeout(
+    a: &Args,
+    jc_port: &str,
+    jc_channel: &str,
+    seq: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let msg = IbcMsg::Timeout {
+        sender: layer_sender(a)?,
+        port_id: jc_port.to_string(),
+        channel_id: jc_channel.to_string(),
+        sequence: seq,
+        proof: cosmwasm_std::Binary::default(),
+        proof_height: 0,
+    };
+    let hash = submit_ibc_msg(a, msg).await?;
+    println!("relay: jc-timeout seq {seq} txhash {hash}");
+    Ok(())
+}
+
+/// Daemon liveness + packet counters, shared with the optional health endpoint.
+struct RelayStats {
+    started: Instant,
+    ticks: u64,
+    errors: u64,
+    panics: u64,
+    recv: u64,
+    acked: u64,
+    timeouts: u64,
+    pending: u32,
+    jc_height: u64,
+    cp_height: u64,
+    cp_fee_balance: Option<u128>,
+    last_tick_unix: u64,
+    last_error: String,
+}
+
+impl RelayStats {
+    fn to_json(&self) -> String {
+        serde_json::json!({
+            "uptime_secs": self.started.elapsed().as_secs(),
+            "ticks": self.ticks,
+            "errors": self.errors,
+            "panics": self.panics,
+            "packets_recv": self.recv,
+            "packets_acked": self.acked,
+            "packets_timed_out": self.timeouts,
+            "packets_pending": self.pending,
+            "junoclaw_height": self.jc_height,
+            "cp_height": self.cp_height,
+            "cp_fee_balance": self.cp_fee_balance,
+            "last_tick_unix": self.last_tick_unix,
+            "last_error": self.last_error,
+        })
+        .to_string()
+    }
+}
+
+/// Daemon loop state carried across ticks.
+struct RelayState {
+    /// Last JunoClaw height pushed to the 08-wasm client.
+    last_client_height: u64,
+    /// Lowest sequence that may still hold a commitment — everything below it
+    /// resolved, so earlier sequences are never re-queried (O(1) scans after
+    /// steady state instead of O(nextSequenceSend)).
+    scan_floor: u64,
+    /// Per-sequence recv attempt count for --max-retries.
+    retries: HashMap<u64, u32>,
+}
+
+/// Minimal HTTP health endpoint — every request returns the daemon stats as
+/// JSON (200 OK). Alerting systems should watch `last_tick_unix` staleness,
+/// `errors`/`panics` growth, and `packets_pending` accumulation. Runs for the
+/// life of the daemon; a bind failure only warns and disables the endpoint.
+async fn serve_health(addr: String, stats: Arc<Mutex<RelayStats>>) {
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("relay: health endpoint bind {addr} failed: {e}");
+            return;
+        }
+    };
+    loop {
+        let (mut sock, _) = match listener.accept().await {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let stats = stats.clone();
+        tokio::spawn(async move {
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf).await;
+            let body = stats
+                .lock()
+                .map(|s| s.to_json())
+                .unwrap_or_else(|_| "{}".into());
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = sock.write_all(resp.as_bytes()).await;
+        });
+    }
+}
+
+/// One daemon iteration: fee preflight → relay pending packets (ack → timeout
+/// → recv, in that order) → keepalive-update the 08-wasm client.
 async fn relay_tick(
     a: &Args,
     client_id: &str,
@@ -1775,27 +1967,81 @@ async fn relay_tick(
     jc_channel: &str,
     cp_port: &str,
     cp_channel: &str,
-    last_client_height: &mut u64,
+    state: &mut RelayState,
+    stats: &Arc<Mutex<RelayStats>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // 0. Fee preflight — pause the tick rather than burn transactions that are
+    //    guaranteed to fail BroadcastTx. --min-fee-balance 0 = auto (one tx fee).
+    let cp_min_fee = if a.min_fee_balance == 0 {
+        a.fee_amount
+    } else {
+        a.min_fee_balance
+    };
+    let cp_addr = signer_key(a)?
+        .public_key()
+        .account_id(&a.bech32_prefix)?
+        .to_string();
+    match bank_balance(&a.grpc, &cp_addr, &a.fee_denom).await {
+        Ok(bal) => {
+            if let Ok(mut s) = stats.lock() {
+                s.cp_fee_balance = Some(bal);
+            }
+            if bal < cp_min_fee {
+                eprintln!(
+                    "relay: PAUSED — counterparty fee balance {bal}{} < {cp_min_fee} (top up {cp_addr})",
+                    a.fee_denom
+                );
+                return Ok(());
+            }
+        }
+        Err(e) => eprintln!("relay: counterparty balance query failed ({e}) — continuing"),
+    }
+    // Same check on the JunoClaw side — best effort: if the node's gRPC does
+    // not expose cosmos.bank.v1beta1 the query errors and we only warn.
+    let jc_addr = layer_sender(a)?.to_string();
+    match bank_balance(&a.layer_grpc, &jc_addr, LAYER_FEE_DENOM).await {
+        Ok(bal) if bal < 5000 => eprintln!(
+            "relay: WARNING — JunoClaw fee balance {bal}{LAYER_FEE_DENOM} low ({jc_addr})"
+        ),
+        Ok(_) | Err(_) => {}
+    }
+
     // 1. Relay any pending outbound packets on the JunoClaw channel.
     let next = match query_value(&a.layer_grpc, jc_next_seq_key(jc_port, jc_channel)).await? {
         Some(v) if v.len() >= 8 => u64::from_be_bytes(v[..8].try_into().unwrap()),
         _ => 1,
     };
-    for seq in 1..next {
-        // Commitment still present => not yet acked on JunoClaw.
+
+    // Counterparty tip once per tick — needed for timeout detection.
+    let (cp_height, cp_time_nanos) = cp_latest(&a.grpc).await.unwrap_or((0, 0));
+    if let Ok(mut s) = stats.lock() {
+        s.jc_height = latest_height(&a.layer_grpc).await.unwrap_or(0);
+        s.cp_height = cp_height;
+    }
+
+    let mut lowest_pending: Option<u64> = None;
+    let mut pending: u32 = 0;
+    for seq in state.scan_floor.max(1)..next {
+        // Commitment still present => not yet resolved on JunoClaw.
         if query_value(&a.layer_grpc, jc_commitment_key(jc_port, jc_channel, seq))
             .await?
             .is_none()
         {
             continue;
         }
+        lowest_pending = lowest_pending.or(Some(seq));
+
         // Already received + acked on the counterparty? Just clear locally.
-        if cp_has_ack(&a.grpc, cp_port, cp_channel, seq).await {
+        if cp_acked(&a.grpc, cp_port, cp_channel, seq).await {
             relay_ack(a, jc_port, jc_channel, seq).await?;
+            if let Ok(mut s) = stats.lock() {
+                s.acked += 1;
+            }
             continue;
         }
-        // Read the stored packet and deliver it.
+        pending += 1;
+
+        // Read the stored packet — needed for both recv and timeout detection.
         let packet = match query_value(&a.layer_grpc, jc_packet_data_key(jc_port, jc_channel, seq))
             .await?
         {
@@ -1805,24 +2051,80 @@ async fn relay_tick(
                 continue;
             }
         };
-        relay_recv_packet(a, client_id, jc_port, jc_channel, packet).await?;
-        relay_ack(a, jc_port, jc_channel, seq).await?;
-        *last_client_height = latest_height(&a.layer_grpc).await.unwrap_or(*last_client_height);
+
+        // Timeout already elapsed on the counterparty? Re-delivering would be
+        // rejected by ibc-go — submit IbcMsg::Timeout on JunoClaw instead to
+        // refund the escrow to the original sender.
+        if packet_timed_out(&packet, cp_height, cp_time_nanos) {
+            relay_timeout(a, jc_port, jc_channel, seq).await?;
+            if let Ok(mut s) = stats.lock() {
+                s.timeouts += 1;
+            }
+            continue;
+        }
+
+        // Retry cap — a packet that keeps failing should not burn gas forever
+        // (it pins the scan floor, so the cap is also what keeps the floor from
+        // starving later sequences; resolve manually via jc-ack or timeout).
+        let attempts = state.retries.get(&seq).copied().unwrap_or(0);
+        if a.max_retries > 0 && attempts >= a.max_retries {
+            if attempts == a.max_retries {
+                eprintln!(
+                    "relay: seq {seq} exceeded --max-retries {} — skipping",
+                    a.max_retries
+                );
+                state.retries.insert(seq, a.max_retries + 1);
+            }
+            continue;
+        }
+
+        match relay_recv_packet(a, client_id, jc_port, jc_channel, packet).await {
+            Ok(()) => {
+                state.retries.remove(&seq);
+                if let Ok(mut s) = stats.lock() {
+                    s.recv += 1;
+                }
+                relay_ack(a, jc_port, jc_channel, seq).await?;
+                if let Ok(mut s) = stats.lock() {
+                    s.acked += 1;
+                }
+                state.last_client_height = latest_height(&a.layer_grpc)
+                    .await
+                    .unwrap_or(state.last_client_height);
+            }
+            Err(e) => {
+                let n = state.retries.entry(seq).or_insert(0);
+                *n += 1;
+                eprintln!("relay: recv-packet seq {seq} failed (attempt {n}): {e}");
+            }
+        }
+    }
+
+    // Advance the scan floor to the lowest still-pending sequence — resolved
+    // sequences are never re-queried.
+    state.scan_floor = lowest_pending.unwrap_or(next);
+    if let Ok(mut s) = stats.lock() {
+        s.pending = pending;
     }
 
     // 2. Keepalive: advance the 08-wasm client on cadence so it never goes stale.
     let latest = latest_height(&a.layer_grpc).await?;
-    if latest >= *last_client_height + a.update_cadence {
+    if latest >= state.last_client_height + a.update_cadence {
         let hash = update_client_to(a, client_id, latest).await?;
-        *last_client_height = latest;
+        state.last_client_height = latest;
         println!("relay: keepalive update-client {client_id}@{latest} txhash {hash}");
     }
     Ok(())
 }
 
 /// `relay` — run the relayer as a daemon. Watches the JunoClaw outbound channel
-/// for committed packets, delivers each to the counterparty (`MsgRecvPacket`),
-/// clears the commitment (`jc-ack`), and keeps the 08-wasm client fresh.
+/// for committed packets and resolves each in order: clear if already acked on
+/// the counterparty, refund if its timeout elapsed, otherwise deliver
+/// (`MsgRecvPacket`) and clear (`jc-ack`). Keeps the 08-wasm client fresh.
+///
+/// Robustness: each tick runs inside catch_unwind (a panic counts but never
+/// kills the loop), consecutive tick errors back off exponentially (cap 60s),
+/// a heartbeat line logs every ~minute, and --health-addr serves stats JSON.
 ///
 /// Flags (JunoClaw-centric: `--channel-id` is the JunoClaw source channel,
 /// `--cp-channel-id` the counterparty dest channel):
@@ -1832,6 +2134,11 @@ async fn relay_tick(
 ///   --port-id / --cp-port-id  ports (default "transfer")
 ///   --interval <secs>         tick period (default 6)
 ///   --update-cadence <blocks> keepalive update-client every N blocks (default 50)
+///   --max-retries <n>         per-packet recv attempts before skipping (default
+///                             60; 0 = unlimited)
+///   --min-fee-balance <n>     pause relaying when the counterparty fee balance
+///                             drops below n (default 0 = auto: one tx fee)
+///   --health-addr <host:port> serve stats JSON (e.g. 127.0.0.1:8080)
 async fn cmd_relay(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let client_id = a
         .client_id
@@ -1847,29 +2154,112 @@ async fn cmd_relay(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .cp_channel_id
         .as_ref()
         .ok_or("relay requires --cp-channel-id (the counterparty dest channel)")?;
-    let interval = std::time::Duration::from_secs(a.interval.max(1));
+    let interval = Duration::from_secs(a.interval.max(1));
 
     println!(
-        "relay: watching {jc_port}/{jc_channel} -> {cp_port}/{cp_channel}, client {client_id}, tick {}s, keepalive every {} blocks",
+        "relay: watching {jc_port}/{jc_channel} -> {cp_port}/{cp_channel}, client {client_id}, tick {}s, keepalive every {} blocks, retry cap {}",
         interval.as_secs(),
-        a.update_cadence
+        a.update_cadence,
+        a.max_retries
     );
-    let mut last_client_height = 0u64;
+
+    let stats = Arc::new(Mutex::new(RelayStats {
+        started: Instant::now(),
+        ticks: 0,
+        errors: 0,
+        panics: 0,
+        recv: 0,
+        acked: 0,
+        timeouts: 0,
+        pending: 0,
+        jc_height: 0,
+        cp_height: 0,
+        cp_fee_balance: None,
+        last_tick_unix: 0,
+        last_error: String::new(),
+    }));
+
+    if let Some(addr) = &a.health_addr {
+        println!("relay: health endpoint on http://{addr}/health");
+        tokio::spawn(serve_health(addr.clone(), stats.clone()));
+    }
+
+    let mut state = RelayState {
+        last_client_height: 0,
+        scan_floor: 1,
+        retries: HashMap::new(),
+    };
+    let mut consecutive_errors: u32 = 0;
+
     loop {
-        if let Err(e) = relay_tick(
+        // Panic isolation: a panic inside a tick must not kill the daemon —
+        // count it and keep the loop alive (external restart policies only
+        // help on process exit; a recovered tick loop is strictly better).
+        let res = AssertUnwindSafe(relay_tick(
             a,
             client_id,
             &jc_port,
-            jc_channel,
+            &jc_channel,
             &cp_port,
-            cp_channel,
-            &mut last_client_height,
-        )
-        .await
-        {
-            eprintln!("relay tick: {e}");
+            &cp_channel,
+            &mut state,
+            &stats,
+        ))
+        .catch_unwind()
+        .await;
+
+        match res {
+            Ok(Ok(())) => {
+                consecutive_errors = 0;
+                if let Ok(mut s) = stats.lock() {
+                    s.ticks += 1;
+                    s.last_tick_unix = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                }
+            }
+            Ok(Err(e)) => {
+                consecutive_errors += 1;
+                eprintln!("relay tick: {e}");
+                if let Ok(mut s) = stats.lock() {
+                    s.errors += 1;
+                    s.last_error = e.to_string();
+                }
+            }
+            Err(_) => {
+                consecutive_errors += 1;
+                eprintln!("relay: tick panicked — continuing");
+                if let Ok(mut s) = stats.lock() {
+                    s.panics += 1;
+                    s.last_error = "tick panicked".into();
+                }
+            }
         }
-        tokio::time::sleep(interval).await;
+
+        // Heartbeat roughly once a minute — proves liveness even when idle.
+        if let Ok(s) = stats.lock() {
+            if s.ticks % 10 == 1 || consecutive_errors > 0 {
+                println!(
+                    "relay: heartbeat ticks={} pending={} recv={} acked={} timeouts={} errors={} panics={} jc_h={} cp_h={}",
+                    s.ticks,
+                    s.pending,
+                    s.recv,
+                    s.acked,
+                    s.timeouts,
+                    s.errors,
+                    s.panics,
+                    s.jc_height,
+                    s.cp_height
+                );
+            }
+        }
+
+        // Exponential backoff on consecutive tick errors (cap 60s).
+        let backoff = interval
+            .saturating_mul(1u32 << consecutive_errors.min(4))
+            .min(Duration::from_secs(60));
+        tokio::time::sleep(backoff).await;
     }
 }
 

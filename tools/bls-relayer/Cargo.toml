@@ -36,6 +36,7 @@ bytes = { workspace = true }
 base64 = "0.22"
 getrandom = "0.2"
 bip39 = "2"
+futures = { workspace = true, features = ["std"] }
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }

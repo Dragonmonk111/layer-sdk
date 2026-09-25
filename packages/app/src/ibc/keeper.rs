@@ -239,6 +239,24 @@ impl Ibc {
                     .add_attribute("sequence", sequence.to_string())];
                 Ok(MsgResponse::new(events, IbcMsgData::Acknowledgement {}))
             }
+            IbcMsg::Timeout {
+                sender,
+                port_id,
+                channel_id,
+                sequence,
+                ..
+            } => {
+                ensure_eq!(signer, &sender, self.unauthorized(signer));
+                let (refund_to, coin) =
+                    self.timeout(storage, meter, block, sm, &port_id, &channel_id, sequence)?;
+                let events = vec![Event::new("ibc_timeout")
+                    .add_attribute("port_id", &port_id)
+                    .add_attribute("channel_id", &channel_id)
+                    .add_attribute("sequence", sequence.to_string())
+                    .add_attribute("refund_to", refund_to.to_string())
+                    .add_attribute("refund", format!("{}{}", coin.amount, coin.denom))];
+                Ok(MsgResponse::new(events, IbcMsgData::Timeout {}))
+            }
         }
     }
 
@@ -579,6 +597,77 @@ impl Ibc {
         storage.remove(meter, &paths::packet_commitment_path(port_id, channel_id, sequence))?;
         storage.remove(meter, &paths::packet_data_path(port_id, channel_id, sequence))?;
         Ok(())
+    }
+
+    // ---- ICS-4 timeout ----
+
+    /// Process a packet timeout: refund the escrowed token to the original
+    /// sender and clear the commitment + stored packet. The refund target and
+    /// amount come from the stored packet data — never from the message — so a
+    /// relayer cannot redirect the refund.
+    /// (devnet: timeout proof carried, not verified.)
+    fn timeout(
+        &self,
+        storage: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        port_id: &str,
+        channel_id: &str,
+        sequence: u64,
+    ) -> PulsarResult<(AccountId, Coin)> {
+        // Load the stored packet — the commitment path only holds a hash, so we
+        // read the full proto `Packet` written at send time.
+        let raw = self
+            .read_raw(storage, meter, &paths::packet_data_path(port_id, channel_id, sequence))?
+            .ok_or_else(|| {
+                IbcError::Invalid(format!(
+                    "no stored packet to time out at {port_id}/{channel_id}/seq{sequence}"
+                ))
+            })?;
+        let packet = Packet::decode(raw.as_slice())
+            .map_err(|e| IbcError::Invalid(format!("decode Packet: {e}")))?;
+
+        // Decode the canonical ICS-20 packet data (sorted JSON) for sender +
+        // denom + amount.
+        #[derive(serde::Deserialize)]
+        struct FungibleTokenPacketData {
+            amount: String,
+            denom: String,
+            sender: String,
+        }
+        let data: FungibleTokenPacketData = cosmwasm_std::from_json(&packet.data)
+            .map_err(|e| IbcError::Invalid(format!("decode packet data: {e}")))?;
+        let refund_to = AccountId::parse_string(&data.sender).map_err(|e| {
+            IbcError::Invalid(format!("packet sender '{}': {e}", data.sender))
+        })?;
+        let amount: u128 = data
+            .amount
+            .parse()
+            .map_err(|_| IbcError::Invalid(format!("packet amount '{}'", data.amount)))?;
+        let coin = Coin {
+            denom: data.denom,
+            amount: amount.into(),
+        };
+
+        // Refund the escrowed tokens to the original sender.
+        let escrow = escrow_account(port_id, channel_id);
+        sm.bank.transfer(
+            storage,
+            meter,
+            block,
+            sm,
+            escrow,
+            refund_to.clone(),
+            vec![coin.clone()],
+        )?;
+
+        // Clear the packet commitment + stored packet (devnet: timeout proof
+        // carried, not verified).
+        storage.remove(meter, &paths::packet_commitment_path(port_id, channel_id, sequence))?;
+        storage.remove(meter, &paths::packet_data_path(port_id, channel_id, sequence))?;
+
+        Ok((refund_to, coin))
     }
 
     // ---- queries used by the relayer ----
