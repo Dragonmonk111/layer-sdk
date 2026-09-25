@@ -2107,8 +2107,11 @@ async fn relay_tick(
         s.pending = pending;
     }
 
-    // 2. Keepalive: advance the 08-wasm client on cadence so it never goes stale.
-    let latest = latest_height(&a.layer_grpc).await?;
+    // 2. Keepalive: advance the 08-wasm client on cadence so it never goes
+    // stale. Anchor at the last FINALIZED height (tip - 1): proposal_bytes and
+    // certificate_bytes are only stored once a block finalizes, so block(tip)
+    // returns "no proposal stored".
+    let latest = latest_height(&a.layer_grpc).await?.saturating_sub(1);
     if latest >= state.last_client_height + a.update_cadence {
         let hash = update_client_to(a, client_id, latest).await?;
         state.last_client_height = latest;
