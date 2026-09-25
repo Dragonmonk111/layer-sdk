@@ -111,7 +111,8 @@ bls-relayer relay \
   --channel-id channel-0 --cp-channel-id channel-2 \
   --port-id transfer --cp-port-id transfer \
   --interval 6 --update-cadence 50 \
-  --max-retries 60 --min-fee-balance 0 --health-addr 127.0.0.1:8080
+  --max-retries 60 --min-fee-balance 0 \
+  --fee-amount 20000 --health-addr 127.0.0.1:18080
 ```
 
 Each tick it:
@@ -154,6 +155,25 @@ counterparty *dest* channel.
 - `--health-addr` serves stats JSON on every request — wire it to your monitor
   and alert on `last_tick_unix` staleness, `errors`/`panics` growth, or
   `packets_pending` accumulation.
+
+**Operational notes** — learned from the live e2e run:
+
+- **Counterparty fee**: `--fee-amount` must satisfy the counterparty's min
+  gas price. Local osmosis rejects `5000uosmo` (`code 13: insufficient fees;
+  required: 10000uosmo`) — run `--fee-amount 20000` for headroom. A failed
+  recv burns a retry attempt, so a too-low fee silently exhausts
+  `--max-retries` and skips the packet.
+- **Health port**: pick a port that is actually free — `8080` is bound by
+  `AgentService` on this Windows host (bind failure only warns and disables
+  the endpoint; the relay loop is unaffected).
+- **Ordering**: `channel-0` is `UNORDERED`, so a packet that exhausts
+  `--max-retries` is skipped without stalling later sequences. On an
+  `ORDERED` channel the same skip would wedge every subsequent packet —
+  treat `packets_pending` growth on ordered channels as page-worthy.
+- **Fee payer**: daemon-side `IbcMsg::Timeout`/`Acknowledgement` txs ignore
+  `--to`/`--from`; the JunoClaw fee payer and signer is always `--key-hex`.
+  `--key-hex` on a command line is devnet practice — in production load it
+  from a systemd `EnvironmentFile` (mode 0600) or a keyring.
 
 > Requires the keeper change that stores the full packet at `ibc/packetData/...`
 > (the commitment path only holds `sha256(packet)`, which is not reversible).

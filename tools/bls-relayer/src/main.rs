@@ -56,7 +56,7 @@ use layer_proto::cosmos::base::tendermint::v1beta1::{
 use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
 use layer_proto::layer::lightclient::v1::{
     query_client::QueryClient as LightClientQueryClient, QueryBlockRequest,
-    QueryLatestHeightRequest, QueryProofRequest,
+    QueryBlockResponse, QueryLatestHeightRequest, QueryProofRequest,
 };
 
 mod ibc;
@@ -728,10 +728,7 @@ async fn update_client_to(
     height: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut client = layer_client(&a.layer_grpc).await?;
-    let block = client
-        .block(QueryBlockRequest { height })
-        .await?
-        .into_inner();
+    let block = finalized_block(&mut client, height).await?;
     let header = ContractHeader {
         height: ContractHeight {
             revision_number: HEIGHT_REVISION_NUMBER,
@@ -804,8 +801,10 @@ fn gov_authority(prefix: &str) -> Result<String, Box<dyn std::error::Error>> {
 // Subcommands
 // ---------------------------------------------------------------------------
 
-/// Resolve the target height: explicit --height N wins; 0 or omitted queries
-/// LatestHeight so the common case is "just give me the tip".
+/// Resolve the target height: explicit --height N wins; 0 or omitted resolves
+/// to the last FINALIZED tip. `LatestHeight` counts the proposed tip whose
+/// block record (proposal_bytes/certificate_bytes) does not exist yet, so
+/// anchoring a client or fetch at `tip` fails with "no proposal stored".
 async fn resolve_height(
     client: &mut LightClientQueryClient<Channel>,
     requested: Option<u64>,
@@ -816,17 +815,40 @@ async fn resolve_height(
             .latest_height(QueryLatestHeightRequest {})
             .await?
             .into_inner()
-            .height),
+            .height
+            .saturating_sub(1)),
+    }
+}
+
+/// Fetch `block(height)`, polling until the proposal finalizes — block records
+/// (proposal_bytes/certificate_bytes) only exist once the Reporter stores the
+/// finalization certificate, so querying the tip immediately returns NotFound.
+async fn finalized_block(
+    client: &mut LightClientQueryClient<Channel>,
+    height: u64,
+) -> Result<QueryBlockResponse, Box<dyn std::error::Error>> {
+    let mut attempts = 0u32;
+    loop {
+        match client.block(QueryBlockRequest { height }).await {
+            Ok(b) => return Ok(b.into_inner()),
+            Err(e) => {
+                attempts += 1;
+                if attempts >= 200 {
+                    return Err(format!(
+                        "block {height} not finalized after {attempts} tries: {e}"
+                    )
+                    .into());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }
     }
 }
 
 async fn cmd_fetch(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let mut client = layer_client(&a.layer_grpc).await?;
     let height = resolve_height(&mut client, a.height).await?;
-    let resp = client
-        .block(QueryBlockRequest { height })
-        .await?
-        .into_inner();
+    let resp = finalized_block(&mut client, height).await?;
 
     let proposal = decode_proposal(&resp.proposal_bytes)?;
     println!("height:            {}", resp.height);
@@ -849,10 +871,7 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Fetch the anchor block from the JunoClaw node.
     let mut client = layer_client(&a.layer_grpc).await?;
     let height = resolve_height(&mut client, a.height).await?;
-    let block = client
-        .block(QueryBlockRequest { height })
-        .await?
-        .into_inner();
+    let block = finalized_block(&mut client, height).await?;
     let proposal = decode_proposal(&block.proposal_bytes)?;
 
     // 2. Contract JSON states.
@@ -1018,13 +1037,9 @@ async fn cmd_assemble_proof(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
     let proof_height = proof.state_height + 1;
 
     // 2. The payload at state_height+1 carries the state_root this proof
-    //    verifies against (app-hash semantics).
-    let block = client
-        .block(QueryBlockRequest {
-            height: proof_height,
-        })
-        .await?
-        .into_inner();
+    //    verifies against (app-hash semantics). It may still be finalizing —
+    //    poll until the block record exists.
+    let block = finalized_block(&mut client, proof_height).await?;
     if block.payload_bytes.is_empty() {
         return Err(format!(
             "node has no payload_bytes for height {proof_height} — cannot assemble proof"
@@ -1188,29 +1203,7 @@ async fn assemble_membership_proof(
     let proof_height = proof.state_height + 1;
     // Block `proof_height` carries the state_root for the proven state, but it
     // is the unfinalized tip at query time — poll until it commits.
-    let block = {
-        let mut attempts = 0u32;
-        loop {
-            match client
-                .block(QueryBlockRequest {
-                    height: proof_height,
-                })
-                .await
-            {
-                Ok(b) => break b.into_inner(),
-                Err(e) => {
-                    attempts += 1;
-                    if attempts >= 200 {
-                        return Err(format!(
-                            "block {proof_height} not finalized after {attempts} tries: {e}"
-                        )
-                        .into());
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                }
-            }
-        }
-    };
+    let block = finalized_block(&mut client, proof_height).await?;
     if block.payload_bytes.is_empty() {
         return Err(format!("node has no payload_bytes at height {proof_height}").into());
     }
