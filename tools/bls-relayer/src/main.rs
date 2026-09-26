@@ -53,7 +53,10 @@ use layer_proto::cosmos::tx::v1beta1::{
 use layer_proto::cosmos::base::tendermint::v1beta1::{
     service_client::ServiceClient as TmServiceClient, GetLatestBlockRequest,
 };
-use layer_proto::cosmwasm::wasm::v1::MsgStoreCode;
+use layer_proto::cosmwasm::wasm::v1::{
+    query_client::QueryClient as WasmQueryClient, MsgExecuteContract, MsgInstantiateContract,
+    MsgStoreCode, QueryContractsByCodeRequest, QuerySmartContractStateRequest,
+};
 use layer_proto::layer::lightclient::v1::{
     query_client::QueryClient as LightClientQueryClient, QueryBlockRequest,
     QueryBlockResponse, QueryLatestHeightRequest, QueryProofRequest,
@@ -162,6 +165,8 @@ const TYPE_URL_WASM_CLIENT_MESSAGE: &str = "/ibc.lightclients.wasm.v1.ClientMess
 const TYPE_URL_MSG_CREATE_CLIENT: &str = "/ibc.core.client.v1.MsgCreateClient";
 const TYPE_URL_MSG_UPDATE_CLIENT: &str = "/ibc.core.client.v1.MsgUpdateClient";
 const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
+const TYPE_URL_MSG_INSTANTIATE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgInstantiateContract";
+const TYPE_URL_MSG_EXECUTE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgExecuteContract";
 const TYPE_URL_IBCWASM_MSG_STORE_CODE: &str = "/ibc.lightclients.wasm.v1.MsgStoreCode";
 const TYPE_URL_MSG_SUBMIT_PROPOSAL: &str = "/cosmos.gov.v1.MsgSubmitProposal";
 
@@ -360,6 +365,11 @@ struct Args {
     min_fee_balance: u128,
     health_addr: Option<String>,
     max_retries: u32,
+    // JunoClaw wasm deploy
+    code_id: Option<u64>,
+    contract: Option<String>,
+    msg_json: Option<String>,
+    label: Option<String>,
 }
 
 fn print_usage() {
@@ -383,6 +393,14 @@ fn print_usage() {
     eprintln!("  jc-chan-ack       ChannelOpenAck on JunoClaw (INIT->OPEN)");
     eprintln!("  jc-transfer       ICS-20 transfer (escrow + packet commitment)");
     eprintln!("  jc-ack            Acknowledgement (clear packet commitment)");
+    eprintln!();
+    eprintln!("JunoClaw CosmWasm (signs with deployer key, or --jc-key-hex):");
+    eprintln!("  jc-store-code     MsgStoreCode — upload a .wasm to JunoClaw");
+    eprintln!("  jc-instantiate    MsgInstantiateContract --code-id <n> [--label <l>] [--msg <json>]");
+    eprintln!("  jc-execute        MsgExecuteContract --contract <addr> --msg <json|@file>");
+    eprintln!("  jc-query          Query/SmartContractState --contract <addr> --msg <json|@file>");
+    eprintln!("  jc-contracts      Query/ContractsByCode --code-id <n>");
+    eprintln!("                    (--msg @path reads the JSON from a file)");
     eprintln!();
     eprintln!("Counterparty ibc-go handshake + packet relay (signs with --key-hex):");
     eprintln!("  conn-try          MsgConnectionOpenTry (proof of JunoClaw conn INIT)");
@@ -472,6 +490,10 @@ fn parse_args() -> Result<Args, String> {
         min_fee_balance: 0,
         health_addr: None,
         max_retries: 60,
+        code_id: None,
+        contract: None,
+        msg_json: None,
+        label: None,
     };
     let mut i = 2;
     while i < args.len() {
@@ -557,6 +579,12 @@ fn parse_args() -> Result<Args, String> {
                     .parse()
                     .map_err(|_| "invalid --max-retries")?
             }
+            "--code-id" => {
+                a.code_id = Some(val(&mut i)?.parse().map_err(|_| "invalid --code-id")?)
+            }
+            "--contract" => a.contract = Some(val(&mut i)?),
+            "--msg" => a.msg_json = Some(val(&mut i)?),
+            "--label" => a.label = Some(val(&mut i)?),
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
@@ -666,6 +694,9 @@ fn sign_and_encode(
 }
 
 async fn broadcast(grpc: &str, tx_bytes: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+    // CometBFT txhash = sha256(tx_bytes); the JunoClaw BroadcastTxResponse may
+    // omit it, so compute locally as a fallback — GetTx can then fetch it.
+    let local_hash = hex::encode_upper(Sha256::digest(&tx_bytes));
     let mut client = TxServiceClient::new(connect(grpc).await?)
         .max_decoding_message_size(32 * 1024 * 1024)
         .max_encoding_message_size(32 * 1024 * 1024);
@@ -684,7 +715,11 @@ async fn broadcast(grpc: &str, tx_bytes: Vec<u8>) -> Result<String, Box<dyn std:
         )
         .into());
     }
-    Ok(tx_resp.txhash)
+    Ok(if tx_resp.txhash.is_empty() {
+        local_hash
+    } else {
+        tx_resp.txhash
+    })
 }
 
 /// Poll `GetTx` until the tx is committed. `BroadcastMode::Sync` only waits for
@@ -773,6 +808,42 @@ async fn simulate(grpc: &str, tx_bytes: Vec<u8>) -> Result<u64, Box<dyn std::err
         .map(|g| g.gas_used)
         .ok_or("simulate returned no gas_info")?;
     Ok(used)
+}
+
+/// Simulate and print the full result — gas plus the wasm events/log the
+/// contract produced. Used to check MAYO verification output without
+/// committing state.
+async fn simulate_report(
+    grpc: &str,
+    tx_bytes: Vec<u8>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = TxServiceClient::new(connect(grpc).await?)
+        .max_decoding_message_size(32 * 1024 * 1024)
+        .max_encoding_message_size(32 * 1024 * 1024);
+    let resp = client
+        .simulate(SimulateRequest {
+            tx_bytes,
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    if let Some(g) = &resp.gas_info {
+        println!("simulate: gas_used={} gas_wanted={}", g.gas_used, g.gas_wanted);
+    }
+    if let Some(r) = &resp.result {
+        if !r.log.is_empty() {
+            println!("simulate: log {}", r.log);
+        }
+        for ev in &r.events {
+            let attrs: Vec<String> = ev
+                .attributes
+                .iter()
+                .map(|a| format!("{}={}", a.key, a.value))
+                .collect();
+            println!("  event {} [{}]", ev.r#type, attrs.join(" "));
+        }
+    }
+    Ok(())
 }
 
 fn any_of<M: prost::Message>(type_url: &str, msg: &M) -> cosmrs::Any {
@@ -1171,20 +1242,167 @@ fn sign_and_encode_layer(
     Ok(doc.sign(key)?.to_bytes()?)
 }
 
-/// JSON-encode an `IbcMsg` into a single `Any` and broadcast it to JunoClaw.
-async fn submit_ibc_msg(a: &Args, msg: IbcMsg) -> Result<String, Box<dyn std::error::Error>> {
+/// Broadcast a proto `Any` signed with the JunoClaw deployer/--jc-key-hex key.
+/// The chain decodes standard wasmd `/cosmwasm.wasm.v1.*` Anys into WasmMsg
+/// (packages/cosmos/src/msg.rs::parse_cosmos_msg), so contract lifecycle
+/// messages go through this same path — no gov proposal required.
+async fn submit_layer_any(a: &Args, any: cosmrs::Any) -> Result<String, Box<dyn std::error::Error>> {
     let key = layer_signer_key(a)?;
     let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
-    let any = cosmrs::Any {
-        type_url: ibc::TYPE_URL_JUNOCLAW_IBC.to_string(),
-        value: serde_json::to_vec(&msg)?,
-    };
     let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
     if account.account_number == 0 {
         account.account_number = LAYER_ACCOUNT_NUMBER;
     }
     let tx_bytes = sign_and_encode_layer(&key, any, &account)?;
+    if a.simulate {
+        simulate_report(&a.layer_grpc, tx_bytes).await?;
+        return Ok("simulated".into());
+    }
     broadcast(&a.layer_grpc, tx_bytes).await
+}
+
+/// JSON-encode an `IbcMsg` into a single `Any` and broadcast it to JunoClaw.
+async fn submit_ibc_msg(a: &Args, msg: IbcMsg) -> Result<String, Box<dyn std::error::Error>> {
+    let any = cosmrs::Any {
+        type_url: ibc::TYPE_URL_JUNOCLAW_IBC.to_string(),
+        value: serde_json::to_vec(&msg)?,
+    };
+    submit_layer_any(a, any).await
+}
+
+/// `jc-store-code` — upload a CosmWasm contract to JunoClaw (permissionless).
+async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let wasm_path = a.wasm.as_ref().ok_or("jc-store-code requires --wasm")?;
+    let wasm_bytes = std::fs::read(wasm_path)?;
+    println!(
+        "wasm: {} bytes, checksum {}",
+        wasm_bytes.len(),
+        hex::encode(Sha256::digest(&wasm_bytes))
+    );
+    let msg = MsgStoreCode {
+        sender: layer_sender(a)?.to_string(),
+        wasm_byte_code: wasm_bytes,
+    };
+    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_STORE_CODE, &msg)).await?;
+    println!("jc-store-code broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+/// Resolve a `--msg` argument: literal JSON, or `@<path>` to read a file.
+/// Files are needed for MAYO vectors — `Vec<u8>` fields serialize as
+/// multi-KB JSON int arrays that don't fit comfortably on the command line.
+fn load_msg_json(arg: &str) -> Result<String, Box<dyn std::error::Error>> {
+    match arg.strip_prefix('@') {
+        Some(path) => Ok(String::from_utf8(std::fs::read(path)?)?),
+        None => Ok(arg.to_string()),
+    }
+}
+
+/// `jc-instantiate` — instantiate a stored code id on JunoClaw.
+async fn cmd_jc_instantiate(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let code_id = a.code_id.ok_or("jc-instantiate requires --code-id")?;
+    let msg_json = match &a.msg_json {
+        Some(m) => load_msg_json(m)?,
+        None => "{}".into(),
+    };
+    let msg = MsgInstantiateContract {
+        sender: layer_sender(a)?.to_string(),
+        admin: String::new(),
+        code_id,
+        label: a
+            .label
+            .clone()
+            .unwrap_or_else(|| format!("jc-code-{code_id}")),
+        msg: msg_json.into_bytes(),
+        funds: vec![],
+    };
+    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_INSTANTIATE_CONTRACT, &msg)).await?;
+    println!("jc-instantiate code_id={code_id} broadcast OK — txhash {hash}");
+
+    // Wait for the tx to land in a finalized block, then surface the new
+    // contract address via ContractsByCode (addresses are generated
+    // deterministically from (sender, code_id, counter) but this avoids
+    // depending on the counter).
+    let mut client = WasmQueryClient::new(connect(&a.layer_grpc).await?);
+    for attempt in 0..40 {
+        tokio::time::sleep(Duration::from_millis(750)).await;
+        let resp = client
+            .contracts_by_code(QueryContractsByCodeRequest {
+                code_id,
+                pagination: None,
+            })
+            .await;
+        if let Ok(r) = resp {
+            let contracts = r.into_inner().contracts;
+            if !contracts.is_empty() {
+                for c in &contracts {
+                    println!("contract[{code_id}]: {c}");
+                }
+                return Ok(());
+            }
+        } else if attempt == 39 {
+            eprintln!("warn: ContractsByCode query failed — look the contract up via jc-contracts");
+        }
+    }
+    eprintln!("warn: no contract visible for code_id={code_id} after 30s");
+    Ok(())
+}
+
+/// `jc-execute` — call an instantiated contract on JunoClaw.
+async fn cmd_jc_execute(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let contract = a.contract.clone().ok_or("jc-execute requires --contract")?;
+    let msg_json = load_msg_json(
+        a.msg_json
+            .as_deref()
+            .ok_or("jc-execute requires --msg <json|@file>")?,
+    )?;
+    let msg = MsgExecuteContract {
+        sender: layer_sender(a)?.to_string(),
+        contract: contract.clone(),
+        msg: msg_json.into_bytes(),
+        funds: vec![],
+    };
+    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg)).await?;
+    println!("jc-execute {contract} broadcast OK — txhash {hash}");
+    Ok(())
+}
+
+/// `jc-contracts` — list contract addresses instantiated from a code id.
+async fn cmd_jc_contracts(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let code_id = a.code_id.ok_or("jc-contracts requires --code-id")?;
+    let mut client = WasmQueryClient::new(connect(&a.layer_grpc).await?);
+    let resp = client
+        .contracts_by_code(QueryContractsByCodeRequest {
+            code_id,
+            pagination: None,
+        })
+        .await?
+        .into_inner();
+    for c in &resp.contracts {
+        println!("{c}");
+    }
+    Ok(())
+}
+
+/// `jc-query` — smart-contract query on JunoClaw (abci_query path, no gas).
+async fn cmd_jc_query(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let contract = a.contract.clone().ok_or("jc-query requires --contract")?;
+    let msg_json = load_msg_json(
+        a.msg_json
+            .as_deref()
+            .ok_or("jc-query requires --msg <json|@file>")?,
+    )?;
+    let mut client = WasmQueryClient::new(connect(&a.layer_grpc).await?);
+    let resp = client
+        .smart_contract_state(QuerySmartContractStateRequest {
+            address: contract,
+            query_data: msg_json.into_bytes(),
+        })
+        .await?
+        .into_inner();
+    let out = String::from_utf8_lossy(&resp.data);
+    println!("{out}");
+    Ok(())
 }
 
 /// Query JunoClaw for a Merkle membership proof over `key` and return the
@@ -2288,6 +2506,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "jc-chan-ack" => cmd_jc_chan_ack(&a).await,
         "jc-transfer" => cmd_jc_transfer(&a).await,
         "jc-ack" => cmd_jc_ack(&a).await,
+        "jc-store-code" => cmd_jc_store_code(&a).await,
+        "jc-instantiate" => cmd_jc_instantiate(&a).await,
+        "jc-execute" => cmd_jc_execute(&a).await,
+        "jc-contracts" => cmd_jc_contracts(&a).await,
+        "jc-query" => cmd_jc_query(&a).await,
         // Counterparty ibc-go handshake + packet relay
         "conn-try" => cmd_conn_try(&a).await,
         "conn-confirm" => cmd_conn_confirm(&a).await,

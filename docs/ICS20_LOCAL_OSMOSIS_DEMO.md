@@ -233,3 +233,45 @@ from on-chain commitments, so a crash mid-tick just re-runs idempotently.
 - The counterparty `MerklePrefix` is `"ibc/"`, so ibc-go builds
   `key_path = ["ibc/", "<ics24_path>"]` and the contract's
   `concat(key_path) = "ibc/<ics24_path>"` matches JunoClaw's storage key.
+
+## JunoClaw CosmWasm lifecycle (native, no gov wrapping)
+
+The chain decodes standard wasmd `/cosmwasm.wasm.v1.*` `Any`s into `WasmMsg`
+(`packages/cosmos/src/msg.rs`), so the same `jc-*` signing path drives a full
+contract lifecycle directly — no IBC or governance hop:
+
+```sh
+# Store — prints wasm size + sha256 checksum; code id is the next free counter.
+bls-relayer jc-store-code --wasm path/to/contract.wasm
+
+# Instantiate — resolves + prints the new contract address via
+# Query/ContractsByCode (polls ~30s for inclusion).
+bls-relayer jc-instantiate --code-id <n> [--label <l>] [--msg <json|@file>]
+
+# Execute — MsgExecuteContract; --msg @file reads JSON from disk (needed for
+# MAYO vectors, whose Vec<u8> pk/sig fields are multi-KB int arrays).
+bls-relayer jc-execute --contract <addr> --msg <json|@file>
+
+# Queries — abci_query, no gas, no sequence.
+bls-relayer jc-query     --contract <addr> --msg <json|@file>
+bls-relayer jc-contracts --code-id <n>
+```
+
+All sign with the deployer key (`sha256("junoclaw-deployer-v1")` → `juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992`);
+`--jc-key-hex` / `JUNOCLAW_KEY_HEX` overrides. `--simulate` dry-runs via
+`tx.v1beta1.Service/Simulate` — currently `Unimplemented` on the chain.
+
+### Devnet record — jclaw-credential (MAYO-2), 2026-09-26
+
+- **code_id** `2` — `junoclaw/devnet/artifacts/jclaw_credential_mvp.wasm`,
+  313 418 B, checksum `b26230fd31f65947f8d9f17ae735c7ae7bec174e349522cdf7a1260f9f227b24`.
+- **contract** `juno17c5ucyukaf9heseh7gnyjgmwd3jtz6gegm039ezkjhnx6zx526hqq0738c`;
+  genesis member = deployer (weight 10 000), `{"list_members":{}}` to inspect.
+- **Bud** child `juno1z3295emhfln6t6kfzft5w4xwnjvhtp7va3t6xc` (weight 100)
+  with the MAYO-2 test vector pk; `mayo_pk_hash` =
+  `3f245334926d8355301d648fbdf6e3364cc7095594f91668afc81b8aafdb869a`.
+- **`VerifyMayoAttestation`** delivered at height 373 277,
+  `gas_used=309 076`, `success=true` — first on-chain post-quantum
+  (MAYO-2) signature verification on the devnet.
+- txhash note: the chain's `BroadcastTx` response omits the hash, so the
+  relayer now falls back to `sha256(tx_bytes)` (CometBFT convention).
