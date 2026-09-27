@@ -183,6 +183,7 @@ mod tests {
             mempool_max_pending: 5_000,
             leader_timeout_ms: 1_000,
             certification_timeout_ms: 2_000,
+            min_gas_price: default_min_gas_price(),
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");

@@ -445,6 +445,7 @@ async fn run_node(
         mempool.clone(),
         resume_height,
     );
+    let tx_index = layer_node.tx_index();
 
     // Create an unbounded channel to forward payload bytes from the relay's broadcast()
     // to the background P2P sender task. The relay serializes payloads and sends them here;
@@ -662,6 +663,7 @@ async fn run_node(
             app: app_arc.clone(),
             mempool: mempool.clone(),
             chain_id: config.chain_id.clone(),
+            tx_index: tx_index.clone(),
         };
 
         // Cosmos query dispatch state for the axum fallback handler.

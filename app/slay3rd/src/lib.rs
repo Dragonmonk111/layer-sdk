@@ -6,3 +6,4 @@ pub mod grpc;
 pub mod mempool;
 pub mod node;
 pub mod relay;
+pub mod tx_index;

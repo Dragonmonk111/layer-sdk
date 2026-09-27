@@ -33,6 +33,7 @@ use layer_cosmos::parse_cosmos_tx;
 
 use crate::block::BlockPayload;
 use crate::mempool::Mempool;
+use crate::tx_index::{tx_hash_hex, tx_response_from_result, TxIndex, DEFAULT_TX_INDEX_CAPACITY};
 
 /// Maximum number of transactions per block proposal.
 const MAX_BLOCK_TXS: usize = 100;
@@ -60,6 +61,8 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     current_height: Arc<Mutex<u64>>,
     /// The last committed block digest (parent linkage for new proposals).
     last_digest: Arc<Mutex<[u8; 32]>>,
+    /// Node-local tx result index for GetTx (not consensus state).
+    tx_index: Arc<TxIndex>,
     /// Phantom to bind the P type parameter without storing P directly.
     _phantom: std::marker::PhantomData<P>,
 }
@@ -73,6 +76,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             pending_payloads: self.pending_payloads.clone(),
             current_height: self.current_height.clone(),
             last_digest: self.last_digest.clone(),
+            tx_index: self.tx_index.clone(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -86,6 +90,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             pending_payloads: Arc::new(Mutex::new(BTreeMap::new())),
             current_height: Arc::new(Mutex::new(initial_height)),
             last_digest: Arc::new(Mutex::new([0u8; 32])),
+            tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -98,6 +103,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
     /// Access to the mempool for external callers (e.g., gRPC tx submission).
     pub fn mempool(&self) -> Arc<Mutex<Mempool>> {
         self.mempool.clone()
+    }
+
+    /// Access to the tx result index for the gRPC GetTx handler.
+    pub fn tx_index(&self) -> Arc<TxIndex> {
+        self.tx_index.clone()
     }
 
     /// Access to pending payloads for the Relay to populate when receiving
@@ -157,9 +167,13 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         };  // read lock released here
 
         let mut txs: Vec<layer_std::Tx> = Vec::with_capacity(payload.txs.len());
+        let mut tx_hashes: Vec<String> = Vec::with_capacity(payload.txs.len());
         for raw in &payload.txs {
             match parse_cosmos_tx(raw.clone(), &chain_id) {
-                Ok(tx) => txs.push(tx),
+                Ok(tx) => {
+                    txs.push(tx);
+                    tx_hashes.push(tx_hash_hex(raw));
+                }
                 Err(e) => {
                     tracing::warn!(
                         error = ?e,
@@ -201,6 +215,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 *last = digest;
                 drop(h);
                 drop(last);
+
+                // Index tx results for GetTx. tx_results is 1:1 with the parsed
+                // txs (malformed ones were skipped above, together with their hash).
+                for (hash, res) in tx_hashes.into_iter().zip(response.tx_results.iter()) {
+                    self.tx_index.insert(tx_response_from_result(hash, height, res));
+                }
 
                 // Persist the full payload bytes — membership proofs carry
                 // them so the light client can recompute the signed digest
@@ -462,9 +482,23 @@ mod tests {
         }
     }
 
+    /// Unique wasmer cache dir per App. On Windows a `.module` file stays
+    /// memory-mapped while an App is alive, so a second App sharing the dir
+    /// fails to rewrite it (os error 1224). Tests like
+    /// `test_genesis_is_deterministic` hold two live Apps at once.
+    fn unique_cache_dir() -> String {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir()
+            .join(format!("slay3rd-test-node-{}-{n}", std::process::id()))
+            .to_string_lossy()
+            .into_owned()
+    }
+
     fn init_app() -> App<MemoryStore> {
         let storage = MemoryStore::default();
-        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3rd-test-node"));
+        let logic = StateMachine::new(&AppConfig::new(&unique_cache_dir()));
         let mut app = App::new(storage, logic);
 
         let genesis = make_genesis_state();
@@ -497,7 +531,8 @@ mod tests {
 
     fn make_layer_node() -> TestNode {
         // Acquire the global lock to serialize wasmer JIT initialization.
-        let _guard = APP_TEST_LOCK.lock().unwrap();
+        // Tolerate poisoning so one panicking test doesn't fail all others.
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         make_layer_node_locked(&_guard)
     }
 
@@ -779,7 +814,7 @@ mod tests {
     /// before reaching finalize_block) and invalid bytes are skipped gracefully.
     #[test]
     fn test_execute_block_with_real_txs() {
-        let _guard = APP_TEST_LOCK.lock().unwrap();
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         let chain_id = "junoclaw-1";
 

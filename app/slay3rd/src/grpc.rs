@@ -45,6 +45,7 @@ use layer_proto::layer::lightclient::v1::{
 };
 
 use crate::mempool::Mempool;
+use crate::tx_index::TxIndex;
 
 /// gRPC service for slay3rd, generic over the persistent storage backend.
 ///
@@ -58,6 +59,8 @@ pub struct LayerGrpcService<T: PersistentStorage + Send + Sync + 'static> {
     pub mempool: Arc<Mutex<Mempool>>,
     /// Chain ID used to validate incoming tx signatures.
     pub chain_id: String,
+    /// Node-local tx result index (filled after each committed block).
+    pub tx_index: Arc<TxIndex>,
 }
 
 /// Manual Clone implementation — App<T> and Mempool are behind Arc so T does not need Clone.
@@ -67,6 +70,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> Clone for LayerGrpcService<T>
             app: self.app.clone(),
             mempool: self.mempool.clone(),
             chain_id: self.chain_id.clone(),
+            tx_index: self.tx_index.clone(),
         }
     }
 }
@@ -134,9 +138,18 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
 
     async fn get_tx(
         &self,
-        _request: Request<GetTxRequest>,
+        request: Request<GetTxRequest>,
     ) -> Result<Response<GetTxResponse>, Status> {
-        Err(Status::unimplemented("get_tx not yet implemented"))
+        let hash = request.into_inner().hash;
+        match self.tx_index.get(&hash) {
+            Some(tx_response) => Ok(Response::new(GetTxResponse {
+                tx: None,
+                tx_response: Some(tx_response),
+            })),
+            None => Err(Status::not_found(format!(
+                "tx {hash} not found (not yet committed, or outside this node's index window)"
+            ))),
+        }
     }
 
     async fn get_txs_event(
@@ -601,9 +614,20 @@ mod tests {
         }
     }
 
+    /// Unique wasmer cache dir per App — see note in node.rs tests.
+    fn unique_cache_dir() -> String {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir()
+            .join(format!("slay3rd-grpc-test-{}-{n}", std::process::id()))
+            .to_string_lossy()
+            .into_owned()
+    }
+
     fn init_app() -> App<MemoryStore> {
         let storage = MemoryStore::default();
-        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3rd-grpc-test"));
+        let logic = StateMachine::new(&AppConfig::new(&unique_cache_dir()));
         let mut app = App::new(storage, logic);
 
         let genesis = make_genesis();
@@ -628,7 +652,43 @@ mod tests {
             app: Arc::new(RwLock::new(app)),
             mempool: Arc::new(Mutex::new(Mempool::new(100))),
             chain_id: "junoclaw-1".to_string(),
+            tx_index: Arc::new(TxIndex::new(16)),
         }
+    }
+
+    #[test]
+    fn test_get_tx_found_and_not_found() {
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let svc = make_service(init_app());
+            svc.tx_index.insert(layer_proto::cosmos::base::abci::v1beta1::TxResponse {
+                txhash: "0C330C87AB".to_string(),
+                height: 460_286,
+                gas_used: 309_396,
+                ..Default::default()
+            });
+
+            let resp = svc
+                .get_tx(Request::new(GetTxRequest { hash: "0c330c87ab".into() }))
+                .await
+                .expect("indexed tx must be found")
+                .into_inner();
+            let tr = resp.tx_response.expect("tx_response set");
+            assert_eq!(tr.height, 460_286);
+            assert_eq!(tr.gas_used, 309_396);
+
+            let err = svc
+                .get_tx(Request::new(GetTxRequest { hash: "DEADBEEF".into() }))
+                .await
+                .expect_err("unknown tx must error");
+            assert_eq!(err.code(), tonic::Code::NotFound);
+        });
     }
 
     /// Build a valid, properly signed Cosmos tx using a random secp256k1 key.
@@ -679,7 +739,7 @@ mod tests {
     /// 3. `latest_height()` returns the committed block info
     #[test]
     fn test_lightclient_query_block_roundtrip() {
-        let _guard = APP_TEST_LOCK.lock().unwrap();
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -763,7 +823,7 @@ mod tests {
     /// is correctly wired end-to-end.
     #[test]
     fn test_broadcast_tx_roundtrip() {
-        let _guard = APP_TEST_LOCK.lock().unwrap();
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
