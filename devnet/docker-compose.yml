@@ -12,7 +12,7 @@ services:
       - node0_data:/data
     command: ["slay3rd", "/config/node.toml"]
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=info,layer_app=debug
       - RUST_BACKTRACE=1
     networks:
       junoclaw-devnet:

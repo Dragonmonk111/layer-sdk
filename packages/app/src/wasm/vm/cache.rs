@@ -753,6 +753,202 @@ mod tests {
         assert!(result.is_ok(), "jolt-cw-verifier should pass check_wasm with current limits");
     }
 
+    // ── jclaw-credential v2 check_wasm reproduction ────────────────────────
+    //
+    // The 464,247-byte artifact passed check_tx and was proposed at devnet
+    // height 399193 but produced no code_id — a silent DeliverTx failure.
+    // store_code → check_wasm is unmetered and runs auth-commit even on msg
+    // failure, so this test surfaces the exact VmError that node logs hide.
+    const JCLAW_CREDENTIAL_WASM_REL: &str =
+        "/../../../junoclaw/devnet/artifacts/jclaw_credential_v2.wasm";
+
+    #[test]
+    fn jclaw_credential_v2_check_wasm() {
+        let wasm_path = std::env::var("JCLAW_CREDENTIAL_WASM").unwrap_or_else(|_| {
+            format!("{}{}", env!("CARGO_MANIFEST_DIR"), JCLAW_CREDENTIAL_WASM_REL)
+        });
+        let Ok(wasm) = std::fs::read(&wasm_path) else {
+            eprintln!("skipping jclaw_credential_v2_check_wasm: wasm not found at {wasm_path}");
+            return;
+        };
+
+        eprintln!("jclaw-credential v2 wasm size: {} bytes", wasm.len());
+
+        let path = "/tmp/slay3r/test-jclaw-v2-check";
+        let _ = std::fs::remove_dir_all(path);
+        std::fs::create_dir_all(path).unwrap();
+
+        let vm = VmCache::init(path);
+        match vm.store_code(&wasm) {
+            Ok((checksum, analysis)) => {
+                eprintln!("jclaw-credential v2 store_code OK, checksum={checksum:?}");
+                eprintln!("required_capabilities: {:?}", analysis.required_capabilities);
+            }
+            Err(e) => panic!("jclaw-credential v2 store_code FAILED: {e}"),
+        }
+    }
+
+    // ── jclaw-credential v2 smart-query round-trip ──────────────────────────
+    //
+    // On devnet the deployed v2 contract executes `Bud` fine but EVERY smart
+    // query (`{"list_members":{}}`, `{"member":{...}}`, `{"mayo_pk_hash":{...}}`)
+    // fails with "Error parsing into type jclaw_credential::msg::QueryMsg:
+    // Invalid type". This test replays the exact same JSON against the exact
+    // same artifact through VmCache::query — if it passes here, the chain-side
+    // query transport is mangling the msg bytes; if it fails here, the
+    // artifact's QueryMsg ABI is not what the source claims.
+    #[test]
+    fn jclaw_credential_v2_query_roundtrip() {
+        let wasm_path = std::env::var("JCLAW_CREDENTIAL_WASM").unwrap_or_else(|_| {
+            format!("{}{}", env!("CARGO_MANIFEST_DIR"), JCLAW_CREDENTIAL_WASM_REL)
+        });
+        let Ok(wasm) = std::fs::read(&wasm_path) else {
+            eprintln!("skipping jclaw_credential_v2_query_roundtrip: wasm not found at {wasm_path}");
+            return;
+        };
+
+        let path = "/tmp/slay3r/test-jclaw-v2-query";
+        let _ = std::fs::remove_dir_all(path);
+        std::fs::create_dir_all(path).unwrap();
+
+        let mut vm = VmCache::init(path);
+        let (checksum, _) = vm.store_code(&wasm).unwrap();
+
+        let env = mock_env();
+        let genesis = AccountId::unchecked("juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992");
+        let contract = AccountId::unchecked("juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek");
+        let info = mock_info(&genesis.to_string(), &[]);
+        let meter = GasMeter::infinite();
+        let sm = StateMachine::new(&AppConfig::new(path));
+        let store = MemoryStore::new();
+        let mut writer = store.writer();
+
+        // instantiate with default msg {} — genesis = sender
+        let (res, inst_gas) = vm.instantiate(
+            &checksum,
+            &env,
+            &info,
+            b"{}",
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
+        );
+        match &res {
+            Ok(Ok(_)) => eprintln!("instantiate OK (gas_used={inst_gas})"),
+            other => panic!("instantiate failed: {other:?}"),
+        }
+
+        // the exact queries that fail on-chain — non-fatal, we only care
+        // whether the msg PARSES (member existence is state-dependent)
+        for q in [
+            br#"{"list_members":{}}"#.as_slice(),
+            br#"{"total_weight":{}}"#.as_slice(),
+            br#"{"member":{"addr":"juno1df6kume3v3arsde40fnnsuph8pskuur2a8z5w2"}}"#.as_slice(),
+            br#"{"mayo_pk_hash":{"addr":"juno1df6kume3v3arsde40fnnsuph8pskuur2a8z5w2"}}"#.as_slice(),
+        ] {
+            let (res, gas) = vm.query(
+                &checksum,
+                &env,
+                q,
+                writer.as_ref(),
+                &contract,
+                &meter,
+                &sm,
+            );
+            match &res {
+                Ok(Ok(data)) => eprintln!(
+                    "query {} => OK (gas={gas}): {}",
+                    String::from_utf8_lossy(q),
+                    String::from_utf8_lossy(data.as_slice())
+                ),
+                Ok(Err(e)) => eprintln!(
+                    "query {} => CONTRACT ERR: {e}",
+                    String::from_utf8_lossy(q)
+                ),
+                Err(e) => eprintln!(
+                    "query {} => VM ERR: {e}",
+                    String::from_utf8_lossy(q)
+                ),
+            }
+        }
+
+        // ── corruption-matrix: which mangled input reproduces the devnet ────
+        // "Error parsing into type jclaw_credential::msg::QueryMsg: Invalid type"
+        let clean = br#"{"list_members":{}}"#;
+        let double_encoded =
+            to_json_vec(&String::from_utf8_lossy(clean).to_string()).unwrap();
+        let grpc_framed = {
+            let mut v = vec![0u8]; // compression flag
+            v.extend_from_slice(&(clean.len() as u32).to_be_bytes()); // 4-byte len
+            v.extend_from_slice(clean);
+            v
+        };
+        // proto bytes of QuerySmartContractStateRequest{address, query_data}
+        // field1=address(tag 0x0A,len,bytes) field2=query_data(tag 0x12,len,bytes)
+        let proto_wrapped = {
+            let addr = b"juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek";
+            let mut v = vec![0x0A, addr.len() as u8];
+            v.extend_from_slice(addr);
+            v.push(0x12);
+            v.push(clean.len() as u8);
+            v.extend_from_slice(clean);
+            v
+        };
+        let json_byte_array = {
+            // serde_json::to_vec(&Vec<u8>) style: [123,34,108,...]
+            let inner = clean
+                .iter()
+                .map(|b| b.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("[{inner}]").into_bytes()
+        };
+        let mut candidates: Vec<(String, Vec<u8>)> = vec![
+            ("double-encoded string".into(), double_encoded),
+            ("grpc 5-byte frame + msg".into(), grpc_framed),
+            ("proto QuerySmartContractStateRequest".into(), proto_wrapped),
+            ("json byte array".into(), json_byte_array),
+            ("base64 text".into(), Binary::from(clean.to_vec()).to_base64().into_bytes()),
+            ("json null".into(), b"null".to_vec()),
+            ("json string \"x\"".into(), b"\"x\"".to_vec()),
+            ("json number".into(), b"5".to_vec()),
+            ("json array".into(), b"[]".to_vec()),
+            ("json true".into(), b"true".to_vec()),
+            ("empty".into(), b"".to_vec()),
+            ("lone {".into(), b"{".to_vec()),
+            ("whitespace".into(), b"   ".to_vec()),
+            ("utf8 bom + json".into(), {
+                let mut v = vec![0xEF, 0xBB, 0xBF];
+                v.extend_from_slice(clean);
+                v
+            }),
+            ("msg wrapped in Smart".into(), br#"{"smart":{"msg":"e2xpc3RfbWVtYmVyczp7fX0="}}"#.to_vec()),
+            ("QueryRequest json".into(), br#"{"wasm":{"smart":{"contract_addr":"x","msg":"e2xpc3RfbWVtYmVyczp7fX0="}}}"#.to_vec()),
+        ];
+        // every single byte 0x00..=0xFF
+        for b in 0u8..=255 {
+            candidates.push((format!("single byte 0x{b:02x}"), vec![b]));
+        }
+        let mut hits = 0;
+        for (name, q) in &candidates {
+            let (res, _) = vm.query(&checksum, &env, q, writer.as_ref(), &contract, &meter, &sm);
+            let outcome = match &res {
+                Ok(Ok(d)) => format!("OK: {}", String::from_utf8_lossy(d.as_slice())),
+                Ok(Err(e)) => format!("CONTRACT ERR: {e}"),
+                Err(e) => format!("VM ERR: {e}"),
+            };
+            // print only matches of the devnet signature + non-boilerplate ones
+            if outcome.contains("Invalid type") {
+                hits += 1;
+                eprintln!("*** [HIT:{name}] {outcome}");
+            } else if !name.starts_with("single byte") {
+                eprintln!("[corrupt:{name}] {outcome}");
+            }
+        }
+        eprintln!("=== 'Invalid type' hits: {hits} / {} candidates ===", candidates.len());
+    }
+
     #[test]
     fn zk_verifier_bn254_gas() {
         let wasm_path = std::env::var("ZK_VERIFIER_WASM").unwrap_or_else(|_| {
