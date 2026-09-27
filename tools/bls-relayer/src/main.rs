@@ -55,7 +55,8 @@ use layer_proto::cosmos::base::tendermint::v1beta1::{
 };
 use layer_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient as WasmQueryClient, MsgExecuteContract, MsgInstantiateContract,
-    MsgStoreCode, QueryContractsByCodeRequest, QuerySmartContractStateRequest,
+    MsgStoreCode, QueryCodesRequest, QueryContractsByCodeRequest,
+    QuerySmartContractStateRequest,
 };
 use layer_proto::layer::lightclient::v1::{
     query_client::QueryClient as LightClientQueryClient, QueryBlockRequest,
@@ -400,6 +401,7 @@ fn print_usage() {
     eprintln!("  jc-execute        MsgExecuteContract --contract <addr> --msg <json|@file>");
     eprintln!("  jc-query          Query/SmartContractState --contract <addr> --msg <json|@file>");
     eprintln!("  jc-contracts      Query/ContractsByCode --code-id <n>");
+    eprintln!("  jc-codes          Query/Codes — list stored code ids + checksums");
     eprintln!("                    (--msg @path reads the JSON from a file)");
     eprintln!();
     eprintln!("Counterparty ibc-go handshake + packet relay (signs with --key-hex):");
@@ -1206,6 +1208,17 @@ const LAYER_FEE_DENOM: &str = "ujclaw";
 const LAYER_ACCOUNT_NUMBER: u64 = 17;
 const LAYER_GAS: u64 = 4_000_000;
 const LAYER_BECH32: &str = "juno";
+// JunoClaw charges GAS_COST_TX_BYTE=10 per tx byte at DeliverTx, metered
+// against fee.gas_limit — a store-code tx over ~400KB needs more than the
+// default 4M. estimate: tx_len ~= wasm + ~1.4KB proto/envelope overhead.
+fn store_code_gas(wasm_len: usize) -> u64 {
+    (wasm_len as u64 + 2048) * 10 + 500_000
+}
+// Flat fee at the established 0.00125 ujclaw/gas rate (5000 @ 4M), staying
+// above the node's 0.001 ujclaw/gas min-gas-price mempool floor.
+fn layer_fee_amount(gas_limit: u64) -> u128 {
+    gas_limit as u128 / 800
+}
 
 /// JunoClaw signer — the funded deployer account by default; --jc-key-hex
 /// (or JUNOCLAW_KEY_HEX env) overrides for a different funded account.
@@ -1229,15 +1242,16 @@ fn sign_and_encode_layer(
     key: &SigningKey,
     msg: cosmrs::Any,
     account: &AccountInfo,
+    gas_limit: u64,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let chain_id: ChainId = LAYER_CHAIN_ID.parse()?;
     let fee_coin = Coin {
-        amount: 5000u128,
+        amount: layer_fee_amount(gas_limit),
         denom: LAYER_FEE_DENOM.parse()?,
     };
     let body = tx::Body::new(vec![msg], "", 0u16);
     let info = SignerInfo::single_direct(Some(key.public_key()), account.sequence);
-    let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, LAYER_GAS));
+    let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, gas_limit));
     let doc = SignDoc::new(&body, &auth, &chain_id, account.account_number)?;
     Ok(doc.sign(key)?.to_bytes()?)
 }
@@ -1246,14 +1260,18 @@ fn sign_and_encode_layer(
 /// The chain decodes standard wasmd `/cosmwasm.wasm.v1.*` Anys into WasmMsg
 /// (packages/cosmos/src/msg.rs::parse_cosmos_msg), so contract lifecycle
 /// messages go through this same path — no gov proposal required.
-async fn submit_layer_any(a: &Args, any: cosmrs::Any) -> Result<String, Box<dyn std::error::Error>> {
+async fn submit_layer_any(
+    a: &Args,
+    any: cosmrs::Any,
+    gas_limit: u64,
+) -> Result<String, Box<dyn std::error::Error>> {
     let key = layer_signer_key(a)?;
     let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
     let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
     if account.account_number == 0 {
         account.account_number = LAYER_ACCOUNT_NUMBER;
     }
-    let tx_bytes = sign_and_encode_layer(&key, any, &account)?;
+    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas_limit)?;
     if a.simulate {
         simulate_report(&a.layer_grpc, tx_bytes).await?;
         return Ok("simulated".into());
@@ -1267,7 +1285,7 @@ async fn submit_ibc_msg(a: &Args, msg: IbcMsg) -> Result<String, Box<dyn std::er
         type_url: ibc::TYPE_URL_JUNOCLAW_IBC.to_string(),
         value: serde_json::to_vec(&msg)?,
     };
-    submit_layer_any(a, any).await
+    submit_layer_any(a, any, LAYER_GAS).await
 }
 
 /// `jc-store-code` — upload a CosmWasm contract to JunoClaw (permissionless).
@@ -1279,12 +1297,13 @@ async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         wasm_bytes.len(),
         hex::encode(Sha256::digest(&wasm_bytes))
     );
+    let gas = store_code_gas(wasm_bytes.len());
     let msg = MsgStoreCode {
         sender: layer_sender(a)?.to_string(),
         wasm_byte_code: wasm_bytes,
     };
-    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_STORE_CODE, &msg)).await?;
-    println!("jc-store-code broadcast OK — txhash {hash}");
+    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_STORE_CODE, &msg), gas).await?;
+    println!("jc-store-code broadcast OK — txhash {hash} (gas_limit {gas})");
     Ok(())
 }
 
@@ -1292,10 +1311,22 @@ async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 /// Files are needed for MAYO vectors — `Vec<u8>` fields serialize as
 /// multi-KB JSON int arrays that don't fit comfortably on the command line.
 fn load_msg_json(arg: &str) -> Result<String, Box<dyn std::error::Error>> {
-    match arg.strip_prefix('@') {
-        Some(path) => Ok(String::from_utf8(std::fs::read(path)?)?),
-        None => Ok(arg.to_string()),
+    let s = match arg.strip_prefix('@') {
+        Some(path) => String::from_utf8(std::fs::read(path)?)?,
+        None => arg.to_string(),
+    };
+    // Contract msgs are always JSON; a non-JSON msg can only fail inside the
+    // contract (e.g. terse "Invalid type"). Catch it here instead — the most
+    // common cause is the shell stripping `"` from an inline arg.
+    if serde_json::from_str::<serde_json::Value>(&s).is_err() {
+        return Err(concat!(
+            "--msg is not valid JSON",
+            " (shell may have stripped quotes; use --msg @file.json",
+            " or escape quotes as \\\")",
+        )
+        .into());
     }
+    Ok(s)
 }
 
 /// `jc-instantiate` — instantiate a stored code id on JunoClaw.
@@ -1316,7 +1347,8 @@ async fn cmd_jc_instantiate(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
         msg: msg_json.into_bytes(),
         funds: vec![],
     };
-    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_INSTANTIATE_CONTRACT, &msg)).await?;
+    let hash =
+        submit_layer_any(a, any_of(TYPE_URL_MSG_INSTANTIATE_CONTRACT, &msg), LAYER_GAS).await?;
     println!("jc-instantiate code_id={code_id} broadcast OK — txhash {hash}");
 
     // Wait for the tx to land in a finalized block, then surface the new
@@ -1362,7 +1394,8 @@ async fn cmd_jc_execute(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         msg: msg_json.into_bytes(),
         funds: vec![],
     };
-    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg)).await?;
+    let hash =
+        submit_layer_any(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg), LAYER_GAS).await?;
     println!("jc-execute {contract} broadcast OK — txhash {hash}");
     Ok(())
 }
@@ -1380,6 +1413,24 @@ async fn cmd_jc_contracts(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .into_inner();
     for c in &resp.contracts {
         println!("{c}");
+    }
+    Ok(())
+}
+
+/// `jc-codes` — list stored wasm codes (code_id, creator, sha256 checksum).
+async fn cmd_jc_codes(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = WasmQueryClient::new(connect(&a.layer_grpc).await?);
+    let resp = client
+        .codes(QueryCodesRequest { pagination: None })
+        .await?
+        .into_inner();
+    for info in &resp.code_infos {
+        println!(
+            "code_id={} creator={} checksum={}",
+            info.code_id,
+            info.creator,
+            hex::encode(&info.data_hash)
+        );
     }
     Ok(())
 }
@@ -2510,6 +2561,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "jc-instantiate" => cmd_jc_instantiate(&a).await,
         "jc-execute" => cmd_jc_execute(&a).await,
         "jc-contracts" => cmd_jc_contracts(&a).await,
+        "jc-codes" => cmd_jc_codes(&a).await,
         "jc-query" => cmd_jc_query(&a).await,
         // Counterparty ibc-go handshake + packet relay
         "conn-try" => cmd_conn_try(&a).await,

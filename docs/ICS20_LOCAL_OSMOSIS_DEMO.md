@@ -261,6 +261,13 @@ All sign with the deployer key (`sha256("junoclaw-deployer-v1")` → `juno1dz875
 `--jc-key-hex` / `JUNOCLAW_KEY_HEX` overrides. `--simulate` dry-runs via
 `tx.v1beta1.Service/Simulate` — currently `Unimplemented` on the chain.
 
+> **Windows / PowerShell:** inline JSON loses its `"` characters when passed
+> to a native exe — `--msg '{"list_members":{}}'` arrives as
+> `{list_members:{}}`, which the contract rejects with a terse
+> `Error parsing into type ...::QueryMsg: Invalid type`. Use `--msg @file.json`
+> or escape the quotes (`--msg '{\"list_members\":{}}'`). The relayer now
+> validates `--msg` as JSON locally and fails fast with this hint.
+
 ### Devnet record — jclaw-credential (MAYO-2), 2026-09-26
 
 - **code_id** `2` — `junoclaw/devnet/artifacts/jclaw_credential_mvp.wasm`,
@@ -275,3 +282,25 @@ All sign with the deployer key (`sha256("junoclaw-deployer-v1")` → `juno1dz875
   (MAYO-2) signature verification on the devnet.
 - txhash note: the chain's `BroadcastTx` response omits the hash, so the
   relayer now falls back to `sha256(tx_bytes)` (CometBFT convention).
+
+### Devnet record — jclaw-credential v2 (MAYO-2/3/5), 2026-09-27
+
+- **code_id** `3`, **contract**
+  `juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek`.
+  `VerifyMayoAttestation` takes an optional `variant` (default `mayo2`).
+- All txs signed by the deployer; results read from node-0 logs
+  (`tx executed tx_hash=<hash> ... gas_used=... success=...`) since `GetTx`
+  is not implemented yet. `gas_used` is whole-tx, gas limit 4 000 000.
+
+| Step | txhash | Height | gas_used | Result |
+|---|---|---|---|---|
+| MAYO-2 verify | `0C330C87…4B0D` | 460 286 | 309 396 | success, `valid=true` |
+| MAYO-2 verify, tampered sig | `1331C5F7…B611` | 460 866 | 309 573 | **rejected**: `MAYO signature verification failed` |
+| MAYO-3 Bud | `7C08E0F4…A3A4` | 462 414 | 200 212 | success |
+| MAYO-3 verify | `EA7DBEF5…92AE` | 462 422 | 400 245 | success |
+| MAYO-5 Bud | `82564109…DA8C` | 462 562 | 294 132 | success |
+| MAYO-5 verify | `43FC8F5A…AB84` | 462 574 | 725 804 | success |
+
+Vectors: `jc_bud_mayo{3,5}.json`, `jc_verify_mayo{,3,5}.json`,
+`jc_verify_bad.json` (kept outside the repo; regenerate from the KAT
+vectors if needed).
