@@ -19,11 +19,18 @@ ibc-go; its **08-wasm BLS light client** verifies JunoClaw's commitments via
 | Symbol        | Meaning                                        | Example          |
 | ------------- | ---------------------------------------------- | ---------------- |
 | `JC_CLIENT`   | JunoClaw's client for Osmosis                  | `07-tendermint-0`|
-| `WASM_CLIENT` | Osmosis's 08-wasm client for JunoClaw          | `08-wasm-5`      |
+| `WASM_CLIENT` | Osmosis's 08-wasm client for JunoClaw          | `08-wasm-6`      |
 | `JC_CONN`     | JunoClaw's connection id                       | `connection-0`   |
-| `OSMO_CONN`   | Osmosis's connection id (assigned by conn-try) | `connection-2`   |
+| `OSMO_CONN`   | Osmosis's connection id (assigned by conn-try) | `connection-3`   |
 | `JC_CHAN`     | JunoClaw's channel id                          | `channel-0`      |
-| `OSMO_CHAN`   | Osmosis's channel id (assigned by chan-try)    | `channel-2`      |
+| `OSMO_CHAN`   | Osmosis's channel id (assigned by chan-try)    | `channel-3`      |
+
+Live values above are from the 2026-09-28 re-genesis rebuild
+(`C:\cosmos-node\backups\devnet-pre-regenesis-2026-09-28\ibc-rebuild.ps1`).
+The **Osmosis relayer signer** is the keyring-test `relayer` key,
+`osmo14m9v8v33hdaydmz0cuszu339zgmpj5zeucn2w8`, exported from the
+`local-osmosis` container at run time by `C:\cosmos-node\ops\relayer\start-relay.ps1`
+(never stored on the host or placed on a command line).
 
 > `JC_CLIENT` must be a valid ibc-go identifier (9–64 chars). `client-0` is too
 > short and is rejected — use `07-tendermint-0`.
@@ -55,17 +62,17 @@ bls-relayer jc-create-client --client-id 07-tendermint-0 --cp-chain-id <osmo-cha
 
 # --- Connection handshake ---
 # 1. JunoClaw: conn-open-init  (writes ConnectionEnd{INIT} at ibc/connections/connection-0)
-bls-relayer jc-conn-init --client-id 07-tendermint-0 --connection-id connection-0 --cp-client-id 08-wasm-5
+bls-relayer jc-conn-init --client-id 07-tendermint-0 --connection-id connection-0 --cp-client-id 08-wasm-6
 
 # 2. Osmosis: conn-open-try (auto-updates client, verifies JunoClaw conn INIT). Note OSMO_CONN from events.
-bls-relayer conn-try --client-id 08-wasm-5 --cp-client-id 07-tendermint-0 --cp-connection-id connection-0 \
+bls-relayer conn-try --client-id 08-wasm-6 --cp-client-id 07-tendermint-0 --cp-connection-id connection-0 \
     --grpc <osmo-grpc> --key-hex $K --bech32-prefix osmo --fee-denom uosmo --cp-chain-id <osmo-chain-id>
 
 # 3. JunoClaw: conn-open-ack (INIT→OPEN).
 bls-relayer jc-conn-ack --connection-id connection-0 --cp-connection-id <OSMO_CONN>
 
 # 4. Osmosis: conn-open-confirm (auto-updates client, verifies JunoClaw conn OPEN).
-bls-relayer conn-confirm --client-id 08-wasm-5 --connection-id <OSMO_CONN> --cp-connection-id connection-0 \
+bls-relayer conn-confirm --client-id 08-wasm-6 --connection-id <OSMO_CONN> --cp-connection-id connection-0 \
     --grpc <osmo-grpc> --key-hex $K --bech32-prefix osmo --fee-denom uosmo --cp-chain-id <osmo-chain-id>
 
 # --- Channel handshake ---
@@ -73,14 +80,14 @@ bls-relayer conn-confirm --client-id 08-wasm-5 --connection-id <OSMO_CONN> --cp-
 bls-relayer jc-chan-init --channel-id channel-0 --connection-id connection-0
 
 # 6. Osmosis: chan-open-try (auto-updates client, verifies chan INIT). Note OSMO_CHAN.
-bls-relayer chan-try --client-id 08-wasm-5 --connection-id <OSMO_CONN> --cp-channel-id channel-0 --cp-port-id transfer \
+bls-relayer chan-try --client-id 08-wasm-6 --connection-id <OSMO_CONN> --cp-channel-id channel-0 --cp-port-id transfer \
     --grpc <osmo-grpc> --key-hex $K --bech32-prefix osmo --fee-denom uosmo --cp-chain-id <osmo-chain-id>
 
 # 7. JunoClaw: chan-open-ack (INIT→OPEN).
 bls-relayer jc-chan-ack --channel-id channel-0 --cp-channel-id <OSMO_CHAN>
 
 # 8. Osmosis: chan-open-confirm (auto-updates client, verifies chan OPEN).
-bls-relayer chan-confirm --client-id 08-wasm-5 --channel-id <OSMO_CHAN> --cp-channel-id channel-0 --cp-port-id transfer \
+bls-relayer chan-confirm --client-id 08-wasm-6 --channel-id <OSMO_CHAN> --cp-channel-id channel-0 --cp-port-id transfer \
     --grpc <osmo-grpc> --key-hex $K --bech32-prefix osmo --fee-denom uosmo --cp-chain-id <osmo-chain-id>
 
 # --- ICS-20 transfer ---
@@ -92,7 +99,7 @@ bls-relayer jc-transfer --channel-id channel-0 --amount 1000ujclaw --to <osmo_re
 
 # 10. Osmosis: recv-packet (auto-updates client, verifies packet commitment → mints voucher).
 #     --timeout-height/--timeout-timestamp must match the transfer exactly.
-bls-relayer recv-packet --client-id 08-wasm-5 --channel-id <OSMO_CHAN> --cp-channel-id channel-0 --cp-port-id transfer \
+bls-relayer recv-packet --client-id 08-wasm-6 --channel-id <OSMO_CHAN> --cp-channel-id channel-0 --cp-port-id transfer \
     --sequence 1 --amount 1000ujclaw --to <osmo_receiver> --timeout-height 0 --timeout-timestamp <future_ns> \
     --grpc <osmo-grpc> --key-hex $K --bech32-prefix osmo --fee-denom uosmo --cp-chain-id <osmo-chain-id>
 
@@ -107,8 +114,8 @@ logic as a loop so the bridge operates without babysitting:
 
 ```bash
 bls-relayer relay \
-  --client-id 08-wasm-5 \
-  --channel-id channel-0 --cp-channel-id channel-2 \
+  --client-id 08-wasm-6 \
+  --channel-id channel-0 --cp-channel-id channel-3 \
   --port-id transfer --cp-port-id transfer \
   --interval 6 --update-cadence 50 \
   --max-retries 60 --min-fee-balance 0 \
@@ -194,8 +201,8 @@ relayer:
   image: junoclaw-bls-relayer:latest
   restart: unless-stopped
   command: >
-    relay --client-id 08-wasm-5
-    --channel-id channel-0 --cp-channel-id channel-2
+    relay --client-id 08-wasm-6
+    --channel-id channel-0 --cp-channel-id channel-3
     --interval 6 --update-cadence 50
     --health-addr 0.0.0.0:8080
   ports: ["127.0.0.1:8080:8080"]
@@ -210,7 +217,7 @@ After=network.target
 
 [Service]
 ExecStart=/usr/local/bin/bls-relayer relay \
-  --client-id 08-wasm-5 --channel-id channel-0 --cp-channel-id channel-2 \
+  --client-id 08-wasm-6 --channel-id channel-0 --cp-channel-id channel-3 \
   --interval 6 --update-cadence 50 --health-addr 127.0.0.1:8080
 Restart=always
 RestartSec=5
@@ -223,6 +230,12 @@ The in-process `catch_unwind` + backoff already handles per-tick failures; the
 restart policy is the backstop for process exit (OOM, unrecoverable runtime
 state). Keep `RestartSec` small — on restart the daemon re-derives all state
 from on-chain commitments, so a crash mid-tick just re-runs idempotently.
+
+**Windows devnet**: launch via `C:\cosmos-node\ops\relayer\start-relay.ps1`,
+which exports the `relayer` key from the `local-osmosis` container into an
+env var for the child process only, then starts the daemon with
+`--health-addr 127.0.0.1:18080`. Run it under Task Scheduler or a terminal
+with a restart loop for the same supervision guarantee.
 
 ## Wire-format notes
 
@@ -268,7 +281,30 @@ All sign with the deployer key (`sha256("junoclaw-deployer-v1")` → `juno1dz875
 > or escape the quotes (`--msg '{\"list_members\":{}}'`). The relayer now
 > validates `--msg` as JSON locally and fails fast with this hint.
 
-### Devnet record — jclaw-credential (MAYO-2), 2026-09-26
+### Re-genesis record — 2026-09-28
+
+The devnet was wiped and re-genesised on 2026-09-28 (payload-format migration;
+see `C:\cosmos-node\backups\devnet-pre-regenesis-2026-09-28\RECORD.md`).
+Post-mortem inventory of the wiped chain, verified by probing the backed-up
+node-0 volume with the old image:
+
+- **Only one CosmWasm code ever existed**: `code_id=1` =
+  `layer_root.wasm` (checksum `a1eda8bd…32236e`), the Layer-SDK root contract
+  auto-deployed at genesis — creator `juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx`,
+  contract `juno1pkspmgpd5q76qndqtksxmgra5zx6p8dq46k6h9`. The re-genesised chain
+  reproduces all three values deterministically — nothing to rebuild.
+- The devnet records below (code_id 2/3, contracts, heights, tx hashes) refer to
+  the **wiped** chain and are kept for historical reference only.
+- IBC was rebuilt fresh: Osmosis `08-wasm-6`/`connection-3`/`channel-3` ↔
+  JunoClaw `07-tendermint-0`/`connection-0`/`channel-0`, plus a verified
+  1000 ujclaw transfer (voucher `ibc/4192…90FA`). Script: `ibc-rebuild.ps1`.
+- Inputs for any future jclaw-credential deployment are preserved and
+  checksum-pinned in `C:\cosmos-node\backups\junoclaw-state-inputs\`
+  (`jclaw_credential_{mvp,v2}.wasm` + MAYO vectors + `SHA256SUMS`).
+  Re-deploying them would be **new** state (code_id 2/3 on the current chain),
+  not a rebuild.
+
+### Devnet record — jclaw-credential (MAYO-2), 2026-09-26 — SUPERSEDED by re-genesis
 
 - **code_id** `2` — `junoclaw/devnet/artifacts/jclaw_credential_mvp.wasm`,
   313 418 B, checksum `b26230fd31f65947f8d9f17ae735c7ae7bec174e349522cdf7a1260f9f227b24`.
@@ -283,7 +319,7 @@ All sign with the deployer key (`sha256("junoclaw-deployer-v1")` → `juno1dz875
 - txhash note: the chain's `BroadcastTx` response omits the hash, so the
   relayer now falls back to `sha256(tx_bytes)` (CometBFT convention).
 
-### Devnet record — jclaw-credential v2 (MAYO-2/3/5), 2026-09-27
+### Devnet record — jclaw-credential v2 (MAYO-2/3/5), 2026-09-27 — SUPERSEDED by re-genesis
 
 - **code_id** `3`, **contract**
   `juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek`.

@@ -9,7 +9,10 @@ mod sync;
 pub(crate) mod testing;
 mod wasm;
 
-pub use app::{App, AppLoadError, MinGasPrice};
+pub use app::{
+    decode_snapshot_chunk, verify_snapshot_root, App, AppLoadError, MinGasPrice, SnapshotChunk,
+    SnapshotExport, SNAPSHOT_CHUNK_TARGET, SNAPSHOT_FORMAT_V1,
+};
 pub use error::{PulsarError, PulsarResult};
 pub use sm::{AppConfig, StateMachine};
 pub use sync::SyncProvider;

@@ -1,5 +1,7 @@
 mod error;
 mod legacy;
+#[cfg(test)]
+mod mayo_test_vector;
 mod msg;
 mod pubkey;
 mod query;

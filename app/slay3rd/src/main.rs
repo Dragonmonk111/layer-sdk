@@ -61,11 +61,18 @@ use tokio::sync::{Mutex, RwLock};
 use tonic::transport::Server as GrpcServer;
 use tracing::{error, info, warn};
 
+/// Channel-3 message tags: a full payload, a request for a payload by
+/// digest, or a request for a contiguous range of payloads by height
+/// (bulk backfill — the requester doesn't know digests yet).
+const PAYLOAD_MSG_PUSH: u8 = 0;
+const PAYLOAD_MSG_REQUEST: u8 = 1;
+const PAYLOAD_MSG_REQUEST_RANGE: u8 = 2;
+
 use slay3rd::{
     config::NodeConfig,
     grpc::LayerGrpcService,
     mempool::Mempool,
-    node::LayerNode,
+    node::{FetchRequest, LayerNode},
     relay::LayerRelay,
 };
 
@@ -133,22 +140,76 @@ impl KeyMaterial {
 /// (it is assembled by the consensus engine after a quorum of validators certify).
 /// The Finalization activity delivers the certificate post-commit, and the Reporter
 /// is the correct place to store it.
-struct LayerReporter<T: PersistentStorage + Send + Sync + 'static> {
-    /// Shared reference to the Layer application.
-    /// RwLock: read lock for height query, write lock for set_block_certificate().
-    app: Arc<RwLock<App<T>>>,
+///
+/// The simplex voter awaits `report()` inline, so the reporter MUST NOT block:
+/// it only enqueues finalizations for `run_executor`, which executes blocks
+/// (possibly slow wasm, possibly waiting on payload fetches) off the
+/// consensus path, in the order consensus finalized them.
+#[derive(Clone)]
+struct LayerReporter {
+    exec_tx: tokio::sync::mpsc::UnboundedSender<FinalizedBlock>,
 }
 
-/// Manual Clone implementation — App<T> is behind Arc so T does not need Clone.
-impl<T: PersistentStorage + Send + Sync + 'static> Clone for LayerReporter<T> {
-    fn clone(&self) -> Self {
-        LayerReporter {
-            app: self.app.clone(),
+/// A finalization handed from the reporter to the executor.
+struct FinalizedBlock {
+    payload_digest: [u8; 32],
+    cert_bytes: Vec<u8>,
+    proposal_bytes: Vec<u8>,
+    round: String,
+}
+
+/// Executes finalized blocks in order and persists their light-client records.
+/// The ONLY place application state advances.
+async fn run_executor<T: PersistentStorage + Send + Sync + 'static>(
+    app: Arc<RwLock<App<T>>>,
+    node: LayerNode<T, ed25519::PublicKey>,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<FinalizedBlock>,
+) {
+    while let Some(f) = rx.recv().await {
+        // Execute the finalized chain up to this digest. The returned height
+        // is the height OF THIS DIGEST, so the certificate is attached to the
+        // block it actually signs.
+        let (height, timestamp_nanos) = match node.finalize(f.payload_digest).await {
+            Some(v) => v,
+            None => {
+                tracing::debug!(
+                    round = %f.round,
+                    payload_digest = %hex::encode(f.payload_digest),
+                    "Finalization not applied (already executed, or execution halted)"
+                );
+                continue;
+            }
+        };
+
+        tracing::info!(
+            height = height,
+            round = %f.round,
+            payload_digest = %hex::encode(f.payload_digest),
+            cert_len = f.cert_bytes.len(),
+            certificate = %hex::encode(&f.cert_bytes),
+            "Block finalized with BLS threshold certificate (CONS-05)"
+        );
+
+        // CONS-05 + BLS light client: certificate, the exact signed Proposal
+        // bytes (ops::verify_message::<MinSig>(group_pubkey, namespace,
+        // proposal_bytes, certificate)) and the timestamp, in one commit.
+        if f.cert_bytes.is_empty() {
+            continue;
+        }
+        let mut app = app.write().await;
+        match app.set_block_finality(height, f.cert_bytes, f.proposal_bytes, timestamp_nanos) {
+            Ok(()) => tracing::info!(height, "Finality record stored (certificate, proposal, timestamp)"),
+            Err(e) => tracing::error!(
+                height,
+                error = ?e,
+                "Failed to store finality record — light client verification unavailable for this height"
+            ),
         }
     }
+    tracing::error!("Executor channel closed — no further blocks will be executed");
 }
 
-impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T> {
+impl Reporter for LayerReporter {
     type Activity = commonware_consensus::simplex::types::Activity<
         BlsScheme<ed25519::PublicKey, MinSig>,
         sha256::Digest,
@@ -163,95 +224,14 @@ impl<T: PersistentStorage + Send + Sync + 'static> Reporter for LayerReporter<T>
                 // CONS-05: Finalized block with BLS threshold certificate.
                 // The certificate bytes are produced by the consensus engine after a quorum
                 // of validators certify. They are NOT available at certify() time.
-                let cert_bytes = finalization.certificate.encode().to_vec();
-                let proposal_bytes = finalization.proposal.encode().to_vec();
-                let payload_digest: [u8; 32] = finalization.proposal.payload.0;
-
-                // Determine the block height and timestamp: query the App's last committed
-                // block. Since certify() -> execute_block() -> finalize_block() has already run,
-                // the App's LAST_BLOCK height IS the block that just received its certificate.
-                let (height, timestamp_nanos) = {
-                    let app = self.app.read().await;  // SHARED read lock — read-only
-                    app.info()
-                        .map(|b| (b.height, b.time.nanos()))
-                        .unwrap_or((0, 0))
-                };  // read lock released here
-
-                tracing::info!(
-                    height = height,
-                    view = ?finalization.proposal.round,
-                    payload_digest = %hex::encode(payload_digest),
-                    cert_len = cert_bytes.len(),
-                    certificate = %hex::encode(&cert_bytes),
-                    "Block finalized with BLS threshold certificate (CONS-05)"
-                );
-
-                // CONS-05: Persist the BLS certificate to the committed block record.
-                // This is the post-commit update path — the block was already committed
-                // by certify()/execute_block()/finalize_block(), and now we store the
-                // certificate that the consensus engine produced from the quorum of
-                // certify votes.
-                if !cert_bytes.is_empty() {
-                    let mut app = self.app.write().await;  // EXCLUSIVE write lock — mutates storage
-                    match app.set_block_certificate(height, cert_bytes.clone()) {
-                        Ok(()) => {
-                            tracing::info!(
-                                height = height,
-                                cert_len = cert_bytes.len(),
-                                "BLS certificate stored in block record (CONS-05)"
-                            );
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                height = height,
-                                error = ?e,
-                                "Failed to store BLS certificate — CONS-05 gap"
-                            );
-                        }
-                    }
-
-                    // BLS light client: persist the raw encoded Proposal alongside the
-                    // certificate. A light client verifies the certificate via
-                    // ops::verify_message::<MinSig>(group_pubkey, namespace, proposal_bytes,
-                    // certificate) and needs the exact signed bytes — reconstructing them
-                    // from height/timestamp/payload_digest alone is not possible (round and
-                    // parent view are not otherwise exposed).
-                    match app.set_block_proposal(height, proposal_bytes.clone()) {
-                        Ok(()) => {
-                            tracing::info!(
-                                height = height,
-                                proposal_len = proposal_bytes.len(),
-                                "Proposal bytes stored in block record (light client)"
-                            );
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                height = height,
-                                error = ?e,
-                                "Failed to store proposal bytes — light client verification will be impossible for this height"
-                            );
-                        }
-                    }
-
-                    // Light client header completeness: persist the block timestamp
-                    // (nanos). The 08-wasm header carries it for IBC packet-timeout
-                    // bookkeeping on the counterparty chain.
-                    match app.set_block_timestamp(height, timestamp_nanos) {
-                        Ok(()) => {
-                            tracing::debug!(
-                                height = height,
-                                timestamp_nanos = timestamp_nanos,
-                                "Block timestamp stored in block record (light client)"
-                            );
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                height = height,
-                                error = ?e,
-                                "Failed to store block timestamp — light client headers for this height will lack a timestamp"
-                            );
-                        }
-                    }
+                let f = FinalizedBlock {
+                    payload_digest: finalization.proposal.payload.0,
+                    cert_bytes: finalization.certificate.encode().to_vec(),
+                    proposal_bytes: finalization.proposal.encode().to_vec(),
+                    round: format!("{:?}", finalization.proposal.round),
+                };
+                if self.exec_tx.send(f).is_err() {
+                    tracing::error!("Executor task gone — finalization dropped");
                 }
             }
             Activity::Notarization(notarization) => {
@@ -391,26 +371,47 @@ async fn run_node(
             info!("App loaded from existing storage");
         }
         Err(AppLoadError::NoStoredState) => {
-            info!("No stored state — initializing from genesis");
-            let genesis = default_genesis();
-            let app_state = match serde_json::to_vec(&genesis) {
-                Ok(b) => b,
-                Err(e) => {
-                    error!(error = %e, "Failed to serialize genesis state");
+            if let Some(ss) = &config.state_sync {
+                // State-sync bootstrap: adopt a peer's snapshot — the only
+                // trust anchor is the BLS-certified BlockPayload.state_root
+                // (docs/STATE_SYNC.md §4). Failure is FATAL: falling back
+                // to genesis would fork the node onto a divergent state.
+                info!(peer = %ss.peer_grpc, "No stored state — attempting state-sync");
+                match slay3rd::state_sync::adopt_snapshot(
+                    &mut app,
+                    &ss.peer_grpc,
+                    &config.chain_id,
+                )
+                .await
+                {
+                    Ok(h) => info!(height = h, "state-sync: snapshot adopted"),
+                    Err(e) => {
+                        error!(error = ?e, "state-sync failed — refusing genesis fallback");
+                        return;
+                    }
+                }
+            } else {
+                info!("No stored state — initializing from genesis");
+                let genesis = default_genesis();
+                let app_state = match serde_json::to_vec(&genesis) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        error!(error = %e, "Failed to serialize genesis state");
+                        return;
+                    }
+                };
+                let init_req = layer_std::api::InitChainRequest {
+                    time: cosmwasm_std::Timestamp::from_nanos(1_673_194_026_078_305_426),
+                    chain_id: config.chain_id.clone(),
+                    consensus_params: Default::default(),
+                    validators: vec![],
+                    app_state: cosmwasm_std::Binary::from(app_state),
+                    initial_height: 1,
+                };
+                if let Err(e) = app.init(init_req) {
+                    error!(error = ?e, "Failed to initialize App from genesis");
                     return;
                 }
-            };
-            let init_req = layer_std::api::InitChainRequest {
-                time: cosmwasm_std::Timestamp::from_nanos(1_673_194_026_078_305_426),
-                chain_id: config.chain_id.clone(),
-                consensus_params: Default::default(),
-                validators: vec![],
-                app_state: cosmwasm_std::Binary::from(app_state),
-                initial_height: 1,
-            };
-            if let Err(e) = app.init(init_req) {
-                error!(error = ?e, "Failed to initialize App from genesis");
-                return;
             }
         }
         Err(e) => {
@@ -445,6 +446,22 @@ async fn run_node(
         mempool.clone(),
         resume_height,
     );
+
+    // Durable payload store: certified-but-unexecuted payloads survive restart
+    // and are re-broadcast; executed payloads are retained to serve peers.
+    let payload_store = match slay3rd::payload_store::PayloadStore::open(format!("{}/payloads", config.data_dir)) {
+        Ok(s) => s,
+        Err(e) => {
+            error!(error = %e, "Failed to open payload store");
+            return;
+        }
+    };
+    let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
+    let (payload_fetch_tx, payload_fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+    layer_node.set_fetch_sender(payload_fetch_tx);
+    info!(recovered = recovered_payloads.len(), "Payload store opened");
+    let p2p_node = layer_node.clone();
+
     let tx_index = layer_node.tx_index();
 
     // Create an unbounded channel to forward payload bytes from the relay's broadcast()
@@ -453,17 +470,14 @@ async fn run_node(
     let (payload_broadcast_tx, payload_broadcast_rx) =
         tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
 
-    // Capture pending_payloads BEFORE layer_node is moved into the consensus config.
-    // This Arc is used by the payload relay receive task (Task B) to insert payloads
-    // received from peers so that verify() can find them.
-    let layer_node_pending_payloads = layer_node.pending_payloads();
-
     // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
     // This is what allows non-proposer validators to find payloads in verify().
-    let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx));
+    let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx.clone()));
     // CONS-05: Reporter holds the app Arc so it can persist BLS certificates
     // via set_block_certificate() when the Finalization activity fires.
-    let reporter = LayerReporter { app: app_arc.clone() };
+    let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
+    tokio::spawn(run_executor(app_arc.clone(), layer_node.clone(), exec_rx));
+    let reporter = LayerReporter { exec_tx };
 
     info!("LayerNode and LayerRelay created (shared pending_payloads)");
 
@@ -664,6 +678,7 @@ async fn run_node(
             mempool: mempool.clone(),
             chain_id: config.chain_id.clone(),
             tx_index: tx_index.clone(),
+            snapshot_cache: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
         };
 
         // Cosmos query dispatch state for the axum fallback handler.
@@ -711,7 +726,15 @@ async fn run_node(
                     layer_proto::layer::sync::v1::query_server::QueryServer::new(grpc_svc.clone()),
                 )
                 .add_service(
-                    layer_proto::layer::lightclient::v1::query_server::QueryServer::new(grpc_svc),
+                    layer_proto::layer::lightclient::v1::query_server::QueryServer::new(
+                        grpc_svc.clone(),
+                    ),
+                )
+                .add_service(
+                    layer_proto::layer::statesync::v1::query_server::QueryServer::new(grpc_svc)
+                        // snapshot chunks are ~8 MiB each — lift the 4 MiB
+                        // default so chunk responses aren't truncated
+                        .max_encoding_message_size(12 * 1024 * 1024),
                 )
                 .serve(grpc_addr)
                 .await
@@ -819,6 +842,10 @@ async fn run_node(
         tokio::spawn(async move {
             while let Some(payload_bytes) = rx.recv().await {
                 let psize = payload_bytes.len();
+                let mut framed = Vec::with_capacity(psize + 1);
+                framed.push(PAYLOAD_MSG_PUSH);
+                framed.extend_from_slice(&payload_bytes);
+                let payload_bytes = bytes::Bytes::from(framed);
                 match P2pSender::send(&mut sender, Recipients::All, payload_bytes, true).await {
                     Ok(sent_to) => {
                         tracing::info!(
@@ -837,27 +864,147 @@ async fn run_node(
         });
     }
 
-    // Task B: receive payload bytes from P2P, insert into pending_payloads (non-proposer path)
+    // Re-broadcast payloads recovered from disk (certified but not executed
+    // before restart) once peers have had time to connect.
     {
-        let pending_payloads = layer_node_pending_payloads.clone();
+        let tx = payload_broadcast_tx;
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            for p in recovered_payloads {
+                let _ = tx.send(bytes::Bytes::from(p.to_bytes()));
+            }
+        });
+    }
+
+    // Task C: ask peers for payloads this node is missing (certify/finalize
+    // digest requests, plus bulk height-range backfill requests).
+    {
+        let mut sender = payload_p2p_sender.clone();
+        let mut rx = payload_fetch_rx;
+        tokio::spawn(async move {
+            while let Some(req) = rx.recv().await {
+                let msg = match req {
+                    FetchRequest::Digest(digest) => {
+                        let mut msg = Vec::with_capacity(33);
+                        msg.push(PAYLOAD_MSG_REQUEST);
+                        msg.extend_from_slice(&digest);
+                        msg
+                    }
+                    FetchRequest::HeightRange { start, count } => {
+                        let mut msg = Vec::with_capacity(11);
+                        msg.push(PAYLOAD_MSG_REQUEST_RANGE);
+                        msg.extend_from_slice(&start.to_be_bytes());
+                        msg.extend_from_slice(&count.to_be_bytes());
+                        msg
+                    }
+                };
+                if let Err(e) = P2pSender::send(&mut sender, Recipients::All, bytes::Bytes::from(msg), true).await {
+                    tracing::warn!(error = ?e, "Payload fetch: request send failed");
+                }
+            }
+        });
+    }
+
+    // Task D: bulk backfill — every BACKFILL_TICK, request every missing
+    // height between the executed tip and the highest observed payload
+    // height. Turns a long outage into ~parallel fetches instead of the
+    // finalize() digest walk's one-RTT-per-block crawl.
+    const BACKFILL_TICK: Duration = Duration::from_millis(250);
+    {
+        let node = p2p_node.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(BACKFILL_TICK).await;
+                node.backfill_tick().await;
+            }
+        });
+    }
+
+    // Task B: receive payload pushes / requests from P2P (non-proposer path)
+    {
+        let node = p2p_node;
+        let mut reply_sender = payload_p2p_sender.clone();
         tokio::spawn(async move {
             loop {
                 match payload_p2p_receiver.recv().await {
-                    Ok((_sender_pk, message)) => {
-                        let payload_bytes: &[u8] = message.as_ref();
+                    Ok((sender_pk, message)) => {
+                        let raw: &[u8] = message.as_ref();
+                        let (tag, payload_bytes) = match raw.split_first() {
+                            Some((tag, body)) => (*tag, body),
+                            None => continue,
+                        };
+                        if tag == PAYLOAD_MSG_REQUEST {
+                            let Ok(digest) = <[u8; 32]>::try_from(payload_bytes) else {
+                                tracing::warn!("Payload fetch: malformed request");
+                                continue;
+                            };
+                            if let Some(p) = node.lookup_payload(&digest).await {
+                                let mut msg = vec![PAYLOAD_MSG_PUSH];
+                                msg.extend_from_slice(&p.to_bytes());
+                                if let Err(e) = P2pSender::send(
+                                    &mut reply_sender,
+                                    Recipients::One(sender_pk),
+                                    bytes::Bytes::from(msg),
+                                    true,
+                                ).await {
+                                    tracing::warn!(error = ?e, "Payload fetch: reply send failed");
+                                }
+                            }
+                            continue;
+                        }
+                        if tag == PAYLOAD_MSG_REQUEST_RANGE {
+                            // Body: u64be start + u16be count. Serve each
+                            // height we hold as a separate PUSH frame, capped
+                            // at BACKFILL_BATCH_SIZE to bound reply fan-out.
+                            if payload_bytes.len() != 10 {
+                                tracing::warn!("Payload fetch: malformed range request");
+                                continue;
+                            }
+                            let start = u64::from_be_bytes(payload_bytes[..8].try_into().unwrap());
+                            let count = u16::from_be_bytes(payload_bytes[8..10].try_into().unwrap())
+                                as u64;
+                            let count = count.min(slay3rd::node::BACKFILL_BATCH_SIZE);
+                            for h in start..start + count {
+                                let Some(p) = node.payload_by_height(h).await else {
+                                    continue;
+                                };
+                                let mut msg = vec![PAYLOAD_MSG_PUSH];
+                                msg.extend_from_slice(&p.to_bytes());
+                                if let Err(e) = P2pSender::send(
+                                    &mut reply_sender,
+                                    Recipients::One(sender_pk.clone()),
+                                    bytes::Bytes::from(msg),
+                                    true,
+                                ).await {
+                                    tracing::warn!(error = ?e, "Payload backfill: reply send failed");
+                                    break;
+                                }
+                            }
+                            continue;
+                        }
+                        if tag != PAYLOAD_MSG_PUSH {
+                            tracing::warn!(tag, "Payload relay: unknown message tag");
+                            continue;
+                        }
                         let psize = payload_bytes.len();
                         match slay3rd::block::BlockPayload::from_bytes(payload_bytes) {
                             Ok(payload) => {
                                 let digest = payload.digest();
-                                let mut pending = pending_payloads.lock().await;
-                                if !pending.contains_key(&digest) {
-                                    tracing::info!(
-                                        height = payload.height,
+                                let height = payload.height;
+                                match node.accept_peer_payload(payload).await {
+                                    Ok(true) => tracing::info!(
+                                        height,
                                         digest = %hex::encode(digest),
                                         payload_bytes = psize,
-                                        "Payload relay: received from peer, inserting into pending_payloads"
-                                    );
-                                    pending.insert(digest, payload);
+                                        "Payload relay: received from peer, inserted into pending_payloads"
+                                    ),
+                                    Ok(false) => {}
+                                    Err(reason) => tracing::debug!(
+                                        height,
+                                        digest = %hex::encode(digest),
+                                        reason,
+                                        "Payload relay: peer payload rejected"
+                                    ),
                                 }
                             }
                             Err(e) => {

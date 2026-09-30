@@ -272,7 +272,7 @@ mod tests {
             height: Some(187),
         };
         let exec_msg = Msg::Wasm(WasmMsg::Execute {
-            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqlkna4k")
+            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c")
                 .unwrap(),
             contract_addr: AccountId::parse_string("juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc")
                 .unwrap(),
@@ -282,7 +282,7 @@ mod tests {
 
         let amino_msg = AminoMsg::build(&exec_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgExecuteContract","value":{"contract":"juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqlkna4k"}}"#;
+        let expected = r#"{"type":"wasm/MsgExecuteContract","value":{"contract":"juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc","funds":[],"msg":{"age":32,"height":187,"name":"John Smith"},"sender":"juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c"}}"#;
         assert_eq!(output, expected);
     }
 
@@ -294,7 +294,7 @@ mod tests {
             height: Some(165),
         };
         let init_msg = Msg::Wasm(WasmMsg::Instantiate {
-            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqlkna4k")
+            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c")
                 .unwrap(),
             admin: Some(
                 AccountId::parse_string("juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc").unwrap(),
@@ -307,7 +307,7 @@ mod tests {
 
         let amino_msg = AminoMsg::build(&init_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc","code_id":"12345","funds":[{"amount":"1234","denom":"ujclaw"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqlkna4k"}}"#;
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"admin":"juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc","code_id":"12345","funds":[{"amount":"1234","denom":"ujclaw"}],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c"}}"#;
         assert_eq!(output, expected);
     }
 
@@ -320,7 +320,7 @@ mod tests {
             height: Some(165),
         };
         let init_msg = Msg::Wasm(WasmMsg::Instantiate {
-            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqlkna4k")
+            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c")
                 .unwrap(),
             admin: None,
             code_id: 12345,
@@ -331,7 +331,7 @@ mod tests {
 
         let amino_msg = AminoMsg::build(&init_msg);
         let output = serde_json::to_string(&amino_msg).unwrap();
-        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"code_id":"12345","funds":[],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqlkna4k"}}"#;
+        let expected = r#"{"type":"wasm/MsgInstantiateContract","value":{"code_id":"12345","funds":[],"label":"sticky","msg":{"age":18,"height":165,"name":"n00b"},"sender":"juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c"}}"#;
         assert_eq!(output, expected);
     }
 }

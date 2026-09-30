@@ -36,3 +36,6 @@ snapshot/juno-1-snapshot-*.json
 /slog.txt
 /txlog.txt
 /local-osmosis/
+
+# Validator key material — contains private keys, must never be committed
+/testnet-keys/

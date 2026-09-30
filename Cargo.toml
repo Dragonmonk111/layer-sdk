@@ -2,6 +2,7 @@
 members = ["app/*", "contracts/*", "packages/*", "tools/tx-sender", "tools/bls-relayer"]
 exclude = [
   "tools/proto-compiler",
+  "tools/hybrid-sign",  # excluded: needs sriracha-mayo (cmake/C toolchain); built in Docker only
   "packages/golem",  # excluded: cw-orch-core 2.x API migration deferred
   # lib/cosmwasm is its own workspace (v2.3.2). It must be excluded so the
   # [patch.crates-io] cosmwasm-* path entries below resolve their

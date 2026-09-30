@@ -1,0 +1,56 @@
+syntax = "proto3";
+package layer.statesync.v1;
+import "google/api/annotations.proto";
+// Query serves state-sync snapshots: a chunked dump of all committed
+// consensus KV (everything that feeds `state_root` — `_`-prefixed
+// sidecar keys excluded). A joining node pins a BLS-certified
+// `BlockPayload.state_root` at some finalized height H, downloads all
+// chunks for that height, recomputes the flat sorted-leaf Merkle root
+// over the received records, and adopts the state only if it matches.
+// Chunks carry plain sha256 checksums for corruption detection — the
+// cryptographic authentication is the single whole-dump root check,
+// not per-chunk proofs (docs/STATE_SYNC.md §3).
+service Query {
+  // ListSnapshots returns the snapshots this node currently offers —
+  // at most one: the latest committed state, cached and refreshed at
+  // SNAPSHOT_INTERVAL block cadence (the store holds only current
+  // state, so historical heights cannot be served).
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse) {
+    option (google.api.http).get = "/layer/statesync/v1/snapshots";
+  }
+  // LoadSnapshotChunk returns one chunk of a listed snapshot. `height`
+  // and `format` must match a listed snapshot; `chunk` indexes
+  // 0..SnapshotMeta.chunks.
+  rpc LoadSnapshotChunk(LoadSnapshotChunkRequest) returns (LoadSnapshotChunkResponse) {
+    option (google.api.http).get = "/layer/statesync/v1/snapshots/{height}/{format}/{chunk}";
+  }
+}
+message ListSnapshotsRequest {}
+message SnapshotMeta {
+  // Committed height the snapshot covers.
+  uint64 height = 1;
+  // Snapshot wire format (1 = length-prefixed records, chunked).
+  uint32 format = 2;
+  // Number of chunks in the snapshot.
+  uint32 chunks = 3;
+  // Merkle state_root over the exported records — matches the
+  // `state_root` of the BLS-certified BlockPayload at `height`.
+  bytes state_root = 4;
+  // Total size of all chunks in bytes.
+  uint64 total_bytes = 5;
+}
+message ListSnapshotsResponse {
+  repeated SnapshotMeta snapshots = 1;
+}
+message LoadSnapshotChunkRequest {
+  uint64 height = 1;
+  uint32 format = 2;
+  uint32 chunk = 3;
+}
+message LoadSnapshotChunkResponse {
+  // Record stream `[key_len u32le | key | val_len u32le | val]*`,
+  // keys ascending, sidecar keys excluded.
+  bytes chunk = 1;
+  // sha256(chunk) — corruption detection only.
+  bytes checksum = 2;
+}

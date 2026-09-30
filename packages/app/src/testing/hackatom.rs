@@ -597,7 +597,8 @@ fn check_query_recursion() {
         10_000_000,
     );
 
-    // note: gas limit is currently 500k from crate::app::DEFAULT_QUERY_GAS
+    // note: query gas limit is DEFAULT_QUERY_GAS (4M — raised above
+    // MAYO-5's ~726k for PQ-verify smart queries)
 
     // use internal dispatched query and compare to normal query
     let query = &msgs::QueryMsg::Recurse {
@@ -607,9 +608,14 @@ fn check_query_recursion() {
     let rec: msgs::RecurseResponse = app.query_wasm(&contract, &query).unwrap();
     assert_eq!(rec.hashed.len(), 32);
 
-    // too much gas will eventually panic (50_000 - 100_000 cycles triggers out of gas)
-    // This should run out of gas around 20 depth, instead it stack overflows at 100.
-    // (Relies on proper gas accounting in `impl BackendQuerier for VmQuerier`::query_raw
+    // Recursion must be bounded by gas, never stack overflow.
+    // (Relies on proper gas accounting in `impl BackendQuerier for VmQuerier`::query_raw)
+    //
+    // Depletion surfaces in one of two ways depending on WHERE the meter
+    // trips: at a nested `query_raw` boundary it is VmError::GasDepletion →
+    // OutOfGas; inside the instance's own instruction metering it is a
+    // wasmer runtime trap surfaced as Vm("...Ran out of gas..."). Both are
+    // gas-bounded failures — with 4M the second path wins.
 
     let query = &msgs::QueryMsg::Recurse {
         depth: 100,
@@ -618,7 +624,16 @@ fn check_query_recursion() {
     let err = app
         .query_wasm::<_, msgs::RecurseResponse>(&contract, &query)
         .unwrap_err();
-    assert_eq!(err, PulsarError::Gas(GasError::OutOfGas));
+    match err {
+        PulsarError::Gas(GasError::OutOfGas) => {}
+        PulsarError::Wasm(WasmError::Vm(ref msg)) => {
+            assert!(
+                msg.contains("Ran out of gas"),
+                "expected gas-bounded failure, got: {msg}"
+            );
+        }
+        other => panic!("recursion must die by gas, got: {other:?}"),
+    }
 }
 
 #[test]

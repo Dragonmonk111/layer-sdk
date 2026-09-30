@@ -25,6 +25,7 @@ use tonic::{Request, Response, Status};
 
 use layer_app::App;
 use layer_app::SyncProvider;
+use layer_app::{SnapshotExport, SNAPSHOT_FORMAT_V1};
 use layer_cosmos::{encode_cosmos_response, parse_cosmos_query, parse_cosmos_tx};
 use layer_storage::PersistentStorage;
 
@@ -43,8 +44,17 @@ use layer_proto::layer::lightclient::v1::{
     query_server::Query as LightClientQuery, QueryBlockRequest, QueryBlockResponse,
     QueryLatestHeightRequest, QueryLatestHeightResponse, QueryProofRequest, QueryProofResponse,
 };
+use layer_proto::layer::statesync::v1::{
+    query_server::Query as StateSyncQuery, ListSnapshotsRequest, ListSnapshotsResponse,
+    LoadSnapshotChunkRequest, LoadSnapshotChunkResponse, SnapshotMeta,
+};
 
-use crate::mempool::Mempool;
+use layer_proto::cosmos::base::abci::v1beta1::{
+    GasInfo as AbciGasInfo, Result as AbciResult, TxResponse,
+};
+use layer_proto::tendermint::abci::{Event, EventAttribute};
+
+use crate::mempool::{Mempool, SubmitError};
 use crate::tx_index::TxIndex;
 
 /// gRPC service for slay3rd, generic over the persistent storage backend.
@@ -57,11 +67,18 @@ pub struct LayerGrpcService<T: PersistentStorage + Send + Sync + 'static> {
     pub app: Arc<RwLock<App<T>>>,
     /// Transaction mempool — receives validated txs from BroadcastTx.
     pub mempool: Arc<Mutex<Mempool>>,
-    /// Chain ID used to validate incoming tx signatures.
+    /// Chain ID — used to validate transaction chain_id at check_tx.
     pub chain_id: String,
-    /// Node-local tx result index (filled after each committed block).
+    /// Index of committed txs by hash for the GetTx RPC.
     pub tx_index: Arc<TxIndex>,
+    /// Cached state-sync snapshot — regenerated every SNAPSHOT_INTERVAL
+    /// blocks. Exports are O(state); caching keeps repeat chunk fetches
+    /// from re-iterating storage.
+    pub snapshot_cache: Arc<Mutex<Option<Arc<SnapshotExport>>>>,
 }
+
+/// State-sync snapshots refresh at this block cadence.
+const SNAPSHOT_INTERVAL: u64 = 1_000;
 
 /// Manual Clone implementation — App<T> and Mempool are behind Arc so T does not need Clone.
 impl<T: PersistentStorage + Send + Sync + 'static> Clone for LayerGrpcService<T> {
@@ -71,7 +88,37 @@ impl<T: PersistentStorage + Send + Sync + 'static> Clone for LayerGrpcService<T>
             mempool: self.mempool.clone(),
             chain_id: self.chain_id.clone(),
             tx_index: self.tx_index.clone(),
+            snapshot_cache: self.snapshot_cache.clone(),
         }
+    }
+}
+
+impl<T: PersistentStorage + Send + Sync + 'static> LayerGrpcService<T> {
+    /// Latest offered snapshot: generated lazily, cached until the chain
+    /// tip advances SNAPSHOT_INTERVAL blocks past its height. The export
+    /// covers committed state at `SnapshotExport.height`.
+    async fn cached_snapshot(&self) -> Result<Arc<SnapshotExport>, Status> {
+        let mut cache = self.snapshot_cache.lock().await;
+        if let Some(exp) = &*cache {
+            let tip = {
+                let app = self.app.read().await;
+                app.info().map(|b| b.height).unwrap_or(0)
+            };
+            if tip < exp.height + SNAPSHOT_INTERVAL {
+                return Ok(exp.clone());
+            }
+        }
+        let exp = {
+            let app = self.app.read().await;
+            if app.info().is_none() {
+                return Err(Status::unavailable("node initializing"));
+            }
+            app.snapshot_export()
+                .map_err(|e| Status::internal(format!("snapshot export failed: {e}")))?
+        };
+        let exp = Arc::new(exp);
+        *cache = Some(exp.clone());
+        Ok(exp)
     }
 }
 
@@ -116,24 +163,88 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
         }
 
         // Step 4: submit raw bytes to mempool
-        let accepted = {
+        let submitted = {
             let mut mempool = self.mempool.lock().await;
             mempool.submit(raw_bytes)
         };
-        if !accepted {
-            return Err(Status::resource_exhausted("mempool full"));
-        }
+        let hash = match submitted {
+            Ok(hash) => hash,
+            Err(SubmitError::Duplicate) => {
+                return Err(Status::already_exists("tx already in mempool"))
+            }
+            Err(SubmitError::TooLarge) => {
+                return Err(Status::invalid_argument("tx exceeds maximum size"))
+            }
+            Err(SubmitError::Full) => return Err(Status::resource_exhausted("mempool full")),
+        };
 
         Ok(Response::new(BroadcastTxResponse {
-            tx_response: Some(Default::default()),
+            tx_response: Some(TxResponse {
+                txhash: hex::encode_upper(hash),
+                ..Default::default()
+            }),
         }))
     }
 
+    /// Simulate: execute a tx against committed state on a scratch overlay
+    /// (auth + all messages, fully metered) and report gas + result — nothing
+    /// is committed and the mempool is untouched.
     async fn simulate(
         &self,
-        _request: Request<SimulateRequest>,
+        request: Request<SimulateRequest>,
     ) -> Result<Response<SimulateResponse>, Status> {
-        Err(Status::unimplemented("simulate not yet implemented"))
+        let req = request.into_inner();
+        if req.tx_bytes.is_empty() {
+            return Err(Status::invalid_argument(
+                "tx_bytes required (deprecated `tx` field is not supported)",
+            ));
+        }
+        let tx = parse_cosmos_tx(Bytes::from(req.tx_bytes), &self.chain_id)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        let sim = {
+            let app = self.app.read().await;
+            if app.info().is_none() {
+                return Err(Status::unavailable("node initializing"));
+            }
+            app.simulate(tx)
+        };
+
+        let gas_info = AbciGasInfo {
+            gas_wanted: sim.gas.gas_wanted,
+            gas_used: sim.gas.gas_used,
+        };
+        let result = match sim.result {
+            Ok(ok) => AbciResult {
+                events: ok
+                    .events
+                    .iter()
+                    .flatten()
+                    .map(|e| Event {
+                        r#type: e.ty.clone(),
+                        attributes: e
+                            .attributes
+                            .iter()
+                            .map(|a| EventAttribute {
+                                key: a.key.clone(),
+                                value: a.value.clone(),
+                                index: false,
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                ..Default::default()
+            },
+            Err(e) => AbciResult {
+                log: e.to_string(),
+                ..Default::default()
+            },
+        };
+
+        Ok(Response::new(SimulateResponse {
+            gas_info: Some(gas_info),
+            result: Some(result),
+        }))
     }
 
     async fn get_tx(
@@ -360,6 +471,65 @@ impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrp
                 .iter()
                 .map(|s| s.map(|h| h.to_vec()).unwrap_or_default())
                 .collect(),
+        }))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// layer.statesync.v1.Query implementation
+// ---------------------------------------------------------------------------
+
+#[tonic::async_trait]
+impl<T: PersistentStorage + Send + Sync + 'static> StateSyncQuery for LayerGrpcService<T> {
+    /// ListSnapshots: offers at most one snapshot — the cached export of
+    /// latest committed state, refreshed every SNAPSHOT_INTERVAL blocks.
+    async fn list_snapshots(
+        &self,
+        _request: Request<ListSnapshotsRequest>,
+    ) -> Result<Response<ListSnapshotsResponse>, Status> {
+        let exp = self.cached_snapshot().await?;
+        Ok(Response::new(ListSnapshotsResponse {
+            snapshots: vec![SnapshotMeta {
+                height: exp.height,
+                format: exp.format,
+                chunks: exp.chunks.len() as u32,
+                state_root: exp.state_root.to_vec(),
+                total_bytes: exp.chunks.iter().map(|c| c.data.len() as u64).sum(),
+            }],
+        }))
+    }
+
+    /// LoadSnapshotChunk: serves one chunk of the cached snapshot. The
+    /// requested height must match the offered snapshot — historical
+    /// heights cannot be served (the store holds only current state).
+    async fn load_snapshot_chunk(
+        &self,
+        request: Request<LoadSnapshotChunkRequest>,
+    ) -> Result<Response<LoadSnapshotChunkResponse>, Status> {
+        let req = request.into_inner();
+        if req.format != SNAPSHOT_FORMAT_V1 {
+            return Err(Status::invalid_argument(format!(
+                "unsupported snapshot format {} (expected {})",
+                req.format, SNAPSHOT_FORMAT_V1
+            )));
+        }
+        let exp = self.cached_snapshot().await?;
+        if req.height != exp.height {
+            return Err(Status::not_found(format!(
+                "no snapshot at height {} (offered: {})",
+                req.height, exp.height
+            )));
+        }
+        let chunk = exp.chunks.get(req.chunk as usize).ok_or_else(|| {
+            Status::not_found(format!(
+                "chunk {} out of range ({} chunks)",
+                req.chunk,
+                exp.chunks.len()
+            ))
+        })?;
+        Ok(Response::new(LoadSnapshotChunkResponse {
+            chunk: chunk.data.clone(),
+            checksum: chunk.checksum.to_vec(),
         }))
     }
 }
@@ -653,6 +823,7 @@ mod tests {
             mempool: Arc::new(Mutex::new(Mempool::new(100))),
             chain_id: "junoclaw-1".to_string(),
             tx_index: Arc::new(TxIndex::new(16)),
+            snapshot_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -908,6 +1079,176 @@ mod tests {
                 result.is_err(),
                 "uninitialized node should return an error"
             );
+        });
+    }
+
+    /// Validates the Simulate gRPC handler:
+    ///
+    /// 1. Empty `tx_bytes` → `invalid_argument` (deprecated `tx` field unsupported)
+    /// 2. Garbage bytes → `invalid_argument` (parse failure)
+    /// 3. Valid signed tx from an unfunded account → handler returns Ok with
+    ///    `gas_info` populated and `result.log` carrying the execution error
+    ///    (the genesis has no funded accounts, so auth fails inside execute_tx —
+    ///    which proves the tx was actually executed, not just check_tx'd)
+    /// 4. Nothing is persisted: LAST_BLOCK stays at the init height
+    #[test]
+    fn test_simulate() {
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let svc = make_service(init_app());
+
+            // --- Empty tx_bytes → invalid_argument ---
+            let err = svc
+                .simulate(Request::new(SimulateRequest {
+                    tx: None,
+                    tx_bytes: vec![],
+                }))
+                .await
+                .expect_err("empty tx_bytes must be rejected");
+            assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+            // --- Garbage bytes → invalid_argument ---
+            let err = svc
+                .simulate(Request::new(SimulateRequest {
+                    tx: None,
+                    tx_bytes: vec![0xFF_u8; 32],
+                }))
+                .await
+                .expect_err("garbage bytes must be rejected");
+            assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+            // --- Valid signed tx, unfunded account → Ok + error in result.log ---
+            let tx_bytes = build_signed_tx_bytes();
+            let resp = svc
+                .simulate(Request::new(SimulateRequest {
+                    tx: None,
+                    tx_bytes,
+                }))
+                .await
+                .expect("simulate must return Ok even when execution fails")
+                .into_inner();
+            let gas = resp.gas_info.expect("gas_info always set");
+            assert!(gas.gas_wanted > 0, "gas_wanted must reflect tx fee limit");
+            let result = resp.result.expect("result always set");
+            assert!(
+                !result.log.is_empty(),
+                "unfunded account must surface execution error in log"
+            );
+
+            // --- Nothing persisted: height still 0 ---
+            let latest = svc
+                .latest_height(Request::new(QueryLatestHeightRequest {}))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(latest.height, 0, "simulate must not advance state");
+        });
+    }
+
+    /// State-sync gRPC surface: ListSnapshots offers exactly one cached
+    /// export; LoadSnapshotChunk serves every chunk, decodes clean, and
+    /// the whole-dump root check verifies against the advertised
+    /// state_root. Wrong height / bad format / OOB chunk all rejected.
+    #[test]
+    fn test_statesync_list_and_load_chunk() {
+        let _guard = APP_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let svc = make_service(init_app());
+
+            let res = svc
+                .list_snapshots(Request::new(ListSnapshotsRequest {}))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(res.snapshots.len(), 1, "at most one offered snapshot");
+            let meta = &res.snapshots[0];
+            assert_eq!(meta.format, SNAPSHOT_FORMAT_V1);
+            assert!(meta.chunks >= 1);
+            assert_eq!(meta.state_root.len(), 32);
+            assert!(meta.total_bytes > 0);
+
+            // fetch every chunk, verify checksum, decode records
+            let mut records = Vec::new();
+            for i in 0..meta.chunks {
+                let r = svc
+                    .load_snapshot_chunk(Request::new(LoadSnapshotChunkRequest {
+                        height: meta.height,
+                        format: SNAPSHOT_FORMAT_V1,
+                        chunk: i,
+                    }))
+                    .await
+                    .unwrap()
+                    .into_inner();
+                let cksum: [u8; 32] =
+                    <sha2::Sha256 as sha2::Digest>::digest(&r.chunk).into();
+                assert_eq!(
+                    &cksum[..],
+                    &r.checksum[..],
+                    "chunk {i} checksum mismatch"
+                );
+                records.extend(layer_app::decode_snapshot_chunk(&r.chunk).unwrap());
+            }
+            assert!(!records.is_empty(), "genesis must produce KV records");
+
+            // whole-dump authentication: recomputed root == advertised root
+            let mut root = [0u8; 32];
+            root.copy_from_slice(&meta.state_root);
+            assert!(layer_app::verify_snapshot_root(&records, &root));
+
+            // wrong height -> NotFound
+            let err = svc
+                .load_snapshot_chunk(Request::new(LoadSnapshotChunkRequest {
+                    height: meta.height + 1,
+                    format: SNAPSHOT_FORMAT_V1,
+                    chunk: 0,
+                }))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code(), tonic::Code::NotFound);
+
+            // bad format -> InvalidArgument
+            let err = svc
+                .load_snapshot_chunk(Request::new(LoadSnapshotChunkRequest {
+                    height: meta.height,
+                    format: 99,
+                    chunk: 0,
+                }))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+            // out-of-range chunk -> NotFound
+            let err = svc
+                .load_snapshot_chunk(Request::new(LoadSnapshotChunkRequest {
+                    height: meta.height,
+                    format: SNAPSHOT_FORMAT_V1,
+                    chunk: 99,
+                }))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code(), tonic::Code::NotFound);
+
+            // uninitialized app -> Unavailable
+            let uninit = make_service(App::new(
+                MemoryStore::default(),
+                StateMachine::new(&AppConfig::new(&unique_cache_dir())),
+            ));
+            let err = uninit
+                .list_snapshots(Request::new(ListSnapshotsRequest {}))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code(), tonic::Code::Unavailable);
         });
     }
 }

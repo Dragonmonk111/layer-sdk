@@ -42,7 +42,8 @@ use layer_proto::cosmos::bank::v1beta1::{
 };
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
-    service_client::ServiceClient as TxServiceClient, BroadcastTxRequest,
+    service_client::ServiceClient as TxServiceClient, BroadcastTxRequest, GetTxRequest,
+    SimulateRequest,
 };
 use layer_proto::cosmwasm::wasm::v1::{
     MsgExecuteContract, MsgInstantiateContract, MsgStoreCode,
@@ -87,6 +88,9 @@ fn print_usage() {
     eprintln!("  instantiate Instantiate a contract (MsgInstantiateContract)");
     eprintln!("  execute     Execute a contract (MsgExecuteContract)");
     eprintln!("  send        Send tokens (MsgSend bank transfer)");
+    eprintln!("  simulate    Dry-run a MsgSend via cosmos.tx.v1beta1.Service/Simulate");
+    eprintln!("  get-tx      Query a committed tx by hash (cosmos.tx.v1beta1.Service/GetTx)");
+    eprintln!("  broadcast   Broadcast a pre-signed raw tx (hex TxRaw bytes, e.g. from hybrid-sign)");
     eprintln!("  query       Query contract state (SmartContractState)");
     eprintln!("  contracts-by-code  List contract addresses for a code id");
     eprintln!("  code-info   Query CodeInfo for a code id");
@@ -115,6 +119,19 @@ fn print_usage() {
     eprintln!("  --denom <str>        Denom (default: ujclaw)");
     eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
     eprintln!();
+    eprintln!("simulate flags:");
+    eprintln!("  --to <addr>          Recipient address (required)");
+    eprintln!("  --amount <N>         Amount to send (required)");
+    eprintln!("  --denom <str>        Denom (default: ujclaw)");
+    eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
+    eprintln!();
+    eprintln!("get-tx flags:");
+    eprintln!("  --hash <hex>         Tx hash (sha256 of tx_bytes, with or without 0x)");
+    eprintln!();
+    eprintln!("broadcast flags:");
+    eprintln!("  --tx-hex <hex>       Hex-encoded TxRaw bytes");
+    eprintln!("  --tx-file <path>     File containing hex-encoded TxRaw bytes (preferred for large txs)");
+    eprintln!();
     eprintln!("query flags:");
     eprintln!("  --contract <addr>    Contract address (required)");
     eprintln!("  --msg <json>         JSON query message (default: {{}})");
@@ -142,6 +159,8 @@ struct Args {
     to: Option<String>,
     amount: Option<String>,
     denom: String,
+    hash: Option<String>,
+    tx_hex: Option<String>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -164,6 +183,8 @@ fn parse_args() -> Result<Args, String> {
     let mut to: Option<String> = None;
     let mut amount: Option<String> = None;
     let mut denom = "ujclaw".to_string();
+    let mut hash: Option<String> = None;
+    let mut tx_hex: Option<String> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -222,6 +243,24 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 denom = args.get(i).ok_or("--denom requires a value")?.clone();
             }
+            "--hash" => {
+                i += 1;
+                hash = Some(args.get(i).ok_or("--hash requires a value")?.clone());
+            }
+            "--tx-hex" => {
+                i += 1;
+                tx_hex = Some(args.get(i).ok_or("--tx-hex requires a value")?.clone());
+            }
+            "--tx-file" => {
+                i += 1;
+                let path = args.get(i).ok_or("--tx-file requires a value")?;
+                tx_hex = Some(
+                    std::fs::read_to_string(path)
+                        .map_err(|e| format!("failed to read --tx-file {}: {}", path, e))?
+                        .trim()
+                        .to_string(),
+                );
+            }
             flag => {
                 return Err(format!("unknown flag: {}", flag));
             }
@@ -242,6 +281,8 @@ fn parse_args() -> Result<Args, String> {
         to,
         amount,
         denom,
+        hash,
+        tx_hex,
     })
 }
 
@@ -359,6 +400,56 @@ async fn query_account_sequence(
 }
 
 // ---------------------------------------------------------------------------
+// Subcommand: broadcast — submit a pre-signed raw tx (e.g. from hybrid-sign)
+// ---------------------------------------------------------------------------
+
+fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+async fn cmd_broadcast(
+    grpc_addr: &str,
+    tx_hex: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let tx_bytes = decode_hex(tx_hex).map_err(|e| format!("invalid tx hex: {}", e))?;
+    println!("Raw tx size: {} bytes", tx_bytes.len());
+    let hash = tx_hash_hex(&tx_bytes);
+    println!("txhash: {}", hash);
+
+    let channel = connect(grpc_addr).await?;
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    let response = client
+        .broadcast_tx(BroadcastTxRequest {
+            tx_bytes,
+            mode: 1, // BROADCAST_MODE_SYNC
+        })
+        .await?;
+
+    let tx_response = response.into_inner().tx_response;
+    if let Some(ref resp) = tx_response {
+        println!(
+            "BroadcastTx response: code={}, log={}",
+            resp.code, resp.raw_log
+        );
+        if resp.code == 0 {
+            println!("TX submitted — query with: tx-sender get-tx --hash {}", hash);
+        } else {
+            println!("Warning: tx returned non-zero code — check node logs");
+        }
+    } else {
+        println!("TX submitted (no response body)");
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Subcommand: store-code
 // ---------------------------------------------------------------------------
 
@@ -396,6 +487,7 @@ async fn cmd_store_code(
 
     let tx_bytes = sign_tx(cosmrs_any, sequence);
     println!("Signed tx size: {} bytes", tx_bytes.len());
+    println!("txhash: {}", tx_hash_hex(&tx_bytes));
 
     let channel = connect(grpc_addr).await?;
     let mut client = TxServiceClient::new(channel)
@@ -468,6 +560,7 @@ async fn cmd_instantiate(
 
     let tx_bytes = sign_tx(cosmrs_any, sequence);
     println!("Signed tx size: {} bytes", tx_bytes.len());
+    println!("txhash: {}", tx_hash_hex(&tx_bytes));
 
     let channel = connect(grpc_addr).await?;
     let mut client = TxServiceClient::new(channel)
@@ -536,6 +629,7 @@ async fn cmd_execute(
 
     let tx_bytes = sign_tx(cosmrs_any, sequence);
     println!("Signed tx size: {} bytes", tx_bytes.len());
+    println!("txhash: {}", tx_hash_hex(&tx_bytes));
 
     let channel = connect(grpc_addr).await?;
     let mut client = TxServiceClient::new(channel)
@@ -606,6 +700,7 @@ async fn cmd_send(
 
     let tx_bytes = sign_tx(cosmrs_any, sequence);
     println!("Signed tx size: {} bytes", tx_bytes.len());
+    println!("txhash: {}", tx_hash_hex(&tx_bytes));
 
     let channel = connect(grpc_addr).await?;
     let mut client = TxServiceClient::new(channel)
@@ -632,6 +727,129 @@ async fn cmd_send(
         }
     } else {
         println!("Send TX submitted (no response body)");
+    }
+
+    Ok(())
+}
+
+/// CometBFT txhash convention: uppercase hex of sha256(tx_bytes).
+fn tx_hash_hex(tx_bytes: &[u8]) -> String {
+    hex::encode_upper(Sha256::digest(tx_bytes))
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: simulate — dry-run a MsgSend (cosmos.tx.v1beta1.Service/Simulate)
+// ---------------------------------------------------------------------------
+
+/// Builds the exact same signed MsgSend as `send` but submits it to
+/// `Service/Simulate` instead of `BroadcastTx`. Reports gas_info + result;
+/// nothing is committed and the mempool is untouched, so this is safe to
+/// hammer against a live node.
+async fn cmd_simulate(
+    grpc_addr: &str,
+    to: &str,
+    amount: u128,
+    denom: &str,
+    explicit_sequence: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sender = deployer_address().to_string();
+    println!("Deployer address: {}", sender);
+
+    let sequence = match explicit_sequence {
+        Some(seq) => {
+            println!("Using explicit sequence: {}", seq);
+            seq
+        }
+        None => query_account_sequence(grpc_addr, &sender).await?,
+    };
+    println!("Account sequence: {}", sequence);
+
+    let msg = MsgSend {
+        from_address: sender.clone(),
+        to_address: to.to_string(),
+        amount: vec![ProtoCoin {
+            denom: denom.to_string(),
+            amount: amount.to_string(),
+        }],
+    };
+    let proto_bytes = msg.encode_to_vec();
+    let cosmrs_any = cosmrs::Any {
+        type_url: TYPE_URL_MSG_SEND.to_string(),
+        value: proto_bytes,
+    };
+
+    let tx_bytes = sign_tx(cosmrs_any, sequence);
+    println!("Signed tx size: {} bytes", tx_bytes.len());
+
+    let channel = connect(grpc_addr).await?;
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    let response = client
+        .simulate(SimulateRequest {
+            tx_bytes,
+            ..Default::default()
+        })
+        .await?;
+    let sim = response.into_inner();
+
+    if let Some(gas) = sim.gas_info {
+        println!("gas_wanted: {}", gas.gas_wanted);
+        println!("gas_used:   {}", gas.gas_used);
+    } else {
+        println!("no gas_info in response");
+    }
+    match sim.result {
+        Some(res) => {
+            if !res.log.is_empty() {
+                println!("log: {}", res.log);
+            } else {
+                println!("log: <empty> (success)");
+            }
+            for ev in &res.events {
+                println!("event: {}", ev.r#type);
+                for attr in &ev.attributes {
+                    println!("  {}={}", attr.key, attr.value);
+                }
+            }
+        }
+        None => println!("no result in response"),
+    }
+    println!("Simulation complete — nothing committed");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: get-tx (cosmos.tx.v1beta1.Service/GetTx)
+// ---------------------------------------------------------------------------
+
+async fn cmd_get_tx(grpc_addr: &str, hash: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let channel = connect(grpc_addr).await?;
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    let response = client
+        .get_tx(GetTxRequest {
+            hash: hash.to_string(),
+        })
+        .await?;
+
+    let result = response.into_inner();
+    match result.tx_response {
+        Some(resp) => {
+            println!("txhash: {}", resp.txhash);
+            println!("height: {}", resp.height);
+            println!("code: {}", resp.code);
+            println!("gas_wanted: {}", resp.gas_wanted);
+            println!("gas_used: {}", resp.gas_used);
+            println!("raw_log: {}", resp.raw_log);
+            for ev in &resp.events {
+                println!("event: {}", ev.r#type);
+            }
+        }
+        None => println!("GetTx returned no tx_response for hash {}", hash),
     }
 
     Ok(())
@@ -871,6 +1089,35 @@ async fn main() {
                 std::process::exit(1);
             });
             cmd_send(&args.grpc, &to, amount, &args.denom, args.sequence).await
+        }
+        "simulate" => {
+            let to = args.to.unwrap_or_else(|| {
+                eprintln!("Error: --to is required for simulate");
+                std::process::exit(1);
+            });
+            let amount_str = args.amount.unwrap_or_else(|| {
+                eprintln!("Error: --amount is required for simulate");
+                std::process::exit(1);
+            });
+            let amount: u128 = amount_str.parse().unwrap_or_else(|_| {
+                eprintln!("Error: invalid --amount: {}", amount_str);
+                std::process::exit(1);
+            });
+            cmd_simulate(&args.grpc, &to, amount, &args.denom, args.sequence).await
+        }
+        "get-tx" => {
+            let hash = args.hash.unwrap_or_else(|| {
+                eprintln!("Error: --hash is required for get-tx");
+                std::process::exit(1);
+            });
+            cmd_get_tx(&args.grpc, &hash).await
+        }
+        "broadcast" => {
+            let tx_hex = args.tx_hex.unwrap_or_else(|| {
+                eprintln!("Error: --tx-hex or --tx-file is required for broadcast");
+                std::process::exit(1);
+            });
+            cmd_broadcast(&args.grpc, &tx_hex).await
         }
         "balance" => {
             let addr = args

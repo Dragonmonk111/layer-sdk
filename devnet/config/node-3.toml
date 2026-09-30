@@ -10,6 +10,11 @@ mempool_max_pending = 10000
 leader_timeout_ms = 3000
 certification_timeout_ms = 5000
 
+# State-sync bootstrap: when /data has no committed state, adopt
+# node-0's snapshot instead of genesis (docs/STATE_SYNC.md).
+[state_sync]
+peer_grpc = "172.28.0.10:9090"
+
 [[peers]]
 address = "172.28.0.10:7001"
 public_key = "b371e8d4c1a35a376a13772d763f207c892421ac237262451cdf448e1dd1b25f"

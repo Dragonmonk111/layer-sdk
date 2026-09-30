@@ -47,6 +47,8 @@ COPY dummy.rs /myapp/packages/proto/src/lib.rs
 COPY dummy.rs /myapp/packages/proto/examples/sync_test.rs
 COPY packages/std/Cargo.toml /myapp/packages/std/Cargo.toml
 COPY dummy.rs /myapp/packages/std/src/lib.rs
+COPY packages/junoclaw-mayo-verify/Cargo.toml /myapp/packages/junoclaw-mayo-verify/Cargo.toml
+COPY dummy.rs /myapp/packages/junoclaw-mayo-verify/src/lib.rs
 COPY packages/storage/Cargo.toml /myapp/packages/storage/Cargo.toml
 COPY dummy.rs /myapp/packages/storage/src/lib.rs
 COPY tools/tx-sender/Cargo.toml /myapp/tools/tx-sender/Cargo.toml
@@ -59,7 +61,11 @@ RUN cargo build --release --bin slay3rd --features rocksdb
 
 # clean up these fake local deps so we compile for real later
 RUN find /myapp -name "*.rs" -path "*/src/*" -not -path "*/lib/cosmwasm/*" -delete
-RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3rd-*
+# Purge fingerprints for ALL workspace path-deps — not just layer-*/slay3rd-*.
+# Without this, cargo sees a "fresh" fingerprint from the dummy-stub build and
+# links the stub rlib even after real sources are restored (COPY preserves
+# mtimes), producing unresolved-import errors (hit for junoclaw-mayo-verify).
+RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3rd-* target/release/.fingerprint/junoclaw-* target/release/.fingerprint/tx-sender-* target/release/.fingerprint/bls-relayer-* target/release/deps/libjunoclaw_mayo_verify-* target/release/libjunoclaw_mayo_verify*
 
 # This build step should just compile the local code and be faster
 COPY . .

@@ -19,7 +19,7 @@ pub use ibc::{IbcMsg, IbcMsgData};
 pub use msg::{
     required_signer, BankMsg, BankMsgData, Msg, MsgData, MsgError, WasmMsg, WasmMsgData,
 };
-pub use pubkey::PubKey;
+pub use pubkey::{MayoVariant, PubKey, HYBRID_PUBKEY_TYPE_URL};
 pub use query::{AuthQuery, BankQuery, Query, QueryError, WasmQuery};
 pub use time::{format_timestamp_rfc3339, Duration, Rfc3339, Timestamp};
 pub use tx::{FeeInfo, SignedTx, SigningInfo, Tx, TxError};

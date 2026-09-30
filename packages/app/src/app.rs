@@ -9,7 +9,7 @@ use tracing::{
 };
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{BlockInfo, Coin, Decimal, Uint128};
+use cosmwasm_std::{BlockInfo, Coin, Decimal, StdError, Uint128};
 
 use crate::genesis::GenesisState;
 use crate::sm::StateMachine;
@@ -32,7 +32,10 @@ use layer_storage::{
 };
 
 // FIXME: make this configurable on per-node basis
-const DEFAULT_QUERY_GAS: u64 = 500_000;
+// Query gas is node-local (never consensus). Must exceed the heaviest
+// legitimate smart query: in-contract MAYO-5 verify ≈ 726k SDK gas.
+// 4M gives ~5× headroom while still bounding per-query CPU burn.
+const DEFAULT_QUERY_GAS: u64 = 4_000_000;
 const DEFAULT_SIMULATE_GAS: u64 = 10_000_000;
 
 // these are all consensus critical and must be identical over all nodes
@@ -402,8 +405,10 @@ impl<T: PersistentStorage + 'static> App<T> {
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
 
-        // only run auth check
-        let meter = self.block_gas_meter();
+        // only run auth check — cap at MAX_VALIDATE_GAS so check_tx admits
+        // exactly what deliver_tx can execute (audit: block meter here let
+        // txs pass check that were guaranteed to fail at the 200k deliver cap)
+        let meter = GasMeter::new(MAX_VALIDATE_GAS);
         let block = &self.data.as_ref().unwrap().block;
         let res = atomic(&mut store, &meter, |store, m| {
             self.logic.validate_tx(store, m, block, tx)
@@ -438,6 +443,26 @@ impl<T: PersistentStorage + 'static> App<T> {
                 result: Err(e),
             },
         }
+    }
+
+    /// Run a tx for real against committed state — auth validation AND full
+    /// message execution, metered — then throw the writes away. This is what
+    /// backs the `Simulate` gRPC: gas numbers come from actually executing,
+    /// not from `check_tx`-style auth-only validation.
+    ///
+    /// The tx runs in the context of the last committed block (SDK
+    /// checkState semantics) on a `ScratchTx` overlay over a storage reader,
+    /// so nothing persists and no commit/lock is taken.
+    pub fn simulate(&self, tx: Tx) -> TxResult<PulsarError> {
+        let _span = debug_span!("simulate").entered();
+        let data = self.data.as_ref().unwrap();
+        let block = data.block.clone();
+        let reader = self.storage.reader();
+        let mut store = ScratchTx::new(&reader);
+        let block_meter = self.simulate_gas_meter();
+        let res = self.execute_tx(&mut store, &block_meter, &block, tx);
+        reader.abort();
+        res
     }
 
     fn execute_tx(
@@ -549,6 +574,19 @@ impl<T: PersistentStorage + 'static> App<T> {
         &mut self,
         full_block: Block,
     ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
+        self.finalize_block_with_payload(full_block, None)
+    }
+
+    /// `finalize_block`, additionally persisting the consensus payload bytes
+    /// under `_payload/{height}`. State writes, `LAST_BLOCK`, the state root
+    /// and the payload land in ONE storage commit, so a crash can never leave
+    /// a committed height without its state root or payload (either of which
+    /// would wedge the node on restart).
+    pub fn finalize_block_with_payload(
+        &mut self,
+        full_block: Block,
+        payload: Option<Vec<u8>>,
+    ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
         let _span = info_span!(
             "finalize_block",
             height = full_block.height,
@@ -609,16 +647,23 @@ impl<T: PersistentStorage + 'static> App<T> {
         // Use infinite gas meter to ensure we don't fail here
         let meter = GasMeter::infinite();
         LAST_BLOCK.save(&mut writer, &meter, &block)?;
+        if let Some(bytes) = payload {
+            let key = format!("{}{}", BLOCK_PAYLOAD_KEY_PREFIX, block.height);
+            let payload_item: Item<Vec<u8>> = Item::new(&key);
+            payload_item.save(&mut writer, &meter, &bytes)?;
+        }
+
+        // State root over the post-block state, computed through the writer
+        // (which sees its own uncommitted writes). The NEXT block's payload
+        // carries this root (app-hash semantics), which is what binds IBC
+        // membership proofs to the signed certificate chain. Sidecar write —
+        // excluded from app_hash and from the root itself.
+        let root = state_root_over(&writer)?;
+        STATE_ROOT.save(&mut writer, &meter, &root)?;
         writer.commit(&meter)?;
 
         // update block in cache
         self.data.as_mut().unwrap().block = block;
-
-        // Recompute the state root over the just-committed state. The NEXT
-        // block's payload carries this root (app-hash semantics), which is
-        // what binds IBC membership proofs to the signed certificate chain.
-        // Sidecar write — excluded from app_hash and from the root itself.
-        self.store_state_root()?;
 
         Ok(FinalizeBlockResponse {
             events,
@@ -739,6 +784,29 @@ impl<T: PersistentStorage + 'static> App<T> {
         Ok(())
     }
 
+    /// Persist a finalized block's light-client record (BLS certificate,
+    /// encoded consensus `Proposal`, timestamp) in ONE commit, so a crash can
+    /// never leave a height with a certificate but no signed message (or
+    /// vice versa). Sidecar keys only — no effect on app_hash / state root.
+    pub fn set_block_finality(
+        &mut self,
+        height: u64,
+        certificate: Vec<u8>,
+        proposal: Vec<u8>,
+        timestamp_nanos: u64,
+    ) -> PulsarResult<()> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let cert_key = format!("{}{}", BLOCK_CERTIFICATE_KEY_PREFIX, height);
+        Item::<Vec<u8>>::new(&cert_key).save(&mut writer, &meter, &certificate)?;
+        let proposal_key = format!("{}{}", BLOCK_PROPOSAL_KEY_PREFIX, height);
+        Item::<Vec<u8>>::new(&proposal_key).save(&mut writer, &meter, &proposal)?;
+        let ts_key = format!("{}{}", BLOCK_TIMESTAMP_KEY_PREFIX, height);
+        Item::<u64>::new(&ts_key).save(&mut writer, &meter, &timestamp_nanos)?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
     /// Retrieve the block timestamp (nanoseconds) for a block at the given
     /// height, if stored. Returns `None` if no timestamp has been stored for
     /// this height yet.
@@ -810,26 +878,10 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// Cost is O(state size) per call — fine at devnet scale; the upgrade
     /// path is a versioned Merkle store (JMT/IAVL-style) when state grows.
     pub fn compute_state_root(&self) -> PulsarResult<[u8; 32]> {
-        let meter = GasMeter::infinite();
         let reader = self.storage.reader();
-        let iter = reader
-            .range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
-
-        let mut leaves: Vec<[u8; 32]> = Vec::new();
-        for entry in iter {
-            let (key, value) = entry?;
-            if key.first() == Some(&b'_') {
-                continue; // sidecar keys are not consensus state
-            }
-            let mut h = Sha256::new();
-            h.update([0x00u8]);
-            h.update(&key);
-            h.update(&value);
-            leaves.push(h.finalize().into());
-        }
+        let root = state_root_over(&reader);
         reader.abort();
-
-        Ok(merkle_root(&leaves))
+        root
     }
 
     /// Recompute the state root over committed state and persist it to the
@@ -901,10 +953,234 @@ impl<T: PersistentStorage + 'static> App<T> {
         }))
     }
 
+    /// One-pass state-sync snapshot export: streams all committed
+    /// consensus KV (excluding `_` sidecar keys — the same filter
+    /// `state_root_over` uses) into length-prefixed `[key_len|key|val_len|val]`
+    /// records packed into ≤ `SNAPSHOT_CHUNK_TARGET` chunks with per-chunk
+    /// sha256.
+    ///
+    /// Chunking is a transport detail, not a proof scheme — the flat
+    /// sorted-leaf Merkle means the joiner authenticates the WHOLE dump
+    /// with one `state_root` recomputation (docs/STATE_SYNC.md §3).
+    /// Per-chunk checksums are corruption detection only.
+    ///
+    /// Height, records and `state_root` all come from the SAME storage
+    /// reader, so the export can never disagree with itself if a block
+    /// commits mid-request.
+    pub fn snapshot_export(&self) -> PulsarResult<SnapshotExport> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+
+        let height = LAST_BLOCK
+            .may_load(&reader, &meter)?
+            .map(|b| b.height)
+            .unwrap_or(0);
+
+        let iter = reader.range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+        let mut leaves: Vec<[u8; 32]> = Vec::new();
+        let mut chunks: Vec<SnapshotChunk> = Vec::new();
+        let mut cur: Vec<u8> = Vec::new();
+
+        for entry in iter {
+            let (key, value) = entry?;
+            if key.first() == Some(&b'_') {
+                continue; // sidecar keys are not consensus state
+            }
+            let mut h = Sha256::new();
+            h.update([0x00u8]);
+            h.update(&key);
+            h.update(&value);
+            leaves.push(h.finalize().into());
+
+            let rec_len = 4 + key.len() + 4 + value.len();
+            if cur.len() + rec_len > SNAPSHOT_CHUNK_TARGET && !cur.is_empty() {
+                chunks.push(SnapshotChunk {
+                    checksum: Sha256::digest(&cur).into(),
+                    data: std::mem::take(&mut cur),
+                });
+            }
+            cur.extend_from_slice(&(key.len() as u32).to_le_bytes());
+            cur.extend_from_slice(&key);
+            cur.extend_from_slice(&(value.len() as u32).to_le_bytes());
+            cur.extend_from_slice(&value);
+        }
+        reader.abort();
+
+        if !cur.is_empty() || chunks.is_empty() {
+            chunks.push(SnapshotChunk {
+                checksum: Sha256::digest(&cur).into(),
+                data: cur,
+            });
+        }
+
+        Ok(SnapshotExport {
+            height,
+            state_root: merkle_root(&leaves),
+            format: SNAPSHOT_FORMAT_V1,
+            chunks,
+        })
+    }
+
+    /// State-sync adopt step (joiner side — docs/STATE_SYNC.md §4).
+    ///
+    /// `records` is the full decoded chunk stream fetched via
+    /// `/layer.statesync.v1.Query/LoadSnapshotChunk`; `expected_root` MUST
+    /// be the `state_root` from a BLS-certified `BlockPayload` — never
+    /// the snapshot metadata itself. The whole-dump root check runs
+    /// BEFORE any write: a mismatch means the dump is doctored and
+    /// nothing is imported.
+    ///
+    /// On success all KV land in ONE storage commit together with
+    /// `LAST_BLOCK` at `block` and the `app/state` sidecar, `self.data`
+    /// is populated, and the `_state_root` sidecar is recomputed — the
+    /// same tail-of-commit invariants `finalize_block` maintains, so a
+    /// restart loads cleanly and consensus resumes at `block.height + 1`.
+    /// `tip_payload` is the serialized consensus `BlockPayload` for the
+    /// block at `block.height` — REQUIRED: `LayerNode` links the executed
+    /// tip via `get_block_payload(height)` (`_block_payload:` sidecar is
+    /// `_`-prefixed and therefore NOT part of the dump). Without it the
+    /// parent-digest chain can never reach the adopted tip and execution
+    /// wedges on the first finalized block.
+    pub fn snapshot_import(
+        &mut self,
+        block: BlockInfo,
+        records: &[(Vec<u8>, Vec<u8>)],
+        expected_root: &[u8; 32],
+        tip_payload: &[u8],
+    ) -> PulsarResult<()> {
+        if !verify_snapshot_root(records, expected_root) {
+            return Err(
+                StdError::generic_err("snapshot root mismatch — refusing to adopt state").into(),
+            );
+        }
+
+        let mut writer = self.storage.writer();
+        let meter = GasMeter::infinite();
+        for (k, v) in records {
+            writer.set(&meter, k, v)?;
+        }
+        LAST_BLOCK.save(&mut writer, &meter, &block)?;
+        let key = format!("{}{}", BLOCK_PAYLOAD_KEY_PREFIX, block.height);
+        let payload_item: Item<Vec<u8>> = Item::new(&key);
+        payload_item.save(&mut writer, &meter, &tip_payload.to_vec())?;
+        writer.commit(&meter)?;
+
+        // app/state comes from the dump — if it is missing, the dump was
+        // not produced by snapshot_export and we refuse to continue.
+        self.load_from_storage().map_err(|e| {
+            StdError::generic_err(format!("snapshot import: state load failed: {e}"))
+        })?;
+        self.store_state_root()?;
+        Ok(())
+    }
+
     #[cfg(test)]
     pub fn copy_storage_to_memory(&self) -> layer_storage::MemoryStore {
         layer_storage::MemoryStore::import(&self.storage.reader(), None).unwrap()
     }
+}
+
+/// State root over every non-sidecar (`'_'`-prefixed keys excluded) entry of
+/// `store`, in ascending key order. Works over a reader (committed state) or
+/// a writer (state including its uncommitted writes).
+fn state_root_over(store: &dyn ReadonlyStorage) -> PulsarResult<[u8; 32]> {
+    let meter = GasMeter::infinite();
+    let iter = store.range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+    let mut leaves: Vec<[u8; 32]> = Vec::new();
+    for entry in iter {
+        let (key, value) = entry?;
+        if key.first() == Some(&b'_') {
+            continue; // sidecar keys are not consensus state
+        }
+        let mut h = Sha256::new();
+        h.update([0x00u8]);
+        h.update(&key);
+        h.update(&value);
+        leaves.push(h.finalize().into());
+    }
+    Ok(merkle_root(&leaves))
+}
+
+/// Snapshot wire format — bump if the record/chunk layout changes.
+pub const SNAPSHOT_FORMAT_V1: u32 = 1;
+
+/// Chunk payloads stay below this; a record is never split across chunks.
+pub const SNAPSHOT_CHUNK_TARGET: usize = 8 * 1024 * 1024;
+
+/// One transport chunk of a state-sync snapshot.
+#[derive(Clone)]
+pub struct SnapshotChunk {
+    /// Record stream `[key_len u32le | key | val_len u32le | val]*`, keys
+    /// ascending, `_`-prefixed sidecar keys excluded.
+    pub data: Vec<u8>,
+    /// sha256(data) — corruption detection only; authentication is the
+    /// whole-dump `state_root` check on the joiner.
+    pub checksum: [u8; 32],
+}
+
+/// Exported state-sync snapshot: metadata + transport chunks.
+#[derive(Clone)]
+pub struct SnapshotExport {
+    /// Committed height the snapshot was taken at.
+    pub height: u64,
+    /// `state_root` recomputed over the exported records (same storage
+    /// snapshot as the records themselves).
+    pub state_root: [u8; 32],
+    /// Always `SNAPSHOT_FORMAT_V1` today.
+    pub format: u32,
+    /// Transport chunks, in order.
+    pub chunks: Vec<SnapshotChunk>,
+}
+
+/// Decode one snapshot chunk's records — the joiner side of the wire
+/// format. Kept next to the encoder so the layout has exactly one
+/// definition.
+pub fn decode_snapshot_chunk(data: &[u8]) -> PulsarResult<Vec<(Vec<u8>, Vec<u8>)>> {
+    let mut out = Vec::new();
+    let mut rest = data;
+    while !rest.is_empty() {
+        if rest.len() < 4 {
+            return Err(StdError::generic_err("snapshot record: truncated key length").into());
+        }
+        let klen = u32::from_le_bytes(rest[..4].try_into().unwrap()) as usize;
+        rest = &rest[4..];
+        if rest.len() < klen {
+            return Err(StdError::generic_err("snapshot record: truncated key").into());
+        }
+        let key = rest[..klen].to_vec();
+        rest = &rest[klen..];
+        if rest.len() < 4 {
+            return Err(StdError::generic_err("snapshot record: truncated value length").into());
+        }
+        let vlen = u32::from_le_bytes(rest[..4].try_into().unwrap()) as usize;
+        rest = &rest[4..];
+        if rest.len() < vlen {
+            return Err(StdError::generic_err("snapshot record: truncated value").into());
+        }
+        out.push((key, rest[..vlen].to_vec()));
+        rest = &rest[vlen..];
+    }
+    Ok(out)
+}
+
+/// The joiner's whole-dump authentication: sort records by key (canonical
+/// leaf order), recompute the Merkle root, compare to the `state_root`
+/// extracted from a BLS-certified `BlockPayload`. One check authenticates
+/// every byte — any missing, extra, or tampered record shifts the root.
+pub fn verify_snapshot_root(records: &[(Vec<u8>, Vec<u8>)], expected_root: &[u8; 32]) -> bool {
+    let mut sorted: Vec<&(Vec<u8>, Vec<u8>)> = records.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    let leaves: Vec<[u8; 32]> = sorted
+        .iter()
+        .map(|(k, v)| {
+            let mut h = Sha256::new();
+            h.update([0x00u8]);
+            h.update(k);
+            h.update(v);
+            h.finalize().into()
+        })
+        .collect();
+    merkle_root(&leaves) == *expected_root
 }
 
 /// Compute the root of a domain-separated binary Merkle tree over sorted
@@ -1032,6 +1308,56 @@ mod tests {
         // create rocksdb store and run same tests
         let storage = layer_storage::RockStore::open(path);
         transaction_workflow(storage);
+    }
+
+    /// A1 regression: the state root is computed inside the block commit and
+    /// must equal a fresh post-commit computation; the payload sidecar lands
+    /// in the same commit; neither sidecar affects app_hash.
+    #[test]
+    fn finalize_block_with_payload_is_atomic_and_consistent() {
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+                balance: coins(1_000, "ujclaw"),
+            }],
+            wasm: WasmParams {
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+            },
+        };
+        let block = || Block {
+            txs: vec![],
+            height: 1,
+            time: Timestamp::from_seconds(1690406618),
+            proposer_address: vec![1u8; 32],
+            last_votes: vec![],
+            certificate: None,
+        };
+
+        let mut with_payload = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/atomic_commit_a")),
+        );
+        with_payload.init(mock_init(&genesis)).unwrap();
+        let res_a = with_payload
+            .finalize_block_with_payload(block(), Some(b"payload-bytes".to_vec()))
+            .unwrap();
+
+        let mut plain = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/atomic_commit_b")),
+        );
+        plain.init(mock_init(&genesis)).unwrap();
+        let res_b = plain.finalize_block(block()).unwrap();
+
+        assert_eq!(
+            with_payload.state_root(),
+            Some(with_payload.compute_state_root().unwrap()),
+            "in-commit state root must match post-commit recomputation"
+        );
+        assert_eq!(with_payload.get_block_payload(1), Some(b"payload-bytes".to_vec()));
+        assert_eq!(plain.get_block_payload(1), None);
+        assert_eq!(res_a.app_hash, res_b.app_hash, "payload sidecar must not affect app_hash");
+        assert_eq!(with_payload.state_root(), plain.state_root());
     }
 
     // this emulates the run of a transaction being submitted
@@ -1267,5 +1593,153 @@ mod tests {
 
         // Block 2 has no certificate (no Reporter fired for it yet)
         assert_eq!(app.get_block_certificate(2), None);
+    }
+
+    /// State-sync export: chunk round-trip decodes every record, the
+    /// embedded root matches a fresh `compute_state_root`, and the
+    /// joiner-side root check rejects tampered/dropped records while
+    /// tolerating reshuffles (canonical key sort).
+    #[test]
+    fn snapshot_export_roundtrip_and_tamper_detection() {
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+                balance: coins(1_000, "ujclaw"),
+            }],
+            wasm: WasmParams {
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+            },
+        };
+        let mut app = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/snapshot_export_test")),
+        );
+        app.init(mock_init(&genesis)).unwrap();
+
+        let exp = app.snapshot_export().unwrap();
+        assert_eq!(exp.format, SNAPSHOT_FORMAT_V1);
+        assert!(!exp.chunks.is_empty());
+        // embedded root equals the committed root
+        assert_eq!(exp.state_root, app.compute_state_root().unwrap());
+        // per-chunk checksums are real
+        for c in &exp.chunks {
+            let cksum: [u8; 32] = Sha256::digest(&c.data).into();
+            assert_eq!(c.checksum, cksum);
+        }
+
+        // decode all records across chunk boundaries
+        let mut records = Vec::new();
+        for c in &exp.chunks {
+            records.extend(decode_snapshot_chunk(&c.data).unwrap());
+        }
+        assert!(!records.is_empty(), "genesis must produce KV records");
+        // no sidecar keys leaked into the dump
+        assert!(records.iter().all(|(k, _)| k.first() != Some(&b'_')));
+
+        // whole-dump root check: clean, shuffled, tampered, dropped
+        assert!(verify_snapshot_root(&records, &exp.state_root));
+
+        let mut shuffled = records.clone();
+        shuffled.reverse();
+        assert!(
+            verify_snapshot_root(&shuffled, &exp.state_root),
+            "canonical sort must tolerate record order"
+        );
+
+        let mut tampered = records.clone();
+        tampered[0].1.push(0xFF);
+        assert!(
+            !verify_snapshot_root(&tampered, &exp.state_root),
+            "tampered value must shift root"
+        );
+
+        let mut dropped = records.clone();
+        dropped.pop();
+        assert!(
+            !verify_snapshot_root(&dropped, &exp.state_root),
+            "missing record must shift root"
+        );
+
+        // decoder rejects truncation
+        let truncated = &exp.chunks[0].data[..exp.chunks[0].data.len() - 1];
+        assert!(
+            exp.chunks[0].data.is_empty() || decode_snapshot_chunk(truncated).is_err(),
+            "truncated chunk must fail decode"
+        );
+    }
+
+    /// The joiner path: a fresh App adopts a verified snapshot, lands at
+    /// the same state_root, and `info()` reflects the imported height —
+    /// the same tail-of-commit state a `finalize_block` would leave.
+    /// A doctored dump is refused without touching storage.
+    #[test]
+    fn snapshot_import_adopts_verified_state() {
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+                balance: coins(1_000, "ujclaw"),
+            }],
+            wasm: WasmParams {
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+            },
+        };
+        let mut producer = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/snap_import_producer")),
+        );
+        producer.init(mock_init(&genesis)).unwrap();
+        let exp = producer.snapshot_export().unwrap();
+
+        let records: Vec<(Vec<u8>, Vec<u8>)> = exp
+            .chunks
+            .iter()
+            .flat_map(|c| decode_snapshot_chunk(&c.data).unwrap())
+            .collect();
+
+        let block = cosmwasm_std::BlockInfo {
+            height: exp.height,
+            time: Timestamp::from_seconds(1690406618),
+            chain_id: "junoclaw-1".to_string(),
+        };
+
+        // joiner: fresh, never inited
+        let mut joiner = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/snap_import_joiner")),
+        );
+        assert!(joiner.info().is_none(), "joiner must start uninitialized");
+
+        // doctored dump refused: mutate one record's value
+        let mut doctored = records.clone();
+        doctored[0].1.push(0xAA);
+        assert!(joiner
+            .snapshot_import(block.clone(), &doctored, &exp.state_root, b"tip-payload")
+            .is_err());
+        assert!(joiner.info().is_none(), "refused import must not set info");
+
+        // honest dump adopts
+        joiner
+            .snapshot_import(block.clone(), &records, &exp.state_root, b"tip-payload")
+            .unwrap();
+        assert_eq!(joiner.info().unwrap().height, exp.height);
+        // tip payload sidecar must be restored — LayerNode links the
+        // executed tip's last_digest via get_block_payload(height).
+        assert_eq!(
+            joiner.get_block_payload(exp.height),
+            Some(b"tip-payload".to_vec())
+        );
+        assert_eq!(
+            joiner.compute_state_root().unwrap(),
+            exp.state_root,
+            "joiner must land on the same state root"
+        );
+        // exported over the joined state reproduces an identical dump
+        let re = joiner.snapshot_export().unwrap();
+        assert_eq!(re.state_root, exp.state_root);
+        assert_eq!(re.height, exp.height);
+        assert_eq!(re.chunks.len(), exp.chunks.len());
+        for (a, b) in re.chunks.iter().zip(&exp.chunks) {
+            assert_eq!(a.data, b.data);
+        }
     }
 }

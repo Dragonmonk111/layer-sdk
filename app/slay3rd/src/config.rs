@@ -80,6 +80,20 @@ pub struct NodeConfig {
     /// fee-less spam and prices block space. "0<denom>" disables the floor.
     #[serde(default = "default_min_gas_price")]
     pub min_gas_price: String,
+
+    /// Optional state-sync bootstrap. When set and no stored state exists,
+    /// the node adopts a peer's snapshot instead of initializing from
+    /// genesis (docs/STATE_SYNC.md). Failure is fatal — the node never
+    /// silently falls back to genesis.
+    #[serde(default)]
+    pub state_sync: Option<StateSyncConfig>,
+}
+
+/// State-sync bootstrap parameters (docs/STATE_SYNC.md §4).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StateSyncConfig {
+    /// gRPC address of the snapshot-donor peer (host:port).
+    pub peer_grpc: String,
 }
 
 fn default_min_gas_price() -> String {
@@ -102,6 +116,7 @@ impl Default for NodeConfig {
             leader_timeout_ms: 3_000,
             certification_timeout_ms: 5_000,
             min_gas_price: default_min_gas_price(),
+            state_sync: None,
         }
     }
 }
@@ -184,6 +199,7 @@ mod tests {
             leader_timeout_ms: 1_000,
             certification_timeout_ms: 2_000,
             min_gas_price: default_min_gas_price(),
+            state_sync: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");

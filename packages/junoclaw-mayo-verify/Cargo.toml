@@ -1,0 +1,30 @@
+[package]
+name = "junoclaw-mayo-verify"
+version = "0.1.0"
+edition = "2021"
+authors = ["JunoClaw Contributors"]
+description = "Pure-Rust MAYO post-quantum signature verifier (vendored from junoclaw/crates for native chain use)"
+license = "Apache-2.0"
+
+# VENDORED COPY of junoclaw/crates/junoclaw-mayo-verify.
+# Keep in sync — the contract crate and this chain-native copy must verify
+# identical signatures. If you change verify.rs/params.rs, change both.
+# Vendored (rather than path-dep'd) because Docker builds are scoped to
+# junoclaw-chain only.
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false }
+sha3 = { version = "0.10", default-features = false }
+aes = { version = "0.8", default-features = false }
+
+[dev-dependencies]
+hex-literal = "0.4"
+hex = "0.4"
+rand_chacha = "0.3"
+rand_core = "0.6"
+# sriracha-mayo provides real MAYO keypairs+sigs for tests (verify-only crate)
+sriracha-mayo = "0.0.4"
+
+[features]
+default = ["std"]
+std = ["sha2/std", "sha3/std"]

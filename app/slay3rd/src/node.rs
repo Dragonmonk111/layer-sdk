@@ -2,10 +2,16 @@
 //!
 //! This is the single integration point where consensus callbacks call into
 //! the Layer state machine. LayerNode wraps Arc<RwLock<App<T>>> and translates:
-//! - genesis() -> App::app_hash() (initial state digest)
-//! - propose() -> drain mempool, build BlockPayload, return digest
-//! - verify()  -> structural validation only, NO state mutation
-//! - certify() -> App::finalize_block() (DETERMINISM CRITICAL)
+//! - genesis()  -> constant genesis parent digest
+//! - propose()  -> build on consensus `context.parent` once it is executed
+//! - verify()   -> check parent/height/state_root/timestamp/proposer, NO state mutation
+//! - certify()  -> payload availability + durable persistence, NO execution
+//! - finalize() -> execute the finalized chain in order (DETERMINISM CRITICAL)
+//!
+//! Execution happens ONLY on finalization. A notarized block may still be
+//! skipped by consensus, and a validator that could not certify a block must
+//! still apply it once it is finalized; executing in certify() violated both
+//! and let validators silently diverge.
 //!
 //! IMPORTANT: The `pending_payloads` map is shared with the Relay (Plan 03).
 //! The proposer's `propose()` inserts payloads; the Relay inserts payloads
@@ -13,7 +19,7 @@
 //! map. Without Relay wiring, only the proposer would have payloads and
 //! non-proposers would always fail `verify()`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -32,11 +38,98 @@ use tokio::sync::{Mutex, RwLock, oneshot};
 use layer_cosmos::parse_cosmos_tx;
 
 use crate::block::BlockPayload;
-use crate::mempool::Mempool;
+use crate::mempool::{tx_hash, Mempool, TxHash};
+use crate::payload_store::{PayloadStore, DEFAULT_RETAIN_HEIGHTS};
 use crate::tx_index::{tx_hash_hex, tx_response_from_result, TxIndex, DEFAULT_TX_INDEX_CAPACITY};
 
 /// Maximum number of transactions per block proposal.
 const MAX_BLOCK_TXS: usize = 100;
+/// Maximum total tx bytes per block. Keeps the relayed payload under the
+/// 10 MiB P2P message limit (main.rs) with headroom for encoding overhead.
+pub const MAX_BLOCK_TX_BYTES: usize = 8 * 1024 * 1024;
+
+const POLL_INTERVAL: Duration = Duration::from_millis(25);
+/// propose() waits this long for its parent to be finalized + executed (< leader_timeout).
+const PROPOSE_WAIT_MAX: Duration = Duration::from_millis(2_000);
+/// verify() waits this long for the payload and its executed parent (< leader_timeout).
+const VERIFY_WAIT_MAX: Duration = Duration::from_millis(2_500);
+/// certify() waits this long for the payload bytes (< certification_timeout).
+const CERTIFY_WAIT_MAX: Duration = Duration::from_millis(4_000);
+/// finalize() waits this long for missing ancestor payloads before halting execution.
+const FINALIZE_FETCH_WAIT_MAX: Duration = Duration::from_millis(5_000);
+/// Minimum spacing between repeated fetch requests for the same digest.
+const FETCH_RETRY: Duration = Duration::from_millis(500);
+/// Unsolicited peer payloads are accepted only this far above the executed tip.
+pub const PEER_PAYLOAD_LOOKAHEAD: u64 = 64;
+/// Unsolicited peer payloads are dropped once this many payloads are pending.
+pub const MAX_PENDING_PAYLOADS: usize = 256;
+/// Outstanding fetch requests remembered (so replies bypass the lookahead).
+const MAX_REQUESTED_DIGESTS: usize = 65_536;
+/// Outstanding height-ranged backfill requests remembered.
+const MAX_REQUESTED_HEIGHTS: usize = 4_096;
+/// Heights covered by a single `FetchRequest::HeightRange` message.
+pub const BACKFILL_BATCH_SIZE: u64 = 64;
+/// How far above the executed tip one backfill tick may reach. Larger spans
+/// amortize the digest-walk latency over many parallel height fetches.
+const BACKFILL_MAX_SPAN: u64 = 512;
+
+const GENESIS_TIME_NS: u64 = 1_673_194_026_078_305_426;
+
+/// A payload fetch this node wants peers to answer over the P2P relay.
+/// Digest requests serve the finalize() walk; HeightRange requests serve
+/// bulk backfill (requester doesn't know digests yet — that's the point).
+pub enum FetchRequest {
+    Digest([u8; 32]),
+    /// Inclusive start + count (count ≤ BACKFILL_BATCH_SIZE).
+    HeightRange { start: u64, count: u16 },
+}
+
+/// Parent digest of the first block. Constant (not the app hash) so that
+/// `genesis()` is identical on every validator and across restarts.
+pub fn genesis_parent() -> [u8; 32] {
+    let mut hasher = sha256::Sha256::new();
+    hasher.update(b"slay3r/genesis-parent/v1");
+    hasher.finalize().0
+}
+
+/// Deterministic block timestamp for a consensus view.
+pub fn view_timestamp_nanos(view: u64) -> u64 {
+    GENESIS_TIME_NS.saturating_add(view.saturating_mul(1_000_000_000))
+}
+
+/// Pure consensus-validity check for a proposed payload, evaluated against
+/// this validator's executed tip (which must equal the proposal's parent).
+pub fn validate_payload(
+    payload: &BlockPayload,
+    parent: &[u8; 32],
+    expected_height: u64,
+    expected_state_root: &[u8; 32],
+    expected_timestamp_nanos: u64,
+    expected_proposer: &[u8],
+) -> Result<(), &'static str> {
+    if payload.parent_digest != *parent {
+        return Err("parent_digest does not match consensus parent");
+    }
+    if payload.height != expected_height {
+        return Err("height is not parent height + 1");
+    }
+    if payload.state_root != *expected_state_root {
+        return Err("state_root does not match local post-parent state");
+    }
+    if payload.timestamp_nanos != expected_timestamp_nanos {
+        return Err("timestamp does not match view");
+    }
+    if payload.proposer.as_slice() != expected_proposer {
+        return Err("proposer is not the view leader");
+    }
+    if payload.txs.len() > MAX_BLOCK_TXS {
+        return Err("too many transactions");
+    }
+    if payload.txs.iter().map(|t| t.len()).sum::<usize>() > MAX_BLOCK_TX_BYTES {
+        return Err("transactions exceed block byte budget");
+    }
+    Ok(())
+}
 
 /// LayerNode bridges Commonware consensus to the Layer state machine.
 ///
@@ -57,10 +150,26 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     /// SHARED with the Relay (Plan 03) — the Relay inserts payloads received
     /// from other validators so non-proposers can look them up in verify().
     pending_payloads: Arc<Mutex<BTreeMap<[u8; 32], BlockPayload>>>,
-    /// Track the current block height (incremented only on successful certify).
+    /// Height of the last EXECUTED (finalized) block.
+    /// Lock order everywhere: current_height -> last_digest -> app.
     current_height: Arc<Mutex<u64>>,
-    /// The last committed block digest (parent linkage for new proposals).
+    /// Digest of the last EXECUTED (finalized) block.
     last_digest: Arc<Mutex<[u8; 32]>>,
+    /// Serializes finalize() so the finalized chain is applied exactly once, in order.
+    exec_lock: Arc<Mutex<()>>,
+    /// Durable copy of certified/executed payloads (survives restart).
+    store: Arc<std::sync::Mutex<PayloadStore>>,
+    /// Requests a missing payload from peers (wired to the P2P relay in main.rs).
+    fetch_tx: Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<FetchRequest>>>>,
+    /// Digests this node has requested from peers and not yet received.
+    requested: Arc<std::sync::Mutex<HashSet<[u8; 32]>>>,
+    /// Heights this node has asked peers for via backfill, with request
+    /// time — entries expire after FETCH_RETRY so misses are re-requested.
+    requested_heights: Arc<std::sync::Mutex<BTreeMap<u64, Instant>>>,
+    /// Highest payload height ever observed (admitted or rejected pushes,
+    /// payloads traversed in finalize). Fetch-target hint for backfill —
+    /// never used to advance execution.
+    max_seen_height: Arc<std::sync::atomic::AtomicU64>,
     /// Node-local tx result index for GetTx (not consensus state).
     tx_index: Arc<TxIndex>,
     /// Phantom to bind the P type parameter without storing P directly.
@@ -76,6 +185,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             pending_payloads: self.pending_payloads.clone(),
             current_height: self.current_height.clone(),
             last_digest: self.last_digest.clone(),
+            exec_lock: self.exec_lock.clone(),
+            store: self.store.clone(),
+            fetch_tx: self.fetch_tx.clone(),
+            requested: self.requested.clone(),
+            requested_heights: self.requested_heights.clone(),
+            max_seen_height: self.max_seen_height.clone(),
             tx_index: self.tx_index.clone(),
             _phantom: std::marker::PhantomData,
         }
@@ -84,15 +199,259 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
 
 impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P> {
     pub fn new(app: Arc<RwLock<App<T>>>, mempool: Arc<Mutex<Mempool>>, initial_height: u64) -> Self {
+        // Executed tip digest: genesis parent at height 0, otherwise the digest
+        // of the persisted payload at the resume height. If that payload is
+        // missing the node cannot link new blocks and will (correctly) refuse
+        // to vote rather than diverge.
+        let last_digest = if initial_height == 0 {
+            genesis_parent()
+        } else {
+            let stored = app
+                .try_read()
+                .ok()
+                .and_then(|a| a.get_block_payload(initial_height));
+            match stored {
+                Some(bytes) => {
+                    let mut hasher = sha256::Sha256::new();
+                    hasher.update(&bytes);
+                    hasher.finalize().0
+                }
+                None => {
+                    tracing::error!(
+                        height = initial_height,
+                        "No stored payload for resume height — executed tip digest unknown; node will not vote"
+                    );
+                    [0u8; 32]
+                }
+            }
+        };
         LayerNode {
             app,
             mempool,
             pending_payloads: Arc::new(Mutex::new(BTreeMap::new())),
             current_height: Arc::new(Mutex::new(initial_height)),
-            last_digest: Arc::new(Mutex::new([0u8; 32])),
+            last_digest: Arc::new(Mutex::new(last_digest)),
+            exec_lock: Arc::new(Mutex::new(())),
+            store: Arc::new(std::sync::Mutex::new(PayloadStore::in_memory())),
+            fetch_tx: Arc::new(std::sync::Mutex::new(None)),
+            requested: Arc::new(std::sync::Mutex::new(HashSet::new())),
+            requested_heights: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
+            max_seen_height: Arc::new(std::sync::atomic::AtomicU64::new(initial_height)),
             tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Attach a durable payload store. Payloads certified but not yet executed
+    /// before a restart are loaded back into `pending_payloads` and returned so
+    /// the caller can re-broadcast them to peers.
+    pub async fn with_payload_store(self, store: PayloadStore) -> (Self, Vec<BlockPayload>) {
+        let tip = *self.current_height.lock().await;
+        let recovered = store.payloads_above(tip);
+        {
+            let mut pending = self.pending_payloads.lock().await;
+            for p in &recovered {
+                pending.insert(p.digest(), p.clone());
+            }
+        }
+        *self.store.lock().unwrap_or_else(|e| e.into_inner()) = store;
+        (self, recovered)
+    }
+
+    /// Wire the channel used to request missing payloads from peers.
+    pub fn set_fetch_sender(&self, tx: tokio::sync::mpsc::UnboundedSender<FetchRequest>) {
+        *self.fetch_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
+    }
+
+    fn request_payload(&self, digest: [u8; 32]) {
+        {
+            let mut requested = self.requested.lock().unwrap_or_else(|e| e.into_inner());
+            if requested.len() >= MAX_REQUESTED_DIGESTS {
+                requested.clear();
+            }
+            requested.insert(digest);
+        }
+        if let Some(tx) = self.fetch_tx.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            let _ = tx.send(FetchRequest::Digest(digest));
+        }
+    }
+
+    /// Record an observed payload height as a backfill fetch target.
+    /// Purely a hint — never advances execution.
+    fn note_height_observed(&self, height: u64) {
+        self.max_seen_height
+            .fetch_max(height, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// One backfill step: ask peers for every height between the executed
+    /// tip and the highest observed payload height that we don't already
+    /// hold. Complements the digest walk in finalize(): that walk discovers
+    /// the chain, backfill fills it in parallel instead of one RTT per block.
+    /// Called periodically by a background task in main.rs.
+    pub async fn backfill_tick(&self) {
+        let tip = *self.current_height.lock().await;
+        let target = self
+            .max_seen_height
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .min(tip + BACKFILL_MAX_SPAN);
+        if target <= tip {
+            return;
+        }
+
+        // Heights we already have: on disk, or buffered pending execution.
+        let held: HashSet<u64> = {
+            let pending = self.pending_payloads.lock().await;
+            let mut held: HashSet<u64> = pending.values().map(|p| p.height).collect();
+            held.extend(
+                (tip + 1..=target)
+                    .filter(|h| {
+                        self.store
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .contains_height(*h)
+                    }),
+            );
+            held
+        };
+
+        // Expire stale height requests so unanswered ones are re-asked.
+        {
+            let mut req = self
+                .requested_heights
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            req.retain(|_, t| t.elapsed() < FETCH_RETRY);
+            if req.len() >= MAX_REQUESTED_HEIGHTS {
+                req.clear();
+            }
+        }
+
+        // Send contiguous range requests for missing heights.
+        let mut run_start: Option<u64> = None;
+        for h in (tip + 1)..=target {
+            let missing = !held.contains(&h);
+            match (missing, run_start) {
+                (true, None) => run_start = Some(h),
+                (false, Some(start)) => {
+                    self.request_height_range(start, h - start);
+                    run_start = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(start) = run_start {
+            self.request_height_range(start, target - start + 1);
+        }
+    }
+
+    /// Queue one height-range request, marking each height as solicited so
+    /// replies bypass the lookahead/capacity bounds in accept_peer_payload.
+    fn request_height_range(&self, start: u64, count: u64) {
+        if count == 0 {
+            return;
+        }
+        let mut sent_start = start;
+        let mut remaining = count;
+        {
+            let mut req = self
+                .requested_heights
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let now = Instant::now();
+            for h in start..start + count {
+                req.insert(h, now);
+            }
+        }
+        if let Some(tx) = self.fetch_tx.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            while remaining > 0 {
+                let n = remaining.min(BACKFILL_BATCH_SIZE);
+                let _ = tx.send(FetchRequest::HeightRange {
+                    start: sent_start,
+                    count: n as u16,
+                });
+                sent_start += n;
+                remaining -= n;
+            }
+        }
+    }
+
+    /// Serve a payload by height for peer backfill requests: pending
+    /// (not-yet-executed) payloads first, then the durable store.
+    pub async fn payload_by_height(&self, height: u64) -> Option<BlockPayload> {
+        {
+            let pending = self.pending_payloads.lock().await;
+            if let Some(p) = pending.values().find(|p| p.height == height) {
+                return Some(p.clone());
+            }
+        }
+        self.store
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_by_height(height)
+    }
+
+    /// Admit a payload received from a peer into `pending_payloads`.
+    ///
+    /// Bounds peer-driven memory: stale and structurally oversized payloads
+    /// are always rejected; unsolicited pushes must lie within
+    /// `PEER_PAYLOAD_LOOKAHEAD` of the executed tip and fit under
+    /// `MAX_PENDING_PAYLOADS`. Replies to this node's own fetch requests
+    /// bypass the window so catch-up across a larger gap still works.
+    /// Returns `Ok(true)` if newly inserted, `Ok(false)` if already known.
+    pub async fn accept_peer_payload(&self, payload: BlockPayload) -> Result<bool, &'static str> {
+        if payload.txs.len() > MAX_BLOCK_TXS
+            || payload.txs.iter().map(|t| t.len()).sum::<usize>() > MAX_BLOCK_TX_BYTES
+        {
+            return Err("payload exceeds block limits");
+        }
+        let tip = *self.current_height.lock().await;
+        if payload.height <= tip {
+            return Err("payload at or below executed tip");
+        }
+        let digest = payload.digest();
+        // Always record the height — even rejected pushes are evidence of
+        // the peer tip and give backfill a fetch target.
+        self.note_height_observed(payload.height);
+        let solicited = self
+            .requested
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&digest)
+            || self
+                .requested_heights
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&payload.height)
+                .is_some();
+        let mut pending = self.pending_payloads.lock().await;
+        if pending.contains_key(&digest) {
+            return Ok(false);
+        }
+        if !solicited {
+            if payload.height > tip + PEER_PAYLOAD_LOOKAHEAD {
+                return Err("unsolicited payload beyond lookahead window");
+            }
+            if pending.len() >= MAX_PENDING_PAYLOADS {
+                return Err("pending payload capacity reached");
+            }
+        }
+        pending.insert(digest, payload);
+        Ok(true)
+    }
+
+    /// Look up a payload in memory, then on disk.
+    pub async fn lookup_payload(&self, digest: &[u8; 32]) -> Option<BlockPayload> {
+        if let Some(p) = self.pending_payloads.lock().await.get(digest) {
+            return Some(p.clone());
+        }
+        self.store.lock().unwrap_or_else(|e| e.into_inner()).get(digest)
+    }
+
+    /// Executed tip as (height, digest).
+    pub async fn executed_tip(&self) -> (u64, [u8; 32]) {
+        let h = self.current_height.lock().await;
+        let d = self.last_digest.lock().await;
+        (*h, *d)
     }
 
     /// Access to the app for external callers (e.g., gRPC query handler).
@@ -125,32 +484,154 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         payload.digest()
     }
 
-    /// Internal: execute a block payload by calling App::finalize_block().
-    /// This is called from certify() — DETERMINISM CRITICAL.
-    /// NEVER call this from verify().
+    /// Execute the finalized chain ending at `digest`, in order, exactly once.
+    ///
+    /// Consensus may report only the newest finalization (ancestors are
+    /// finalized by implication), so walk `parent_digest` links back to the
+    /// executed tip and apply every block on the way. Returns the height and
+    /// timestamp of `digest`, or `None` if it was already executed (replay)
+    /// or cannot be executed. Missing payloads are fetched from peers; if they
+    /// never arrive, execution halts (fail-stop) instead of skipping a block.
+    pub async fn finalize(&self, digest: [u8; 32]) -> Option<(u64, u64)> {
+        let _exec = self.exec_lock.lock().await;
+        let (tip_height, tip_digest) = self.executed_tip().await;
+        if digest == tip_digest {
+            return None;
+        }
+
+        let mut chain: Vec<BlockPayload> = Vec::new();
+        let mut cursor = digest;
+        let deadline = Instant::now() + FINALIZE_FETCH_WAIT_MAX;
+        let mut last_request: Option<Instant> = None;
+        while cursor != tip_digest {
+            match self.lookup_payload(&cursor).await {
+                Some(p) => {
+                    if p.height <= tip_height {
+                        if chain.is_empty() {
+                            tracing::debug!(digest = %hex::encode(digest), "finalize: already executed (replay)");
+                        } else {
+                            tracing::error!(
+                                digest = %hex::encode(digest),
+                                tip_height,
+                                "finalize: finalized chain does not connect to executed tip — local state diverged, halting execution"
+                            );
+                        }
+                        return None;
+                    }
+                    cursor = p.parent_digest;
+                    chain.push(p);
+                }
+                None => {
+                    if Instant::now() >= deadline {
+                        tracing::error!(
+                            missing = %hex::encode(cursor),
+                            finalized = %hex::encode(digest),
+                            tip_height,
+                            "finalize: finalized payload unavailable — execution halted until it is fetched"
+                        );
+                        return None;
+                    }
+                    if last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY) {
+                        self.request_payload(cursor);
+                        last_request = Some(Instant::now());
+                    }
+                    tokio::time::sleep(POLL_INTERVAL).await;
+                }
+            }
+        }
+
+        let mut result = None;
+        for (i, payload) in chain.into_iter().rev().enumerate() {
+            if payload.height != tip_height + 1 + i as u64 {
+                tracing::error!(
+                    height = payload.height,
+                    expected = tip_height + 1 + i as u64,
+                    "finalize: non-contiguous height in finalized chain — halting execution"
+                );
+                return None;
+            }
+            // Fail-stop divergence detector: 2f+1 validators checked this
+            // state_root against their own state in verify(). If ours differs
+            // we are the divergent node — stop rather than compound it.
+            let local_root = {
+                let app = self.app.read().await;
+                app.state_root().unwrap_or([0u8; 32])
+            };
+            if payload.state_root != local_root {
+                tracing::error!(
+                    height = payload.height,
+                    expected = %hex::encode(payload.state_root),
+                    local = %hex::encode(local_root),
+                    "finalize: state_root mismatch — local state diverged from the network, halting execution"
+                );
+                return None;
+            }
+            let d = payload.digest();
+            self.pending_payloads.lock().await.remove(&d);
+            result = Some(self.execute_payload(d, payload).await?);
+        }
+
+        if let Some((height, _)) = result {
+            self.pending_payloads.lock().await.retain(|_, p| p.height > height);
+            self.store
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .prune_below(height.saturating_sub(DEFAULT_RETAIN_HEIGHTS));
+            self.recheck_mempool().await;
+        }
+        result
+    }
+
+    /// Re-run check_tx for every pending tx against the post-block state and
+    /// evict the ones that are no longer valid (stale sequence, spent funds).
+    /// Node-local policy only — never affects consensus.
+    async fn recheck_mempool(&self) {
+        let snapshot = self.mempool.lock().await.snapshot();
+        if snapshot.is_empty() {
+            return;
+        }
+        let invalid: Vec<TxHash> = {
+            let app = self.app.read().await;
+            let Some(chain_id) = app.info().map(|b| b.chain_id.clone()) else {
+                return;
+            };
+            snapshot
+                .iter()
+                .filter(|(_, raw)| match parse_cosmos_tx(raw.clone(), &chain_id) {
+                    Ok(tx) => app.check_tx(tx).result.is_err(),
+                    Err(_) => true,
+                })
+                .map(|(h, _)| *h)
+                .collect()
+        };
+        if !invalid.is_empty() {
+            let mut pool = self.mempool.lock().await;
+            let evicted = pool.remove_committed(invalid.iter());
+            tracing::info!(evicted, remaining = pool.len(), "mempool recheck evicted invalid txs");
+        }
+    }
+
+    /// Remove `digest` from pending and execute it on top of the executed tip.
+    /// Low-level: no parent/state_root checks (finalize() performs those).
+    #[cfg(test)]
     pub(crate) async fn execute_block(&self, digest: [u8; 32]) -> bool {
-        // Remove the payload from the pending map.
-        // BTreeMap removal is deterministic (exact key lookup).
         let payload = {
             let mut pending = self.pending_payloads.lock().await;
             pending.remove(&digest)
         };
+        match payload {
+            Some(p) => self.execute_payload(digest, p).await.is_some(),
+            None => false,
+        }
+    }
 
-        let payload = match payload {
-            Some(p) => p,
-            None => {
-                // Payload not found — block cannot be executed.
-                // This may happen if the Relay hasn't delivered the payload yet
-                // (Plan 03 adds the Relay; for Phase 2, only the proposer has payloads).
-                return false;
-            }
-        };
-
-        // Derive the block height: current_height + 1.
-        let height = {
-            let h = self.current_height.lock().await;
-            *h + 1
-        };
+    /// Apply one payload on top of the executed tip via App::finalize_block().
+    /// DETERMINISM CRITICAL. Holds current_height + last_digest for the whole
+    /// commit so readers never observe a new state root with an old tip.
+    async fn execute_payload(&self, digest: [u8; 32], payload: BlockPayload) -> Option<(u64, u64)> {
+        let mut h = self.current_height.lock().await;
+        let mut last = self.last_digest.lock().await;
+        let height = *h + 1;
 
         // Convert BlockPayload to layer_std::api::Block.
         // Block timestamp comes from payload.timestamp_nanos (from consensus context — DETERMINISTIC).
@@ -201,20 +682,28 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             certificate: None,
         };
 
+        // The payload bytes are committed atomically with the block's state:
+        // restart derives the executed tip digest from them, and membership
+        // proofs carry them so the light client can recompute the signed
+        // digest and extract state_root.
+        let payload_bytes = payload.to_bytes();
         let result = {
             let mut app = self.app.write().await;  // EXCLUSIVE write lock — mutates state
-            app.finalize_block(block)
+            app.finalize_block_with_payload(block, Some(payload_bytes))
         };  // write lock released here
 
         match result {
             Ok(response) => {
-                // Commit succeeded: advance height and update last_digest.
-                let mut h = self.current_height.lock().await;
+                // Commit succeeded: advance the executed tip.
                 *h = height;
-                let mut last = self.last_digest.lock().await;
                 *last = digest;
-                drop(h);
-                drop(last);
+
+                // Drop this block's txs from the local mempool before the tip
+                // locks are released, so the next proposal cannot re-include them.
+                {
+                    let committed: Vec<TxHash> = payload.txs.iter().map(|t| tx_hash(t)).collect();
+                    self.mempool.lock().await.remove_committed(committed.iter());
+                }
 
                 // Index tx results for GetTx. tx_results is 1:1 with the parsed
                 // txs (malformed ones were skipped above, together with their hash).
@@ -222,19 +711,8 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                     self.tx_index.insert(tx_response_from_result(hash, height, res));
                 }
 
-                // Persist the full payload bytes — membership proofs carry
-                // them so the light client can recompute the signed digest
-                // and extract state_root. The payload was just removed from
-                // pending_payloads, so this is the only durable copy.
-                {
-                    let mut app = self.app.write().await;
-                    if let Err(e) = app.set_block_payload(height, payload.to_bytes()) {
-                        tracing::error!(
-                            height = height,
-                            error = ?e,
-                            "Failed to persist block payload — membership proofs for this height will be unavailable"
-                        );
-                    }
+                if let Err(e) = self.store.lock().unwrap_or_else(|e| e.into_inner()).put(&payload) {
+                    tracing::warn!(height, error = %e, "Failed to persist executed payload to payload store");
                 }
 
                 // Structured log: height, app_hash, digest (CONS-04, CONS-05 audit support)
@@ -246,11 +724,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                     digest = %hex::encode(digest),
                     "Block finalized — certificate stored by Reporter on Finalization activity"
                 );
-                true
+                Some((height, payload.timestamp_nanos))
             }
             Err(e) => {
-                tracing::error!(height = height, error = ?e, "finalize_block failed");
-                false
+                tracing::error!(height = height, error = ?e, "finalize_block failed on a finalized block — halting execution");
+                None
             }
         }
     }
@@ -269,146 +747,152 @@ where
     type Digest = sha256::Digest;
 
     async fn genesis(&mut self, _epoch: Epoch) -> Self::Digest {
-        // Return initial app_hash from genesis state as a sha256::Digest.
-        // app_hash() returns Vec<u8>; we normalize to [u8; 32] via SHA-256 if needed.
-        let app_hash = {
-            let app = self.app.read().await;  // SHARED read lock — read-only
-            app.app_hash()
-        };
-        // If app_hash is already 32 bytes, use it directly as the digest.
-        // Otherwise, hash it to normalize to 32 bytes.
-        if let Ok(arr) = <[u8; 32]>::try_from(app_hash.as_slice()) {
-            sha256::Digest::from(arr)
-        } else {
-            let mut hasher = sha256::Sha256::new();
-            hasher.update(&app_hash);
-            hasher.finalize()
-        }
+        // Must be identical on every validator and across restarts: it is the
+        // parent digest of the first block (see genesis_parent()).
+        sha256::Digest::from(genesis_parent())
     }
 
     async fn propose(&mut self, context: Self::Context) -> oneshot::Receiver<Self::Digest> {
         let (tx, rx) = oneshot::channel();
-
-        // Drain transactions from the mempool.
-        let raw_txs = {
-            let mut pool = self.mempool.lock().await;
-            pool.drain_batch(MAX_BLOCK_TXS)
-        };
-
-        // Build BlockPayload with current height + 1 and parent digest.
-        let height = {
-            let h = self.current_height.lock().await;
-            *h + 1
-        };
-        let last_digest = {
-            let d = self.last_digest.lock().await;
-            *d
-        };
-
-        // State root committed by this payload: the Merkle root over the
-        // app's post-state after the PREVIOUS block (app-hash semantics).
-        // Stored by finalize_block/init; [0;32] only before the first commit.
-        let state_root = {
-            let app = self.app.read().await;
-            app.state_root().unwrap_or([0u8; 32])
-        };
-
-        // Timestamp comes from the consensus context (same on all validators — DETERMINISTIC).
-        // We derive a deterministic timestamp from the view number.
-        // IMPORTANT: Timestamp must be > genesis time (1_673_194_026_078_305_426 ns, Jan 2023).
-        // App::finalize_block() rejects blocks with timestamps <= the previous block's timestamp.
-        // Use genesis_time + view * 1e9 ns: monotonically increasing and deterministic.
-        // Each view adds 1 second, starting from genesis epoch to satisfy the timestamp check.
-        const GENESIS_TIME_NS: u64 = 1_673_194_026_078_305_426;
+        let node = self.clone();
+        let (_, parent_digest) = context.parent;
+        let parent: [u8; 32] = parent_digest.0;
         let view_num = context.round.view().get();
-        let timestamp_nanos = GENESIS_TIME_NS.saturating_add(view_num.saturating_mul(1_000_000_000));
-
         // Proposer is the leader's public key bytes from context.
-        // PublicKey: Array: AsRef<[u8]> — safe to copy the bytes.
         let proposer = context.leader.as_ref().to_vec();
 
-        let total_tx_bytes: usize = raw_txs.iter().map(|t| t.len()).sum();
-        tracing::info!(
-            tx_count = raw_txs.len(),
-            total_tx_bytes = total_tx_bytes,
-            height = height,
-            "propose: drained mempool"
-        );
+        tokio::spawn(async move {
+            // Build on consensus' parent. It must be finalized and executed
+            // here first so height and state_root (post-parent state, app-hash
+            // semantics) are well-defined and identical on every validator.
+            let start = Instant::now();
+            let (height, state_root) = loop {
+                {
+                    let h = node.current_height.lock().await;
+                    let last = node.last_digest.lock().await;
+                    if *last == parent {
+                        let app = node.app.read().await;
+                        break (*h + 1, app.state_root().unwrap_or([0u8; 32]));
+                    }
+                }
+                if start.elapsed() >= PROPOSE_WAIT_MAX {
+                    tracing::info!(
+                        parent = %hex::encode(parent),
+                        view = view_num,
+                        "propose: parent not executed in time — skipping proposal for this view"
+                    );
+                    // Dropping `tx` tells consensus there is no proposal.
+                    return;
+                }
+                tokio::time::sleep(POLL_INTERVAL).await;
+            };
 
-        let payload = BlockPayload {
-            height,
-            timestamp_nanos,
-            proposer,
-            txs: raw_txs,
-            parent_digest: last_digest,
-            state_root,
-        };
+            // Peek, don't drain: txs leave the pool only once a block
+            // containing them is executed, so a skipped proposal loses nothing.
+            let raw_txs = {
+                let pool = node.mempool.lock().await;
+                pool.peek_batch(MAX_BLOCK_TXS, MAX_BLOCK_TX_BYTES)
+            };
 
-        let payload_bytes = payload.to_bytes().len();
-        let digest_bytes = Self::compute_digest(&payload);
-        tracing::info!(
-            payload_bytes = payload_bytes,
-            "propose: built BlockPayload"
-        );
-        let digest = sha256::Digest::from(digest_bytes);
+            let total_tx_bytes: usize = raw_txs.iter().map(|t| t.len()).sum();
+            tracing::info!(
+                tx_count = raw_txs.len(),
+                total_tx_bytes = total_tx_bytes,
+                height = height,
+                "propose: selected mempool txs"
+            );
 
-        // Store in pending map so verify() can look it up.
-        {
-            let mut pending = self.pending_payloads.lock().await;
-            pending.insert(digest_bytes, payload);
-        }
+            let payload = BlockPayload {
+                height,
+                timestamp_nanos: view_timestamp_nanos(view_num),
+                proposer,
+                txs: raw_txs,
+                parent_digest: parent,
+                state_root,
+            };
 
-        tx.send(digest).ok();
+            let payload_bytes = payload.to_bytes().len();
+            let digest_bytes = Self::compute_digest(&payload);
+            tracing::info!(
+                payload_bytes = payload_bytes,
+                "propose: built BlockPayload"
+            );
+
+            // Store in pending map so the relay can broadcast it.
+            {
+                let mut pending = node.pending_payloads.lock().await;
+                pending.insert(digest_bytes, payload);
+            }
+
+            tx.send(sha256::Digest::from(digest_bytes)).ok();
+        });
         rx
     }
 
     async fn verify(
         &mut self,
-        _context: Self::Context,
+        context: Self::Context,
         payload: Self::Digest,
     ) -> oneshot::Receiver<bool> {
         let (tx, rx) = oneshot::channel();
 
         // CRITICAL: verify() MUST NOT call app.finalize_block() or mutate App state.
-        // Verify only checks if the payload digest exists in pending_payloads.
         //
-        // The pending_payloads map is populated by TWO sources:
-        //   (a) This node's own propose() when it is the leader.
-        //   (b) The Relay (Plan 03) when it receives payloads from the proposing validator.
-        //
-        // The proposal digest (32 bytes, consensus vote channel) can reach this
-        // validator before the full block payload finishes propagating over the
-        // payload relay channel — especially for large store-code txs (~4.4MB).
-        // Poll pending_payloads for a bounded window so verify() tolerates the
-        // relay delay instead of rejecting the proposal outright. The wait runs
-        // in a spawned task so the receiver returns immediately and the voter's
-        // select loop is not blocked; the window stays under leader_timeout so
-        // the result lands within the view's verification deadline.
+        // The payload can arrive over the relay after the digest (large
+        // store-code txs), and the parent may still be finalizing, so poll
+        // for a bounded window (< leader_timeout) in a spawned task. Once the
+        // payload is present AND our executed tip equals the consensus parent,
+        // validate it against our own post-parent state.
+        let node = self.clone();
+        let (_, parent_digest) = context.parent;
+        let parent: [u8; 32] = parent_digest.0;
+        let view_num = context.round.view().get();
+        let leader = context.leader.as_ref().to_vec();
         let digest_bytes: [u8; 32] = payload.0;
-        let pending_payloads = self.pending_payloads.clone();
         tokio::spawn(async move {
-            const VERIFY_POLL_INTERVAL: Duration = Duration::from_millis(25);
-            const VERIFY_WAIT_MAX: Duration = Duration::from_millis(2_500);
             let start = Instant::now();
-            let found = loop {
+            let mut last_request: Option<Instant> = None;
+            let verdict = loop {
+                let candidate = node.pending_payloads.lock().await.get(&digest_bytes).cloned();
+                if candidate.is_none()
+                    && start.elapsed() >= FETCH_RETRY
+                    && last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY)
                 {
-                    let pending = pending_payloads.lock().await;
-                    if pending.contains_key(&digest_bytes) {
-                        break true;
+                    node.request_payload(digest_bytes);
+                    last_request = Some(Instant::now());
+                }
+                if let Some(p) = candidate {
+                    let h = node.current_height.lock().await;
+                    let last = node.last_digest.lock().await;
+                    if *last == parent {
+                        let root = node.app.read().await.state_root().unwrap_or([0u8; 32]);
+                        break validate_payload(
+                            &p,
+                            &parent,
+                            *h + 1,
+                            &root,
+                            view_timestamp_nanos(view_num),
+                            &leader,
+                        );
+                    }
+                    if *h >= p.height {
+                        break Err("parent is not the executed tip (stale or forked proposal)");
                     }
                 }
                 if start.elapsed() >= VERIFY_WAIT_MAX {
-                    break false;
+                    break Err("payload or executed parent unavailable within wait window");
                 }
-                tokio::time::sleep(VERIFY_POLL_INTERVAL).await;
+                tokio::time::sleep(POLL_INTERVAL).await;
             };
-            if !found {
-                tracing::debug!(
+            if let Err(reason) = verdict {
+                tracing::info!(
                     digest = %hex::encode(digest_bytes),
-                    "verify: payload not received within wait window"
+                    view = view_num,
+                    reason,
+                    "verify: rejecting proposal"
                 );
             }
-            tx.send(found).ok();
+            tx.send(verdict.is_ok()).ok();
         });
 
         rx
@@ -427,14 +911,44 @@ where
     ) -> oneshot::Receiver<bool> {
         let (tx, rx) = oneshot::channel();
 
-        // DETERMINISM CRITICAL: certify() is the single commit point.
-        // All code in execute_block must be deterministic:
-        //   - BTreeMap (not HashMap) for pending_payloads
-        //   - Timestamp from block payload (not SystemTime::now())
-        //   - No floating-point arithmetic
+        // certify() does NOT execute: a notarized block can still be skipped
+        // by consensus. Certifying means "I hold these bytes durably and can
+        // execute them once finalized" — so fetch if missing, persist, vote.
+        let node = self.clone();
         let digest_bytes: [u8; 32] = payload.0;
-        let success = self.execute_block(digest_bytes).await;
-        tx.send(success).ok();
+        tokio::spawn(async move {
+            let start = Instant::now();
+            let mut last_request: Option<Instant> = None;
+            let ok = loop {
+                if let Some(p) = node.lookup_payload(&digest_bytes).await {
+                    let persisted = node.store.lock().unwrap_or_else(|e| e.into_inner()).put(&p);
+                    match persisted {
+                        Ok(()) => break true,
+                        Err(e) => {
+                            tracing::error!(
+                                digest = %hex::encode(digest_bytes),
+                                error = %e,
+                                "certify: failed to persist payload — refusing to certify"
+                            );
+                            break false;
+                        }
+                    }
+                }
+                if start.elapsed() >= CERTIFY_WAIT_MAX {
+                    tracing::info!(
+                        digest = %hex::encode(digest_bytes),
+                        "certify: payload unavailable within wait window"
+                    );
+                    break false;
+                }
+                if last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY) {
+                    node.request_payload(digest_bytes);
+                    last_request = Some(Instant::now());
+                }
+                tokio::time::sleep(POLL_INTERVAL).await;
+            };
+            tx.send(ok).ok();
+        });
         rx
     }
 }
@@ -744,6 +1258,269 @@ mod tests {
         assert!(rt().block_on(node.execute_block(digest2)), "second block should certify");
         let h2 = rt().block_on(async { *node.current_height.lock().await });
         assert_eq!(h2, 2);
+    }
+
+    fn local_state_root(node: &TestNode) -> [u8; 32] {
+        rt().block_on(async { node.app().read().await.state_root().unwrap_or([0u8; 32]) })
+    }
+
+    /// Build a payload that is valid on top of `parent` given the node's current state.
+    fn valid_child(node: &TestNode, height: u64, parent: [u8; 32]) -> BlockPayload {
+        BlockPayload {
+            height,
+            timestamp_nanos: view_timestamp_nanos(height),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: parent,
+            state_root: local_state_root(node),
+        }
+    }
+
+    #[test]
+    fn test_new_node_tip_is_genesis_parent() {
+        let node = make_layer_node();
+        let (h, d) = rt().block_on(node.executed_tip());
+        assert_eq!((h, d), (0, genesis_parent()));
+        let mut n = node.clone();
+        assert_eq!(rt().block_on(n.genesis(Epoch::new(0))).0, genesis_parent());
+    }
+
+    #[test]
+    fn test_certify_does_not_execute() {
+        let mut node = make_layer_node();
+        let p = valid_child(&node, 1, genesis_parent());
+        let digest = insert_payload_sync(&node, p);
+        let hash_before = rt().block_on(async { node.app().read().await.app_hash() });
+        let ok = rt().block_on(async {
+            let rx = node.certify(Round::new(Epoch::new(0), commonware_consensus::types::View::new(1)), sha256::Digest::from(digest)).await;
+            rx.await.unwrap()
+        });
+        assert!(ok, "certify should succeed when payload is available");
+        let hash_after = rt().block_on(async { node.app().read().await.app_hash() });
+        assert_eq!(hash_before, hash_after, "certify must not mutate state");
+        assert_eq!(rt().block_on(node.executed_tip()).0, 0, "certify must not advance height");
+    }
+
+    #[test]
+    fn test_finalize_executes_skipped_ancestors_in_order() {
+        let node = make_layer_node();
+        let p1 = valid_child(&node, 1, genesis_parent());
+        let d1 = insert_payload_sync(&node, p1);
+        // p2's state_root must be post-p1 state; compute it by executing p1 on a
+        // twin node (execution is deterministic).
+        let twin = make_layer_node();
+        let d1_twin = insert_payload_sync(&twin, valid_child(&twin, 1, genesis_parent()));
+        assert_eq!(d1, d1_twin);
+        assert!(rt().block_on(twin.execute_block(d1_twin)));
+        let p2 = valid_child(&twin, 2, d1);
+        let d2 = insert_payload_sync(&node, p2.clone());
+
+        // Only the tip's finalization is reported; p1 is finalized by implication.
+        let res = rt().block_on(node.finalize(d2));
+        assert_eq!(res.map(|r| r.0), Some(2));
+        assert_eq!(rt().block_on(node.executed_tip()), (2, d2));
+        let d2_twin = insert_payload_sync(&twin, p2);
+        assert!(rt().block_on(twin.execute_block(d2_twin)));
+        assert_eq!(local_state_root(&node), local_state_root(&twin));
+
+        // Replayed finalizations are no-ops.
+        assert_eq!(rt().block_on(node.finalize(d2)), None);
+        assert_eq!(rt().block_on(node.executed_tip()).0, 2);
+    }
+
+    #[test]
+    fn test_finalize_halts_on_state_root_mismatch() {
+        let node = make_layer_node();
+        let mut p1 = valid_child(&node, 1, genesis_parent());
+        p1.state_root = [7u8; 32];
+        let d1 = insert_payload_sync(&node, p1);
+        assert_eq!(rt().block_on(node.finalize(d1)), None);
+        assert_eq!(rt().block_on(node.executed_tip()).0, 0, "divergent block must not execute");
+    }
+
+    /// Executing a block removes its txs from the pool; finalize() then
+    /// rechecks the remainder and evicts txs invalid against the new state.
+    #[test]
+    fn test_mempool_remove_on_commit_and_recheck() {
+        let node = make_layer_node();
+        let committed = bytes::Bytes::from_static(b"\xff\xfecommitted");
+        let stale = bytes::Bytes::from_static(b"\xff\xfestale");
+        rt().block_on(async {
+            let mut pool = node.mempool.lock().await;
+            pool.submit(committed.clone()).unwrap();
+            pool.submit(stale.clone()).unwrap();
+        });
+
+        let mut p1 = valid_child(&node, 1, genesis_parent());
+        p1.txs = vec![committed.clone()];
+        let d1 = insert_payload_sync(&node, p1);
+        assert!(rt().block_on(node.execute_block(d1)));
+        rt().block_on(async {
+            let pool = node.mempool.lock().await;
+            assert!(!pool.contains(&tx_hash(&committed)), "committed tx must leave the pool");
+            assert!(pool.contains(&tx_hash(&stale)), "execute alone must not evict other txs");
+        });
+
+        let p2 = valid_child(&node, 2, d1);
+        let d2 = insert_payload_sync(&node, p2);
+        assert_eq!(rt().block_on(node.finalize(d2)).map(|r| r.0), Some(2));
+        assert!(
+            rt().block_on(async { node.mempool.lock().await.is_empty() }),
+            "post-block recheck must evict txs that fail check_tx"
+        );
+    }
+
+    #[test]
+    fn test_accept_peer_payload_bounds() {
+        let node = make_layer_node();
+        let at = |height: u64| BlockPayload {
+            height,
+            timestamp_nanos: view_timestamp_nanos(height),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: [height as u8; 32],
+            state_root: [0u8; 32],
+        };
+        rt().block_on(async {
+            assert_eq!(node.accept_peer_payload(at(1)).await, Ok(true));
+            assert_eq!(node.accept_peer_payload(at(1)).await, Ok(false), "duplicate is a no-op");
+            assert!(node.accept_peer_payload(at(0)).await.is_err(), "stale height rejected");
+            assert!(
+                node.accept_peer_payload(at(PEER_PAYLOAD_LOOKAHEAD + 1)).await.is_err(),
+                "unsolicited payload beyond lookahead rejected"
+            );
+            let far = at(PEER_PAYLOAD_LOOKAHEAD + 1);
+            node.request_payload(far.digest());
+            assert_eq!(node.accept_peer_payload(far).await, Ok(true), "solicited reply bypasses window");
+
+            let mut big = at(2);
+            big.txs = vec![bytes::Bytes::from(vec![0u8; MAX_BLOCK_TX_BYTES + 1])];
+            assert!(node.accept_peer_payload(big).await.is_err(), "oversized payload rejected");
+
+            for i in 0..MAX_PENDING_PAYLOADS {
+                let mut p = at(2);
+                p.timestamp_nanos += i as u64;
+                let _ = node.accept_peer_payload(p).await;
+            }
+            assert_eq!(node.pending_payloads.lock().await.len(), MAX_PENDING_PAYLOADS);
+            let mut extra = at(3);
+            extra.timestamp_nanos += 1;
+            assert!(node.accept_peer_payload(extra).await.is_err(), "pending cap enforced");
+        });
+    }
+
+    /// Bulk backfill: heights solicited via request_height_range must bypass
+    /// the lookahead window just like digest-solicited replies.
+    #[test]
+    fn test_height_solicited_payload_bypasses_lookahead() {
+        let node = make_layer_node();
+        let at = |height: u64| BlockPayload {
+            height,
+            timestamp_nanos: view_timestamp_nanos(height),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: [height as u8; 32],
+            state_root: [0u8; 32],
+        };
+        rt().block_on(async {
+            // Unsolicited far payload rejected — but its height is observed.
+            let far = at(PEER_PAYLOAD_LOOKAHEAD + 50);
+            assert!(node.accept_peer_payload(far.clone()).await.is_err());
+            assert_eq!(
+                node.max_seen_height.load(std::sync::atomic::Ordering::Relaxed),
+                far.height,
+                "rejected pushes still advance the fetch target"
+            );
+
+            // Solicit the height explicitly — now the same payload is admitted.
+            node.request_height_range(far.height, 1);
+            assert_eq!(
+                node.accept_peer_payload(far).await,
+                Ok(true),
+                "height-solicited reply must bypass the lookahead window"
+            );
+        });
+    }
+
+    /// backfill_tick emits HeightRange requests covering every missing height
+    /// between the executed tip and the observed peer tip.
+    #[test]
+    fn test_backfill_tick_requests_missing_range() {
+        let node = make_layer_node();
+        let (fetch_tx, mut fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+        node.set_fetch_sender(fetch_tx);
+        rt().block_on(async {
+            // Simulate learning the peer tip is 150 above our tip of 0.
+            let far = BlockPayload {
+                height: 150,
+                timestamp_nanos: view_timestamp_nanos(150),
+                proposer: vec![1u8; 32],
+                txs: vec![],
+                parent_digest: [9u8; 32],
+                state_root: [0u8; 32],
+            };
+            let _ = node.accept_peer_payload(far).await; // rejected, height noted
+            node.backfill_tick().await;
+
+            let mut covered: Vec<u64> = Vec::new();
+            while let Ok(req) = fetch_rx.try_recv() {
+                let FetchRequest::HeightRange { start, count } = req else {
+                    continue;
+                };
+                assert!(count as u64 <= BACKFILL_BATCH_SIZE);
+                covered.extend(start..start + count as u64);
+            }
+            assert_eq!(
+                covered,
+                (1..=150).collect::<Vec<u64>>(),
+                "backfill must request every missing height tip+1..=observed"
+            );
+        });
+    }
+
+    /// payload_by_height serves pending (not-yet-executed) payloads for
+    /// peers running range backfill against this node.
+    #[test]
+    fn test_payload_by_height_serves_pending() {
+        let node = make_layer_node();
+        let payload = BlockPayload {
+            height: 7,
+            timestamp_nanos: view_timestamp_nanos(7),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: [6u8; 32],
+            state_root: [0u8; 32],
+        };
+        let expected = payload.clone();
+        insert_payload_sync(&node, payload);
+        rt().block_on(async {
+            assert_eq!(node.payload_by_height(7).await, Some(expected));
+            assert_eq!(node.payload_by_height(8).await, None);
+        });
+    }
+
+    #[test]
+    fn test_validate_payload_rejects_bad_fields() {
+        let parent = [3u8; 32];
+        let root = [4u8; 32];
+        let good = BlockPayload {
+            height: 5,
+            timestamp_nanos: view_timestamp_nanos(9),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: parent,
+            state_root: root,
+        };
+        let check = |p: &BlockPayload| validate_payload(p, &parent, 5, &root, view_timestamp_nanos(9), &[1u8; 32]);
+        assert!(check(&good).is_ok());
+        let mut p = good.clone(); p.parent_digest = [0u8; 32]; assert!(check(&p).is_err());
+        let mut p = good.clone(); p.height = 6; assert!(check(&p).is_err());
+        let mut p = good.clone(); p.state_root = [0u8; 32]; assert!(check(&p).is_err());
+        let mut p = good.clone(); p.timestamp_nanos += 1; assert!(check(&p).is_err());
+        let mut p = good.clone(); p.proposer = vec![2u8; 32]; assert!(check(&p).is_err());
+        let mut p = good.clone();
+        p.txs = vec![bytes::Bytes::from(vec![0u8; MAX_BLOCK_TX_BYTES / 2 + 1]); 2];
+        assert!(check(&p).is_err(), "block byte budget must be enforced");
     }
 
     /// Build a properly signed Cosmos tx bytes (cosmos.tx.v1beta1.TxRaw encoded) using cosmrs.

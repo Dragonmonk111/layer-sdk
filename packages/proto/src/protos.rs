@@ -113,4 +113,10 @@ pub mod layer {
             include!("protos/layer.lightclient.v1.rs");
         }
     }
+
+    pub mod statesync {
+        pub mod v1 {
+            include!("protos/layer.statesync.v1.rs");
+        }
+    }
 }

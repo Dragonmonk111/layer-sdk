@@ -1413,6 +1413,158 @@ mod tests {
             .unwrap();
     }
 
+    /// Deploy hackatom and return its contract address. Shared setup for the
+    /// metering-enforcement tests below. Uses real bech32 addresses —
+    /// hackatom's instantiate runs `addr_validate` on the verifier.
+    const TEST_SENDER: &str = "juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992";
+    const TEST_VERIFIER: &str = "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx";
+    const TEST_BENEFICIARY: &str = "juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek";
+
+    fn deploy_hackatom(
+        store: &mut dyn Storage,
+        meter: &GasMeter,
+        block: &BlockInfo,
+        sm: &StateMachine,
+        sender: &AccountId,
+        verifier: &AccountId,
+    ) -> AccountId {
+        let resp = sm
+            .wasm
+            .process_msg(
+                store,
+                meter,
+                block,
+                sm,
+                sender,
+                WasmMsg::StoreCode {
+                    sender: sender.clone(),
+                    code: HACKATOM.into(),
+                },
+            )
+            .unwrap();
+        let code_id: u64 = event_value(&resp.events, "store_code", "code_id")
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        let init_msg = hackatom_msgs::InstantiateMsg {
+            verifier: verifier.to_string(),
+            beneficiary: TEST_BENEFICIARY.to_string(),
+        };
+        let resp = sm
+            .wasm
+            .process_msg(
+                store,
+                meter,
+                block,
+                sm,
+                sender,
+                WasmMsg::Instantiate {
+                    sender: sender.clone(),
+                    admin: None,
+                    code_id,
+                    msg: to_json_binary(&init_msg).unwrap(),
+                    funds: vec![],
+                    label: "Hackatom".into(),
+                },
+            )
+            .unwrap();
+        AccountId::parse_string(
+            event_value(&resp.events, "instantiate", "_contract_address").unwrap(),
+        )
+        .unwrap()
+    }
+
+    /// The metering middleware must actually bound execution: hackatom's
+    /// `CpuLoop` spins forever — under a bounded meter it MUST die with
+    /// OutOfGas (via VmError::GasDepletion → GasError), not hang the node.
+    /// Without instrumentation this test would never return.
+    #[test]
+    fn cpu_loop_killed_by_meter() {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let block = mock_env().block;
+        // 2M SDK gas — finite, well above deploy cost, below the time it
+        // would take an uninstrumented loop to look like a hang.
+        let meter = GasMeter::new(2_000_000);
+        let sm = StateMachine::new(&AppConfig::new(
+            "/tmp/slay3r/cpu_loop_killed_by_meter",
+        ));
+        let sender = AccountId::unchecked(TEST_SENDER);
+        let verifier = AccountId::unchecked(TEST_VERIFIER);
+        let contract_addr =
+            deploy_hackatom(&mut store, &meter, &block, &sm, &sender, &verifier);
+
+        let err = sm
+            .wasm
+            .process_msg(
+                &mut store,
+                &meter,
+                &block,
+                &sm,
+                &verifier,
+                WasmMsg::Execute {
+                    sender: verifier.clone(),
+                    contract_addr,
+                    msg: to_json_binary(&hackatom_msgs::ExecuteMsg::CpuLoop {}).unwrap(),
+                    funds: vec![],
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(err, PulsarError::Gas(GasError::OutOfGas { .. })),
+            "CpuLoop must die with OutOfGas, got: {err:?}"
+        );
+    }
+
+    /// Memory growth is bounded by the 32MiB per-instance cap
+    /// (DEFAULT_INSTANCE_MB): hackatom's AllocateLargeMemory must fail
+    /// gracefully — contract error or OutOfGas — never OOM the host.
+    /// 1024 wasm pages = 64MiB > cap.
+    #[test]
+    fn large_memory_allocation_fails_gracefully() {
+        let storage = MemoryStore::new();
+        let mut store = storage.writer();
+        let block = mock_env().block;
+        // generous meter — the failure must come from the memory cap or
+        // grow metering, not from a tiny gas budget
+        let meter = GasMeter::new(20_000_000);
+        let sm = StateMachine::new(&AppConfig::new(
+            "/tmp/slay3r/large_memory_allocation_fails",
+        ));
+        let sender = AccountId::unchecked(TEST_SENDER);
+        let verifier = AccountId::unchecked(TEST_VERIFIER);
+        let contract_addr =
+            deploy_hackatom(&mut store, &meter, &block, &sm, &sender, &verifier);
+
+        let err = sm
+            .wasm
+            .process_msg(
+                &mut store,
+                &meter,
+                &block,
+                &sm,
+                &verifier,
+                WasmMsg::Execute {
+                    sender: verifier.clone(),
+                    contract_addr,
+                    msg: to_json_binary(&hackatom_msgs::ExecuteMsg::AllocateLargeMemory {
+                        pages: 1024,
+                    })
+                    .unwrap(),
+                    funds: vec![],
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                PulsarError::Gas(GasError::OutOfGas { .. }) | PulsarError::Wasm(_)
+            ),
+            "64MiB alloc must fail gracefully (gas or contract error), got: {err:?}"
+        );
+    }
+
     /// This is copied from https://github.com/CosmWasm/cosmwasm/blob/v1.2.6/contracts/hackatom/src/msg.rs
     pub mod hackatom_msgs {
         use cosmwasm_schema::{cw_serde, QueryResponses};

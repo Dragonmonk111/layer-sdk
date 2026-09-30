@@ -1,0 +1,20 @@
+[package]
+name = "hybrid-sign"
+description = "Hybrid secp256k1+MAYO transaction signer for JunoClaw (Linux/Docker only: sriracha-mayo wraps MAYO-C)"
+version = "0.1.0"
+edition = "2021"
+
+# NOTE: this crate is excluded from the workspace (root Cargo.toml `exclude`) because
+# sriracha-mayo needs cmake + a C toolchain that are not available on the dev host.
+# Build inside Docker — see docker run command in docs/NEXT_SESSION.md or README below.
+
+[dependencies]
+sriracha-mayo = "0.0.4"
+k256 = { version = "0.13", features = ["ecdsa"] }
+sha2 = "0.10"
+hex = "0.4"
+prost = "0.13"
+rand_core = { version = "0.6", features = ["getrandom"] }
+rand_chacha = "0.3"
+layer-std = { path = "../../packages/std" }
+layer-proto = { path = "../../packages/proto" }

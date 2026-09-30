@@ -22,3 +22,12 @@ flate2 = { version = "1.0.26", features = ["any_impl", "miniz_oxide"], default-f
 
 [dev-dependencies]
 hex-literal = {workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+# Test-only: real secp256k1 signer for the hybrid pubkey round-trip.
+# MAYO material comes from a hardcoded sriracha-generated vector
+# (src/mayo_test_vector.rs) — sriracha needs cmake, so it cannot be a
+# dev-dep on hosts without a C toolchain.
+k256 = { version = "0.13.4", features = ["ecdsa"] }
+rand_chacha = "0.3"
+rand_core = "0.6"

@@ -34,6 +34,10 @@ pub fn fee_collector_account() -> AccountId {
 }
 
 pub const GAS_COST_SIG_VALIDATION: u64 = 1_000;
+/// Additional gas charged when the account key is hybrid secp256k1+MAYO —
+/// the PQ half dominates: in-contract MAYO-5 wasm verify measured 726k gas,
+/// native is far cheaper but still ~20x a secp256k1 verify.
+pub const GAS_COST_PQ_SIG_VALIDATION: u64 = 25_000;
 
 #[cw_serde]
 pub enum Account {
@@ -139,6 +143,9 @@ impl Auth {
         // validate the signature with that account (Cosmos-specific)
         // gas cost always charges (even in simulate) to provide more accurate gas estimation
         meter.charge(GAS_COST_SIG_VALIDATION)?;
+        if matches!(pubkey, PubKey::HybridSecp256k1Mayo { .. }) {
+            meter.charge(GAS_COST_PQ_SIG_VALIDATION)?;
+        }
         if validate_sig {
             pubkey.validate_signature(&tx.signing_info.message_hash, &tx.signing_info.signature)?;
         }
