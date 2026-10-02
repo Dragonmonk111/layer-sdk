@@ -42,10 +42,14 @@ while ((Get-Date) -lt $deadline) {
                 Start-Sleep (30 + $rng.Next(0, 60))
                 docker start "junoclaw-node-$victim" | Out-Null }
             1 { $dur = 90 + $rng.Next(0, 90)
+                $pinIP = "172.28.0.$($victim + 10)"   # compose pins node-N to 172.28.0.(10+N)
                 Add-Content $log "$start EVENT#$eventNo partition node-$victim for ${dur}s (tip=$tipBefore)"
                 docker network disconnect $net "junoclaw-node-$victim" 2>$null | Out-Null
                 Start-Sleep $dur
-                docker network connect $net "junoclaw-node-$victim" 2>$null | Out-Null }
+                # MUST restore the pinned IP — bare `docker network connect` reassigns
+                # a fresh IP, breaking the static [[peers]] addressing on all nodes
+                # (observed 2026-10-02: node-3 got 172.28.0.2, wedged silent 38min).
+                docker network connect --ip $pinIP $net "junoclaw-node-$victim" 2>$null | Out-Null }
             2 { Add-Content $log "$start EVENT#$eventNo recreate node-$victim (tip=$tipBefore)"
                 docker compose -f devnet/docker-compose.yml up -d --force-recreate "node-$victim" 2>&1 | Out-Null }
         }

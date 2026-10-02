@@ -77,6 +77,46 @@
   measured via tip delta → `soak-c9.log`. **Byzantine-proposer leg needs a
   patched image — no fault-injection flag exists yet; build one for full
   C9 credit.**
+- **C9 FINDING + FIX (2026-10-02 ~20:10Z):** partition leg (EVENT#3,
+  node-3, 91s) wedged the node silently for ~40min — NOT a node bug:
+  `docker network connect` without `--ip` reassigned node-3 to
+  `172.28.0.2` while compose + all `[[peers]]` pin it to `172.28.0.13`.
+  Peers dialed a stale address; node showed idle CPU, zero consensus
+  activity, and even post-restart its outbound never linked. Fix:
+  `docker network connect --ip 172.28.0.$((victim+10))` in the partition
+  leg (soak-c9.ps1 patched). Recovery: restart + IP re-pin → relays
+  resumed instantly; gap backfill + finalize-missing-digest fetch then
+  resolved the ~9.8k-block hole (missing digests arrive ~ms after
+  `finalized payload unavailable` errors). Residual question: why
+  node-3's OUTBOUND dials to peers (0.10–0.12, unchanged IPs) did not
+  restore connectivity in ~25min post-restart before the IP re-pin —
+  commonware lookup tracker may gate dialing on the registered listen
+  addr; worth a unit-level look but not consensus-critical.
+- **C9 FINDING #2 — payload-fetch stall on large gap (chain bug, real):**
+  after the IP re-pin, node-3 fell ~10k blocks behind and could NOT
+  recover via backfill: ~5min of scattered solicited inserts
+  (h83–84k), then ZERO payload pushes received while consensus traffic
+  (proposal verify/rejects at current views) kept flowing — so the
+  consensus P2P channel stayed up but the payload-relay/fetch channel
+  stalled. Solicited-mark expiry alone doesn't explain it: digest
+  requests carry permanent marks (`requested` set, no TTL under 65k)
+  yet `finalize`'s needed payload never arrived, i.e. replies stopped
+  entirely — consistent with peers dropping node-3 from their relay
+  sender set (connection flap during the wrong-IP window never
+  re-linked, or per-peer rate limiting after the backfill request
+  flood: backfill_tick re-sends ALL missing ranges every 250ms —
+  8 range reqs/tick = ~32 req/s/peer, each triggering up to 64 pushes).
+  FIX NEEDED (not yet implemented): bound outstanding range requests
+  (skip heights with fresh in-flight marks instead of re-sending every
+  tick), add per-peer fetch rate limiting/backoff, cap solicited
+  inserts to a pending ceiling, and confirm whether commonware p2p
+  rate-limits then blocks a flooding peer. Recovered node-3 via full
+  state-sync (wipe volume → certified snapshot → live at tip in
+  seconds, back to peers=3) — ALSO proof that state-sync, not
+  backfill, is the right recovery for big gaps; consider gating:
+  gap > N heights → offer state-sync path. Debug-level visibility of
+  dropped pushes (`Err(reason)` arm in the relay) is needed to pin the
+  exact stall mechanism — enable trace logging in a future repro.
 
 ## Landed this session (2026-10-01) — LIVE-VERIFIED on devnet
 
