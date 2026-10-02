@@ -1,6 +1,6 @@
 # Next Session — Plan (updated 2026-10-02, UTC+1)
 
-## OPEN INCIDENT — node-3 state divergence (top priority, blocks G1)
+## RESOLVED INCIDENT — node-3 state divergence (fix live-verified 2026-10-02)
 
 - **2026-10-02 ~05:50 UTC:** `junoclaw-node-3` diverged at **h142868** on an
   **empty block** (`tx_count=0`). Network root `5765e54f…` vs node-3 local
@@ -41,12 +41,37 @@
   or a one-shot upgrade migration that reads `wal/cache/modules` on a
   canonical node and injects the blobs via a deterministic mechanism
   (e.g. gov StoreCode re-tx). Soak/monitor must restart on the fixed image.
+- **LIVE VERIFICATION (2026-10-02, fresh genesis on fixed image
+  `698ac45a`):** StoreCode `cw20_base.wasm` committed h2880
+  (tx `30D3EFB9…`, code_id=2); node-3 data wiped → state-sync adopted
+  h6332 (multi-peer quorum anchor, cold VM cache); two bad-JSON
+  instantiates at h24759/h25241 errored IDENTICALLY on all 4 nodes
+  (deterministic contract error — hydration already worked); successful
+  instantiate h25639 (tx `7DA5616C…`, code=0, gas_used=4,878,992,
+  contract `juno18hgxtqvzc8s7auxtcup00umr8sweaf3py87qx8d7vxfmx3w92ay0tyq0dks7w`).
+  Node-3 has finalized ~32,600+ post-instantiate blocks with ZERO
+  `state_root mismatch` halts — the fail-stop check (node.rs:560,
+  `payload.state_root != local_root` → halt) proves node-3's covered
+  state equals the certified root at EVERY height. **FIX VERIFIED.**
+- **IMPORTANT WATCH-OUT — `app_hash` ≠ `state_root`:** the `app_hash=`
+  field in finalize logs is `storage.app_hash()` = `FastHasher`, a
+  rolling WRITE-HISTORY hash (seeded from `APP_HASH_KEY`, folds each
+  commit's set/remove ops). A state-synced node's history is
+  `[zeros → bulk import commit → new commits]` vs donors' incremental
+  commits → its `app_hash` diverges PERMANENTLY from the first post-sync
+  block (observed h6333) even with identical consensus state. Consensus
+  binds `BlockPayload.state_root` (Merkle over non-`_` KV) — compare
+  `digest=` (sha256 of certified payload, binds state_root) or watch
+  for fail-stop halts, NOT `app_hash=`. `monitor-s4.ps1` updated
+  accordingly (digest comparison + halt-line scan).
 
 ## Ops running (detached PS processes)
 
 - `monitor-s4.ps1` (26h) — polls all 4 nodes' logs every 30s; alerts on
-  app_hash mismatch, lag>10, stall>90s → `monitor-s4.log`. **Caught the
-  node-3 divergence on its first poll.**
+  certified-payload **digest** mismatch (binds `state_root` — do NOT use
+  `app_hash`, it is the FastHasher write-history hash and diverges
+  permanently on state-synced nodes), `state_root mismatch` fail-stop
+  halt lines, lag>10, stall>90s → `monitor-s4.log`.
 - `soak-c9.ps1` (24h) — chaos events every ~60–120min: kill+restart /
   90–180s network partition / compose recreate, rotating victim, recovery
   measured via tip delta → `soak-c9.log`. **Byzantine-proposer leg needs a

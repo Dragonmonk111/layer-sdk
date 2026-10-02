@@ -1,6 +1,12 @@
-# S4 monitoring: app_hash agreement + liveness across all 4 validators.
+# S4 monitoring: certified-payload digest agreement + liveness across all 4 validators.
 # Polls docker logs every $IntervalSec, writes monitor-s4.log.
-# ALERT lines: app_hash mismatch at same height, height lag > $LagMax, stall > $StallSec.
+# ALERT lines: digest mismatch at same height, height lag > $LagMax, stall > $StallSec,
+# and any "state_root mismatch" fail-stop halt line.
+# NOTE: do NOT compare app_hash here — it is the FastHasher rolling WRITE-HISTORY hash,
+# not a state hash; a state-synced node diverges on it permanently even with identical
+# consensus state. digest is sha256(certified BlockPayload) and binds state_root, so
+# same-height digest agreement == covered-state agreement. A locally-diverged node
+# fail-stops (node.rs finalize halt) -> shows up as lag + halt-line alert.
 param(
     [int]$IntervalSec = 30,
     [int]$LagMax = 10,
@@ -20,12 +26,17 @@ function Get-Latest($node) {
         Where-Object { $_ -match 'certificate stored' } | Select-Object -Last 1
     if (-not $line) { return $null }
     $clean = "$line" -replace "$esc\[[0-9;]*m", ''
-    $h = $null; $ah = $null
+    $h = $null; $dg = $null
     foreach ($t in ($clean -split '\s+')) {
-        if ($t.StartsWith('height='))  { $h  = $t.Substring(7) }
-        if ($t.StartsWith('app_hash=')) { $ah = $t.Substring(9) }
+        if ($t.StartsWith('height=')) { $h  = $t.Substring(7) }
+        if ($t.StartsWith('digest=')) { $dg = $t.Substring(7) }
     }
-    if ($h -and $ah) { @{ height = [int64]$h; apphash = $ah } } else { $null }
+    if ($h -and $dg) { @{ height = [int64]$h; digest = $dg } } else { $null }
+}
+
+function Get-Halt($node) {
+    docker logs $node --tail 200 2>&1 |
+        Where-Object { $_ -match 'state_root mismatch' } | Select-Object -First 1
 }
 
 Add-Content $log "=== S4 monitor start $(Get-Date -Format u) ==="
@@ -50,7 +61,16 @@ while ((Get-Date) -lt $deadline) {
         Add-Content $log "$now ALERT stall: no finalized height > ${StallSec}s (tip=$lastMaxHeight)"
     }
 
-    # Per-node lag + app_hash agreement vs majority
+    # Fail-stop halt check: any node that logged a state_root mismatch is diverged
+    foreach ($n in $nodes) {
+        $halt = Get-Halt $n
+        if ($halt) {
+            $alerts++
+            Add-Content $log "$now ALERT DIVERGENCE HALT on $n : $halt"
+        }
+    }
+
+    # Per-node lag + digest agreement vs majority
     $line = "$now tip=$maxH"
     foreach ($n in $nodes) {
         $s = $states[$n]
@@ -62,19 +82,17 @@ while ((Get-Date) -lt $deadline) {
         }
         $line += " | $n h=$($s.height)"
     }
-    # app_hash check at min common height
-    $minH = ($alive | ForEach-Object { $_.Value.height } | Measure-Object -Min).Minimum
-    # compare latest app_hash of nodes sitting at the SAME height
+    # digest check: nodes at the SAME height must report the SAME certified payload
     $byH = @{}
     foreach ($kv in $alive) {
         $k = "$($kv.Value.height)"
         if (-not $byH[$k]) { $byH[$k] = @{} }
-        $byH[$k][$kv.Value.apphash] = $true
+        $byH[$k][$kv.Value.digest] = $true
     }
     foreach ($h in $byH.Keys) {
         if ($byH[$h].Count -gt 1) {
             $alerts++
-            Add-Content $log "$now ALERT APP_HASH MISMATCH at h$h : $($byH[$h].Keys -join ' vs ')"
+            Add-Content $log "$now ALERT DIGEST MISMATCH at h$h : $($byH[$h].Keys -join ' vs ')"
         }
     }
     Add-Content $log $line
