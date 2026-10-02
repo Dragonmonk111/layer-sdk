@@ -67,6 +67,9 @@
 
 ## Ops running (detached PS processes)
 
+- `docs/RUNBOOK.md` — incident response: liveness check, lag tiers
+  (backfill vs state-sync), the silent-wedge IP re-pin procedure,
+  app_hash vs state_root divergence semantics, soak ops rules.
 - `monitor-s4.ps1` (26h) — polls all 4 nodes' logs every 30s; alerts on
   certified-payload **digest** mismatch (binds `state_root` — do NOT use
   `app_hash`, it is the FastHasher write-history hash and diverges
@@ -74,9 +77,14 @@
   halt lines, lag>10, stall>90s → `monitor-s4.log`.
 - `soak-c9.ps1` (24h) — chaos events every ~60–120min: kill+restart /
   90–180s network partition / compose recreate, rotating victim, recovery
-  measured via tip delta → `soak-c9.log`. **Byzantine-proposer leg needs a
-  patched image — no fault-injection flag exists yet; build one for full
-  C9 credit.**
+  measured via tip delta → `soak-c9.log`. **Byzantine-proposer leg now
+  implemented:** `fault_inject = "bad_state_root"` (or `"bad_parent"`) in a
+  node's toml makes propose() emit a corrupted payload — honest verify()
+  rejects, view times out, honest leaders keep the chain live. Soak event
+  kind 3 injects the flag into the victim's config, restarts, observes,
+  restores. Same DEPLOY GATE as the backfill fix: image rebuild waits for
+  soak end (an early rebuild would silently mix versions on the next
+  recreate event).
 - **C9 FINDING + FIX (2026-10-02 ~20:10Z):** partition leg (EVENT#3,
   node-3, 91s) wedged the node silently for ~40min — NOT a node bug:
   `docker network connect` without `--ip` reassigned node-3 to
