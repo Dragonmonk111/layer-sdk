@@ -106,11 +106,15 @@
   re-linked, or per-peer rate limiting after the backfill request
   flood: backfill_tick re-sends ALL missing ranges every 250ms —
   8 range reqs/tick = ~32 req/s/peer, each triggering up to 64 pushes).
-  FIX NEEDED (not yet implemented): bound outstanding range requests
-  (skip heights with fresh in-flight marks instead of re-sending every
-  tick), add per-peer fetch rate limiting/backoff, cap solicited
-  inserts to a pending ceiling, and confirm whether commonware p2p
-  rate-limits then blocks a flooding peer. Recovered node-3 via full
+  **FIXED (commit pending, tested 67/67 slay3rd):** `node.rs` now skips
+  heights with fresh in-flight marks (`HEIGHT_REASK_AFTER`=2s re-ask),
+  keeps solicited marks valid for `SOLICITED_HEIGHT_TTL`=30s so delayed
+  replies still land, and caps solicited inserts at
+  `MAX_PENDING_PAYLOADS_TOTAL`=16384. Regression tests:
+  `test_backfill_tick_does_not_reflood_inflight_heights`,
+  `test_backfill_tick_reasks_after_reask_window`. DEPLOY GATE: do NOT
+  rebuild the docker image until the soak ends — a --force-recreate
+  event mid-soak would boot a mixed-version node. Recovered node-3 via full
   state-sync (wipe volume → certified snapshot → live at tip in
   seconds, back to peers=3) — ALSO proof that state-sync, not
   backfill, is the right recovery for big gaps; consider gating:

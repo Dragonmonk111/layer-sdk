@@ -72,6 +72,20 @@ pub const BACKFILL_BATCH_SIZE: u64 = 64;
 /// How far above the executed tip one backfill tick may reach. Larger spans
 /// amortize the digest-walk latency over many parallel height fetches.
 const BACKFILL_MAX_SPAN: u64 = 512;
+/// A missing height is re-requested only after its previous request is this
+/// old — bounds per-peer fetch traffic on large gaps. Re-sending every
+/// missing range every tick flooded the reply path in the 2026-10-02 C9
+/// soak (node wedged ~10k blocks behind, zero inserts for minutes).
+const HEIGHT_REASK_AFTER: Duration = Duration::from_secs(2);
+/// A requested height stays "solicited" this long for reply acceptance —
+/// replies inside the window bypass lookahead/pending bounds. Deliberately
+/// far above HEIGHT_REASK_AFTER: a reply delayed by peer queueing must not
+/// be dropped as unsolicited (that drop then re-request loop is the wedge).
+const SOLICITED_HEIGHT_TTL: Duration = Duration::from_secs(30);
+/// Absolute pending ceiling INCLUDING solicited replies. verify()/certify()
+/// solicit far-future proposals while the executed tip lags, so solicited
+/// inserts still need a bound (16k × ~128B payloads ≈ 2 MiB worst case).
+const MAX_PENDING_PAYLOADS_TOTAL: usize = 16_384;
 
 const GENESIS_TIME_NS: u64 = 1_673_194_026_078_305_426;
 
@@ -314,33 +328,41 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             held
         };
 
-        // Expire stale height requests so unanswered ones are re-asked.
+        // Expire marks only after the solicited TTL; heights asked recently
+        // are in-flight and are NOT re-requested this tick. (Was: marks died
+        // at FETCH_RETRY and every missing range re-sent every tick — the
+        // flood that wedged recovery under a ~10k-block gap.)
+        let mut runs: Vec<(u64, u64)> = Vec::new();
         {
             let mut req = self
                 .requested_heights
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            req.retain(|_, t| t.elapsed() < FETCH_RETRY);
+            req.retain(|_, t| t.elapsed() < SOLICITED_HEIGHT_TTL);
             if req.len() >= MAX_REQUESTED_HEIGHTS {
                 req.clear();
             }
-        }
-
-        // Send contiguous range requests for missing heights.
-        let mut run_start: Option<u64> = None;
-        for h in (tip + 1)..=target {
-            let missing = !held.contains(&h);
-            match (missing, run_start) {
-                (true, None) => run_start = Some(h),
-                (false, Some(start)) => {
-                    self.request_height_range(start, h - start);
-                    run_start = None;
+            let mut run_start: Option<u64> = None;
+            for h in (tip + 1)..=target {
+                let in_flight = req
+                    .get(&h)
+                    .map_or(false, |t| t.elapsed() < HEIGHT_REASK_AFTER);
+                let need = !held.contains(&h) && !in_flight;
+                match (need, run_start) {
+                    (true, None) => run_start = Some(h),
+                    (false, Some(start)) => {
+                        runs.push((start, h - start));
+                        run_start = None;
+                    }
+                    _ => {}
                 }
-                _ => {}
+            }
+            if let Some(start) = run_start {
+                runs.push((start, target - start + 1));
             }
         }
-        if let Some(start) = run_start {
-            self.request_height_range(start, target - start + 1);
+        for (start, count) in runs {
+            self.request_height_range(start, count);
         }
     }
 
@@ -434,6 +456,8 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             if pending.len() >= MAX_PENDING_PAYLOADS {
                 return Err("pending payload capacity reached");
             }
+        } else if pending.len() >= MAX_PENDING_PAYLOADS_TOTAL {
+            return Err("pending payload capacity reached (solicited)");
         }
         pending.insert(digest, payload);
         Ok(true)
@@ -1497,6 +1521,77 @@ mod tests {
                 (1..=150).collect::<Vec<u64>>(),
                 "backfill must request every missing height tip+1..=observed"
             );
+        });
+    }
+
+    /// Regression for the 2026-10-02 C9 soak wedge: a missing height that
+    /// was just requested is in-flight — the next tick must NOT re-send its
+    /// range. (Re-sending every missing range every 250ms flooded the fetch
+    /// path so hard that replies arrived after the solicited mark expired.)
+    #[test]
+    fn test_backfill_tick_does_not_reflood_inflight_heights() {
+        let node = make_layer_node();
+        let (fetch_tx, mut fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+        node.set_fetch_sender(fetch_tx);
+        rt().block_on(async {
+            let far = BlockPayload {
+                height: 100,
+                timestamp_nanos: view_timestamp_nanos(100),
+                proposer: vec![1u8; 32],
+                txs: vec![],
+                parent_digest: [9u8; 32],
+                state_root: [0u8; 32],
+            };
+            let _ = node.accept_peer_payload(far).await; // rejected, height noted
+
+            node.backfill_tick().await;
+            let mut first = 0usize;
+            while fetch_rx.try_recv().is_ok() {
+                first += 1;
+            }
+            assert!(first > 0, "first tick should emit range requests");
+
+            node.backfill_tick().await;
+            assert!(
+                fetch_rx.try_recv().is_err(),
+                "in-flight heights must not be re-requested on the next tick"
+            );
+        });
+    }
+
+    /// After an in-flight mark expires (HEIGHT_REASK_AFTER), the height must
+    /// be re-requested — lost replies still recover.
+    #[test]
+    fn test_backfill_tick_reasks_after_reask_window() {
+        let node = make_layer_node();
+        let (fetch_tx, mut fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+        node.set_fetch_sender(fetch_tx);
+        rt().block_on(async {
+            let far = BlockPayload {
+                height: 10,
+                timestamp_nanos: view_timestamp_nanos(10),
+                proposer: vec![1u8; 32],
+                txs: vec![],
+                parent_digest: [9u8; 32],
+                state_root: [0u8; 32],
+            };
+            let _ = node.accept_peer_payload(far).await;
+            node.backfill_tick().await;
+            while fetch_rx.try_recv().is_ok() {}
+
+            // Age every mark past HEIGHT_REASK_AFTER, then tick again.
+            {
+                let mut req = node.requested_heights.lock().unwrap();
+                for t in req.values_mut() {
+                    *t = Instant::now() - HEIGHT_REASK_AFTER;
+                }
+            }
+            node.backfill_tick().await;
+            let mut reasked = 0usize;
+            while let Ok(FetchRequest::HeightRange { .. }) = fetch_rx.try_recv() {
+                reasked += 1;
+            }
+            assert!(reasked > 0, "stale in-flight marks must be re-requested");
         });
     }
 
