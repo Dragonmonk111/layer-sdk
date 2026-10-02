@@ -196,6 +196,12 @@ const BLOCK_TIMESTAMP_KEY_PREFIX: &str = "_ts/";
 /// Same "_" app_hash-exclusion convention.
 const BLOCK_PAYLOAD_KEY_PREFIX: &str = "_payload/";
 
+/// Storage key prefix for the persisted tx-result index (Q2). Values are
+/// prost-encoded `cosmos.base.abci.v1beta1.TxResponse` keyed by the
+/// upper-case hex txhash. Same "_" app_hash-exclusion convention — this is
+/// node-local indexing state, never part of consensus.
+const TX_RESPONSE_KEY_PREFIX: &str = "_txres/";
+
 /// Storage item holding the latest committed state root — the Merkle root
 /// over all non-`'_'`-prefixed KV entries, recomputed at the end of every
 /// `finalize_block` (and at `init` for the genesis state). The next block's
@@ -846,6 +852,29 @@ impl<T: PersistentStorage + 'static> App<T> {
         let key = format!("{}{}", BLOCK_PAYLOAD_KEY_PREFIX, height);
         let payload_item: Item<Vec<u8>> = Item::new(&key);
         let result = payload_item.may_load(&reader, &meter).ok().flatten();
+        reader.abort();
+        result
+    }
+
+    /// Persist a prost-encoded `TxResponse` for `txhash` (Q2 — durable
+    /// tx index). `txhash` is normalized (upper-case, `0x` stripped) by the
+    /// caller-side `tx_index::normalize` convention.
+    pub fn set_tx_response(&mut self, txhash: &str, encoded: &[u8]) -> PulsarResult<()> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let key = format!("{}{}", TX_RESPONSE_KEY_PREFIX, txhash);
+        Item::<Vec<u8>>::new(&key).save(&mut writer, &meter, &encoded.to_vec())?;
+        writer.commit(&meter)?;
+        Ok(())
+    }
+
+    /// Retrieve the prost-encoded `TxResponse` for `txhash`, if indexed.
+    pub fn get_tx_response(&self, txhash: &str) -> Option<Vec<u8>> {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let key = format!("{}{}", TX_RESPONSE_KEY_PREFIX, txhash);
+        let item: Item<Vec<u8>> = Item::new(&key);
+        let result = item.may_load(&reader, &meter).ok().flatten();
         reader.abort();
         result
     }
@@ -1555,6 +1584,99 @@ mod tests {
         }
     }
 
+    /// timeout_height: a tx is valid through the given height and expired
+    /// strictly above it — enforced identically in check_tx and deliver.
+    #[test]
+    fn timeout_height_is_enforced() {
+        let sender = must_id("juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx");
+        let recipient = must_id("juno1y5hl7x8hxl72dc9gu920eaz6l7vhl0luag99fr");
+        let denom = "ujclaw";
+
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: sender.to_string(),
+                balance: coins(1_000_000, denom),
+            }],
+            wasm: WasmParams {
+                gov_account: sender.to_string(),
+            },
+        };
+        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3r/timeout_height"));
+        let mut app = App::new(MemoryStore::default(), logic);
+        app.init(mock_init(&genesis)).unwrap();
+
+        let block = Block {
+            txs: vec![],
+            height: 1,
+            time: Timestamp::from_seconds(1690406618),
+            proposer_address: vec![1u8; 32],
+            last_votes: vec![],
+            certificate: None,
+        };
+        app.finalize_block(block).unwrap();
+        // committed height is now 1
+
+        let mk_tx = |timeout_height: Option<u64>| {
+            Tx::Signed(SignedTx {
+                msgs: vec![Msg::Bank(BankMsg::Send {
+                    sender: sender.clone(),
+                    recipient: recipient.clone(),
+                    amount: coins(1, denom),
+                })],
+                signer: sender.clone(),
+                signing_info: SigningInfo {
+                    message_hash: Binary::from(vec![0u8; 32]),
+                    sequence: 0,
+                    pubkey: Some(PubKey::Secp256k1(Binary::from(
+                        hex!("034f04181eeba35391b858633a765c4a0c189697b40d216354d50890d350c70290")
+                            .as_slice(),
+                    ))),
+                    signature: Binary::from(b""),
+                },
+                fee: FeeInfo {
+                    fee: None,
+                    gas_limit: 0,
+                },
+                timeout_height,
+                raw_tx: Bytes::from("x"),
+            })
+        };
+
+        // expired in check_tx: committed height 1 > timeout_height 0
+        let err = app.check_tx(mk_tx(Some(0))).result.unwrap_err();
+        assert!(
+            err.to_string().contains("expired"),
+            "expected TxExpired, got {err}"
+        );
+
+        // boundary: timeout_height == committed height is still valid — the
+        // tx must pass the expiry check and fail later (empty signature)
+        let err = app.check_tx(mk_tx(Some(1))).result.unwrap_err();
+        assert!(
+            !err.to_string().contains("expired"),
+            "tx at timeout_height boundary must not expire, got {err}"
+        );
+
+        // deliver path: the same boundary tx expires one height later
+        let block = Block {
+            txs: vec![mk_tx(Some(1))],
+            height: 2,
+            time: Timestamp::from_seconds(1690406620),
+            proposer_address: vec![1u8; 32],
+            last_votes: vec![],
+            certificate: None,
+        };
+        let res = app.finalize_block(block).unwrap();
+        assert_eq!(res.tx_results.len(), 1);
+        let tx_res = &res.tx_results[0];
+        assert!(!tx_res.is_ok(), "expired tx must fail in deliver");
+        let err = tx_res.result.as_ref().unwrap_err().to_string();
+        assert!(
+            err.contains("expired"),
+            "deliver must surface TxExpired, got {err}"
+        );
+    }
+
     #[test]
     fn test_set_and_get_block_certificate() {
         let storage = MemoryStore::default();
@@ -1593,6 +1715,26 @@ mod tests {
 
         // Block 2 has no certificate (no Reporter fired for it yet)
         assert_eq!(app.get_block_certificate(2), None);
+    }
+
+    #[test]
+    fn test_set_and_get_tx_response() {
+        let storage = MemoryStore::default();
+        let logic = StateMachine::new(&AppConfig::new("/tmp/slay3r/txres_test"));
+        let mut app = App::new(storage, logic);
+
+        // Miss before any write.
+        assert_eq!(app.get_tx_response("ABCD"), None);
+
+        let encoded = vec![0x08, 0x07, 0x12, 0x04, 0xAA, 0xBB, 0xCC, 0xDD];
+        app.set_tx_response("ABCDEF", &encoded).unwrap();
+        assert_eq!(app.get_tx_response("ABCDEF"), Some(encoded));
+
+        // Independent hashes miss; overwriting the same key updates in place.
+        assert_eq!(app.get_tx_response("1234"), None);
+        let updated = vec![0x01, 0x02];
+        app.set_tx_response("ABCDEF", &updated).unwrap();
+        assert_eq!(app.get_tx_response("ABCDEF"), Some(updated));
     }
 
     /// State-sync export: chunk round-trip decodes every record, the

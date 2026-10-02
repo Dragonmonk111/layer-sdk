@@ -5,7 +5,9 @@
 //! hold a different window of history without affecting consensus.
 //!
 //! Bounded FIFO: once `capacity` entries are held, the oldest is evicted.
-//! In-memory only — results are lost on restart (persistence is a follow-up).
+//! The in-memory map is a hot cache — `execute_block` also writes every
+//! result through to durable storage under `_txres/`, and `get_tx` falls
+//! back to it on a cache miss (Q2).
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
@@ -70,7 +72,9 @@ impl TxIndex {
     }
 }
 
-fn normalize(hash: &str) -> String {
+/// Normalize a txhash for indexing: trim, strip an optional `0x` prefix,
+/// upper-case. Used for both the in-memory cache and the `_txres/` store keys.
+pub fn normalize(hash: &str) -> String {
     let h = hash.trim();
     let h = h.strip_prefix("0x").or_else(|| h.strip_prefix("0X")).unwrap_or(h);
     h.to_ascii_uppercase()

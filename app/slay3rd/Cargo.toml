@@ -11,10 +11,12 @@ path = "src/main.rs"
 [dependencies]
 layer-app = { workspace = true }
 layer-std = { workspace = true }
+junoclaw-mayo-verify = { workspace = true }
 layer-storage = { workspace = true }
 layer-cosmos = { workspace = true }
 layer-proto = { workspace = true, features = ["server", "client"] }
 tonic = { workspace = true }
+prost = { workspace = true }
 tonic-reflection = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
@@ -48,10 +50,19 @@ hex = { workspace = true }
 toml = { workspace = true }
 rand = "0.8"
 rand_chacha = "0.3"
+# CryptoRngCore bound on commonware certificate::Scheme methods.
+rand_core = "0.6.4"
 cosmwasm-std = { workspace = true }
 # commonware-cryptography → aws-lc-rs needs NASM on Windows; prebuilt-nasm
 # ships precompiled asm objects so no assembler install is required.
 aws-lc-rs = { version = "1", features = ["prebuilt-nasm"] }
+
+# MAYO signing: sriracha-mayo wraps the MAYO-C reference implementation and
+# needs a C toolchain; it only builds on Unix. Verification stays pure-Rust
+# (junoclaw-mayo-verify) on every platform, so non-Unix hosts run the hybrid
+# scheme as verifier-only nodes.
+[target.'cfg(unix)'.dependencies]
+sriracha-mayo = "0.0.4"
 
 [dev-dependencies]
 cosmwasm-std = { workspace = true }

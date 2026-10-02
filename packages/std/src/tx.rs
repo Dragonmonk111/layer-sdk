@@ -154,6 +154,12 @@ pub enum TxError {
     #[error("Cannot execute an external transaction from an internal account")]
     InternalAcccount,
 
+    #[error("Smart accounts cannot sign transactions directly")]
+    SmartAccountSigner,
+
+    #[error("Tx expired: timeout_height {timeout_height} passed at height {height}")]
+    TxExpired { timeout_height: u64, height: u64 },
+
     /// FIXME: either ensure all callers of this function produce determinstic strings,
     /// Or remove all info
     #[error("Parse: {0}")]

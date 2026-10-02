@@ -1,0 +1,21 @@
+# Rogue 1-validator chain — byzantine-donor test harness.
+# Runs its own consensus on the devnet network so its gRPC serves
+# certified BlockPayload bytes that differ from the honest chain at
+# every height. A joiner pointed at this peer + an honest peer with
+# min_anchor_agree=2 must hit "anchor disagreement" and refuse.
+validator_index = 0
+chain_id = "junoclaw-rogue"
+p2p_listen = "0.0.0.0:7001"
+grpc_listen = "0.0.0.0:9090"
+bls_key_path = "/keys/validator-0/keys.json"
+identity_key_path = "/keys/validator-0/keys.json"
+data_dir = "/data"
+genesis_path = ""
+mempool_max_pending = 10000
+leader_timeout_ms = 1000
+certification_timeout_ms = 2000
+hybrid_consensus = true
+
+# No [state_sync] — initializes from genesis.
+# Empty peers — single-validator chain, no P2P partners.
+peers = []

@@ -94,6 +94,26 @@ pub struct ValidatorKeys {
     /// Populated by `finalize`; absent in legacy devnet key files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub share_hex: Option<String>,
+
+    /// Hybrid validator identity (docs/PQ_PROTOCOL_AUTH.md §3) — only
+    /// populated on Unix builds where sriracha-mayo keygen is available.
+    /// `mayo_variant` is always "mayo2" (fixed-size signatures).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mayo_variant: Option<String>,
+
+    /// Hex-encoded 24-byte MAYO2 secret seed (`SecretKey::from_seed` input).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mayo_private_hex: Option<String>,
+
+    /// Hex-encoded MAYO2 compact public key (4912 bytes) for this validator.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mayo_public_hex: Option<String>,
+
+    /// MAYO2 public keys of ALL validators, in validator_index order — the
+    /// same convention as `validator_public_keys`. The node sorts this table
+    /// alongside the Ed25519 set at load time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validator_mayo_public_keys: Option<Vec<String>>,
 }
 
 fn main() {
@@ -195,6 +215,37 @@ fn legacy_main(args: &[String]) {
     let threshold_required = sharing.required::<N3f1>();
     let threshold_total = sharing.total().get();
 
+    // Hybrid validator identity (PQ_PROTOCOL_AUTH.md §3): per-validator
+    // MAYO2 seed + compact public key. sriracha-mayo's signer is C-backed and
+    // Unix-only, so on other platforms the MAYO fields are omitted — a node
+    // running with `hybrid_consensus = true` will refuse to boot without them.
+    #[cfg(unix)]
+    let mayo_pairs: Vec<(Vec<u8>, Vec<u8>)> = (0..num_validators)
+        .map(|_| {
+            use rand::RngCore;
+            let mut seed = vec![0u8; 24]; // MAYO SK_SEED_BYTES
+            rng.fill_bytes(&mut seed);
+            let (pk, _sk) =
+                sriracha_mayo::SecretKey::<sriracha_mayo::Mayo2>::from_seed(&seed)
+                    .expect("MAYO2 keygen from 24-byte seed");
+            let pk_bytes: &[u8] = pk.as_ref();
+            (seed, pk_bytes.to_vec())
+        })
+        .collect();
+    #[cfg(not(unix))]
+    let mayo_pairs: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+
+    let validator_mayo_public_keys: Option<Vec<String>> = if mayo_pairs.is_empty() {
+        None
+    } else {
+        Some(
+            mayo_pairs
+                .iter()
+                .map(|(_, pk)| hex::encode(pk))
+                .collect(),
+        )
+    };
+
     println!(
         "BLS DKG complete: {threshold_required}/{threshold_total} threshold (N3f1)"
     );
@@ -241,6 +292,14 @@ fn legacy_main(args: &[String]) {
             validator_public_keys: validator_public_keys.clone(),
             sharing_hex: None,
             share_hex: None,
+            mayo_variant: mayo_pairs.get(validator_index).map(|_| "mayo2".to_string()),
+            mayo_private_hex: mayo_pairs
+                .get(validator_index)
+                .map(|(seed, _)| hex::encode(seed)),
+            mayo_public_hex: mayo_pairs
+                .get(validator_index)
+                .map(|(_, pk)| hex::encode(pk)),
+            validator_mayo_public_keys: validator_mayo_public_keys.clone(),
         };
 
         let json = serde_json::to_string_pretty(&keys)
@@ -265,6 +324,12 @@ fn legacy_main(args: &[String]) {
     println!("  - Ed25519 identity key pair (ed25519_private_hex, ed25519_public_hex)");
     println!("  - Ordered validator set (validator_public_keys)");
     println!("\nSet bls_key_path in your node config to point to the appropriate keys.json.");
+    #[cfg(unix)]
+    println!("MAYO2 identity material included — usable with hybrid_consensus = true.");
+    #[cfg(not(unix))]
+    println!("NOTE: MAYO keygen is Unix-only (sriracha-mayo). keys.json lacks hybrid");
+    #[cfg(not(unix))]
+    println!("      identity fields — regenerate on Unix/WSL to use hybrid_consensus.");
     println!("WARNING: These keys were generated with a seeded RNG for reproducibility.");
     println!("         Do NOT use this tool for production deployments — use OsRng.");
 }
@@ -298,8 +363,16 @@ pub struct ShareRequest {
     pub p2p_address: String,
     /// Hex-encoded Ed25519 identity public key.
     pub ed25519_public_hex: String,
-    /// Hex-encoded Ed25519 signature over the pubkey bytes
-    /// (namespace "junoclaw-dkg-v1"). Proves possession of the private key.
+    /// Hex-encoded MAYO2 compact public key (4912 B) — hybrid validator
+    /// identity (PQ_PROTOCOL_AUTH.md §3). Present when the operator ran
+    /// keygen-share on a Unix host with sriracha-mayo. All-or-none: the
+    /// coordinator rejects a mixed set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mayo_public_hex: Option<String>,
+    /// Hex-encoded Ed25519 signature binding this identity — over
+    /// `ed25519_pk` alone (classical) or `ed25519_pk || mayo_pk` when
+    /// `mayo_public_hex` is present (namespace "junoclaw-dkg-v1").
+    /// Proves possession of the private key(s).
     pub attestation_hex: String,
 }
 
@@ -324,6 +397,11 @@ pub struct BlsSharePackage {
     pub threshold_total: u32,
     /// Ordered validator set (sorted Ed25519 pubkeys, hex).
     pub validator_public_keys: Vec<String>,
+    /// MAYO2 compact pubkeys in the same sorted order as
+    /// `validator_public_keys` — the hybrid identity table the node loads
+    /// under `hybrid_consensus`. None when the ceremony ran classical-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validator_mayo_public_keys: Option<Vec<String>>,
 }
 
 /// Public ceremony output — the assembled validator set (no secrets).
@@ -343,6 +421,8 @@ pub struct SharedValidator {
     pub moniker: String,
     pub p2p_address: String,
     pub ed25519_public_hex: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mayo_public_hex: Option<String>,
 }
 
 fn get_arg<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
@@ -378,8 +458,34 @@ fn cmd_keygen_share(args: &[String]) {
     let ed25519_public_hex = hex::encode(ed_pub_bytes.as_ref());
     let ed25519_private_hex = hex::encode(ed_key.encode().as_ref());
 
-    // Attestation: sign our own pubkey — proves possession of the private key.
-    let attestation = ed_key.sign(DKG_ATTEST_NAMESPACE, ed_pub_bytes.as_ref());
+    // Hybrid validator identity (PQ_PROTOCOL_AUTH.md §3): MAYO2 seed +
+    // compact pk with real entropy (OsRng). sriracha-mayo keygen is
+    // Unix-only; elsewhere the fields stay None and the share-request
+    // carries no MAYO material (coordinator enforces all-or-none).
+    #[cfg(unix)]
+    let mayo: Option<(Vec<u8>, Vec<u8>)> = {
+        use rand::RngCore;
+        let mut seed = vec![0u8; 24]; // MAYO SK_SEED_BYTES
+        OsRng.fill_bytes(&mut seed);
+        let (pk, _sk) = sriracha_mayo::SecretKey::<sriracha_mayo::Mayo2>::from_seed(&seed)
+            .expect("MAYO2 keygen from 24-byte seed");
+        let pk_bytes: &[u8] = pk.as_ref();
+        Some((seed, pk_bytes.to_vec()))
+    };
+    #[cfg(not(unix))]
+    let mayo: Option<(Vec<u8>, Vec<u8>)> = None;
+    let (mayo_private_hex, mayo_public_hex) = match &mayo {
+        Some((seed, pk)) => (Some(hex::encode(seed)), Some(hex::encode(pk))),
+        None => (None, None),
+    };
+
+    // Attestation: sign `ed25519_pk` (classical) or `ed25519_pk || mayo_pk`
+    // (hybrid) — proves possession and binds both halves of the identity.
+    let mut attest_msg = ed_pub_bytes.to_vec();
+    if let Some((_, mayo_pk)) = &mayo {
+        attest_msg.extend_from_slice(mayo_pk);
+    }
+    let attestation = ed_key.sign(DKG_ATTEST_NAMESPACE, &attest_msg);
     let attestation_hex = hex::encode(attestation.encode().as_ref());
 
     std::fs::create_dir_all(&output_dir)
@@ -399,6 +505,10 @@ fn cmd_keygen_share(args: &[String]) {
         validator_public_keys: Vec::new(),
         sharing_hex: None,
         share_hex: None,
+        mayo_variant: mayo.as_ref().map(|_| "mayo2".to_string()),
+        mayo_private_hex,
+        mayo_public_hex: mayo_public_hex.clone(),
+        validator_mayo_public_keys: None,
     };
     let keys_path = format!("{output_dir}/keys.json");
     std::fs::write(&keys_path, serde_json::to_string_pretty(&keys).unwrap())
@@ -408,6 +518,7 @@ fn cmd_keygen_share(args: &[String]) {
         moniker: moniker.clone(),
         p2p_address: p2p_address.clone(),
         ed25519_public_hex: ed25519_public_hex.clone(),
+        mayo_public_hex,
         attestation_hex,
     };
     let req_path = format!("{output_dir}/share-request.json");
@@ -417,6 +528,12 @@ fn cmd_keygen_share(args: &[String]) {
     println!("Validator identity generated (OsRng).");
     println!("  moniker:   {moniker}");
     println!("  ed25519:   {}...", &ed25519_public_hex[..16]);
+    match mayo {
+        Some(_) => println!("  mayo2:     included in share-request (hybrid identity)"),
+        None => println!(
+            "  mayo2:     NOT generated (Unix-only) — re-run on Linux/macOS for hybrid consensus"
+        ),
+    }
     println!("  keys:      {keys_path}  (PRIVATE — never share)");
     println!("  request:   {req_path}  (publish to coordinator)");
     println!("\nNext: send share-request.json to the coordinator.");
@@ -470,11 +587,38 @@ fn cmd_assemble_genesis(args: &[String]) {
             .unwrap_or_else(|_| panic!("{}: undecodable ed25519 pubkey", req.moniker));
         let sig = ed25519::Signature::read_cfg(&mut &sig_bytes[..], &())
             .unwrap_or_else(|_| panic!("{}: undecodable attestation", req.moniker));
-        if !pk.verify(DKG_ATTEST_NAMESPACE, &pk_bytes, &sig) {
+        // Hybrid requests attest over `ed25519_pk || mayo_pk`; classical
+        // requests over `ed25519_pk` alone — same rule the operator used.
+        let mut attest_msg = pk_bytes.clone();
+        if let Some(mh) = &req.mayo_public_hex {
+            let mpk = hex::decode(mh)
+                .unwrap_or_else(|_| panic!("{}: bad mayo_public_hex", req.moniker));
+            if mpk.len() != 4912 {
+                panic!("{}: mayo_public_hex must be a MAYO2 compact pk (4912 bytes)", req.moniker);
+            }
+            attest_msg.extend_from_slice(&mpk);
+        }
+        if !pk.verify(DKG_ATTEST_NAMESPACE, &attest_msg, &sig) {
             panic!("{}: attestation verification failed — pubkey not signed by its owner", req.moniker);
         }
     }
     println!("Verified {} attestations.", requests.len());
+
+    // MAYO identity is all-or-none: hybrid consensus needs every
+    // validator's MAYO pk — a mixed set would produce an unusable table.
+    let any_mayo = requests.iter().any(|r| r.mayo_public_hex.is_some());
+    let all_mayo = requests.iter().all(|r| r.mayo_public_hex.is_some());
+    if any_mayo && !all_mayo {
+        let missing: Vec<&str> = requests
+            .iter()
+            .filter(|r| r.mayo_public_hex.is_none())
+            .map(|r| r.moniker.as_str())
+            .collect();
+        panic!(
+            "mixed ceremony: some share-requests carry MAYO identity but these don't: {missing:?} — \
+             either all validators provide mayo_public_hex or none may"
+        );
+    }
 
     // Sort by Ed25519 pubkey bytes — deterministic validator_index, and it
     // matches the node's sorted-position share selection.
@@ -493,6 +637,17 @@ fn cmd_assemble_genesis(args: &[String]) {
 
     let validator_public_keys: Vec<String> =
         requests.iter().map(|r| r.ed25519_public_hex.clone()).collect();
+    let validator_mayo_public_keys: Option<Vec<String>> = if all_mayo {
+        Some(
+            requests
+                .iter()
+                .map(|r| r.mayo_public_hex.clone().unwrap())
+                .collect(),
+        )
+    } else {
+        println!("Classical-only ceremony (no MAYO identity) — hybrid_consensus will refuse to boot.");
+        None
+    };
 
     // Deal BLS shares with OsRng — real entropy, not the seeded devnet path.
     let n = NonZeroU32::new(requests.len() as u32).unwrap();
@@ -526,6 +681,7 @@ fn cmd_assemble_genesis(args: &[String]) {
             threshold_required,
             threshold_total,
             validator_public_keys: validator_public_keys.clone(),
+            validator_mayo_public_keys: validator_mayo_public_keys.clone(),
         };
         let pkg_path = format!("{dir}/bls-share.json");
         std::fs::write(&pkg_path, serde_json::to_string_pretty(&package).unwrap())
@@ -578,6 +734,7 @@ fn cmd_assemble_genesis(args: &[String]) {
                 moniker: r.moniker.clone(),
                 p2p_address: r.p2p_address.clone(),
                 ed25519_public_hex: r.ed25519_public_hex.clone(),
+                mayo_public_hex: r.mayo_public_hex.clone(),
             })
             .collect(),
     };
@@ -656,6 +813,33 @@ fn cmd_finalize(args: &[String]) {
     keys.validator_public_keys = package.validator_public_keys;
     keys.sharing_hex = Some(package.sharing_hex);
     keys.share_hex = Some(package.share_hex);
+
+    // Hybrid identity: the ceremony's MAYO table (if any) must contain
+    // the pk this operator generated at keygen-share time.
+    match (
+        &package.validator_mayo_public_keys,
+        &keys.mayo_public_hex,
+    ) {
+        (Some(table), Some(own)) => {
+            match table.get(package.validator_index) {
+                Some(t) if t == own => {}
+                _ => {
+                    eprintln!("Error: our mayo_public_hex is absent from the ceremony table at index {}", package.validator_index);
+                    std::process::exit(1);
+                }
+            }
+            keys.validator_mayo_public_keys = Some(table.clone());
+            keys.mayo_variant = Some("mayo2".to_string());
+        }
+        (Some(_), None) => {
+            eprintln!("Error: ceremony is hybrid but keys.json lacks MAYO identity — re-run keygen-share on Unix.");
+            std::process::exit(1);
+        }
+        (None, Some(_)) => {
+            eprintln!("Warning: keys.json has MAYO identity but ceremony ran classical-only — mayo fields unused.");
+        }
+        (None, None) => {}
+    }
 
     std::fs::write(&keys_path, serde_json::to_string_pretty(&keys).unwrap())
         .unwrap_or_else(|e| panic!("Failed to write {keys_path}: {e}"));

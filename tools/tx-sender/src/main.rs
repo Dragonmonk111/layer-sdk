@@ -127,6 +127,14 @@ fn print_usage() {
     eprintln!();
     eprintln!("get-tx flags:");
     eprintln!("  --hash <hex>         Tx hash (sha256 of tx_bytes, with or without 0x)");
+    eprintln!("  --wait <secs>        Poll every 500ms until committed (default: single query)");
+    eprintln!();
+    eprintln!("bench flags:");
+    eprintln!("  --kind <kind>        bank | bud1 | bud2 | bud3 | bud5 (required)");
+    eprintln!("  --count <N>          Number of paced txs (default: 100)");
+    eprintln!("  --contract <addr>    Bud contract address (required for bud* kinds)");
+    eprintln!("  --to <addr>          Recipient for bank kind (default: deployer)");
+    eprintln!("  --amount <N>         Amount per bank send (default: 1)");
     eprintln!();
     eprintln!("broadcast flags:");
     eprintln!("  --tx-hex <hex>       Hex-encoded TxRaw bytes");
@@ -161,6 +169,9 @@ struct Args {
     denom: String,
     hash: Option<String>,
     tx_hex: Option<String>,
+    wait: Option<u64>,
+    kind: Option<String>,
+    count: Option<u64>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -185,6 +196,9 @@ fn parse_args() -> Result<Args, String> {
     let mut denom = "ujclaw".to_string();
     let mut hash: Option<String> = None;
     let mut tx_hex: Option<String> = None;
+    let mut wait: Option<u64> = None;
+    let mut kind: Option<String> = None;
+    let mut count: Option<u64> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -261,6 +275,20 @@ fn parse_args() -> Result<Args, String> {
                         .to_string(),
                 );
             }
+            "--wait" => {
+                i += 1;
+                let s = args.get(i).ok_or("--wait requires a value")?;
+                wait = Some(s.parse().map_err(|_| format!("invalid --wait: {}", s))?);
+            }
+            "--kind" => {
+                i += 1;
+                kind = Some(args.get(i).ok_or("--kind requires a value")?.clone());
+            }
+            "--count" => {
+                i += 1;
+                let s = args.get(i).ok_or("--count requires a value")?;
+                count = Some(s.parse().map_err(|_| format!("invalid --count: {}", s))?);
+            }
             flag => {
                 return Err(format!("unknown flag: {}", flag));
             }
@@ -283,6 +311,9 @@ fn parse_args() -> Result<Args, String> {
         denom,
         hash,
         tx_hex,
+        wait,
+        kind,
+        count,
     })
 }
 
@@ -515,8 +546,10 @@ async fn cmd_store_code(
     } else {
         println!("StoreCode TX submitted (no response body)");
     }
-    // On a fresh chain, the first code stored gets code_id=1
-    println!("code_id=1 (assumed — first store on fresh chain)");
+    // code_id is assigned by the chain (genesis may already hold code 1 —
+    // the root contract). Resolve it via `code-info`/`contracts-by-code`
+    // or the store tx's events rather than assuming.
+    println!("Confirm code_id via: tx-sender get-tx --hash <hash> (events)");
 
     Ok(())
 }
@@ -738,6 +771,154 @@ fn tx_hash_hex(tx_bytes: &[u8]) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Subcommand: bench (C7 — paced load, prints "kind,height,txhash" per commit)
+// ---------------------------------------------------------------------------
+
+/// MAYO compact-pk sizes accepted by jclaw-credential `ExecuteMsg::Bud`:
+/// MAYO-1 = 1420, MAYO-2 = 4912, MAYO-3 = 2986, MAYO-5 = 5554 bytes.
+fn bud_pk_len(kind: &str) -> Option<usize> {
+    match kind {
+        "bud1" => Some(1420),
+        "bud2" => Some(4912),
+        "bud3" => Some(2986),
+        "bud5" => Some(5554),
+        _ => None,
+    }
+}
+
+/// Fresh valid bech32 member address for a bench bud child, unique per
+/// (start_seq, index) so re-running the bench does not collide with
+/// previously registered members.
+fn bench_child_addr(seed_seq: u64, i: u64) -> String {
+    let digest = Sha256::digest(format!("junoclaw-bench-child-{seed_seq}-{i}").as_bytes());
+    AccountId::new(BECH32_PREFIX, &digest[..20])
+        .expect("valid bech32 child address")
+        .to_string()
+}
+
+/// Send `count` txs of `kind`, waiting for each to commit before sending the
+/// next (check_tx rejects future sequences, so pacing is required anyway).
+/// Each committed tx prints a `kind,height,txhash` CSV line — join with the
+/// node's `exec_ms` finalize log for the C7 p99 measurement.
+async fn cmd_bench(
+    grpc_addr: &str,
+    kind: &str,
+    count: u64,
+    contract: Option<String>,
+    to: Option<String>,
+    amount: u128,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sender = deployer_address().to_string();
+    let mut sequence = query_account_sequence(grpc_addr, &sender).await?;
+    eprintln!("bench kind={kind} count={count} sender={sender} start_seq={sequence}");
+
+    let channel = connect(grpc_addr).await?;
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    for i in 0..count {
+        let any = if kind == "bank" {
+            let msg = MsgSend {
+                from_address: sender.clone(),
+                to_address: to.clone().unwrap_or_else(|| sender.clone()),
+                amount: vec![ProtoCoin {
+                    denom: "ujclaw".to_string(),
+                    amount: amount.to_string(),
+                }],
+            };
+            cosmrs::Any {
+                type_url: TYPE_URL_MSG_SEND.to_string(),
+                value: msg.encode_to_vec(),
+            }
+        } else if let Some(pk_len) = bud_pk_len(kind) {
+            let contract = contract
+                .clone()
+                .ok_or("--contract is required for bud* kinds")?;
+            // serde encodes Vec<u8> as a JSON array of bytes.
+            let pk_json = format!(
+                "[{}]",
+                std::iter::repeat_n("0", pk_len).collect::<Vec<_>>().join(",")
+            );
+            let msg_json = format!(
+                r#"{{"bud":{{"parent":"{sender}","child":"{}","child_weight":1,"mayo_pk":{pk_json}}}}}"#,
+                bench_child_addr(sequence, i)
+            );
+            let msg = MsgExecuteContract {
+                sender: sender.clone(),
+                contract,
+                msg: msg_json.into_bytes(),
+                funds: vec![],
+            };
+            cosmrs::Any {
+                type_url: TYPE_URL_MSG_EXECUTE_CONTRACT.to_string(),
+                value: msg.encode_to_vec(),
+            }
+        } else {
+            return Err(
+                format!("unknown bench kind {kind} (bank|bud1|bud2|bud3|bud5)").into(),
+            );
+        };
+
+        let tx_bytes = sign_tx(any, sequence);
+        let txhash = tx_hash_hex(&tx_bytes);
+
+        let resp = client
+            .broadcast_tx(BroadcastTxRequest {
+                tx_bytes,
+                mode: 1, // BROADCAST_MODE_SYNC
+            })
+            .await?
+            .into_inner()
+            .tx_response
+            .ok_or("broadcast returned no tx_response")?;
+        if resp.code != 0 {
+            return Err(format!(
+                "bench tx {i} rejected at check_tx: code={} log={}",
+                resp.code, resp.raw_log
+            )
+            .into());
+        }
+
+        // Poll until committed (also confirms the sequence advanced).
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let height = loop {
+            match client
+                .get_tx(GetTxRequest {
+                    hash: txhash.clone(),
+                })
+                .await
+            {
+                Ok(r) => {
+                    let resp = r
+                        .into_inner()
+                        .tx_response
+                        .ok_or("get_tx returned no tx_response")?;
+                    if resp.code != 0 {
+                        return Err(format!(
+                            "bench tx {i} failed on commit: code={} log={}",
+                            resp.code, resp.raw_log
+                        )
+                        .into());
+                    }
+                    break resp.height;
+                }
+                Err(s) if s.code() == tonic::Code::NotFound => {
+                    if std::time::Instant::now() >= deadline {
+                        return Err(format!("bench tx {i} {txhash} not committed after 30s").into());
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
+                Err(s) => return Err(s.into()),
+            }
+        };
+        println!("{kind},{height},{txhash}");
+        sequence += 1;
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Subcommand: simulate — dry-run a MsgSend (cosmos.tx.v1beta1.Service/Simulate)
 // ---------------------------------------------------------------------------
 
@@ -824,19 +1005,43 @@ async fn cmd_simulate(
 // Subcommand: get-tx (cosmos.tx.v1beta1.Service/GetTx)
 // ---------------------------------------------------------------------------
 
-async fn cmd_get_tx(grpc_addr: &str, hash: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_get_tx(
+    grpc_addr: &str,
+    hash: &str,
+    wait_secs: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     let channel = connect(grpc_addr).await?;
     let mut client = TxServiceClient::new(channel)
         .max_decoding_message_size(10 * 1024 * 1024)
         .max_encoding_message_size(10 * 1024 * 1024);
 
-    let response = client
-        .get_tx(GetTxRequest {
-            hash: hash.to_string(),
-        })
-        .await?;
+    // Q7: --wait polls until the tx is committed (or the timeout expires).
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_secs(wait_secs);
+    let result = loop {
+        match client
+            .get_tx(GetTxRequest {
+                hash: hash.to_string(),
+            })
+            .await
+        {
+            Ok(r) => break r.into_inner(),
+            Err(s)
+                if s.code() == tonic::Code::NotFound && wait_secs > 0 =>
+            {
+                if std::time::Instant::now() >= deadline {
+                    return Err(format!(
+                        "tx {} not committed after {}s",
+                        hash, wait_secs
+                    )
+                    .into());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+            Err(s) => return Err(s.into()),
+        }
+    };
 
-    let result = response.into_inner();
     match result.tx_response {
         Some(resp) => {
             println!("txhash: {}", resp.txhash);
@@ -850,6 +1055,15 @@ async fn cmd_get_tx(grpc_addr: &str, hash: &str) -> Result<(), Box<dyn std::erro
             }
         }
         None => println!("GetTx returned no tx_response for hash {}", hash),
+    }
+    // Decoded tx body (Q3) — message type URLs for relayer verification.
+    if let Some(tx) = &result.tx {
+        if let Some(body) = &tx.body {
+            println!("messages: {}", body.messages.len());
+            for m in &body.messages {
+                println!("  msg: {}", m.type_url);
+            }
+        }
     }
 
     Ok(())
@@ -1110,7 +1324,7 @@ async fn main() {
                 eprintln!("Error: --hash is required for get-tx");
                 std::process::exit(1);
             });
-            cmd_get_tx(&args.grpc, &hash).await
+            cmd_get_tx(&args.grpc, &hash, args.wait.unwrap_or(0)).await
         }
         "broadcast" => {
             let tx_hex = args.tx_hex.unwrap_or_else(|| {
@@ -1118,6 +1332,30 @@ async fn main() {
                 std::process::exit(1);
             });
             cmd_broadcast(&args.grpc, &tx_hex).await
+        }
+        "bench" => {
+            let kind = args.kind.unwrap_or_else(|| {
+                eprintln!("Error: --kind is required for bench (bank|bud1|bud2|bud3|bud5)");
+                std::process::exit(1);
+            });
+            let amount: u128 = args
+                .amount
+                .as_deref()
+                .unwrap_or("1")
+                .parse()
+                .unwrap_or_else(|_| {
+                    eprintln!("Error: invalid --amount: {}", args.amount.as_deref().unwrap_or(""));
+                    std::process::exit(1);
+                });
+            cmd_bench(
+                &args.grpc,
+                &kind,
+                args.count.unwrap_or(100),
+                args.contract,
+                args.to,
+                amount,
+            )
+            .await
         }
         "balance" => {
             let addr = args

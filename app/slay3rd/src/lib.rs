@@ -3,6 +3,7 @@
 pub mod block;
 pub mod config;
 pub mod grpc;
+pub mod hybrid_scheme;
 pub mod mempool;
 pub mod node;
 pub mod payload_store;

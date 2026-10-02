@@ -22,9 +22,17 @@ hex-literal = "0.4"
 hex = "0.4"
 rand_chacha = "0.3"
 rand_core = "0.6"
-# sriracha-mayo provides real MAYO keypairs+sigs for tests (verify-only crate)
+sha2 = "0.10"
+
+# sriracha-mayo provides real MAYO keypairs+sigs for tests (verify-only crate).
+# Its build script requires cmake + a C toolchain — only gate it on unix so
+# `cargo test` still compiles on Windows (test-c tests are cfg-gated anyway).
+[target.'cfg(unix)'.dev-dependencies]
 sriracha-mayo = "0.0.4"
 
 [features]
 default = ["std"]
 std = ["sha2/std", "sha3/std"]
+# Enables the sriracha-mayo cross-check tests in lib.rs (C impl is a
+# cfg(unix) dev-dep — only usable on Unix hosts with cmake).
+test-c = ["std"]

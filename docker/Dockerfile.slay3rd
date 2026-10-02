@@ -6,8 +6,9 @@
 FROM rust:1.97-bookworm AS builder
 WORKDIR /myapp
 
-# clang for wasmer shim; g++ + libclang for the rocksdb C++/bindgen build.
-RUN apt update && apt install -y clang g++ libclang-dev
+# clang for wasmer shim; g++ + libclang for the rocksdb C++/bindgen build;
+# cmake for the sriracha-mayo C build (hybrid consensus signing, cfg(unix)).
+RUN apt update && apt install -y clang g++ libclang-dev cmake
 
 # wasmer 4.3.7 references __rust_probestack which was removed from Rust stdlib.
 # Provide a shim so the linker can resolve the symbol.

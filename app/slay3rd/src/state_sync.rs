@@ -16,6 +16,15 @@
 //!
 //! Trust: the ONLY anchor is the certified `BlockPayload.state_root`.
 //! Advertised snapshot metadata is untrusted.
+//!
+//! Multi-peer anchor: the certified payload bytes must be served
+//! byte-identically by at least `min_anchor_agree` distinct peers
+//! (`StateSyncConfig`). The certificate itself is not verified locally
+//! — the validator set it authenticates against lives inside the state
+//! being imported (weak-subjectivity caveat, docs/STATE_SYNC.md §5).
+//! Quorum agreement makes a single malicious peer incapable of pinning
+//! a fabricated root: it would have to serve bytes that match what the
+//! honest majority serves.
 
 use anyhow::{anyhow, Context, Result};
 use cosmwasm_std::Timestamp;
@@ -30,6 +39,7 @@ use layer_proto::layer::statesync::v1::query_client::QueryClient as StateSyncCli
 use layer_proto::layer::statesync::v1::{ListSnapshotsRequest, LoadSnapshotChunkRequest};
 
 use crate::block::BlockPayload;
+use crate::config::StateSyncConfig;
 
 /// Decoded snapshot fetched from a peer's statesync service.
 pub struct FetchedSnapshot {
@@ -42,13 +52,39 @@ pub struct FetchedSnapshot {
     pub advertised_root: [u8; 32],
 }
 
-/// Fetch + decode every chunk of the peer's offered snapshot. Each
+/// Fetch + decode the offered snapshot, trying each configured peer in
+/// order until one serves a complete valid dump. All peers are donors —
+/// the payload itself is untrusted until the whole-dump root check in
+/// `App::snapshot_import` runs against the quorum-anchored root.
+pub async fn fetch_snapshot(peers: &[String]) -> Result<FetchedSnapshot> {
+    let mut errs = Vec::new();
+    for peer in peers {
+        match fetch_snapshot_from(peer).await {
+            Ok(snap) => {
+                tracing::info!(peer, height = snap.height,
+                    "state-sync: snapshot donated");
+                return Ok(snap);
+            }
+            Err(e) => {
+                tracing::warn!(peer, error = %e,
+                    "state-sync: peer failed as snapshot donor, trying next");
+                errs.push(format!("{peer}: {e:#}"));
+            }
+        }
+    }
+    Err(anyhow!(
+        "state-sync: no peer could donate a snapshot ({:?})",
+        errs
+    ))
+}
+
+/// Fetch + decode every chunk of ONE peer's offered snapshot. Each
 /// chunk's sha256 is checked against the served checksum — corruption
 /// detection only, NOT authentication.
 ///
 /// The initial connect + ListSnapshots retries briefly: a joiner often
 /// boots before its donor's gRPC is serving.
-pub async fn fetch_snapshot(peer: &str) -> Result<FetchedSnapshot> {
+async fn fetch_snapshot_from(peer: &str) -> Result<FetchedSnapshot> {
     let mut client = {
         let mut last_err = None;
         let mut c = None;
@@ -87,10 +123,15 @@ pub async fn fetch_snapshot(peer: &str) -> Result<FetchedSnapshot> {
         }
     }
     let snaps = snaps.expect("retry loop always sets or returns");
+    // Adopt the latest offered snapshot. Height-0 (genesis) offers are
+    // skipped outright: they are unanchorable — the tip anchor at
+    // `snap.height` requires a certified block, and height 0 is never
+    // finalized (consensus starts at height 1).
     let meta = snaps
         .into_iter()
-        .next()
-        .ok_or_else(|| anyhow!("peer {peer} offers no snapshot"))?;
+        .filter(|m| m.height > 0)
+        .max_by_key(|m| m.height)
+        .ok_or_else(|| anyhow!("peer {peer} offers no usable snapshot"))?;
 
     anyhow::ensure!(
         meta.state_root.len() == 32,
@@ -129,66 +170,120 @@ pub async fn fetch_snapshot(peer: &str) -> Result<FetchedSnapshot> {
     })
 }
 
-/// Adopt the peer's snapshot into `app` (which must be uninitialized).
+/// Query `Block(height)` from every configured peer and require the
+/// certified `payload_bytes` to agree byte-for-byte on at least
+/// `min_agree` distinct peers.
 ///
-/// The trusted root comes from the BLS-certified `BlockPayload` at
-/// `snapshot_height + 1` — the advertised metadata is cross-checked
-/// against it but never trusted. `chain_id` is the local config's
-/// chain-id for `LAST_BLOCK`.
+/// Unreachable peers / peers still catching up to `height` are skipped
+/// (warned); peers that return DIFFERENT payload bytes are Byzantine
+/// evidence — the joiner aborts rather than picks a winner.
+async fn fetch_certified_payload(
+    peers: &[String],
+    height: u64,
+    min_agree: usize,
+) -> Result<Vec<u8>> {
+    let mut payloads: Vec<(String, Vec<u8>)> = Vec::new();
+    for peer in peers {
+        match fetch_block_retry(peer, height).await {
+            Ok(bytes) => payloads.push((peer.clone(), bytes)),
+            Err(e) => {
+                tracing::warn!(peer, height, error = %e,
+                    "state-sync: anchor peer did not serve block");
+            }
+        }
+    }
+    select_anchor(payloads, min_agree)
+        .with_context(|| format!("state-sync: anchor quorum failed at height {height}"))
+}
+
+/// Fetch `payload_bytes` for `height` from one peer. The block is often
+/// AT the donor's tip — it may still be a notarized proposal rather than
+/// a finalized/certified block, so NotFound is retried briefly; other
+/// errors return immediately.
+async fn fetch_block_retry(peer: &str, height: u64) -> Result<Vec<u8>> {
+    let mut lc = LightClientClient::connect(format!("http://{peer}"))
+        .await
+        .with_context(|| format!("lightclient connect to {peer}"))?;
+    let mut last_err = None;
+    for attempt in 1..=12 {
+        match lc.block(QueryBlockRequest { height }).await {
+            Ok(r) => return Ok(r.into_inner().payload_bytes),
+            Err(e) if e.code() == tonic::Code::NotFound => {
+                tracing::info!(peer, attempt, height,
+                    "state-sync: waiting for certified block");
+                last_err = Some(e);
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+            Err(e) => {
+                return Err(e).with_context(|| format!("Block({height}) failed"))
+            }
+        }
+    }
+    Err(last_err.unwrap())
+        .with_context(|| format!("no certified block at height {height}"))
+}
+
+/// Quorum check on the payloads peers served for one height. Every
+/// respondent must agree byte-for-byte — `payload_bytes` binds height,
+/// timestamp, parent_digest and state_root, so identical bytes =
+/// identical anchor. Disagreement is fatal (Byzantine evidence), not a
+/// vote to resolve.
+fn select_anchor(payloads: Vec<(String, Vec<u8>)>, min_agree: usize) -> Result<Vec<u8>> {
+    let (_, first) = match payloads.first() {
+        Some(v) => v,
+        None => return Err(anyhow!("no peer served the block")),
+    };
+    for (peer, p) in &payloads[1..] {
+        anyhow::ensure!(
+            p == first,
+            "anchor disagreement: peer {peer} served different certified \
+             payload bytes than {} — refusing to pick a winner",
+            payloads[0].0
+        );
+    }
+    anyhow::ensure!(
+        payloads.len() >= min_agree,
+        "anchor quorum too small: {} agreeing peers < min_anchor_agree {min_agree}",
+        payloads.len()
+    );
+    Ok(first.clone())
+}
+
+/// Adopt a snapshot into `app` (which must be uninitialized).
+///
+/// The trusted root comes from the certified `BlockPayload` at
+/// `snapshot_height + 1`, served identically by `min_anchor_agree`
+/// peers. The advertised snapshot metadata is cross-checked against it
+/// but never trusted. `chain_id` is the local config's chain-id for
+/// `LAST_BLOCK`.
 ///
 /// Returns the adopted snapshot height.
 pub async fn adopt_snapshot<T>(
     app: &mut App<T>,
-    peer: &str,
+    ss: &StateSyncConfig,
     chain_id: &str,
 ) -> Result<u64>
 where
     T: PersistentStorage + Send + Sync + 'static,
 {
-    let snap = fetch_snapshot(peer).await?;
+    anyhow::ensure!(
+        !ss.peers.is_empty(),
+        "state-sync: configured with zero peers"
+    );
+    anyhow::ensure!(
+        ss.min_anchor_agree >= 1 && ss.min_anchor_agree <= ss.peers.len(),
+        "state-sync: min_anchor_agree {} must be in 1..={} (configured peers)",
+        ss.min_anchor_agree,
+        ss.peers.len()
+    );
+
+    let snap = fetch_snapshot(&ss.peers).await?;
 
     // Certified anchor: BlockPayload at height+1 commits to post-H state.
-    let mut lc = LightClientClient::connect(format!("http://{peer}"))
-        .await
-        .with_context(|| format!("state-sync: lightclient connect to {peer}"))?;
-
-    // The snapshot is often AT the donor's tip — block H+1 may still be
-    // a notarized proposal, not yet a finalized/certified block. Retry
-    // NotFound briefly; non-NotFound errors are fatal immediately.
-    let cert = {
-        let mut c = None;
-        let mut last_err = None;
-        for attempt in 1..=12 {
-            match lc
-                .block(QueryBlockRequest {
-                    height: snap.height + 1,
-                })
-                .await
-            {
-                Ok(r) => {
-                    c = Some(r.into_inner());
-                    break;
-                }
-                Err(e) if e.code() == tonic::Code::NotFound => {
-                    tracing::info!(attempt, height = snap.height + 1,
-                        "state-sync: waiting for certified block");
-                    last_err = Some(e);
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                }
-                Err(e) => {
-                    return Err(e)
-                        .with_context(|| format!("state-sync: Block({}) failed", snap.height + 1));
-                }
-            }
-        }
-        match c {
-            Some(v) => v,
-            None => return Err(last_err.unwrap()).with_context(|| {
-                format!("state-sync: no certified block at {}", snap.height + 1)
-            }),
-        }
-    };
-    let payload = BlockPayload::from_bytes(&cert.payload_bytes)
+    // Must be served identically by the peer quorum.
+    let anchor_bytes =
+        fetch_certified_payload(&ss.peers, snap.height + 1, ss.min_anchor_agree).await?;
+    let payload = BlockPayload::from_bytes(&anchor_bytes)
         .context("state-sync: certified payload decode failed")?;
     anyhow::ensure!(
         payload.state_root == snap.advertised_root,
@@ -196,43 +291,12 @@ where
         snap.height + 1
     );
 
-    // Timestamp + tip payload bytes come from the certified block at the
-    // snapshot height itself — also subject to the same tip race as
-    // Block(H+1), so retry NotFound identically.
-    let tip = {
-        let mut c = None;
-        let mut last_err = None;
-        for attempt in 1..=12 {
-            match lc
-                .block(QueryBlockRequest {
-                    height: snap.height,
-                })
-                .await
-            {
-                Ok(r) => {
-                    c = Some(r.into_inner());
-                    break;
-                }
-                Err(e) if e.code() == tonic::Code::NotFound => {
-                    tracing::info!(attempt, height = snap.height,
-                        "state-sync: waiting for certified tip block");
-                    last_err = Some(e);
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                }
-                Err(e) => {
-                    return Err(e)
-                        .with_context(|| format!("state-sync: Block({}) failed", snap.height));
-                }
-            }
-        }
-        match c {
-            Some(v) => v,
-            None => return Err(last_err.unwrap()).with_context(|| {
-                format!("state-sync: certified tip payload unavailable at height {}", snap.height)
-            }),
-        }
-    };
-    let tip_payload = BlockPayload::from_bytes(&tip.payload_bytes)
+    // Tip payload at the snapshot height — quorum-anchored identically.
+    // Its timestamp field is authenticated by the quorum, unlike the
+    // peer-supplied response metadata.
+    let tip_bytes =
+        fetch_certified_payload(&ss.peers, snap.height, ss.min_anchor_agree).await?;
+    let tip_payload = BlockPayload::from_bytes(&tip_bytes)
         .context("state-sync: certified tip payload decode failed")?;
     anyhow::ensure!(
         tip_payload.height == snap.height,
@@ -242,10 +306,52 @@ where
     );
     let block = cosmwasm_std::BlockInfo {
         height: snap.height,
-        time: Timestamp::from_nanos(tip.timestamp_nanos),
+        time: Timestamp::from_nanos(tip_payload.timestamp_nanos),
         chain_id: chain_id.to_string(),
     };
 
-    app.snapshot_import(block, &snap.records, &payload.state_root, &tip.payload_bytes)?;
+    app.snapshot_import(block, &snap.records, &payload.state_root, &tip_bytes)?;
     Ok(snap.height)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(bytes: &[u8]) -> (String, Vec<u8>) {
+        (format!("peer-{:x?}", &bytes[..1]), bytes.to_vec())
+    }
+
+    #[test]
+    fn anchor_accepts_identical_payloads() {
+        let res = select_anchor(vec![p(b"aa"), p(b"aa"), p(b"aa")], 2).unwrap();
+        assert_eq!(res, b"aa");
+    }
+
+    #[test]
+    fn anchor_rejects_empty() {
+        assert!(select_anchor(vec![], 1).is_err());
+    }
+
+    #[test]
+    fn anchor_rejects_below_quorum() {
+        // 2 agree but min is 3 — insufficient corroboration.
+        assert!(select_anchor(vec![p(b"aa"), p(b"aa")], 3).is_err());
+    }
+
+    #[test]
+    fn anchor_rejects_any_disagreement() {
+        // 3-of-3 respondents but one diverges — Byzantine evidence is
+        // fatal even though two agree and min_agree is only 2.
+        let err = select_anchor(vec![p(b"aa"), p(b"bb"), p(b"aa")], 2)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("anchor disagreement"), "{err}");
+    }
+
+    #[test]
+    fn anchor_single_peer_meets_quorum_of_one() {
+        let res = select_anchor(vec![p(b"xy")], 1).unwrap();
+        assert_eq!(res, b"xy");
+    }
 }

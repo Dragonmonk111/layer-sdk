@@ -2,7 +2,7 @@ use ripemd::Ripemd160;
 use sha2::{Digest, Sha256};
 use tracing::debug_span;
 
-use cosmwasm_crypto::secp256k1_verify;
+use cosmwasm_crypto::{ed25519_verify, secp256k1_verify};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Binary;
 
@@ -172,7 +172,15 @@ impl PubKey {
                     Err(TxError::InvalidSignature)
                 }
             }
-            PubKey::Ed25519(_) => todo!(),
+            PubKey::Ed25519(pk) => {
+                if !ed25519_verify(message_hash, signature, pk.as_slice())
+                    .unwrap_or(false)
+                {
+                    Err(TxError::InvalidSignature)
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 
@@ -184,11 +192,16 @@ impl PubKey {
                 let ripemd_digest = Ripemd160::digest(&sha_digest[..]);
                 AccountId::new(ripemd_digest.as_slice())
             }
-            PubKey::HybridSecp256k1Mayo { .. } => {
+            PubKey::HybridSecp256k1Mayo { secp256k1, .. } => {
                 // sha256(domain || canonical encoding) then ripemd160 —
                 // domain-separated from plain secp256k1 addresses so the two
                 // key types can never claim the same account.
-                let wire = self.to_hybrid_any_bytes().unwrap_or_default();
+                // Must error — not fall back — when the key can't encode:
+                // an empty wire would map every malformed key to the SAME
+                // address (collision + unspendable sink).
+                let wire = self
+                    .to_hybrid_any_bytes()
+                    .ok_or(AccountIdError::InvalidLength(secp256k1.len()))?;
                 let mut preimage = Vec::with_capacity(HYBRID_ACCOUNT_DOMAIN.len() + wire.len());
                 preimage.extend_from_slice(HYBRID_ACCOUNT_DOMAIN);
                 preimage.extend_from_slice(&wire);
@@ -196,7 +209,12 @@ impl PubKey {
                 let ripemd_digest = Ripemd160::digest(&sha_digest[..]);
                 AccountId::new(ripemd_digest.as_slice())
             }
-            PubKey::Ed25519(_) => todo!(),
+            PubKey::Ed25519(pk) => {
+                // Tendermint convention: sha256(pk) truncated to 20 bytes
+                // (ed25519 addresses skip the ripemd160 round).
+                let sha_digest = Sha256::digest(pk);
+                AccountId::new(&sha_digest[..20])
+            }
         }
     }
 }

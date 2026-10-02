@@ -1,4 +1,137 @@
-# Next Session — Plan (updated 2026-09-29 ~16:15 UTC+1)
+# Next Session — Plan (updated 2026-10-01, UTC+1)
+
+## Landed this session (2026-10-01) — LIVE-VERIFIED on devnet
+
+- **PQ protocol auth Phase 2a — hybrid consensus LIVE-VERIFIED.** All 4
+  devnet validators finalizing `0x01`-tagged hybrid certs (BLS threshold
+  cert + signer bitmap + MAYO2 quorum, `cert_len=616`), heights into the
+  thousands. Docker keygen emitted MAYO2 identity for every validator;
+  `hybrid_consensus = true` booted clean after wipe. Coded per
+  `docs/PQ_PROTOCOL_AUTH.md` §3–§5: `HybridScheme` wraps the BLS12-381
+  threshold scheme (`HybridSignature` = BLS partial + 186-byte MAYO2 sig
+  over identical namespaced bytes); `HybridCertificate` requires quorum on
+  both halves.
+- **Two real bugs found by the live run — both fixed:**
+  - *Randomized-signature equivocation:* MAYO draws a fresh salt per sign,
+    so journal replay / retransmit of an identical vote produced different
+    bytes. Simplex compares votes byte-for-byte → read as *conflicting*
+    vote → sender blocked → consensus stalled at view 1. Fix: `sign`
+    memoizes MAYO sigs per signed message (`sig_cache`,
+    `app/slay3rd/src/hybrid_scheme.rs`).
+  - *Unanchorable genesis snapshot:* donors lazily cached a height-0
+    export; joiner demanded a certified tip at h0, which never exists →
+    fatal `anchor quorum failed`. Fixed both sides: `cached_snapshot`
+    refuses h0 exports (`grpc.rs`); `adopt_snapshot` skips h0 offers and
+    takes the highest offered height (`state_sync.rs`).
+- **Multi-peer state-sync anchor LIVE-VERIFIED.** Node-3 adopted a
+  snapshot at h7,085 via `min_anchor_agree = 2` quorum on certified
+  payloads (peers node-0/node-1), joined consensus, caught up to tip in
+  seconds.
+- **Stubs closed:** `timeout_height` enforced in ante (check_tx +
+  deliver, `keeper.rs`, unit-tested); M1 leader-forwarding tx propagation
+  (non-leader gossips to next round-robin leaders over authenticated P2P);
+  MAYO-1/2/3/5 NIST KATs wired into `packages/junoclaw-mayo-verify/
+  tests/kat.rs` (fixture integrity + corruption negatives); MAYO identity
+  in Phase A ceremony (`ShareRequest`/`SharedValidator` carry
+  `mayo_public_hex`, attestation binds `ed25519_pk || mayo_pk`,
+  all-or-none enforced).
+- **Crash vector closed** (carried): `Account::Smart` `todo!()` →
+  deterministic `TxError::SmartAccountSigner`.
+- `cargo test -p slay3rd -p layer-app` — 65 + 49 passed, 0 failed.
+
+## Ordered next steps (deterministic)
+
+Each item: what to do + the check that proves it done.
+
+### 1. Hybrid-consensus negative tests — ✅ ALL PASSED live (2026-10-01)
+- Quorum loss: `docker stop` node-2+node-3 → chain stalled ~10 min
+  (last finalize h46555 @14:31:08Z, then silence on both survivors —
+  neither BLS nor MAYO quorum reachable at 2-of-4). `docker start` →
+  all 4 resumed finalizing @14:42Z with no manual intervention.
+- Corrupted MAYO table: flipped one byte of `mayo_public_hex` in
+  validator-0/keys.json → node-0 refused at startup:
+  `ERROR mayo_public_hex does not match validator_mayo_public_keys at
+  our sorted position` (main.rs:1204), clean exit. Restored → resumed.
+- Byzantine state-sync donor: spawned rogue 1-validator chain
+  (`devnet/config/rogue.toml` + `devnet/rogue-keys/`, threshold 1-of-1,
+  chain_id=junoclaw-rogue) on the devnet network at 172.28.0.20.
+  Joiner (`devnet/config/joiner-byz.toml`, peers=[rogue, honest],
+  min_anchor_agree=2) took the rogue's snapshot, then hit:
+  `anchor disagreement: peer 172.28.0.10:9090 served different
+  certified payload bytes than 172.28.0.20:9090 — refusing to pick a
+  winner` → "state-sync failed — refusing genesis fallback", exited 0,
+  never adopted. Rogue+joiner containers removed after the test.
+
+### 2. G0 close-out (TESTNET_LAUNCH_PLAN §2–§8)
+- **C2 timestamps** — view-derived OK for G0; pre-G1 switch to proposer
+  wall-clock bounded `parent < t ≤ local_now + 2s`.
+- **C7 bench** — ✅ done + live-verified. `node.rs` logs `exec_ms` per
+  finalized block; `tx-sender bench --kind {bank|bud1..5} --count N`
+  sends paced txs (fresh bech32 bud children per run, MAYO pk lens
+  1420/4912/2986/5554 B). Gate: p99 < 50% of `leader_timeout_ms` (1500 ms).
+  Measured on devnet (n=100/leg): bank p50=701 p99=1195 ms; bud2 p50=728
+  p99=1048 ms; bud5 p50=734 p99=953 ms — all PASS with ≥20% headroom.
+  Note: `code_id=1` is the genesis root contract; stored wasm lands on
+  `code_id≥2` — resolve via `code-info`, don't assume (store-code print
+  now says this).
+- **C9 soak** — ≥4 validators, ≥24h, leader kill + partition + restart +
+  byzantine proposer.
+- **M4 sender ordering** — ✅ done. `TxMeta{sender,sequence,store_code}`
+  plumbed at both admission paths (BroadcastTx + gossip) before `check_tx`
+  consumes the tx; `peek_batch` k-way merges per-sender queues sorted by
+  sequence (FIFO fairness across senders via queue-head arrival). Live
+  note: `check_tx` rejects future sequences, so seq-gaps can't sit pending
+  — ordering protects the in-window race. 15 mempool tests pass.
+- **M7 limits** — ✅ done. `DEFAULT_MAX_PER_SENDER = 64` (`SenderFull`
+  error → `resource_exhausted`); `MsgStoreCode` txs get the 8 MiB
+  `MAX_STORE_CODE_TX_BYTES` cap instead of 2 MiB `max_tx_bytes`.
+- **Q2** — ✅ done + live-verified. `App::set_tx_response`/`get_tx_response`
+  persist prost-encoded `TxResponse` under `_txres/<hash>`
+  (app_hash-excluded); `execute_block` writes through alongside the
+  in-memory 100k cache, and `get_tx` falls back to disk on a cache miss
+  then warms it. Live: tx 9770648F… committed h108394, `docker restart
+  junoclaw-node-0` (in-memory index wiped), `get-tx` still resolved the
+  result + decoded body from disk. Pruning/capping is a follow-up knob.
+- **Q3/Q7** — ✅ done + live-verified. `get_tx` recovers the committed
+  raw bytes from the `BlockPayload` at `TxResponse.height` and returns the
+  decoded `Tx{body,auth_info,signatures}`; `tx-sender get-tx --wait <s>`
+  polls every 500 ms until committed and prints msg type URLs. Live:
+  send tx 2EF194BA… at h102025, `get-tx --wait 15` returned
+  `messages: 1 / msg: /cosmos.bank.v1beta1.MsgSend`.
+- **S4 monitoring** — `app_hash` agreement alerts across validators.
+
+### 3. PQ-1 fuzz gate (G1 blocker)
+- ✅ exists: `junoclaw-mayo-verify/tests/fuzz_inputs.rs` (seeded-xorshift
+  malformed pk/sig/msg sweep over MAYO-1/2/3/5, `--ignored` soak variant),
+  `packages/std/tests/fuzz_pubkey.rs` (pk-hash path).
+- Still needed: Bud contract arithmetic fuzz — the deployed `Bud`
+  member-tree contract's source is NOT in `junoclaw-chain` or
+  `junoclaw/contracts` (searched); locate before fuzzing. ML-DSA-44/65/87
+  KATs — no ML-DSA verifier exists in this workspace yet (post-G2 per
+  plan, but KAT leg belongs to PQ-1).
+
+### 4. G1 ceremony + ops
+- Ceremony rehearsal with external validators (`ceremony-test/` exists;
+  MAYO step is now plumbed, needs a real-entropy run).
+- Faucet, status page, relayer supervisor, runbook.
+
+## Watch-outs (carry-forward)
+- `packages/junoclaw-mayo-verify` is VENDORED — mirror edits to
+  `junoclaw/crates/junoclaw-mayo-verify`.
+- `PubKey`/`Account` enums are serde-JSON in state: append-only.
+- Mixed-version P2P: tag 2 (HeightRange) and hybrid certs are only
+  understood by new images — rebuild all validators at once.
+- Hybrid certificates are larger: 4-sig hybrid cert ≈ classical + ~750 B
+  (`cert_len=616` measured). `mailbox_size`/`replay_buffer` unchanged;
+  watch `cert` channel metrics.
+- MAYO sig memoization is per-process; bounded at 8192 entries. If a
+  replay storm ever exceeds it the cache just signs fresh — no
+  correctness impact, only a possible equivocation-style duplicate under
+  retransmit, which is now the documented behavior.
+
+---
+
+# Historical — 2026-09-29 session
 
 ## Verified LIVE this session (all on devnet)
 

@@ -20,6 +20,11 @@ today* vs. what remains, with the check that proves it done.
 | IBC ↔ local Osmosis | scripted rebuild ~1.5 min (`ibc-rebuild.ps1`), ICS-20 voucher minted | 2026-09-28 |
 | Relay daemon | `relay` subcommand, catch_unwind + backoff + health `:18080` | 2026-09-28 |
 | MAYO-2/3/5 verify in-contract | gas 309k/400k/726k vs 4M limit; tampered sig rejected | 2026-09-27 (pre-regenesis heights) |
+| Hybrid secp256k1+MAYO account spend | committed h165,266 + h169,044; corrupted MAYO sig rejected at check_tx | 2026-09-29 |
+| Bulk backfill | node-2 −700 blk → ~1,600 heights in ~15 min, ~1.7× live rate, identical `app_hash` | 2026-09-29 |
+| Snapshot state-sync | wiped node-3 adopted cert-anchored snapshot @212,930, proposed @213,035 | 2026-09-30 |
+| `Simulate` gRPC | full `execute_tx` on scratch overlay, real gas/error log, zero writes | 2026-09-30 |
+| Hybrid consensus scheme (Phase 2a) | `hybrid_scheme.rs` — BLS threshold + MAYO2 bitmap cert, flag-gated; check+tests green, **live verify pending** | 2026-10-01 |
 
 ## Known gaps and pre-existing failures
 
@@ -27,31 +32,27 @@ today* vs. what remains, with the check that proves it done.
   --workspace` fails in the layer-cosmos fixtures; `slay3rd` is green. Not a
   regression of this week's work, but they must either be fixed or pinned +
   documented before CI gating means anything.
-- ~~Catch-up is lazy, not a sync protocol.~~ **Bulk backfill landed
-  2026-09-29** (unverified live): `FetchRequest::HeightRange` P2P msg,
-  `PayloadStore` height→digest index, `backfill_tick` every 250 ms requests
-  all missing heights tip+1..observed in ≤64-height ranges; solicited-height
-  replies bypass the lookahead window; retention raised 1,024→65,536 heights.
-  Unit-tested (`test_backfill_tick_requests_missing_range` et al.).
-  **Remaining gap:** (a) live verification — stop a node for ~10k blocks,
-  measure time-to-tip vs the old digest crawl; (b) **state-sync** — a new
-  validator still must execute every block from genesis; backfill only
-  parallelises payload *acquisition*. Snapshot-based state-sync remains the
-  missing piece for fast validator joins.
+- ~~Catch-up is lazy, not a sync protocol.~~ **Bulk backfill live-verified
+  2026-09-29** (node-2 −700 blk → caught up at ~1.7× rate). **Snapshot
+  state-sync live-verified 2026-09-30** — cert-anchored chunked dump,
+  verify-before-write, atomic commit; wiped node-3 adopted @212,930 and
+  proposed @213,035. **Remaining:** the joiner anchored on one donor;
+  multi-peer quorum (`state_sync.peers` + `min_anchor_agree`) is
+  implemented 2026-10-01, live verify pending.
 - **Catch-up side-effect observed:** while behind, a node logs
   `verify: rejecting proposal` / `certify: payload unavailable within wait
   window` — correct behaviour (it can't vote for payloads it doesn't hold)
   but it means a lagging validator contributes nothing until caught up.
-- **`Simulate` = `Unimplemented`.** `GetTx` now works; `Simulate` is the
-  remaining query-service gap — required for any external integrator.
-- **Hybrid PQ tx auth landed 2026-09-29** (chain-side): `PubKey::Hybrid
-  Secp256k1Mayo` — account spends require BOTH secp256k1 AND MAYO-1/2/3/5
-  sigs over the same sign-doc hash; `Any` type_url
-  `/junoclaw.crypto.HybridSecp256k1Mayo` parses into auth; +25k gas for the
-  PQ half; domain-separated address space. Vendored `junoclaw-mayo-verify`
-  into `packages/` for native use. **Remaining:** tx-sender signing support
-  (MAYO signer = sriracha/C → Linux/Docker only), live hybrid tx on devnet,
-  then validator identity + consensus cert hybridization (Phase 2 design).
+- ~~**`Simulate` = `Unimplemented`.~~ **Done 2026-09-30** — `App::simulate`
+  runs the full `execute_tx` path metered on a scratch overlay; gRPC handler
+  maps GasInfo/events into `SimulateResponse`. Integrators can dry-run.
+- **Hybrid PQ tx auth live-verified 2026-09-29**: `PubKey::Hybrid
+  Secp256k1Mayo` spends committed @165,266 and @169,044 (`code=0`,
+  ~110k gas); corrupted-MAYO-sig rejected at check_tx. Signing via
+  `tools/hybrid-sign` Docker image + `tx-sender broadcast`.
+  **Remaining:** validator identity + consensus cert hybridization —
+  Phase 2a implemented 2026-10-01 (`hybrid_scheme.rs` + `hybrid_consensus`
+  flag + MAYO keygen in the keygen tool), live devnet verify pending.
 - **Mempool queues nothing.** Strict sequence at admission (stale *and*
   future nonces rejected). Simple and safe; means bursts must arrive
   ordered. Note for the faucet/bot docs.
@@ -72,10 +73,10 @@ today* vs. what remains, with the check that proves it done.
 1. Fix or pin `layer-cosmos` fixture failures; make `cargo test --workspace`
    a green gate.
 2. `Simulate` in the query service (follows `GetTx` pattern).
-3. ~~Bulk catch-up~~ **Verify backfill live + ship state-sync.** Test: stop
-   node for 10k blocks, measure time-to-tip; new node from genesis or
-   snapshot. Backfill code landed 2026-09-29 — needs a node-image rebuild
-   and the live fault test to close.
+3. ~~Bulk catch-up + state-sync~~ **Both live-verified** (Sept 29/30).
+   Remaining: live-verify the multi-peer anchor quorum (implemented
+   2026-10-01) — fresh node with `peers=[2 donors]`, `min_anchor_agree=2`,
+   plus a mismatched-donor refusal test.
 
 ### Phase 1 — hardening
 4. Fuzz the PQ stack + malformed wasm executes; measure adversarial gas.

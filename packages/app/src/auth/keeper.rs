@@ -77,6 +77,20 @@ impl Auth {
         // later handle other types
         let Tx::Signed(tx) = tx;
 
+        // timeout_height: tx is valid through the given block height,
+        // expired strictly above it (Cosmos SDK / CometBFT semantics).
+        // Enforced in check_tx, deliver, and simulate alike — cheap and
+        // must precede any state access.
+        if let Some(timeout_height) = tx.timeout_height {
+            if block.height > timeout_height {
+                return Err(TxError::TxExpired {
+                    timeout_height,
+                    height: block.height,
+                }
+                .into());
+            }
+        }
+
         // load the signer account if any
         let mut auth_store = prefixed(storage, NAMESPACE_AUTH);
         let pubkey = match ACCOUNTS.may_load(&auth_store, meter, &tx.signer)? {
@@ -136,7 +150,10 @@ impl Auth {
                 return Err(TxError::InternalAcccount.into());
             }
             Some(Account::Smart { .. }) => {
-                todo!();
+                // Smart accounts are not external signers — returning a
+                // deterministic error instead of panicking; a crafted tx
+                // must never crash a validator in check_tx/deliver_tx.
+                return Err(TxError::SmartAccountSigner.into());
             }
         };
 

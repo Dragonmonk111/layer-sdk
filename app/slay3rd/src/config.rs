@@ -87,13 +87,34 @@ pub struct NodeConfig {
     /// silently falls back to genesis.
     #[serde(default)]
     pub state_sync: Option<StateSyncConfig>,
+
+    /// Hybrid consensus certificates (docs/PQ_PROTOCOL_AUTH.md Phase 2a).
+    /// When true, consensus votes carry BLS + MAYO2 signatures and
+    /// certificates require both halves. ALL validators must share this
+    /// flag — a hybrid validator cannot verify classical-only votes and
+    /// vice versa. Default false (classical BLS-only).
+    #[serde(default)]
+    pub hybrid_consensus: bool,
 }
 
 /// State-sync bootstrap parameters (docs/STATE_SYNC.md §4).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateSyncConfig {
-    /// gRPC address of the snapshot-donor peer (host:port).
-    pub peer_grpc: String,
+    /// gRPC addresses of snapshot-donor peers (host:port). The first
+    /// reachable peer donates the snapshot chunks; the certified
+    /// `BlockPayload` anchor must be served identically by at least
+    /// `min_anchor_agree` distinct peers — a single peer cannot dictate
+    /// the anchor.
+    pub peers: Vec<String>,
+    /// Minimum number of peers that must return byte-identical certified
+    /// payloads at the anchor heights. Any disagreement between peers is
+    /// fatal (Byzantine evidence). Default: 2.
+    #[serde(default = "default_min_anchor_agree")]
+    pub min_anchor_agree: usize,
+}
+
+fn default_min_anchor_agree() -> usize {
+    2
 }
 
 fn default_min_gas_price() -> String {
@@ -117,6 +138,7 @@ impl Default for NodeConfig {
             certification_timeout_ms: 5_000,
             min_gas_price: default_min_gas_price(),
             state_sync: None,
+            hybrid_consensus: false,
         }
     }
 }
@@ -200,6 +222,7 @@ mod tests {
             certification_timeout_ms: 2_000,
             min_gas_price: default_min_gas_price(),
             state_sync: None,
+            hybrid_consensus: false,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");

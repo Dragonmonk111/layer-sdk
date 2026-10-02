@@ -1,3 +1,13 @@
+# Byzantine-donor test joiner. Reuses validator-3's key material but
+# runs in its own container/volume; it exits on state-sync failure
+# long before P2P or consensus start, so the identity overlap with
+# node-3 is never exercised.
+#
+# state_sync peers are ordered [rogue, honest] deliberately: the
+# rogue donates ITS snapshot first, then the anchor fetch at
+# snap.height+1 pulls Block() from BOTH peers — different bytes →
+# "anchor disagreement" → fatal. The joiner must refuse and exit,
+# never adopting either state.
 validator_index = 3
 chain_id = "junoclaw-1"
 p2p_listen = "0.0.0.0:7001"
@@ -11,11 +21,8 @@ leader_timeout_ms = 3000
 certification_timeout_ms = 5000
 hybrid_consensus = true
 
-# State-sync bootstrap: when /data has no committed state, adopt a
-# peer snapshot instead of genesis (docs/STATE_SYNC.md). The certified
-# anchor must be served identically by >= min_anchor_agree peers.
 [state_sync]
-peers = ["172.28.0.10:9090", "172.28.0.11:9090", "172.28.0.12:9090"]
+peers = ["172.28.0.20:9090", "172.28.0.10:9090"]
 min_anchor_agree = 2
 
 [[peers]]

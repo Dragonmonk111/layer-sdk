@@ -86,12 +86,18 @@ message LoadSnapshotChunkResponse { bytes chunk = 1; bytes32 checksum = 2; }
 3. Offer only heights with a finality record — a snapshot you can't anchor
    to a cert is worthless to a joiner.
 
-**Joiner side** (slay3rd, `--state-sync` flag or `statesync { enabled,
-trust_height }` config):
-1. Backfill normally until a certified payload ≥ `trust_height` is seen;
-   extract `root_H` from `BlockPayload_H` (cert already verified by
-   consensus layer).
-2. `ListSnapshots` → pick snapshot at exactly H (or nearest ≤ H).
+**Joiner side** (slay3rd, `[state_sync]` config — `peers`,
+`min_anchor_agree`):
+1. `ListSnapshots` across configured peers; the first peer that serves a
+   complete dump is the donor (advertised metadata untrusted).
+2. **Multi-peer anchor**: query `Block(H)` and `Block(H+1)` on the
+   lightclient service of EVERY configured peer. All responding peers
+   must serve byte-identical `payload_bytes` — it binds height,
+   timestamp, parent_digest and state_root. `min_anchor_agree` (default
+   2) respondents minimum; any disagreement is Byzantine evidence →
+   abort. The joiner never verifies the cert itself — the validator set
+   lives inside the state being imported; quorum agreement is what
+   prevents one malicious peer from pinning a fabricated root.
 3. Download chunks (any order, retry-tolerant; checksum per chunk).
 4. Import into a *staging* store; iterate staged KVs in ascending order,
    recompute `state_root_over`; **require equality with `root_H`**.
@@ -108,10 +114,15 @@ trust_height }` config):
 - **No incremental/delta sync** — needs a versioned store (JMT/IAVL-style);
   that's the documented upgrade path in `app.rs:854`. Flat recompute is fine
   at devnet/testnet state sizes.
-- **No trusted attestations** — the anchor is the BLS cert the chain already
-  produces. Weak-subjectivity caveat: trust_height should be recent enough
-  that ≥2/3 of the signing set still overlaps (standard for all
-  checkpoint-based sync).
+- **No trusted attestations** — the anchor is the BLS-certified payload
+  the chain already produces, corroborated by `min_anchor_agree`
+  independent peers (single-peer `peer_grpc` is gone: one peer could
+  have fabricated payload + snapshot consistently). The cert itself is
+  not re-verified at join time — the validator set it authenticates
+  against lives inside the imported state. Weak-subjectivity caveat:
+  the anchor height should be recent enough that the peer set is still
+  majority-honest for your purposes (standard for all checkpoint-based
+  sync).
 - **`_`-sidecar keys are not synced** — they're per-node operational data
   (payloads, cert records), not consensus state; the node regenerates them.
 
@@ -121,6 +132,9 @@ trust_height }` config):
 |---|---|
 | Tampered chunk | sha256 checksum fails → refetch chunk |
 | Censored/extra keys | recomputed root ≠ `root_H` → abort import |
+| One peer lies about anchor | payload bytes differ from quorum → abort |
+| Donor peer unreachable | try next configured peer for chunks |
+| < min_anchor_agree peers reachable | abort (no silent degrade) |
 | Stale snapshot (> retain window) | ListSnapshots won't offer it |
 | Root matches but wrong height | impossible — `root_H` binds to H's payload via cert |
 | Import interrupted mid-way | staging discarded; restart is idempotent |

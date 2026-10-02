@@ -70,6 +70,7 @@ layer-golem = { path = "./packages/golem" }
 layer-proto = { path = "./packages/proto" }
 layer-std = { path = "./packages/std" }
 layer-storage = { path = "./packages/storage" }
+junoclaw-mayo-verify = { path = "./packages/junoclaw-mayo-verify" }
 
 layer-root = { path = "./contracts/root" }
 tc-echo = { path = "./contracts/echo" }

@@ -687,9 +687,13 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         // proofs carry them so the light client can recompute the signed
         // digest and extract state_root.
         let payload_bytes = payload.to_bytes();
-        let result = {
+        let (result, exec_elapsed) = {
+            let exec_start = Instant::now();
             let mut app = self.app.write().await;  // EXCLUSIVE write lock — mutates state
-            app.finalize_block_with_payload(block, Some(payload_bytes))
+            (
+                app.finalize_block_with_payload(block, Some(payload_bytes)),
+                exec_start.elapsed(),
+            )
         };  // write lock released here
 
         match result {
@@ -707,8 +711,24 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
 
                 // Index tx results for GetTx. tx_results is 1:1 with the parsed
                 // txs (malformed ones were skipped above, together with their hash).
-                for (hash, res) in tx_hashes.into_iter().zip(response.tx_results.iter()) {
-                    self.tx_index.insert(tx_response_from_result(hash, height, res));
+                // Q2: write-through to the persisted `_txres/` index so results
+                // survive restarts and in-memory window eviction.
+                let responses: Vec<_> = tx_hashes
+                    .into_iter()
+                    .zip(response.tx_results.iter())
+                    .map(|(hash, res)| tx_response_from_result(hash, height, res))
+                    .collect();
+                {
+                    let mut app = self.app.write().await;
+                    for resp in &responses {
+                        let encoded = prost::Message::encode_to_vec(resp);
+                        if let Err(e) = app.set_tx_response(&resp.txhash, &encoded) {
+                            tracing::warn!(txhash = %resp.txhash, error = %e, "Failed to persist tx response");
+                        }
+                    }
+                }
+                for resp in responses {
+                    self.tx_index.insert(resp);
                 }
 
                 if let Err(e) = self.store.lock().unwrap_or_else(|e| e.into_inner()).put(&payload) {
@@ -722,6 +742,8 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                     height = height,
                     app_hash = %hex::encode(&response.app_hash),
                     digest = %hex::encode(digest),
+                    tx_count = response.tx_results.len(),
+                    exec_ms = exec_elapsed.as_millis() as u64,
                     "Block finalized — certificate stored by Reporter on Finalization activity"
                 );
                 Some((height, payload.timestamp_nanos))

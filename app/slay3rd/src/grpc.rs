@@ -30,11 +30,13 @@ use layer_cosmos::{encode_cosmos_response, parse_cosmos_query, parse_cosmos_tx};
 use layer_storage::PersistentStorage;
 
 use layer_proto::cosmos::tx::v1beta1::{
-    service_server::Service as CosmTxService, BroadcastTxRequest, BroadcastTxResponse,
-    GetBlockWithTxsRequest, GetBlockWithTxsResponse, GetTxRequest, GetTxResponse,
-    GetTxsEventRequest, GetTxsEventResponse, SimulateRequest, SimulateResponse,
+    service_server::Service as CosmTxService, AuthInfo, BroadcastTxRequest,
+    BroadcastTxResponse, GetBlockWithTxsRequest, GetBlockWithTxsResponse,
+    GetTxRequest, GetTxResponse, GetTxsEventRequest, GetTxsEventResponse,
+    SimulateRequest, SimulateResponse, Tx, TxBody,
     TxDecodeAminoRequest, TxDecodeAminoResponse, TxDecodeRequest, TxDecodeResponse,
     TxEncodeAminoRequest, TxEncodeAminoResponse, TxEncodeRequest, TxEncodeResponse,
+    TxRaw,
 };
 use layer_proto::layer::sync::v1::{
     query_server::Query as SyncQuery, BlockWrites, QueryLatestSequenceRequest,
@@ -54,8 +56,10 @@ use layer_proto::cosmos::base::abci::v1beta1::{
 };
 use layer_proto::tendermint::abci::{Event, EventAttribute};
 
-use crate::mempool::{Mempool, SubmitError};
-use crate::tx_index::TxIndex;
+use crate::block::BlockPayload;
+use crate::mempool::{Mempool, SubmitError, TxMeta};
+use crate::tx_index::{tx_hash_hex, TxIndex};
+use prost::Message;
 
 /// gRPC service for slay3rd, generic over the persistent storage backend.
 ///
@@ -75,6 +79,10 @@ pub struct LayerGrpcService<T: PersistentStorage + Send + Sync + 'static> {
     /// blocks. Exports are O(state); caching keeps repeat chunk fetches
     /// from re-iterating storage.
     pub snapshot_cache: Arc<Mutex<Option<Arc<SnapshotExport>>>>,
+    /// Gossip egress: raw tx bytes accepted into the mempool are sent here
+    /// and forwarded to all validator peers over authenticated P2P
+    /// (channel 4). None in tests — gossip is optional plumbing.
+    pub tx_gossip: Option<tokio::sync::mpsc::UnboundedSender<Bytes>>,
 }
 
 /// State-sync snapshots refresh at this block cadence.
@@ -89,6 +97,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> Clone for LayerGrpcService<T>
             chain_id: self.chain_id.clone(),
             tx_index: self.tx_index.clone(),
             snapshot_cache: self.snapshot_cache.clone(),
+            tx_gossip: self.tx_gossip.clone(),
         }
     }
 }
@@ -110,8 +119,17 @@ impl<T: PersistentStorage + Send + Sync + 'static> LayerGrpcService<T> {
         }
         let exp = {
             let app = self.app.read().await;
-            if app.info().is_none() {
-                return Err(Status::unavailable("node initializing"));
+            let tip = match app.info() {
+                Some(b) => b.height,
+                None => return Err(Status::unavailable("node initializing")),
+            };
+            // Never export height 0: the genesis snapshot is unanchorable —
+            // the joiner anchors on certified blocks at `height` and
+            // `height + 1`, and no certified block exists at height 0.
+            // A height-0 export would otherwise sit in the cache for the
+            // full SNAPSHOT_INTERVAL serving a poison pill to joiners.
+            if tip == 0 {
+                return Err(Status::unavailable("no committed blocks yet"));
             }
             app.snapshot_export()
                 .map_err(|e| Status::internal(format!("snapshot export failed: {e}")))?
@@ -119,6 +137,30 @@ impl<T: PersistentStorage + Send + Sync + 'static> LayerGrpcService<T> {
         let exp = Arc::new(exp);
         *cache = Some(exp.clone());
         Ok(exp)
+    }
+
+    /// Recover the committed raw tx bytes for an indexed result and
+    /// decode them into `cosmos.tx.v1beta1.Tx` (Q3). The raw bytes live
+    /// in the stored `BlockPayload` at `TxResponse.height`. Returns None
+    /// when the payload is unavailable or undeсodable — `tx_response` is
+    /// still served, just without the body.
+    async fn committed_tx(&self, resp: &TxResponse) -> Option<Tx> {
+        let height: u64 = resp.height.try_into().ok()?;
+        let raw_payload = {
+            let app = self.app.read().await;
+            app.get_block_payload(height)?
+        };
+        let payload = BlockPayload::from_bytes(&raw_payload).ok()?;
+        let raw = payload
+            .txs
+            .iter()
+            .find(|t| tx_hash_hex(t).eq_ignore_ascii_case(&resp.txhash))?;
+        let tx_raw = TxRaw::decode(raw.as_ref()).ok()?;
+        Some(Tx {
+            body: TxBody::decode(tx_raw.body_bytes.as_slice()).ok(),
+            auth_info: AuthInfo::decode(tx_raw.auth_info_bytes.as_slice()).ok(),
+            signatures: tx_raw.signatures,
+        })
     }
 }
 
@@ -145,6 +187,17 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
         let tx = parse_cosmos_tx(raw_bytes.clone(), &self.chain_id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
+        // Admission metadata for the mempool — captured before check_tx
+        // consumes the tx (M4 ordering, M7 caps + store-code exception).
+        let layer_std::Tx::Signed(ref signed) = tx;
+        let meta = TxMeta {
+            sender: signed.signer.to_string(),
+            sequence: signed.signing_info.sequence,
+            store_code: signed.msgs.iter().any(|m| {
+                matches!(m, layer_std::Msg::Wasm(layer_std::WasmMsg::StoreCode { .. }))
+            }),
+        };
+
         // Step 2 & 3: guard initialization, then check_tx
         // CRITICAL: read lock (shared), call sync method, drop lock before any .await
         let check = {
@@ -162,10 +215,11 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
             )));
         }
 
-        // Step 4: submit raw bytes to mempool
+        // Step 4: submit raw bytes to mempool (clone is a refcount bump —
+        // the original is still needed for peer gossip below)
         let submitted = {
             let mut mempool = self.mempool.lock().await;
-            mempool.submit(raw_bytes)
+            mempool.submit_checked(raw_bytes.clone(), Some(meta))
         };
         let hash = match submitted {
             Ok(hash) => hash,
@@ -176,7 +230,17 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
                 return Err(Status::invalid_argument("tx exceeds maximum size"))
             }
             Err(SubmitError::Full) => return Err(Status::resource_exhausted("mempool full")),
+            Err(SubmitError::SenderFull) => {
+                return Err(Status::resource_exhausted("per-sender mempool limit"))
+            }
         };
+
+        // Forward accepted tx to all validator peers — a tx submitted to a
+        // non-leader must not wait for its own node's proposal slot.
+        // Peers re-run check_tx on receipt; mempool dedupe absorbs repeats.
+        if let Some(gossip) = &self.tx_gossip {
+            let _ = gossip.send(raw_bytes);
+        }
 
         Ok(Response::new(BroadcastTxResponse {
             tx_response: Some(TxResponse {
@@ -252,13 +316,33 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
         request: Request<GetTxRequest>,
     ) -> Result<Response<GetTxResponse>, Status> {
         let hash = request.into_inner().hash;
-        match self.tx_index.get(&hash) {
-            Some(tx_response) => Ok(Response::new(GetTxResponse {
-                tx: None,
-                tx_response: Some(tx_response),
-            })),
+        // Hot cache first; on a miss (restart or window eviction) fall back
+        // to the persisted `_txres/` index (Q2) and warm the cache.
+        let tx_response = match self.tx_index.get(&hash) {
+            hit @ Some(_) => hit,
+            None => {
+                let encoded = {
+                    let app = self.app.read().await;
+                    app.get_tx_response(&crate::tx_index::normalize(&hash))
+                };
+                encoded
+                    .and_then(|b| TxResponse::decode(b.as_slice()).ok())
+                    .inspect(|r| self.tx_index.insert(r.clone()))
+            }
+        };
+        match tx_response {
+            Some(tx_response) => {
+                // Q3: also serve the decoded tx body — recover the committed
+                // raw bytes from the block payload at the result's height.
+                // Missing/undecodable payloads degrade to tx_response-only.
+                let tx = self.committed_tx(&tx_response).await;
+                Ok(Response::new(GetTxResponse {
+                    tx,
+                    tx_response: Some(tx_response),
+                }))
+            }
             None => Err(Status::not_found(format!(
-                "tx {hash} not found (not yet committed, or outside this node's index window)"
+                "tx {hash} not found (not yet committed, or not indexed on this node)"
             ))),
         }
     }
@@ -762,7 +846,7 @@ mod tests {
     use cosmwasm_std::{to_json_binary, Timestamp as CwTimestamp};
     use layer_app::genesis::{GenesisState, WasmParams};
     use layer_app::{App, AppConfig, StateMachine};
-    use layer_std::api::{InitChainRequest, TmPubKey, ValidatorUpdate};
+    use layer_std::api::{Block, InitChainRequest, TmPubKey, ValidatorUpdate};
     use layer_std::BECH32_PREFIX;
     use layer_storage::MemoryStore;
     use tokio::sync::{Mutex, RwLock};
@@ -824,6 +908,7 @@ mod tests {
             chain_id: "junoclaw-1".to_string(),
             tx_index: Arc::new(TxIndex::new(16)),
             snapshot_cache: Arc::new(Mutex::new(None)),
+            tx_gossip: None,
         }
     }
 
@@ -1164,7 +1249,20 @@ mod tests {
             .unwrap();
 
         rt.block_on(async {
-            let svc = make_service(init_app());
+            let mut app = init_app();
+            // Commit one block — a height-0 (genesis) snapshot is refused
+            // because its tip anchor is unanchorable (no certified block
+            // exists at height 0).
+            app.finalize_block(Block {
+                txs: vec![],
+                height: 1,
+                time: CwTimestamp::from_seconds(1_673_194_027),
+                proposer_address: vec![1u8; 32],
+                last_votes: vec![],
+                certificate: None,
+            })
+            .unwrap();
+            let svc = make_service(app);
 
             let res = svc
                 .list_snapshots(Request::new(ListSnapshotsRequest {}))

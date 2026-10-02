@@ -30,6 +30,7 @@
 //! If BLS key material is missing or invalid, the node exits with a clear error message.
 //! Consensus MUST NOT start until DKG key material is loaded and validated.
 
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::num::{NonZeroU16, NonZeroU32, NonZeroUsize};
 use std::sync::Arc;
@@ -68,9 +69,12 @@ const PAYLOAD_MSG_PUSH: u8 = 0;
 const PAYLOAD_MSG_REQUEST: u8 = 1;
 const PAYLOAD_MSG_REQUEST_RANGE: u8 = 2;
 
+use junoclaw_mayo_verify::ParameterSet as _;
+
 use slay3rd::{
     config::NodeConfig,
     grpc::LayerGrpcService,
+    hybrid_scheme::HybridScheme,
     mempool::Mempool,
     node::{FetchRequest, LayerNode},
     relay::LayerRelay,
@@ -117,6 +121,22 @@ struct KeyMaterial {
     sharing_hex: Option<String>,
     #[serde(default)]
     share_hex: Option<String>,
+    /// Hybrid validator identity (docs/PQ_PROTOCOL_AUTH.md §3). Required iff
+    /// `hybrid_consensus` is enabled in the node config.
+    /// `mayo_variant` — "mayo2" (only supported variant, fixed-size sigs).
+    #[serde(default)]
+    mayo_variant: Option<String>,
+    /// Hex-encoded MAYO secret seed (sriracha-mayo `SecretKey::from_seed` input).
+    #[serde(default)]
+    mayo_private_hex: Option<String>,
+    /// Hex-encoded MAYO2 public key for this validator.
+    #[serde(default)]
+    mayo_public_hex: Option<String>,
+    /// MAYO2 public keys of ALL validators in validator_index order — the
+    /// same ordering convention as `validator_public_keys`. Sorted into
+    /// binary order alongside the Ed25519 set at load time.
+    #[serde(default)]
+    validator_mayo_public_keys: Option<Vec<String>>,
 }
 
 impl KeyMaterial {
@@ -146,8 +166,11 @@ impl KeyMaterial {
 /// (possibly slow wasm, possibly waiting on payload fetches) off the
 /// consensus path, in the order consensus finalized them.
 #[derive(Clone)]
-struct LayerReporter {
+struct LayerReporter<S> {
     exec_tx: tokio::sync::mpsc::UnboundedSender<FinalizedBlock>,
+    /// Certificate type flows through `Activity<S, _>`; PhantomData keeps the
+    /// reporter generic over the consensus scheme (BLS-only or hybrid).
+    _scheme: PhantomData<S>,
 }
 
 /// A finalization handed from the reporter to the executor.
@@ -209,11 +232,11 @@ async fn run_executor<T: PersistentStorage + Send + Sync + 'static>(
     tracing::error!("Executor channel closed — no further blocks will be executed");
 }
 
-impl Reporter for LayerReporter {
-    type Activity = commonware_consensus::simplex::types::Activity<
-        BlsScheme<ed25519::PublicKey, MinSig>,
-        sha256::Digest,
-    >;
+impl<S> Reporter for LayerReporter<S>
+where
+    S: commonware_cryptography::certificate::Scheme,
+{
+    type Activity = commonware_consensus::simplex::types::Activity<S, sha256::Digest>;
 
     async fn report(&mut self, activity: Self::Activity) {
         use commonware_codec::codec::Encode as _;
@@ -376,10 +399,11 @@ async fn run_node(
                 // trust anchor is the BLS-certified BlockPayload.state_root
                 // (docs/STATE_SYNC.md §4). Failure is FATAL: falling back
                 // to genesis would fork the node onto a divergent state.
-                info!(peer = %ss.peer_grpc, "No stored state — attempting state-sync");
+                info!(peers = ?ss.peers, min_anchor_agree = ss.min_anchor_agree,
+                    "No stored state — attempting state-sync");
                 match slay3rd::state_sync::adopt_snapshot(
                     &mut app,
-                    &ss.peer_grpc,
+                    ss,
                     &config.chain_id,
                 )
                 .await
@@ -470,6 +494,13 @@ async fn run_node(
     let (payload_broadcast_tx, payload_broadcast_rx) =
         tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
 
+    // Tx gossip: BroadcastTx-accepted raw tx bytes are pushed here by the
+    // gRPC service and forwarded to all validator peers over P2P channel 4,
+    // so a tx submitted to a non-leader does not wait for that node's own
+    // proposal slot (M1).
+    let (tx_gossip_tx, tx_gossip_rx) =
+        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+
     // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
     // This is what allows non-proposer validators to find payloads in verify().
     let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx.clone()));
@@ -477,7 +508,8 @@ async fn run_node(
     // via set_block_certificate() when the Finalization activity fires.
     let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
     tokio::spawn(run_executor(app_arc.clone(), layer_node.clone(), exec_rx));
-    let reporter = LayerReporter { exec_tx };
+    // The LayerReporter is constructed inside the consensus-scheme branch
+    // below — its certificate type differs between classical and hybrid mode.
 
     info!("LayerNode and LayerRelay created (shared pending_payloads)");
 
@@ -524,11 +556,56 @@ async fn run_node(
     // Sort participant_keys into binary order — required by commonware_utils::ordered::Set.
     // The keygen tool stores keys in validator_index order, NOT sorted binary order.
     // The sorted position of our key is what determines which BLS share we hold.
-    participant_keys.sort_by(|a, b| {
-        let a_bytes: &[u8] = a.as_ref();
-        let b_bytes: &[u8] = b.as_ref();
-        a_bytes.cmp(b_bytes)
-    });
+    //
+    // Hybrid mode: validator_mayo_public_keys is in the same validator_index
+    // order, so we sort (ed25519, mayo) pairs to keep the MAYO identity table
+    // aligned with the sorted participant set (PQ_PROTOCOL_AUTH.md §3).
+    let mayo_pks: Option<Vec<Vec<u8>>> = if config.hybrid_consensus {
+        let mayo_hexes = match &km.validator_mayo_public_keys {
+            Some(l) if l.len() == participant_keys.len() => l.clone(),
+            Some(l) => {
+                error!(
+                    expected = participant_keys.len(),
+                    got = l.len(),
+                    "validator_mayo_public_keys length mismatch"
+                );
+                return;
+            }
+            None => {
+                error!("hybrid_consensus enabled but key file lacks validator_mayo_public_keys");
+                return;
+            }
+        };
+        let mut pairs: Vec<(ed25519::PublicKey, Vec<u8>)> =
+            Vec::with_capacity(mayo_hexes.len());
+        for (pk, mh) in participant_keys.iter().cloned().zip(mayo_hexes.iter()) {
+            match hex::decode(mh) {
+                Ok(b) if b.len() == junoclaw_mayo_verify::Mayo2::PK_BYTES => pairs.push((pk, b)),
+                Ok(b) => {
+                    error!(len = b.len(), "MAYO public key wrong size — expected MAYO2");
+                    return;
+                }
+                Err(e) => {
+                    error!(error = %e, "Invalid hex in validator_mayo_public_keys");
+                    return;
+                }
+            }
+        }
+        pairs.sort_by(|a, b| {
+            let a_bytes: &[u8] = a.0.as_ref();
+            let b_bytes: &[u8] = b.0.as_ref();
+            a_bytes.cmp(b_bytes)
+        });
+        participant_keys = pairs.iter().map(|(pk, _)| pk.clone()).collect();
+        Some(pairs.into_iter().map(|(_, m)| m).collect())
+    } else {
+        participant_keys.sort_by(|a, b| {
+            let a_bytes: &[u8] = a.as_ref();
+            let b_bytes: &[u8] = b.as_ref();
+            a_bytes.cmp(b_bytes)
+        });
+        None
+    };
 
     // Find our sorted position — this is the index into the BLS shares array.
     // shares[0] was assigned to the validator whose sorted position is 0, etc.
@@ -679,6 +756,7 @@ async fn run_node(
             chain_id: config.chain_id.clone(),
             tx_index: tx_index.clone(),
             snapshot_cache: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            tx_gossip: Some(tx_gossip_tx),
         };
 
         // Cosmos query dispatch state for the axum fallback handler.
@@ -778,6 +856,8 @@ async fn run_node(
     let (res_sender, res_receiver) = network.register(2, quota, 128);
     // Channel 3: block payload relay (broadcast to peers, receive from peers)
     let (payload_p2p_sender, mut payload_p2p_receiver) = network.register(3, quota, 128);
+    // Channel 4: tx gossip (raw tx bytes, forwarded from BroadcastTx)
+    let (tx_p2p_sender, mut tx_p2p_receiver) = network.register(4, quota, 128);
 
     // Build peer map: all validators including self
     // Address implements From<SocketAddr>; Map is built via try_into() from array/slice.
@@ -872,6 +952,70 @@ async fn run_node(
             tokio::time::sleep(Duration::from_secs(5)).await;
             for p in recovered_payloads {
                 let _ = tx.send(bytes::Bytes::from(p.to_bytes()));
+            }
+        });
+    }
+
+    // Tx gossip egress: drain the gRPC-forwarded queue onto P2P channel 4.
+    {
+        let mut sender = tx_p2p_sender.clone();
+        let mut rx = tx_gossip_rx;
+        tokio::spawn(async move {
+            while let Some(tx_bytes) = rx.recv().await {
+                if let Err(e) =
+                    P2pSender::send(&mut sender, Recipients::All, tx_bytes, true).await
+                {
+                    tracing::warn!(error = ?e, "Tx gossip: send failed");
+                }
+            }
+        });
+    }
+
+    // Tx gossip ingress: validate + admit peer-forwarded raw tx bytes.
+    // check_tx gates admission (same rules as BroadcastTx); mempool dedupe
+    // makes repeat delivery idempotent; invalid bytes are dropped.
+    {
+        let app = app_arc.clone();
+        let mempool = mempool.clone();
+        let chain_id = config.chain_id.clone();
+        tokio::spawn(async move {
+            loop {
+                match tx_p2p_receiver.recv().await {
+                    Ok((_peer, message)) => {
+                        let raw: bytes::Bytes = message.into();
+                        let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id)
+                        else {
+                            continue;
+                        };
+                        // Admission metadata — captured before check_tx
+                        // consumes the tx (M4 ordering, M7 caps).
+                        let layer_std::Tx::Signed(ref signed) = tx;
+                        let meta = slay3rd::mempool::TxMeta {
+                            sender: signed.signer.to_string(),
+                            sequence: signed.signing_info.sequence,
+                            store_code: signed.msgs.iter().any(|m| {
+                                matches!(
+                                    m,
+                                    layer_std::Msg::Wasm(
+                                        layer_std::WasmMsg::StoreCode { .. }
+                                    )
+                                )
+                            }),
+                        };
+                        let ok = {
+                            let app = app.read().await;
+                            app.info().is_some() && app.check_tx(tx).result.is_ok()
+                        };
+                        if !ok {
+                            continue;
+                        }
+                        let _ = mempool
+                            .lock()
+                            .await
+                            .submit_checked(raw, Some(meta));
+                    }
+                    Err(_) => break,
+                }
             }
         });
     }
@@ -1031,41 +1175,157 @@ async fn run_node(
     let timeout_retry = Duration::from_millis((config.leader_timeout_ms / 2).max(100));
 
     // The lookup Oracle implements Blocker directly (no oracle.control(pk) needed).
-    let consensus_cfg = SimplexConfig {
-        scheme: bls_scheme,
-        elector: RoundRobin::<commonware_cryptography::Sha256>::default(),
-        blocker: oracle,
-        automaton: layer_node,
-        relay,
-        reporter,
-        strategy: Sequential,
-        partition: format!("slay3r-{}", config.chain_id),
-        mailbox_size: 1024,
-        epoch: CONSENSUS_EPOCH,
-        replay_buffer: NZUsize!(1024 * 1024),
-        write_buffer: NZUsize!(1024 * 1024),
-        page_cache: CacheRef::from_pooler(&context, PAGE_SIZE, PAGE_CACHE_SIZE),
-        leader_timeout,
-        certification_timeout: cert_timeout,
-        timeout_retry,
-        activity_timeout: commonware_consensus::types::ViewDelta::new(10),
-        skip_timeout: commonware_consensus::types::ViewDelta::new(5),
-        fetch_timeout: Duration::from_secs(5),
-        fetch_concurrent: 4,
-    };
+    //
+    // Phase 2a (docs/PQ_PROTOCOL_AUTH.md): with `hybrid_consensus = true` the
+    // engine runs HybridScheme — every vote carries BLS + MAYO2 and every
+    // certificate requires both halves. Otherwise the classical BLS-only
+    // scheme runs unchanged. The branch bodies are identical except for the
+    // scheme/reporter types, which are fixed at compile time.
+    if config.hybrid_consensus {
+        let Some(mayo_pks) = mayo_pks else {
+            error!("hybrid_consensus enabled but MAYO identity table was not built");
+            return;
+        };
 
-    consensus_cfg.assert();
+        // Only MAYO2 is supported: fixed 186-byte signatures are what allow
+        // HybridSignature to satisfy the CodecFixed bound.
+        match km.mayo_variant.as_deref() {
+            Some("mayo2") | Some("MAYO2") => {}
+            other => {
+                error!(variant = ?other, "Unsupported mayo_variant — only \"mayo2\" is supported");
+                return;
+            }
+        }
 
-    let consensus_ctx = context.with_label("consensus");
-    let engine = Engine::new(consensus_ctx, consensus_cfg);
-    info!("Starting simplex consensus engine (epoch=0)...");
+        let mayo_seed = match &km.mayo_private_hex {
+            Some(h) => match hex::decode(h) {
+                Ok(b) => b,
+                Err(e) => {
+                    error!(error = %e, "Invalid hex in mayo_private_hex");
+                    return;
+                }
+            },
+            None => {
+                error!("hybrid_consensus requires mayo_private_hex in the key file");
+                return;
+            }
+        };
 
-    // Start engine with the three P2P channel pairs.
-    let _engine_handle = engine.start(
-        (vote_sender, vote_receiver),
-        (cert_sender, cert_receiver),
-        (res_sender, res_receiver),
-    );
+        // Sanity: our declared MAYO public key must sit at our sorted
+        // participant position — catches identity-table misalignment at
+        // startup instead of producing votes that never verify.
+        if let Some(pk_hex) = &km.mayo_public_hex {
+            match hex::decode(pk_hex) {
+                Ok(pk) if pk == mayo_pks[our_sorted_position] => {}
+                Ok(_) => {
+                    error!(
+                        "mayo_public_hex does not match validator_mayo_public_keys at our sorted position"
+                    );
+                    return;
+                }
+                Err(e) => {
+                    error!(error = %e, "Invalid hex in mayo_public_hex");
+                    return;
+                }
+            }
+        }
+
+        // pq_quorum == BLS threshold_required: the certificate needs the same
+        // quorum of valid MAYO signatures as the classical threshold.
+        let scheme = match HybridScheme::new(
+            bls_scheme,
+            NAMESPACE,
+            mayo_pks,
+            Some(mayo_seed),
+            km.threshold_required as usize,
+        ) {
+            Some(s) => s,
+            None => {
+                error!("Hybrid scheme creation failed — MAYO table/quorum mismatch");
+                return;
+            }
+        };
+        info!("Hybrid BLS+MAYO2 consensus scheme initialized (PQ_PROTOCOL_AUTH Phase 2a)");
+
+        let reporter = LayerReporter::<HybridScheme> {
+            exec_tx,
+            _scheme: PhantomData,
+        };
+        let consensus_cfg = SimplexConfig {
+            scheme,
+            elector: RoundRobin::<commonware_cryptography::Sha256>::default(),
+            blocker: oracle,
+            automaton: layer_node,
+            relay,
+            reporter,
+            strategy: Sequential,
+            partition: format!("slay3r-{}", config.chain_id),
+            mailbox_size: 1024,
+            epoch: CONSENSUS_EPOCH,
+            replay_buffer: NZUsize!(1024 * 1024),
+            write_buffer: NZUsize!(1024 * 1024),
+            page_cache: CacheRef::from_pooler(&context, PAGE_SIZE, PAGE_CACHE_SIZE),
+            leader_timeout,
+            certification_timeout: cert_timeout,
+            timeout_retry,
+            activity_timeout: commonware_consensus::types::ViewDelta::new(10),
+            skip_timeout: commonware_consensus::types::ViewDelta::new(5),
+            fetch_timeout: Duration::from_secs(5),
+            fetch_concurrent: 4,
+        };
+
+        consensus_cfg.assert();
+
+        let consensus_ctx = context.with_label("consensus");
+        let engine = Engine::new(consensus_ctx, consensus_cfg);
+        info!("Starting simplex consensus engine (epoch=0, hybrid BLS+MAYO2)...");
+
+        let _engine_handle = engine.start(
+            (vote_sender, vote_receiver),
+            (cert_sender, cert_receiver),
+            (res_sender, res_receiver),
+        );
+    } else {
+        let reporter = LayerReporter::<BlsScheme<ed25519::PublicKey, MinSig>> {
+            exec_tx,
+            _scheme: PhantomData,
+        };
+        let consensus_cfg = SimplexConfig {
+            scheme: bls_scheme,
+            elector: RoundRobin::<commonware_cryptography::Sha256>::default(),
+            blocker: oracle,
+            automaton: layer_node,
+            relay,
+            reporter,
+            strategy: Sequential,
+            partition: format!("slay3r-{}", config.chain_id),
+            mailbox_size: 1024,
+            epoch: CONSENSUS_EPOCH,
+            replay_buffer: NZUsize!(1024 * 1024),
+            write_buffer: NZUsize!(1024 * 1024),
+            page_cache: CacheRef::from_pooler(&context, PAGE_SIZE, PAGE_CACHE_SIZE),
+            leader_timeout,
+            certification_timeout: cert_timeout,
+            timeout_retry,
+            activity_timeout: commonware_consensus::types::ViewDelta::new(10),
+            skip_timeout: commonware_consensus::types::ViewDelta::new(5),
+            fetch_timeout: Duration::from_secs(5),
+            fetch_concurrent: 4,
+        };
+
+        consensus_cfg.assert();
+
+        let consensus_ctx = context.with_label("consensus");
+        let engine = Engine::new(consensus_ctx, consensus_cfg);
+        info!("Starting simplex consensus engine (epoch=0)...");
+
+        // Start engine with the three P2P channel pairs.
+        let _engine_handle = engine.start(
+            (vote_sender, vote_receiver),
+            (cert_sender, cert_receiver),
+            (res_sender, res_receiver),
+        );
+    }
 
     info!(
         grpc_listen = %config.grpc_listen,
