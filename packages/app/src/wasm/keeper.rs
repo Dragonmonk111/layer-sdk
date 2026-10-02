@@ -60,6 +60,13 @@ const CODE_ID: Item<u64> = Item::new("code_id");
 // A counter of total contracts created for the v1 instantiate algorithm
 const CONTRACT_COUNTER: Item<u64> = Item::new("contract_count");
 
+// Wasm bytecode blobs keyed by checksum, kept in committed state so that
+// state-sync snapshots carry them. The cosmwasm_vm Cache dir is node-local
+// and cold after a state-sync — without this a synced node errors on the
+// first wasm tx while peers succeed -> divergent state root. (Root cause of
+// the 2026-10-02 h142867 divergence.)
+pub(crate) const CODE_BYTES: Map<&[u8], Vec<u8>> = Map::new("code_bytes");
+
 // TODO: ideally we can derive these from the actual buckets for no typos.
 // But for now, this is easier to write than building some auto-magic framework
 pub fn parse_keys(bucket: &str, key: Vec<u8>) -> Vec<String> {
@@ -167,6 +174,7 @@ impl Wasm {
             };
             let id = self.next_id(&mut wasm_store, meter)?;
             CODES.save(&mut wasm_store, meter, id, &info)?;
+            CODE_BYTES.save(&mut wasm_store, meter, checksum.as_slice(), &ROOT_WASM.to_vec())?;
 
             // now, pin it (copied code from _process_msg / WasmMsg::Pin)
             self.cache
@@ -271,6 +279,10 @@ impl Wasm {
                 };
                 let mut wasm_store = prefixed(storage, NAMESPACE_WASM);
                 let id = self.next_id(&mut wasm_store, meter)?;
+
+                // Persist the blob into committed state so snapshots carry it
+                // (the VM cache dir is node-local and cold after state-sync).
+                CODE_BYTES.save(&mut wasm_store, meter, checksum.as_slice(), &code.to_vec())?;
 
                 self.save_code(storage, meter, id, &info)?;
                 let data = WasmMsgData::Store {
@@ -567,6 +579,11 @@ impl Wasm {
                 if !code.pinned {
                     code.pinned = true;
                     self.save_code(storage, meter, code_id, &code)?;
+                    // hydrate the VM cache first — a cold node (state-synced)
+                    // has the checksum in state but no module on disk
+                    self.cache
+                        .ensure_cached(storage.as_ref(), &code.get_checksum_not_executing())
+                        .map_err(map_vm_error)?;
                     self.cache
                         .pin(&code.get_checksum_not_executing())
                         .map_err(map_vm_error)?;
@@ -870,8 +887,13 @@ impl Wasm {
                     .try_into()
                     .map_err(|_| WasmError::Checksum)?;
                 let hash = Checksum::from(cs_bytes);
+                // Serve the blob from committed state — deterministic on every
+                // node, regardless of VM cache warmth (state-synced nodes have
+                // cold caches).
                 let data = if include_wasm {
-                    self.cache.load_code(&hash).map_err(map_vm_error)?
+                    CODE_BYTES
+                        .load(&prefixed_read(storage, NAMESPACE_WASM), meter, hash.as_slice())
+                        .map_err(|_| WasmError::Vm(format!("no wasm blob for checksum {hash}")))?
                 } else {
                     vec![]
                 };

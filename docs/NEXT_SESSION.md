@@ -1,4 +1,57 @@
-# Next Session — Plan (updated 2026-10-01, UTC+1)
+# Next Session — Plan (updated 2026-10-02, UTC+1)
+
+## OPEN INCIDENT — node-3 state divergence (top priority, blocks G1)
+
+- **2026-10-02 ~05:50 UTC:** `junoclaw-node-3` diverged at **h142868** on an
+  **empty block** (`tx_count=0`). Network root `5765e54f…` vs node-3 local
+  `8fccf8c4…`. It then logged `state_root mismatch — halting execution` on
+  every subsequent block (11,495 consecutive) while the other 3 finalized
+  fine — chain kept quorum at 3/4.
+- **Forensics preserved:** `docker commit` → image `diverged-node3:h142868`
+  holds the divergent DB for offline diffing.
+- **Recovery verified:** wiped `devnet_node3_data`, re-created → state-sync
+  adopted an anchor, caught up to tip (h154,960+) in seconds and resumed
+  proposing.
+- **Root cause CONFIRMED + FIXED (2026-10-02):** the divergence actually
+  originated at **h142867** (a Wasm `Instantiate` tx), surfacing as the
+  state-root mismatch at h142868. `cosmwasm_vm::Cache` stores compiled wasm
+  modules + source blobs in a **node-local** dir (`{data}/wal/cache/modules`)
+  that state-sync snapshots never carry. Node-3 (freshly state-synced) had
+  the committed `CodeInfo` checksums but NO bytecode on disk → `get_instance`
+  failed there while the 3 warm nodes executed → divergent state root.
+- **Fix (mirrors wasmd — wasm blob is committed state, cache is a cache):**
+  - `wasm::keeper`: new `CODE_BYTES: Map<&[u8], Vec<u8>>` under the `wasm/`
+    namespace — `StoreCode` and genesis `init()` now persist the raw blob
+    keyed by checksum (metered, app-hash-covered, snapshot-carried).
+    `WasmQuery::CodeInfo{include_wasm}` serves the blob from KV, not the
+    node-local dir. `Pin` hydrates before pinning.
+  - `wasm::vm::cache`: new `VmCache::ensure_cached()` called at the top of
+    every `get_instance` path (instantiate/execute/migrate/sudo/reply/query).
+    It REQUIRES the committed blob (deterministic error everywhere if absent)
+    and, on local miss, `store_code`s it back into the VM cache — verifying
+    the re-derived checksum. Deliberately unmetered: cache warmth is
+    node-local, so metering it would itself be a divergence.
+  - Regression test `cold_cache_hydrates_from_committed_state` seeds KV +
+    empty cache dir → instantiate succeeds and warms the cache.
+  - `layer-app`: 50/50 tests green. StoreCode gas limit raised in tests
+    (metered blob write is real state cost, as in wasmd).
+- **Deployment caveat:** existing devnet state predates `CODE_BYTES` — code
+  stored before this fix has checksums but no committed blob, so a cold
+  node still fails on it. Options: fresh genesis (recommended for devnet),
+  or a one-shot upgrade migration that reads `wal/cache/modules` on a
+  canonical node and injects the blobs via a deterministic mechanism
+  (e.g. gov StoreCode re-tx). Soak/monitor must restart on the fixed image.
+
+## Ops running (detached PS processes)
+
+- `monitor-s4.ps1` (26h) — polls all 4 nodes' logs every 30s; alerts on
+  app_hash mismatch, lag>10, stall>90s → `monitor-s4.log`. **Caught the
+  node-3 divergence on its first poll.**
+- `soak-c9.ps1` (24h) — chaos events every ~60–120min: kill+restart /
+  90–180s network partition / compose recreate, rotating victim, recovery
+  measured via tip delta → `soak-c9.log`. **Byzantine-proposer leg needs a
+  patched image — no fault-injection flag exists yet; build one for full
+  C9 credit.**
 
 ## Landed this session (2026-10-01) — LIVE-VERIFIED on devnet
 

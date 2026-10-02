@@ -4,12 +4,13 @@ use cosmwasm_std::{Binary, Env, MessageInfo, Reply, Response};
 use cosmwasm_std::Checksum;
 use cosmwasm_vm::{
     call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
-    AnalysisReport, Cache, CacheOptions, InstanceOptions, Size, VmError,
+    AnalysisReport, BackendError, Cache, CacheOptions, InstanceOptions, Size, VmError,
 };
 use layer_std::{AccountId, GasMeter};
-use layer_storage::{AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
+use layer_storage::{prefixed_read, AppMeter, ReadonlyStorage, ScratchTx, Storage, WeakSubTx};
 
-use crate::{wasm::keeper::contract_storage, StateMachine};
+use crate::wasm::keeper::{contract_storage, CODE_BYTES, NAMESPACE_WASM};
+use crate::StateMachine;
 
 use super::backend::{make_backend, out_of_gas, VmApi, VmQuerier, VmStore};
 
@@ -83,6 +84,46 @@ impl VmCache {
         Ok((checksum, analysis))
     }
 
+    /// Ensure the module for `checksum` is materialized in the node-local VM
+    /// cache, hydrating it from committed state (`wasm/code_bytes`) on miss.
+    ///
+    /// The cache dir is node-local and is COLD after a state-sync (snapshots
+    /// carry the KV, not the dir). The committed blob is therefore the
+    /// required source of truth: if it is absent we fail on EVERY node
+    /// (deterministic), if present we `store_code` it and verify the derived
+    /// checksum. Deliberately unmetered — cache warmth is node-local, so
+    /// charging gas here would itself be a divergence.
+    ///
+    /// Root-cause fix for the 2026-10-02 h142867 divergence: a state-synced
+    /// node failed `get_instance` on the first post-sync wasm tx while peers
+    /// with warm caches succeeded -> divergent state root.
+    pub(crate) fn ensure_cached(
+        &self,
+        storage: &dyn ReadonlyStorage,
+        checksum: &Checksum,
+    ) -> Result<(), VmError> {
+        // Require the committed blob first — never depend on node-local cache
+        // state alone, or warm/cold nodes disagree on tx outcome.
+        let reader = prefixed_read(storage, NAMESPACE_WASM);
+        let blob = CODE_BYTES
+            .load(&reader, &GasMeter::infinite(), checksum.as_slice())
+            .map_err(|e| {
+                VmError::from(BackendError::user_err(format!(
+                    "wasm bytecode missing from state: {e}"
+                )))
+            })?;
+        if self.cache.load_wasm(checksum).is_ok() {
+            return Ok(());
+        }
+        let derived = self.cache.store_code(&blob, true, true)?;
+        if derived != *checksum {
+            return Err(VmError::from(BackendError::user_err(
+                "hydrated wasm checksum mismatch — refusing to execute",
+            )));
+        }
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub fn load_code(&self, checksum: &Checksum) -> Result<Vec<u8>, VmError> {
         self.cache.load_wasm(checksum)
@@ -111,6 +152,11 @@ impl VmCache {
         Result<Result<Response<super::CustomMsg>, String>, VmError>,
         u64,
     ) {
+        // Hydrate from committed state if the node-local cache is cold
+        // (e.g. after state-sync). Deterministic across nodes.
+        if let Err(e) = self.ensure_cached(global_storage.as_ref(), checksum) {
+            return (Err(e), 0);
+        }
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions { gas_limit };
 
@@ -164,6 +210,11 @@ impl VmCache {
         Result<Result<Response<super::CustomMsg>, String>, VmError>,
         u64,
     ) {
+        // Hydrate from committed state if the node-local cache is cold
+        // (e.g. after state-sync). Deterministic across nodes.
+        if let Err(e) = self.ensure_cached(global_storage.as_ref(), checksum) {
+            return (Err(e), 0);
+        }
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions { gas_limit };
 
@@ -216,6 +267,11 @@ impl VmCache {
         Result<Result<Response<super::CustomMsg>, String>, VmError>,
         u64,
     ) {
+        // Hydrate from committed state if the node-local cache is cold
+        // (e.g. after state-sync). Deterministic across nodes.
+        if let Err(e) = self.ensure_cached(global_storage.as_ref(), checksum) {
+            return (Err(e), 0);
+        }
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions { gas_limit };
 
@@ -268,6 +324,11 @@ impl VmCache {
         Result<Result<Response<super::CustomMsg>, String>, VmError>,
         u64,
     ) {
+        // Hydrate from committed state if the node-local cache is cold
+        // (e.g. after state-sync). Deterministic across nodes.
+        if let Err(e) = self.ensure_cached(global_storage.as_ref(), checksum) {
+            return (Err(e), 0);
+        }
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions { gas_limit };
 
@@ -320,6 +381,11 @@ impl VmCache {
         Result<Result<Response<super::CustomMsg>, String>, VmError>,
         u64,
     ) {
+        // Hydrate from committed state if the node-local cache is cold
+        // (e.g. after state-sync). Deterministic across nodes.
+        if let Err(e) = self.ensure_cached(global_storage.as_ref(), checksum) {
+            return (Err(e), 0);
+        }
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions { gas_limit };
 
@@ -369,6 +435,11 @@ impl VmCache {
         meter: &GasMeter,
         sm: &StateMachine,
     ) -> (Result<Result<Binary, String>, VmError>, u64) {
+        // Hydrate from committed state if the node-local cache is cold
+        // (e.g. after state-sync). Deterministic across nodes.
+        if let Err(e) = self.ensure_cached(global_storage, checksum) {
+            return (Err(e), 0);
+        }
         let gas_limit = sdk_gas_to_wasmer(meter.remaining());
         let options = InstanceOptions { gas_limit };
 
@@ -410,7 +481,7 @@ mod tests {
     };
     use cw20::Cw20Coin;
     use layer_std::AccountId;
-    use layer_storage::{MemoryStore, PersistentStorage};
+    use layer_storage::{prefixed, MemoryStore, PersistentStorage};
 
     use crate::AppConfig;
 
@@ -418,6 +489,21 @@ mod tests {
 
     // v1.0.1
     const CW20_BASE: &[u8] = include_bytes!("../../../fixtures/cw20_base.wasm");
+
+    // Mirrors the keeper's StoreCode write: the blob lives in committed state
+    // (wasm/code_bytes) as well as the node-local VM cache. Tests that bypass
+    // the keeper must seed it or ensure_cached fails.
+    fn commit_code(writer: &mut dyn Storage, checksum: &Checksum, wasm: &[u8]) {
+        let mut ws = prefixed(writer, NAMESPACE_WASM);
+        CODE_BYTES
+            .save(
+                &mut ws,
+                &GasMeter::infinite(),
+                checksum.as_slice(),
+                &wasm.to_vec(),
+            )
+            .unwrap();
+    }
 
     #[test]
     fn can_instatiate() {
@@ -451,6 +537,7 @@ mod tests {
         let msg = to_json_vec(&msg).unwrap();
 
         let mut writer = store.writer();
+        commit_code(&mut writer, &checksum, CW20_BASE);
         let (res, gas_used) = vm.instantiate(
             &checksum,
             &env,
@@ -468,11 +555,12 @@ mod tests {
         assert_eq!(gas_used, 140);
 
         // query the state was written - token_info and total supply
+        // (3 contract keys + 1 committed code_bytes blob under wasm/)
         let num = writer
             .range(&meter, None, None, Order::Ascending)
             .unwrap()
             .count();
-        assert_eq!(num, 3);
+        assert_eq!(num, 4);
     }
 
     #[test]
@@ -493,6 +581,7 @@ mod tests {
         let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
+        commit_code(&mut writer, &checksum, CW20_BASE);
 
         // instantiate
         let msg = cw20_base::msg::InstantiateMsg {
@@ -608,6 +697,7 @@ mod tests {
         let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
+        commit_code(&mut writer, &checksum, CW20_BASE);
 
         // instantiate
         let msg = cw20_base::msg::InstantiateMsg {
@@ -822,6 +912,7 @@ mod tests {
         let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
+        commit_code(&mut writer, &checksum, &wasm);
 
         // instantiate with default msg {} — genesis = sender
         let (res, inst_gas) = vm.instantiate(
@@ -978,6 +1069,7 @@ mod tests {
         let sm = StateMachine::new(&AppConfig::new(path));
         let store = MemoryStore::new();
         let mut writer = store.writer();
+        commit_code(&mut writer, &checksum, &wasm);
 
         // instantiate {"admin":null} -> admin becomes the deployer
         let (res, g_inst) = vm.instantiate(

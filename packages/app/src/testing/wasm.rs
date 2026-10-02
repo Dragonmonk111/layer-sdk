@@ -53,7 +53,7 @@ fn happy_path_cw20() {
     let tx = TxBuilder::new()
         .with_msg(msg)
         .with_signer(&signer, 0)
-        .with_fee(1_000_000, coin(50_000, DENOM));
+        .with_fee(10_000_000, coin(500_000, DENOM));
     let mut res = app.block(&[tx]);
     assert_block_success(&res, 1);
 
