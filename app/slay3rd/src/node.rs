@@ -98,6 +98,28 @@ pub enum FetchRequest {
     HeightRange { start: u64, count: u16 },
 }
 
+/// Apply a chaos fault-injection mode to a freshly built proposal payload
+/// (devnet only — `NodeConfig::fault_inject`). Returns true when the mode
+/// was recognized and the payload mutated. Honest validators' verify()
+/// must reject the result: the byzantine-proposer leg asserts exactly that.
+fn apply_fault_inject(payload: &mut BlockPayload, mode: &str) -> bool {
+    match mode {
+        // Claimed post-block state that honest validators cannot recompute —
+        // verify() fails its state_root check, view times out, next leader.
+        "bad_state_root" => {
+            payload.state_root = [0xEF; 32];
+            true
+        }
+        // Break the consensus parent link — verify() rejects on the
+        // parent_digest != context.parent comparison.
+        "bad_parent" => {
+            payload.parent_digest = [0xEF; 32];
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Parent digest of the first block. Constant (not the app hash) so that
 /// `genesis()` is identical on every validator and across restarts.
 pub fn genesis_parent() -> [u8; 32] {
@@ -186,6 +208,9 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     max_seen_height: Arc<std::sync::atomic::AtomicU64>,
     /// Node-local tx result index for GetTx (not consensus state).
     tx_index: Arc<TxIndex>,
+    /// Chaos fault-injection mode (devnet only). When set, propose() emits
+    /// a corrupted payload so the byzantine-proposer path is exercised.
+    fault_inject: Option<String>,
     /// Phantom to bind the P type parameter without storing P directly.
     _phantom: std::marker::PhantomData<P>,
 }
@@ -206,6 +231,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             requested_heights: self.requested_heights.clone(),
             max_seen_height: self.max_seen_height.clone(),
             tx_index: self.tx_index.clone(),
+            fault_inject: self.fault_inject.clone(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -252,6 +278,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             requested_heights: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
             max_seen_height: Arc::new(std::sync::atomic::AtomicU64::new(initial_height)),
             tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
+            fault_inject: None,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -270,6 +297,13 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         }
         *self.store.lock().unwrap_or_else(|e| e.into_inner()) = store;
         (self, recovered)
+    }
+
+    /// Enable a chaos fault-injection mode (devnet only). See
+    /// `NodeConfig::fault_inject` for recognized modes.
+    pub fn with_fault_inject(mut self, mode: Option<String>) -> Self {
+        self.fault_inject = mode;
+        self
     }
 
     /// Wire the channel used to request missing payloads from peers.
@@ -848,7 +882,7 @@ where
                 "propose: selected mempool txs"
             );
 
-            let payload = BlockPayload {
+            let mut payload = BlockPayload {
                 height,
                 timestamp_nanos: view_timestamp_nanos(view_num),
                 proposer,
@@ -856,6 +890,17 @@ where
                 parent_digest: parent,
                 state_root,
             };
+            // Chaos testing only: emit a corrupted proposal so honest
+            // validators' verify() rejection is exercised on the network.
+            if let Some(mode) = node.fault_inject.as_deref() {
+                if apply_fault_inject(&mut payload, mode) {
+                    tracing::warn!(
+                        mode,
+                        height,
+                        "fault_inject: proposing corrupted payload"
+                    );
+                }
+            }
 
             let payload_bytes = payload.to_bytes().len();
             let digest_bytes = Self::compute_digest(&payload);
@@ -1593,6 +1638,29 @@ mod tests {
             }
             assert!(reasked > 0, "stale in-flight marks must be re-requested");
         });
+    }
+
+    /// fault_inject modes must corrupt the payload so honest verify()
+    /// rejects it; unknown modes are inert.
+    #[test]
+    fn test_apply_fault_inject() {
+        let mut p = BlockPayload {
+            height: 5,
+            timestamp_nanos: view_timestamp_nanos(5),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: [7u8; 32],
+            state_root: [8u8; 32],
+        };
+        assert!(apply_fault_inject(&mut p, "bad_state_root"));
+        assert_eq!(p.state_root, [0xEF; 32]);
+        assert_eq!(p.parent_digest, [7u8; 32]);
+
+        let mut q = p.clone();
+        assert!(apply_fault_inject(&mut q, "bad_parent"));
+        assert_eq!(q.parent_digest, [0xEF; 32]);
+
+        assert!(!apply_fault_inject(&mut q, "not_a_mode"));
     }
 
     /// payload_by_height serves pending (not-yet-executed) payloads for

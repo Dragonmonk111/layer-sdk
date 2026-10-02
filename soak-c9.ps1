@@ -33,7 +33,7 @@ while ((Get-Date) -lt $deadline) {
     if ((Get-Date) -ge $nextChaos) {
         $eventNo++
         $victim = $rng.Next(0, 4)
-        $kind = $rng.Next(0, 3)  # 0=kill-restart, 1=partition, 2=recreate
+        $kind = $rng.Next(0, 4)  # 0=kill-restart, 1=partition, 2=recreate, 3=byzantine-proposer
         $tipBefore = Tip
         $start = Get-Date -Format u
         switch ($kind) {
@@ -52,6 +52,19 @@ while ((Get-Date) -lt $deadline) {
                 docker network connect --ip $pinIP $net "junoclaw-node-$victim" 2>$null | Out-Null }
             2 { Add-Content $log "$start EVENT#$eventNo recreate node-$victim (tip=$tipBefore)"
                 docker compose -f devnet/docker-compose.yml up -d --force-recreate "node-$victim" 2>&1 | Out-Null }
+            3 { # Byzantine-proposer leg: victim proposes payloads with a
+                # corrupted state_root. Honest validators' verify() must
+                # reject them; those views time out and honest leaders keep
+                # the chain live. REQUIRES image with fault_inject support
+                # (unknown toml keys are ignored otherwise — leg degrades to
+                # a plain restart on the old image).
+                $cfg = "devnet/config/node-$victim.toml"
+                Add-Content $log "$start EVENT#$eventNo byzantine node-$victim fault_inject=bad_state_root (tip=$tipBefore)"
+                Add-Content $cfg "`nfault_inject = `"bad_state_root`""
+                docker restart "junoclaw-node-$victim" | Out-Null
+                Start-Sleep (120 + $rng.Next(0, 60))
+                (Get-Content $cfg) | Where-Object { $_ -notmatch '^\s*fault_inject\s*=' } | Set-Content $cfg
+                docker restart "junoclaw-node-$victim" | Out-Null }
         }
         # measure recovery: victim's height resumes advancing within 5 min
         Start-Sleep 60

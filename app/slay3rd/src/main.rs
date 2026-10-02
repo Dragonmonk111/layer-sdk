@@ -481,6 +481,13 @@ async fn run_node(
         }
     };
     let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
+    let layer_node = layer_node.with_fault_inject(config.fault_inject.clone());
+    if let Some(mode) = &config.fault_inject {
+        tracing::warn!(
+            mode = %mode,
+            "FAULT INJECTION ENABLED — chaos testing only, never enable on a real validator"
+        );
+    }
     let (payload_fetch_tx, payload_fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
     layer_node.set_fetch_sender(payload_fetch_tx);
     info!(recovered = recovered_payloads.len(), "Payload store opened");

@@ -95,6 +95,16 @@ pub struct NodeConfig {
     /// vice versa. Default false (classical BLS-only).
     #[serde(default)]
     pub hybrid_consensus: bool,
+
+    /// Fault injection for chaos testing (C9 byzantine-proposer leg).
+    /// DEVNET ONLY — never enable on a real validator. Modes:
+    ///   "bad_state_root" — propose() emits a payload whose claimed
+    ///     post-block state_root honest validators will not recompute;
+    ///     verify() rejects, the view times out, next leader proposes.
+    ///   "bad_parent" — payload's parent_digest is corrupted; verify()
+    ///     rejects on parent mismatch.
+    #[serde(default)]
+    pub fault_inject: Option<String>,
 }
 
 /// State-sync bootstrap parameters (docs/STATE_SYNC.md §4).
@@ -139,6 +149,7 @@ impl Default for NodeConfig {
             min_gas_price: default_min_gas_price(),
             state_sync: None,
             hybrid_consensus: false,
+            fault_inject: None,
         }
     }
 }
@@ -223,6 +234,7 @@ mod tests {
             min_gas_price: default_min_gas_price(),
             state_sync: None,
             hybrid_consensus: false,
+            fault_inject: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");
