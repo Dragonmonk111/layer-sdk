@@ -202,6 +202,13 @@ const BLOCK_PAYLOAD_KEY_PREFIX: &str = "_payload/";
 /// node-local indexing state, never part of consensus.
 const TX_RESPONSE_KEY_PREFIX: &str = "_txres/";
 
+/// Sidecar watermarker: the highest block height whose `_payload/`, `_ts/`
+/// and `_txres/` entries have already been pruned. Lets pruning resume
+/// after a restart without re-scanning, and lets nodes adopt a pruning
+/// tier on an already-synced chain (catch-up from the old floor).
+/// Node-local — same "_" app_hash-exclusion convention.
+const PRUNE_FLOOR: Item<u64> = Item::new("_prune_floor");
+
 /// Storage item holding the latest committed state root — the Merkle root
 /// over all non-`'_'`-prefixed KV entries, recomputed at the end of every
 /// `finalize_block` (and at `init` for the genesis state). The next block's
@@ -879,6 +886,57 @@ impl<T: PersistentStorage + 'static> App<T> {
         result
     }
 
+    /// The highest height already pruned (`_prune_floor` sidecar), 0 when
+    /// pruning has never run. Node-local watermark — see `prune_sidecars`.
+    pub fn prune_floor(&self) -> u64 {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let result = PRUNE_FLOOR.may_load(&reader, &meter).ok().flatten().unwrap_or(0);
+        reader.abort();
+        result
+    }
+
+    /// Delete sidecar serving data for `heights` and the given txhash
+    /// index entries, then advance `_prune_floor` to `new_floor` — all in
+    /// ONE storage commit so a crash can never leave a floor ahead of the
+    /// keys it claims are gone.
+    ///
+    /// `_payload/` (the dominant growth), `_ts/`, and `_txres/` are pruned.
+    /// `_cert/` and `_proposal/` are kept — 32-byte cert + proposal bytes
+    /// per height is small, and membership proofs / state-sync anchors may
+    /// need them even for heights below the payload window.
+    ///
+    /// Consensus-safe: every touched key is `_`-prefixed, so app_hash and
+    /// the state root are untouched; two nodes with different tiers still
+    /// commit byte-identical state.
+    ///
+    /// Returns the number of keys removed (payload + timestamp + txres).
+    pub fn prune_sidecars(
+        &mut self,
+        heights: &[u64],
+        txhashes: &[String],
+        new_floor: u64,
+    ) -> PulsarResult<usize> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let mut removed = 0usize;
+        for h in heights {
+            for prefix in [BLOCK_PAYLOAD_KEY_PREFIX, BLOCK_TIMESTAMP_KEY_PREFIX] {
+                let key = format!("{}{}", prefix, h);
+                Item::<Vec<u8>>::new(&key).remove(&mut writer, &meter)?;
+                removed += 1;
+            }
+        }
+        for hash in txhashes {
+            let key = format!("{}{}", TX_RESPONSE_KEY_PREFIX, hash);
+            Item::<Vec<u8>>::new(&key).remove(&mut writer, &meter)?;
+            removed += 1;
+        }
+        PRUNE_FLOOR.save(&mut writer, &meter, &new_floor)?;
+        writer.commit(&meter)?;
+        Ok(removed)
+    }
+
     /// The latest committed state root (Merkle root over all non-`'_'` KV
     /// entries), as stored by the most recent `finalize_block`/`init`.
     /// `propose()` reads this to fill `BlockPayload.state_root`.
@@ -1387,6 +1445,67 @@ mod tests {
         assert_eq!(plain.get_block_payload(1), None);
         assert_eq!(res_a.app_hash, res_b.app_hash, "payload sidecar must not affect app_hash");
         assert_eq!(with_payload.state_root(), plain.state_root());
+    }
+
+    /// Role-tier sidecar pruning: `prune_sidecars` removes `_payload/`,
+    /// `_ts/` and `_txres/` for pruned heights, retains newer heights,
+    /// advances `_prune_floor`, and never touches app_hash — the property
+    /// that makes tier-by-role pruning consensus-safe.
+    #[test]
+    fn prune_sidecars_removes_old_heights_without_touching_consensus() {
+        let genesis = GenesisState {
+            bank: vec![BankAccount {
+                address: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+                balance: coins(1_000, "ujclaw"),
+            }],
+            wasm: WasmParams {
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+            },
+        };
+        let mut app = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/prune_sidecars")),
+        );
+        app.init(mock_init(&genesis)).unwrap();
+
+        let mut app_hash = vec![];
+        for h in 1..=3u64 {
+            let res = app
+                .finalize_block_with_payload(
+                    Block {
+                        txs: vec![],
+                        height: h,
+                        time: Timestamp::from_seconds(1690406618 + h),
+                        proposer_address: vec![1u8; 32],
+                        last_votes: vec![],
+                        certificate: None,
+                    },
+                    Some(format!("payload-{h}").into_bytes()),
+                )
+                .unwrap();
+            app.set_block_timestamp(h, 1690406618 + h).unwrap();
+            app_hash = res.app_hash;
+        }
+        app.set_tx_response("DEADBEEF", b"txresp").unwrap();
+
+        // Prune heights 1 and 2 (floor = 2), keep 3.
+        let removed = app
+            .prune_sidecars(&[1, 2], &["DEADBEEF".to_string()], 2)
+            .unwrap();
+
+        assert_eq!(removed, 5, "2 payloads + 2 timestamps + 1 txres");
+        assert_eq!(app.get_block_payload(1), None);
+        assert_eq!(app.get_block_payload(2), None);
+        assert_eq!(app.get_block_payload(3), Some(b"payload-3".to_vec()));
+        assert_eq!(app.get_block_timestamp(1), None);
+        assert_eq!(app.get_block_timestamp(3), Some(1690406621));
+        assert_eq!(app.get_tx_response("DEADBEEF"), None);
+        assert_eq!(app.prune_floor(), 2);
+        assert_eq!(
+            app.app_hash(),
+            app_hash,
+            "pruning '_' sidecar keys must not change app_hash"
+        );
     }
 
     // this emulates the run of a transaction being submitted

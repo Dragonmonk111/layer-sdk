@@ -211,6 +211,10 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     /// Chaos fault-injection mode (devnet only). When set, propose() emits
     /// a corrupted payload so the byzantine-proposer path is exercised.
     fault_inject: Option<String>,
+    /// Sidecar pruning window from `NodeConfig::prune_keep_heights()`.
+    /// `Some(n)` = after each executed block, drop `_payload/`+`_ts/`+
+    /// `_txres/` sidecars older than tip−n. `None` = archive mode.
+    prune_keep_heights: Option<u64>,
     /// Phantom to bind the P type parameter without storing P directly.
     _phantom: std::marker::PhantomData<P>,
 }
@@ -232,6 +236,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             max_seen_height: self.max_seen_height.clone(),
             tx_index: self.tx_index.clone(),
             fault_inject: self.fault_inject.clone(),
+            prune_keep_heights: self.prune_keep_heights,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -279,6 +284,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             max_seen_height: Arc::new(std::sync::atomic::AtomicU64::new(initial_height)),
             tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
             fault_inject: None,
+            prune_keep_heights: None,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -303,6 +309,14 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
     /// `NodeConfig::fault_inject` for recognized modes.
     pub fn with_fault_inject(mut self, mode: Option<String>) -> Self {
         self.fault_inject = mode;
+        self
+    }
+
+    /// Enable role-tier sidecar pruning. `keep` is the resolved window
+    /// from `NodeConfig::prune_keep_heights()` — `None` means archive mode
+    /// and pruning is never run.
+    pub fn with_pruning(mut self, keep: Option<u64>) -> Self {
+        self.prune_keep_heights = keep;
         self
     }
 
@@ -635,9 +649,65 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .prune_below(height.saturating_sub(DEFAULT_RETAIN_HEIGHTS));
+            self.prune_sidecars(height).await;
             self.recheck_mempool().await;
         }
         result
+    }
+
+    /// Drop `_payload/`+`_ts/`+`_txres/` sidecars below `tip − keep`, per
+    /// the node's pruning tier (`NodeConfig::pruning`). Node-local only —
+    /// `_` keys never enter app_hash, so validators on different tiers
+    /// still commit identical state. Batched to bound finalize latency;
+    /// `_prune_floor` tracks progress so a large catch-up converges over
+    /// consecutive blocks rather than stalling one.
+    async fn prune_sidecars(&self, tip: u64) {
+        /// Max heights pruned per executed block — bounds the single-commit
+        /// batch so a ~110k-height catch-up can't wedge finalize.
+        const MAX_PRUNE_PER_BLOCK: u64 = 2_048;
+
+        let Some(keep) = self.prune_keep_heights else { return };
+        let target_floor = tip.saturating_sub(keep);
+        let old_floor = {
+            let app = self.app.read().await;
+            app.prune_floor()
+        };
+        if target_floor <= old_floor {
+            return;
+        }
+        let new_floor = old_floor.saturating_add(MAX_PRUNE_PER_BLOCK).min(target_floor);
+        let heights: Vec<u64> = ((old_floor + 1)..=new_floor).collect();
+
+        // txres keys are hash-keyed, not height-keyed — recover each
+        // pruned block's txhashes from its payload before it is deleted.
+        let mut txhashes: Vec<String> = Vec::new();
+        {
+            let app = self.app.read().await;
+            for h in &heights {
+                if let Some(bytes) = app.get_block_payload(*h) {
+                    if let Ok(p) = BlockPayload::from_bytes(&bytes) {
+                        txhashes.extend(p.txs.iter().map(|t| tx_hash_hex(t)));
+                    }
+                }
+            }
+        }
+
+        let mut app = self.app.write().await;
+        match app.prune_sidecars(&heights, &txhashes, new_floor) {
+            Ok(removed) => {
+                if removed > 0 {
+                    tracing::debug!(
+                        floor = new_floor,
+                        removed,
+                        "sidecar pruning advanced"
+                    );
+                }
+            }
+            Err(e) => {
+                // Pruning failure is non-fatal: stale sidecars only cost disk.
+                tracing::warn!(error = ?e, floor = new_floor, "sidecar pruning failed — will retry next block");
+            }
+        }
     }
 
     /// Re-run check_tx for every pending tx against the post-block state and

@@ -482,6 +482,12 @@ async fn run_node(
     };
     let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
     let layer_node = layer_node.with_fault_inject(config.fault_inject.clone());
+    let layer_node = layer_node.with_pruning(config.prune_keep_heights());
+    info!(
+        pruning = %config.pruning,
+        keep_heights = config.prune_keep_heights().map(|k| k.to_string()).unwrap_or_else(|| "archive".to_string()),
+        "Sidecar pruning tier"
+    );
     if let Some(mode) = &config.fault_inject {
         tracing::warn!(
             mode = %mode,

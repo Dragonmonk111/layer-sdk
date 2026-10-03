@@ -105,6 +105,23 @@ pub struct NodeConfig {
     ///     rejects on parent mismatch.
     #[serde(default)]
     pub fault_inject: Option<String>,
+
+    /// Sidecar pruning tier. `"_"` -prefixed keys (`_payload/`, `_ts/`,
+    /// `_txres/`) are node-local serving data — never part of app_hash —
+    /// so each node may prune them at its own rate. Modes:
+    ///   "archive"   — keep everything (state-sync donors, indexers)
+    ///   "validator" — keep the last 65,536 heights (matches the payload
+    ///                 store retention / max backfill depth)
+    ///   "rpc"       — keep the last 500,000 heights (serving history)
+    ///   "custom"    — keep `pruning_keep_heights` heights
+    /// Default "validator". Pruning is consensus-safe: `_` keys are
+    /// excluded from app_hash and the state root.
+    #[serde(default = "default_pruning")]
+    pub pruning: String,
+
+    /// Heights retained when `pruning = "custom"`. Ignored otherwise.
+    #[serde(default)]
+    pub pruning_keep_heights: Option<u64>,
 }
 
 /// State-sync bootstrap parameters (docs/STATE_SYNC.md §4).
@@ -131,6 +148,10 @@ fn default_min_gas_price() -> String {
     "0.001ujclaw".to_string()
 }
 
+fn default_pruning() -> String {
+    "validator".to_string()
+}
+
 impl Default for NodeConfig {
     fn default() -> Self {
         NodeConfig {
@@ -150,6 +171,8 @@ impl Default for NodeConfig {
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
+            pruning: default_pruning(),
+            pruning_keep_heights: None,
         }
     }
 }
@@ -188,6 +211,25 @@ impl NodeConfig {
     /// in the named volume so a binary-swap upgrade resumes cleanly.
     pub fn consensus_storage_path(&self) -> String {
         format!("{}/consensus", self.data_dir)
+    }
+
+    /// Resolve the `pruning` tier to a keep-window: `Some(n)` = retain the
+    /// last `n` heights of sidecar data, `None` = archive mode (keep all).
+    /// Unknown values warn and fall back to the validator tier.
+    pub fn prune_keep_heights(&self) -> Option<u64> {
+        match self.pruning.as_str() {
+            "archive" => None,
+            // Must match PayloadStore's DEFAULT_RETAIN_HEIGHTS — the sidecar
+            // payload window is only useful while the PayloadStore can serve
+            // the same range for backfill.
+            "validator" => Some(65_536),
+            "rpc" => Some(500_000),
+            "custom" => Some(self.pruning_keep_heights.unwrap_or(65_536)),
+            other => {
+                eprintln!("unknown pruning mode '{other}' — falling back to validator tier");
+                Some(65_536)
+            }
+        }
     }
 }
 
@@ -235,6 +277,8 @@ mod tests {
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
+            pruning: default_pruning(),
+            pruning_keep_heights: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");
