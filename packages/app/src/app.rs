@@ -347,7 +347,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         Ok(InitChainResponse {
             consensus_params: request.consensus_params,
             validators: request.validators,
-            app_hash: self.storage.app_hash(),
+            app_hash: self.app_hash(),
         })
     }
 }
@@ -359,8 +359,17 @@ impl<T: PersistentStorage + 'static> App<T> {
         self.data.as_ref().map(|d| &d.block)
     }
 
+    /// The app hash reported in finalize/info responses. This is the
+    /// `state_root` — a content hash over the committed KV — NOT the
+    /// storage `FastHasher` value. The rolling hash is history-dependent:
+    /// a node that bulk-loads state via `snapshot_import` ends up on a
+    /// different lineage than replay peers, forever logging a different
+    /// app_hash over identical data. state_root has no history, so every
+    /// node reports the same value regardless of how it was populated.
     pub fn app_hash(&self) -> Vec<u8> {
-        self.storage.app_hash()
+        self.state_root()
+            .map(|r| r.to_vec())
+            .unwrap_or_else(|| self.storage.app_hash())
     }
 
     pub fn chain_id(&self) -> &str {
@@ -683,7 +692,9 @@ impl<T: PersistentStorage + 'static> App<T> {
             tx_results,
             validator_updates: vec![],
             consensus_param_updates: None,
-            app_hash: self.storage.app_hash(),
+            // app_hash = the content root just committed (portable across
+            // state-sync restores; FastHasher lineage is not).
+            app_hash: root.to_vec(),
         })
     }
 
@@ -1993,6 +2004,13 @@ mod tests {
             joiner.compute_state_root().unwrap(),
             exp.state_root,
             "joiner must land on the same state root"
+        );
+        // app_hash is the content root, not the FastHasher lineage — a
+        // state-synced joiner reports the same app_hash as the producer.
+        assert_eq!(
+            joiner.app_hash(),
+            producer.app_hash(),
+            "app_hash must converge across snapshot restore"
         );
         // exported over the joined state reproduces an identical dump
         let re = joiner.snapshot_export().unwrap();
