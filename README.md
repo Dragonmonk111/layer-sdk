@@ -1,42 +1,36 @@
-# Slay3r
+# JunoClaw — the chain
 
-Unleash the Power of Slay3r: A Developer-Friendly, Pure-Rust, CosmWasm Blockchain. Blazing-fast Speed, Interchain Connectivity via IBC, and Stellar Stability
+**The JunoClaw L1 consensus core: a lean Rust chain on Commonware primitives, running Simplex-family BFT with quorum-level post-quantum certificates.**
 
-<p align="center">
-  <img width="384" height="384" src="https://github.com/Lay3rLabs/dev-net/blob/main/assets/slay3r.jpg?raw=true">
-</p>
+Project home → [github.com/Dragonmonk111/junoclaw](https://github.com/Dragonmonk111/junoclaw) · [junoclaw.xyz](https://junoclaw.xyz) · [Telegram](https://t.me/junoclaw) · [@junoclawdao](https://twitter.com/junoclawdao)
 
-## Quick Start
+> If you arrived here from upstream Lay3rLabs — this fork is no longer Slay3r. It is the JunoClaw L1.
 
-There are scattered notes on how to run stuff spread throughout READMEs that should be organized.
+---
 
-Easiest is to check out [`docker-compose.yml`](./docker-compose.yml) and follow the instructions on the top to set up a local server. You will need to set up keplr (or vectis) with a mnemonic, which you can find
-in [`TESTING.md`](./gateway/TESTING.md#connect-keplr).
+## What this repo is
 
-## Application Layout
+This fork carries the **consensus and node code** for JunoClaw — the layer that produces blocks and certificates. The `commonware` branch is the live development line.
 
-Docker compose gives a nice overview. 
+- **Hybrid consensus, running today** — `hybrid_consensus`: every vote carries a threshold-BLS partial *and* a 186-byte MAYO2 signature; every certificate requires quorum on both halves. `max(classical, PQ)` — not a migration roadmap.
+- **State-certifying finality** — every block final binds the executed `state_root` into its certificate (~1 s). No confirmations, no reorgs.
+- **Chain-linked certificates** — each cert binds the previous one; light clients verify certs, not header chains.
+- **Deterministic state machine** — KV + Wasm execution, certified `state_root` per block, fail-stop divergence detection, certified state-sync snapshots, height-range backfill, durable payload store, tx indexing, gRPC + Simulate.
 
-We run CometBFT 0.38, which exposes tendermint-rpc on port `26657`` and p2p networking (to sync nodes) on `26656``.
+## Status
 
-In [`app/slay3rd`](./app/slay3rd/) we find the entry point for the ABCI application. When run it will bind abci to port `26658`, which cometBFT can connect to in order to run a blockchain. It also exposes Cosmos-SDK compatible gRPC endpoint on port `9090`.
+- **24-h chaos soak, ~175k blocks, zero divergence** — kill/restart, partitions, container recreates, Byzantine-proposer fault injection (`fault_inject`: `bad_state_root` | `bad_parent`). Two real bugs found *by* the soak, fixed in code (incl. the backfill fetch flood — C9).
+- **Next: G1 public testnet** — external validators, key ceremony, faucet.
 
-In [`gateway`](./gateway/) we find the gRPC gateway, which exposes a REST API on port `1317` and forwards requests to the gRPC endpoint. This is auto-generated from the protobuf definitions in [`proto`](./proto/).
-In order to regenerate the gateway, run `./scripts/build_proto_gateway` to generate new Go code from the protobuf files. Then run `go build` in the gateway directory to build the binary.
+## Where the rest lives
 
-`Slay3rd` exports a lot of tracing information via open tracing. By default, we connect this to a jaeger instance. This is configured in [`app/slay3rd/src/main.rs`](app/slay3rd/src/main.rs#L72-L91) and one could update the configuration there to use any other Open Tracing compatible consumer. `docker compose up` also starts such jaeger instance and exposes a web UI on port `8080`, which gives a nice overview of activity on the chain and let's you delve into transaction and query details.
+- **Agent layer, contracts, circuits, WAVS/sealed-signer, docs, website** → [Dragonmonk111/junoclaw](https://github.com/Dragonmonk111/junoclaw)
+- **Validator runbook** → `docs/` in this repo (liveness, lag tiers: backfill vs state-sync, divergence semantics, soak ops rules)
 
+## Heritage
 
-## Testing
+Forked from [Lay3rLabs/layer-sdk](https://github.com/Lay3rLabs/layer-sdk) ("Slay3r" — a pure-Rust CosmWasm chain). JunoClaw replaces the Tendermint/CometBFT core with Commonware-based Simplex-family consensus and adds the hybrid PQ certificate layer; the upstream substrate is retained where it earns its keep.
 
-In [`integration`](./integration/) we find the integration tests, which are written in TypeScript using CosmJS and verify that the slay3r blockchain is compatible with Cosmos clients (to some degree). These tests are run by CI and should be kept up to date with the latest changes.
+## License
 
-These integration tests also upload some standard contracts used by Vectis TODO app, and currently the docker-compose serves this on port `8000`. 
-
-### Integrations
-
-A quick way to test code is not to run the full docker setup, but rather just run cometBFT in docker and locally compile and run slay3rd to update quicker. Follow the instructions in [`app/slay3rd/README.md`](./app/slay3rd/README.md#setup-configuration)
-
-## MSRV
-
-This requires Rust 1.73 or higher. We use the latest stable version of Rust.
+Apache-2.0 (see `LICENSE`, `NOTICE`)
