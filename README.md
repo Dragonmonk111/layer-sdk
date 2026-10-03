@@ -33,4 +33,4 @@ Forked from [Lay3rLabs/layer-sdk](https://github.com/Lay3rLabs/layer-sdk) ("Slay
 
 ## License
 
-Apache-2.0 (see `LICENSE`, `NOTICE`)
+Licensed under either of [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Upstream copyright and attribution in `NOTICE`. Code under `lib/cosmwasm` is vendored CosmWasm and remains Apache-2.0 only.

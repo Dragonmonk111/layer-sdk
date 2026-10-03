@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["JunoClaw Contributors"]
 description = "Pure-Rust MAYO post-quantum signature verifier (vendored from junoclaw/crates for native chain use)"
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 
 # VENDORED COPY of junoclaw/crates/junoclaw-mayo-verify.
 # Keep in sync — the contract crate and this chain-native copy must verify

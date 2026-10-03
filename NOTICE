@@ -1,17 +1,16 @@
-Slay3r: A Pure-Rust, CosmWasm Blockchain
+JunoClaw Chain
+Copyright 2026 JunoClaw contributors
 
-Copyright 2023-2024 Ethan Frey
+This repository is a fork of the layer-sdk codebase ("Slay3r"),
+originally authored by Ethan Frey and developed by Layer Labs (Cayman).
 
-Licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives Public License,
-Version 4.0 International (the "License");
-you may not use any files in this repository except in compliance with the License.
+Upstream code:
+    Copyright 2023-2025 Ethan Frey and Layer Labs (Cayman)
+    Licensed under the MIT License (see LICENSE-MIT).
 
-You may obtain a copy of the License at
+JunoClaw fork contributions (Simplex-family consensus core, hybrid
+post-quantum certificate layer, and related work) are licensed under
+MIT OR Apache-2.0, at your option (see LICENSE-MIT, LICENSE-APACHE).
 
-  https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.txt
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Code under lib/cosmwasm is vendored from the CosmWasm project and
+remains licensed under the Apache License 2.0 only.
