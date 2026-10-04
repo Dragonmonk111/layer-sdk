@@ -1,7 +1,7 @@
 {
   "bank": [
     {
-      "address": "juno18k65at7fkf8elhece0fnhsvuxggqg6cved6trp5fyk3lftfn93xsmpeaac",
+      "address": "juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992",
       "balance": [
         {
           "denom": "ujclaw",
@@ -11,6 +11,6 @@
     }
   ],
   "wasm": {
-    "gov_account": "juno18k65at7fkf8elhece0fnhsvuxggqg6cved6trp5fyk3lftfn93xsmpeaac"
+    "gov_account": "juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992"
   }
 }

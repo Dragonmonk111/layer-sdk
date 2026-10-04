@@ -1,0 +1,464 @@
+{
+  "policy": "excluded_from_airdrop_routed_to_community_pool",
+  "reason": "32-byte bech32 payload = juno-1 contract/ICA address; no private key can exist on junoclaw-chain",
+  "count": 114,
+  "total_ujclaw": "859972978354",
+  "addresses": [
+    {
+      "address": "juno1nmezpepv3lx45mndyctz2lzqxa6d9xzd2xumkxf7a6r4nxt0y95qypm6c0",
+      "airdrop_ujclaw": "250000000000"
+    },
+    {
+      "address": "juno1zjpfewdsdykrgce8d20lfanhh6evufxeyya4fyepjs9lh57tv3jqrutwt0",
+      "airdrop_ujclaw": "250000000000"
+    },
+    {
+      "address": "juno17cya4sw72h4886zsm2lk3udxaw5m8ssgpsl6nd6xl6a4ukepdgkqeuv99x",
+      "airdrop_ujclaw": "169273729443"
+    },
+    {
+      "address": "juno1dlp8avgc2r6t4nnsv4yydc6lc73rjtjqvdcee9r2kf0uwuef7v0smljy8w",
+      "airdrop_ujclaw": "55190696291"
+    },
+    {
+      "address": "juno16s8xfl5rmkt8ulj3dd72mut8xuhe430p5wfeuarnsvp872a5y8sqp35a20",
+      "airdrop_ujclaw": "50045000013"
+    },
+    {
+      "address": "juno1ajs39qk0kd5xcjc8lvsym9q9g8q5jalzreum7nwqg036mqrw7utqf9gsu4",
+      "airdrop_ujclaw": "44979750155"
+    },
+    {
+      "address": "juno102at0mu2xeluyw9efg257yy6pyhv088qqhmp4f8wszqcwxnpdcgqsfq0nv",
+      "airdrop_ujclaw": "15168964974"
+    },
+    {
+      "address": "juno1tk3rfjt3srj98sckf2vv04nk3ylw4xyhsanq3vwe6z5ssd8gdugsmzh68m",
+      "airdrop_ujclaw": "7000000002"
+    },
+    {
+      "address": "juno185hgkqs8q8ysnc8cvkgd8j2knnq2m0ah6ae73gntv9ampgwpmrxqc5vwdr",
+      "airdrop_ujclaw": "3416096158"
+    },
+    {
+      "address": "juno18z09krswkzqjrnk2nxw2n9pc8kt3h2c0mrvczqaxmscnnf0esucqs9ul5t",
+      "airdrop_ujclaw": "3005739946"
+    },
+    {
+      "address": "juno10c3gqx34t6jjvfm0nxwzcffaes22hjs4q5wmtht9l3el7sw6njts3qrl8j",
+      "airdrop_ujclaw": "2816076269"
+    },
+    {
+      "address": "juno1ldhvd0zhcdv0pwz3eaymjjzv0nglp9q2c9a5knnrgy42t2jsy3zq48ft4w",
+      "airdrop_ujclaw": "2071199954"
+    },
+    {
+      "address": "juno1jg49s4s0m7u672ym47epg2n0g3zc6m0043858zch7qjjt6wultxqrpjjzk",
+      "airdrop_ujclaw": "1082160796"
+    },
+    {
+      "address": "juno1nktrulhakwm0n3wlyajpwxyg54n39xx4y8hdaqlty7mymf85vweq7m6t0y",
+      "airdrop_ujclaw": "999800010"
+    },
+    {
+      "address": "juno1w7v9k98s2qdacglqlga8m8q2r6lcy5a7sjp3marntfjpg9ake87sml40x8",
+      "airdrop_ujclaw": "877500000"
+    },
+    {
+      "address": "juno1pu4qvnl5kkcaehn5509trrnc7q66cyatqggvc9u4jsnl2g3vqz4qhh2pwu",
+      "airdrop_ujclaw": "812900000"
+    },
+    {
+      "address": "juno1rawmfcfnaul2qmtc3qds4t87h9wcnnp9rp5mw925vzkery4ewrcq30r6hl",
+      "airdrop_ujclaw": "516735813"
+    },
+    {
+      "address": "juno1jtqr599wqd5lxra9ckexlclxv3u6yt3uhjwncl9np3twxfeyu32q2utggh",
+      "airdrop_ujclaw": "501000000"
+    },
+    {
+      "address": "juno1tq3kruh0t3xwaczfgu58dgfah3pkkslze7j06fd402l9nsrdhttqz6yrg7",
+      "airdrop_ujclaw": "345119251"
+    },
+    {
+      "address": "juno18luxdh3zsmsm0tjn2wcmsyxr06puheqwjqy3z6mheg4vgw32krgsawylrh",
+      "airdrop_ujclaw": "268940256"
+    },
+    {
+      "address": "juno1h8u8f0es30eedyv5na4022epaxzwpvwx59hkcepmt9pwt8g8aa9synwy6w",
+      "airdrop_ujclaw": "199960002"
+    },
+    {
+      "address": "juno1xd2fed839exdvqfa4nqluyxxclvwul7kd48e9pyfm0z2g90dc37srnqy39",
+      "airdrop_ujclaw": "199940006"
+    },
+    {
+      "address": "juno1fptkqsmx9d4ec0n3mcqzauppvsed88ht9a7q7mawdl34vcmztexqevtjnx",
+      "airdrop_ujclaw": "177964401"
+    },
+    {
+      "address": "juno1czx6dkvpf0sj8zr74y2uzjam5wg758q4v3jwhd7yvheu3xca2gmq7lv4rw",
+      "airdrop_ujclaw": "150000000"
+    },
+    {
+      "address": "juno1q6v7qhq0sepf87ra8gnwcmmj3r6em5vqucrea932tjwhvqzdm2fs0qsysf",
+      "airdrop_ujclaw": "125791070"
+    },
+    {
+      "address": "juno1qertq0ve2mwnpytas6ckwv4d7ny4pqfanjkxanm84dd6g00tl4ssyjk09q",
+      "airdrop_ujclaw": "121089976"
+    },
+    {
+      "address": "juno13k0x75fgzwdkd5fhca20mjfc9ge7lcft4k8zy9p567v0mg5fax3sk8nw8j",
+      "airdrop_ujclaw": "106878621"
+    },
+    {
+      "address": "juno1egefqhp4tv9gjat3p4clxhstfhw5djfl920p6zcfe8xdymqpuq7s33csz6",
+      "airdrop_ujclaw": "79325336"
+    },
+    {
+      "address": "juno1ce4vxh4w506v3udvfq0u455t7f44qh967l8ncdde8hkm450a00jsywatqu",
+      "airdrop_ujclaw": "63987201"
+    },
+    {
+      "address": "juno1r48wqcm3kmgw4xn40luxhwku9jwx8er4u3na2ap2y003acghwpusrf5zde",
+      "airdrop_ujclaw": "56844419"
+    },
+    {
+      "address": "juno18py565smj9t0qqj8al5yr89uwgtr9uwx7gr9e3utgm94ev6hex6sc8dhj6",
+      "airdrop_ujclaw": "50001986"
+    },
+    {
+      "address": "juno19t6wup3kcmnf690atnycjqx6jjlh4r03t62xp67nkx2f03qj6rnsvmmhk3",
+      "airdrop_ujclaw": "37136725"
+    },
+    {
+      "address": "juno1np4xl9y5vmfstjxa63zmmfcjr9nezmy9yw73qxwcm0hmxxrndyxq8sjh38",
+      "airdrop_ujclaw": "20995800"
+    },
+    {
+      "address": "juno1hqr0t3scwkrmuu3554lnqzrccuevd8huxmu533gtm6s7vuzeztzqh6tuwq",
+      "airdrop_ujclaw": "19996000"
+    },
+    {
+      "address": "juno1xaavrkensv364s44a5rvcx5h2ehvwuldg56d5wutykgxzz36ls8s7yg2ar",
+      "airdrop_ujclaw": "19996000"
+    },
+    {
+      "address": "juno1z3zqgz7t0hcu2fx4wusuyjq0gc2m33la8l64saunfz7vmqwa2d5sz6jnep",
+      "airdrop_ujclaw": "15995200"
+    },
+    {
+      "address": "juno19yyuka76m9236hzpwxgqnq2w642x6erzgvkmvt6xfa699rvk7rlqkvm7zh",
+      "airdrop_ujclaw": "14199560"
+    },
+    {
+      "address": "juno1g85lfcxzqnsehvhsr2w5jj0mn9jskqc244ztxzryav2jqzfjylyqy585fa",
+      "airdrop_ujclaw": "10997800"
+    },
+    {
+      "address": "juno1jwa6l2smum2tqurvnqw5z66ha9wcd9hwknnmawvfxmc8n2n8vp8s8j4lnp",
+      "airdrop_ujclaw": "10858743"
+    },
+    {
+      "address": "juno1xmgnvwzdwltnhp289gv88hdrxqf4anae4t6x2kfs9s3y73uppkcsglnc9z",
+      "airdrop_ujclaw": "9998000"
+    },
+    {
+      "address": "juno10u35t9rg3j9pdxqtvvju8nj2clhp82udqua50k5ulhzz4z0yfruqjuqqf6",
+      "airdrop_ujclaw": "9169833"
+    },
+    {
+      "address": "juno1nnr69ju45m36g87dkzz8pmwgtzmusd0t933g4m78dufyllsazjxq96ggeq",
+      "airdrop_ujclaw": "9000000"
+    },
+    {
+      "address": "juno1am3nl2kuvrsrgncpvwejl9f6p7ssfxq48qdaqjnyj4l2v2fgdc3qlruulp",
+      "airdrop_ujclaw": "7546151"
+    },
+    {
+      "address": "juno13fyva4lz03fngl2vftltgmhme2w4djz78mqywwcqjavqas6yt84q8dnkw7",
+      "airdrop_ujclaw": "5475520"
+    },
+    {
+      "address": "juno1cxcdukl5wff7zfmr35wt6gufp5f03ere5dff2pq6748zq2cgxxhsjlk3nr",
+      "airdrop_ujclaw": "5207295"
+    },
+    {
+      "address": "juno1fmjm20gpnl5zjydm0wgcwquleyy9degk7te6msftxvh2fk0wvwmqz6v2fg",
+      "airdrop_ujclaw": "5019355"
+    },
+    {
+      "address": "juno1gandy00h239k5cccmapjeshc6dr0f0tngskazafq8w2kd9nljmlq32q2lq",
+      "airdrop_ujclaw": "5000000"
+    },
+    {
+      "address": "juno1jgqw3xcnj25z3vu8l32r0xpk49zzuaz78nmy9c0spjvagl4ssewq3ep837",
+      "airdrop_ujclaw": "5000000"
+    },
+    {
+      "address": "juno1zrh3a437jcdv0jkm0k7eflww57s9zlwzesdvu83xhtt74y4yfcmsykhtcz",
+      "airdrop_ujclaw": "4999000"
+    },
+    {
+      "address": "juno15xyzzm3cxnz8d5w3e7gwk6gaflmrz0fklduy8a2l4wj029xud7sskfclre",
+      "airdrop_ujclaw": "4819648"
+    },
+    {
+      "address": "juno1zg8al7svu8n9s6qwqwas748sqjf702wnmuw0par355eredcyme3sd269ch",
+      "airdrop_ujclaw": "4463740"
+    },
+    {
+      "address": "juno1s3z7vdmr2pv3hzn0s85nms6m4yrkpuzk267ajx3h6t2g2l767e2qjw98x3",
+      "airdrop_ujclaw": "4000000"
+    },
+    {
+      "address": "juno1emuw37k64znmcx72dxfl2v2qgx6zg9cwhllcgxqmad57rq8nwhgq3kl9e5",
+      "airdrop_ujclaw": "3279344"
+    },
+    {
+      "address": "juno1nac45hcvysqyx5wscwtqe0s4hw2w2vkxl4h66deg489gnr0uquhqcl5x4h",
+      "airdrop_ujclaw": "3003472"
+    },
+    {
+      "address": "juno1c6ldq78nazsk53z9xq60xy23fcaf75a0nxrvcxagu0cmayxwxymq5y3th0",
+      "airdrop_ujclaw": "2999400"
+    },
+    {
+      "address": "juno1s2v354dzn3tghznf4qy83azlc99gv6zcecj2t6zcmzjr7lpwg7lsznfa8t",
+      "airdrop_ujclaw": "2000000"
+    },
+    {
+      "address": "juno1hrgqzt5596asswkl0nudfwx7meg7h3uphapm498k5thpstmrfj0qwqly56",
+      "airdrop_ujclaw": "1999800"
+    },
+    {
+      "address": "juno1rmsxnwjgm6wmg3qwxzjh8269u6j4satytxqe2peu8srrkw8gr5cqcwgut3",
+      "airdrop_ujclaw": "1999698"
+    },
+    {
+      "address": "juno16qgldjpu4z9y7c6ga6vnq8reky3lm05zdzzdkc8a2reh9he3zsnsa4jtdc",
+      "airdrop_ujclaw": "1500000"
+    },
+    {
+      "address": "juno1p48yqkmmjemvvxksl8a8klqhcsmn2yjgtjvakdn2fevlt8zxlfhqxf8mrc",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1g93456c0nhs5v4esultnxcxwfcqrse8v0etjsydztqdkdkp8un0spwezyp",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno198qsjasjjwxlehz5vqfwdz4y683lqpuwpf3k3fxjr3hglasu8enqkhhqn5",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1t45k3mv8ehs8cjyrtw9fp39dq80nxk4lf07tjc3u3yx0hpmu20lq8n3rh4",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1j8jez086mj22f9k9l8kf9cx5y26mzjkj50rsvstnqgdxtdkt9c9qxyamp0",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1hdrulx3xnwh5y2mgs3vs79pyalnz5v550c0arcleyxmrk29s7qssx8d7mx",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1rpgwhek4t2akwypth6undvuw6e30g9utklesvejgy0u5cde4fg9s8l2see",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno15jhm7qkwyzp0gkrzuda8rdjp6eryya7ly20tjr570p7uvnhaktzsx0gz8j",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1m5p49uzg6jcru8sj8cyufsreutgzjtp3djrdrjtxyp2pvj0eu2hqsz786r",
+      "airdrop_ujclaw": "1000000"
+    },
+    {
+      "address": "juno1cvz4zvv5v002d36wemuhs23dkatk9erhuhgkryad5p9tdhnfhmasefv5cm",
+      "airdrop_ujclaw": "999943"
+    },
+    {
+      "address": "juno1ntwh8kpzux89zewlhc4k7x4zc2saq4q3gu3wg0a5s30vjvyren9sly0zzv",
+      "airdrop_ujclaw": "999900"
+    },
+    {
+      "address": "juno16ag9nax9h6s6pwh8pkaylnsswpv9hl63jdn737g2twja0han7kdqpqgn77",
+      "airdrop_ujclaw": "999900"
+    },
+    {
+      "address": "juno1dk5y9dmdphn667p3a8j8xvmv6cfkqkduyxwfzva6vufcd4kx8mysaqmkdq",
+      "airdrop_ujclaw": "999800"
+    },
+    {
+      "address": "juno1r3gaa6kyejf8g3zjc60vn0p26y5r47kxgev3zjvy4z90lw8yszzsqr2l38",
+      "airdrop_ujclaw": "999800"
+    },
+    {
+      "address": "juno1w09u7crpahyk5w6y9x9ed3kv8hg0d23ray993fp9ct6a84ddp84sq4ya4p",
+      "airdrop_ujclaw": "999800"
+    },
+    {
+      "address": "juno188ykl3kyuga9xeh0muujms69slpmlzp3nrl8mcfldjn6w33mrj3qnl7gg2",
+      "airdrop_ujclaw": "999700"
+    },
+    {
+      "address": "juno15p8mfce2yg6pd0z8ey7sse7v4rm095k6r2eywqsqv3uwyc7qurhqrtmjln",
+      "airdrop_ujclaw": "999700"
+    },
+    {
+      "address": "juno16ka0cltzcafdvxa3e8akv7nzmfwgtl4md6h59gv32uvyyxsda42q552ypp",
+      "airdrop_ujclaw": "999010"
+    },
+    {
+      "address": "juno1ur8pu7dancxwqm39p0mva30252gur4kmf47q5tuernfg6dqd0vaqvuuvuc",
+      "airdrop_ujclaw": "959904"
+    },
+    {
+      "address": "juno12rr9pyv4kvqaptpmxwcnsel9pyduqrx74t8fg7lfr7l4dtyywmcqf84z4q",
+      "airdrop_ujclaw": "899820"
+    },
+    {
+      "address": "juno17l9u2dry5z0evduj6d4s6zxvfhvpxlca9r4f07hz0asa48ysj07qkw7rsv",
+      "airdrop_ujclaw": "549890"
+    },
+    {
+      "address": "juno1u6fjd3v2au9vehepm7m5q4qq6px9qdecazxtcse92zd89y830y9qzu7edw",
+      "airdrop_ujclaw": "500000"
+    },
+    {
+      "address": "juno1wukwmnqm2cu7l25sany2udf3matntmnuc40tsrc9uwx8w5xufyuql7q0fx",
+      "airdrop_ujclaw": "499950"
+    },
+    {
+      "address": "juno1rjjm8vrg4zr79k5cp2zdy5vqfr7dq34egxu00d00l56sm07xx03qwn329g",
+      "airdrop_ujclaw": "499900"
+    },
+    {
+      "address": "juno1nvfw3xesfz5s8k8l85kuwra5dcryzheu4nq2m2yfe79l9tc0zx9sju5acm",
+      "airdrop_ujclaw": "199940"
+    },
+    {
+      "address": "juno17nqq7uvcf978dk3mu4y8nw2wnh6ud7ksr6msfmq6edccv336ewgsqa93lv",
+      "airdrop_ujclaw": "180001"
+    },
+    {
+      "address": "juno1xayg6055msj7pmr7aw60uuh98f87zpzzg2m33ez4r74t9x3qwleqa6wk8s",
+      "airdrop_ujclaw": "100000"
+    },
+    {
+      "address": "juno1vjylu3ddegdd4gcu3m57zpg4mwsve3hh4ax4pzwmh7309khen2sslzalw3",
+      "airdrop_ujclaw": "100000"
+    },
+    {
+      "address": "juno1aev6w5fhphmgcuhlhfu277ghuuqxcudr5qw80lv7mhq48nzap54sen5f2y",
+      "airdrop_ujclaw": "100000"
+    },
+    {
+      "address": "juno1d4jpq3vl7e3qj0efmr2f26nmhzp2g8dmdf4fqwlnc87dfddzvfmqu9mxlg",
+      "airdrop_ujclaw": "100000"
+    },
+    {
+      "address": "juno1lckyf7rd8evdelgxv4kqnzv87dx7l5gra507xemur7xqkatxthyqs3an03",
+      "airdrop_ujclaw": "100000"
+    },
+    {
+      "address": "juno1v0gd665x73a679d8tma5edpuu6a6c5pqqjks3tvktyewjmxu5rgq07qr3l",
+      "airdrop_ujclaw": "99990"
+    },
+    {
+      "address": "juno1ez57uk3vqdmsxy0ltj4wxkccajn8tyqpc74pkwsc5mmree2s0y6s99ycvd",
+      "airdrop_ujclaw": "99980"
+    },
+    {
+      "address": "juno1ycrm8v2kh5juz2kulz83fgnfggtx8h7m0me0nsqwk7zdzlfsfahsacnlls",
+      "airdrop_ujclaw": "44999"
+    },
+    {
+      "address": "juno1juhdcvxtnf2h7kgkscujvqtpfl6egwlf9ytredapepl962cpmn2s8n55n4",
+      "airdrop_ujclaw": "27482"
+    },
+    {
+      "address": "juno15wff5fz24ll7thz92zulq3ulk8u0zrmlll5za05fh6q0r0u63vrqcy4ux9",
+      "airdrop_ujclaw": "21000"
+    },
+    {
+      "address": "juno1ta3f628fte4jq4um25650v85mzelfwqnudmyja2hk2jxphjat7ws7m2fy6",
+      "airdrop_ujclaw": "20000"
+    },
+    {
+      "address": "juno103lrtcrjrsmtuawu5f2pxqae02wl3rvpn9t60vwd5gf0d9mlulzsgz7qxv",
+      "airdrop_ujclaw": "9998"
+    },
+    {
+      "address": "juno14ukquwf74g4hekzt4w6xn64up8dw4empec8wmc52ehx28aa6z80slnt68g",
+      "airdrop_ujclaw": "4999"
+    },
+    {
+      "address": "juno12clyhx5qf2e079xyxkrn8kqzz0kq8urzrgxcylau00qzeg6lw9hsjh4pmp",
+      "airdrop_ujclaw": "4605"
+    },
+    {
+      "address": "juno13jg5ss4h2lwc6j6sl6tlrleh7h07f3ntd2z90wz79cgzx4g44rsskmakhm",
+      "airdrop_ujclaw": "4000"
+    },
+    {
+      "address": "juno13pu8586eefhz4gf9czullz7ymqjzmfef22yce8v5ayzc9gtdly5sq6a32h",
+      "airdrop_ujclaw": "1111"
+    },
+    {
+      "address": "juno15rcf9r4frfhcqpx22hzs6jwl7a7nc4xnlth05fhrm8zsna0nldyqv744fa",
+      "airdrop_ujclaw": "1000"
+    },
+    {
+      "address": "juno1dk4g09tvw2s7psdu4zvcfhcmg4mj9p5vryc9xld9ed0pc8dmkdpqrjjmps",
+      "airdrop_ujclaw": "1000"
+    },
+    {
+      "address": "juno1vc924dhkzu2xp0vzvmsu990k7v7zkdg5pdfpxrdpywydtzy703gqse6l7e",
+      "airdrop_ujclaw": "1000"
+    },
+    {
+      "address": "juno1sz6rhvtxfhg2suxyhty5q6dzw02dhu4ygp0l9zypth23sh0krjfsw5zdj3",
+      "airdrop_ujclaw": "1000"
+    },
+    {
+      "address": "juno1xq6mqsptd56v5nd65r52x0nm49e40x0x3ee0hzg20u6lly7sjmwqqyjttw",
+      "airdrop_ujclaw": "418"
+    },
+    {
+      "address": "juno18pp7qpq0aezjpgw65yuc6avdthxgepfqj42wrmqddwknlqlg4ejs0n0djd",
+      "airdrop_ujclaw": "100"
+    },
+    {
+      "address": "juno1j9e0an5cju93nhh50ma2lk8nlrnl44nlsjzgt0ylkyc3l07e446q8dkjpk",
+      "airdrop_ujclaw": "93"
+    },
+    {
+      "address": "juno1vy2axld4mak0yxmx4eqglkfcrn5aj3qy5sm5run5kmcjmn07askqrh009y",
+      "airdrop_ujclaw": "66"
+    },
+    {
+      "address": "juno10uwjkshv6fe3u3wqvy3dpv6ny0f06kqgtf526jx4ln8e69lcwzwqrjtsa5",
+      "airdrop_ujclaw": "60"
+    },
+    {
+      "address": "juno1shrr8lhxuzhf5jtd35g4auu3pgzce0hhchuadvspu5k85kgdmxms0qlk6p",
+      "airdrop_ujclaw": "59"
+    },
+    {
+      "address": "juno1fkg0mprg6zryjhculf6efkrpjmjv8d3858q3wt0nnhzan7l70w3qqkej76",
+      "airdrop_ujclaw": "1"
+    },
+    {
+      "address": "juno1kpup8xahjg6drfc7an7ywsx3enytj4p6wcdxarkhm5a6ju06adkqhxe65c",
+      "airdrop_ujclaw": "1"
+    },
+    {
+      "address": "juno1a4pjj5l4szl7kq8u4h07se3675fsqcfh66vtks7hlckgz2kpaq0ssn309f",
+      "airdrop_ujclaw": "1"
+    }
+  ]
+}

@@ -11,6 +11,14 @@
  *   parent = SHA-256(min(left, right) || max(left, right))
  * 
  * Usage: node build-merkle-tree.mjs --snapshot=juno-1-snapshot-41655555.json --output=merkle-proofs.json
+ *
+ * CONTRACT/ICA POLICY (decided 2026-10-04): snapshot entries whose bech32
+ * payload is 32 bytes are juno-1 contract or interchain-account addresses.
+ * No private key for them can exist on junoclaw-chain, so they can never
+ * claim. They are EXCLUDED from the tree (114 addrs, ~860K JCLAW) and their
+ * allocation is routed to the community pool at genesis (build-genesis
+ * computes pool = TOTAL - DAO - claimable). The exclusion list is written to
+ * <output>.excluded.json for transparency.
  */
 
 import fs from 'fs';
@@ -22,6 +30,35 @@ const outputFile = args.find(a => a.startsWith('--output='))?.split('=')[1] || '
 
 function sha256(data) {
   return crypto.createHash('sha256').update(data).digest();
+}
+
+// --- bech32 payload-length check --------------------------------------------
+// 20 bytes = key-controlled account (claimable). 32 bytes = contract/ICA
+// address on juno-1 (NO key can exist on junoclaw-chain -> unclaimable).
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+function bech32PayloadBytes(addr) {
+  const sep = addr.lastIndexOf('1');
+  if (sep <= 0) return null;
+  const data = addr.slice(sep + 1).toLowerCase();
+  const values = [];
+  for (const ch of data) {
+    const v = BECH32_CHARSET.indexOf(ch);
+    if (v < 0) return null;
+    values.push(v);
+  }
+  const payload5 = values.slice(0, -6); // strip checksum
+  let acc = 0, bits = 0, n = 0;
+  for (const v of payload5) {
+    acc = (acc << 5) | v;
+    bits += 5;
+    if (bits >= 8) { bits -= 8; n++; }
+  }
+  return n;
+}
+
+function isKeyControlled(addr) {
+  return bech32PayloadBytes(addr) === 20;
 }
 
 function computeLeaf(address, amount) {
@@ -98,9 +135,34 @@ function main() {
   }
 
   // Filter out zero-amount entries
-  const entries = snapshot.staked_balances.filter(e => BigInt(e.airdrop_ujclaw) > 0n);
+  const positive = snapshot.staked_balances.filter(e => BigInt(e.airdrop_ujclaw) > 0n);
   console.log(`Total entries: ${snapshot.staked_balances.length}`);
-  console.log(`Entries with non-zero airdrop: ${entries.length}`);
+  console.log(`Entries with non-zero airdrop: ${positive.length}`);
+
+  // Exclude 32-byte contract/ICA addresses — unclaimable by construction.
+  // Their allocation goes to the community pool (see header comment).
+  const excluded = [];
+  const entries = positive.filter(e => {
+    if (isKeyControlled(e.address)) return true;
+    excluded.push({ address: e.address, airdrop_ujclaw: e.airdrop_ujclaw });
+    return false;
+  });
+  const excludedTotal = excluded.reduce((s, e) => s + BigInt(e.airdrop_ujclaw), 0n);
+  const claimableTotal = entries.reduce((s, e) => s + BigInt(e.airdrop_ujclaw), 0n);
+  console.log(`Excluded contract/ICA recipients: ${excluded.length} (${excludedTotal} ujclaw -> community pool)`);
+  console.log(`Claimable recipients: ${entries.length} (${claimableTotal} ujclaw)`);
+
+  if (excluded.length > 0) {
+    const excludedFile = outputFile.replace(/\.json$/, '') + '.excluded.json';
+    fs.writeFileSync(excludedFile, JSON.stringify({
+      policy: 'excluded_from_airdrop_routed_to_community_pool',
+      reason: '32-byte bech32 payload = juno-1 contract/ICA address; no private key can exist on junoclaw-chain',
+      count: excluded.length,
+      total_ujclaw: excludedTotal.toString(),
+      addresses: excluded,
+    }, null, 2));
+    console.log(`Exclusion manifest: ${excludedFile}`);
+  }
 
   // Sort by address for deterministic ordering
   entries.sort((a, b) => a.address.localeCompare(b.address));
@@ -135,7 +197,9 @@ function main() {
   const output = {
     merkle_root: root,
     leaf_count: leaves.length,
-    total_airdrop_ujclaw: snapshot.summary?.total_airdrop_ujclaw || '0',
+    total_airdrop_ujclaw: claimableTotal.toString(),
+    excluded_contract_recipients: excluded.length,
+    excluded_ujclaw_to_community_pool: excludedTotal.toString(),
     snapshot_block_height: snapshot.snapshot_block_height,
     snapshot_date: snapshot.snapshot_date,
     proofs: proofs
