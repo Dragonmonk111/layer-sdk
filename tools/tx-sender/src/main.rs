@@ -111,6 +111,8 @@ fn print_usage() {
     eprintln!("execute flags:");
     eprintln!("  --contract <addr>    Contract address (required)");
     eprintln!("  --msg <json>         JSON execute message (required)");
+    eprintln!("  --amount <N>         Attach funds to the execute (optional)");
+    eprintln!("  --denom <denom>      Denom for attached funds (default: ujclaw)");
     eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
     eprintln!();
     eprintln!("send flags:");
@@ -634,6 +636,7 @@ async fn cmd_execute(
     grpc_addr: &str,
     contract: &str,
     msg_json: &str,
+    funds: Option<(String, String)>,
     explicit_sequence: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sender = deployer_address().to_string();
@@ -652,7 +655,9 @@ async fn cmd_execute(
         sender: sender.clone(),
         contract: contract.to_string(),
         msg: msg_json.as_bytes().to_vec(),
-        funds: vec![],
+        funds: funds
+            .map(|(amount, denom)| vec![ProtoCoin { denom, amount }])
+            .unwrap_or_default(),
     };
     let proto_bytes = msg.encode_to_vec();
     let cosmrs_any = cosmrs::Any {
@@ -1265,7 +1270,10 @@ async fn main() {
             } else {
                 args.msg
             };
-            cmd_execute(&args.grpc, &contract, &msg, args.sequence).await
+            let funds = args
+                .amount
+                .map(|a| (a, args.denom.clone()));
+            cmd_execute(&args.grpc, &contract, &msg, funds, args.sequence).await
         }
         "query" => {
             let contract = args.contract.unwrap_or_else(|| {
