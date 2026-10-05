@@ -65,11 +65,11 @@ addresses) is gitignored and was **not** read.
 | Contract | uni-7 (Juno testnet) | juno-1 (Juno mainnet) | Sovereign devnet | Needed for e2e |
 |---|---|---|---|---|
 | agent-registry | code 69, `juno15683x0sa...` | not deployed (planned in MAINNET_DEPLOY_PLAN) | **code 5** `juno1ej92ut6...` | yes |
-| task-ledger | v6 code 70 frozen (no wasmd admin); **Tier1.5 code 75** `juno1cp88zj8...` | no | **code 6** `juno1kcaqdc0...` | yes |
-| escrow | code 71 `juno17vrh77v...` | no | **code 7** `juno1lhthdtw...` | yes |
+| task-ledger | v6 code 70 frozen (no wasmd admin); **Tier1.5 code 75** `juno1cp88zj8...` | no | **code 13** (was 6; migrated in place for F2) `juno1kcaqdc0...` | yes |
+| escrow | code 71 `juno17vrh77v...` | no | **code 14** (was 7; migrated in place for F2) `juno1lhthdtw...` | yes |
 | agent-company | v3 code 63 (Mar), v6.1 code 72 `juno1lymtnjr...` (later "v4" per Sept article) | no | **code 9** `juno1lw3677t...` | yes |
 | truth-market | live on uni-7 (Aug); address in gitignored deployed.json | no | **code 10** `juno1mv5nxlz...` | yes |
-| marketplace | live on uni-7 (Aug) | no | **code 12** `juno1uj79fwh...` | yes |
+| marketplace | live on uni-7 (Aug) | no | **code 15** (was 12; migrated in place for F1) `juno1uj79fwh...` | yes |
 | skill-registry | code 82 `juno1pug0zu6...` | **code 5145** `juno1wp5fpcx...` | **code 11** `juno1aylyt4c...` | yes |
 | moultbook (v1) | code 80 `juno1nm0mu2u...` | **code 5148** `juno1r59ulw6...` | TODO | optional |
 | moultbook-v0 | live (feepay tests) | `juno18xn4cfp...z6` (A13 heartbeat, from memory) | **code 8** `juno1a6szypt...` | yes (provenance) |
@@ -123,7 +123,9 @@ each msg); unit enum variants are bare strings; use `tx-sender --msg-file`.
 ## 5. Tooling on the sovereign chain
 
 - `tx-sender` (`tools/tx-sender`): store-code, instantiate, execute (now with
-  `--amount/--denom`), query, bank send, get-tx, bench. gRPC `127.0.0.1:9090`.
+  `--amount/--denom`), migrate (`--contract <addr> --code-id N [--msg '{}']`;
+  the deployer is the wasmd admin), query, bank send, get-tx, bench. gRPC
+  `127.0.0.1:9090`.
 - Deployer: `juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992`
   (SHA256("junoclaw-deployer-v1")), also `wasm.gov_account`.
 - `TX_SENDER_KEY_SEED=<label>` (devnet only) signs as SHA256(<label>) instead of
@@ -137,37 +139,42 @@ each msg); unit enum variants are bare strings; use `tx-sender --msg-file`.
 
 Deployed by `scripts/deploy-agent-stack.ps1` in the section 4 order with the
 registry pointer graph closed. Deploy record: `snapshot/agent-stack-deployed.json`
-(untracked, devnet-local).
+(untracked, devnet-local). The table shows current codes; the three contracts
+that changed were migrated in place on 2026-10-05 (section 5.2), addresses unchanged.
 
 | Contract | code | address |
 |---|---|---|
 | agent-registry | 5 | `juno1ej92ut6dkwc8x6yyyqdjfkxwrp9rs8aw59nv6usvzzuh6phs6ufqfkxurh` |
-| task-ledger | 6 | `juno1kcaqdc0ngvlj8glf4xlr50nd7jvfdh2kqcj3ep38qfue9zas49usw4nsqd` |
-| escrow | 7 | `juno1lhthdtwdxs6mh7flw2mgqpmzrg480pqgunxpzjm9w0u57ttrz3cqzgq9qs` |
+| task-ledger | 13 (was 6) | `juno1kcaqdc0ngvlj8glf4xlr50nd7jvfdh2kqcj3ep38qfue9zas49usw4nsqd` |
+| escrow | 14 (was 7) | `juno1lhthdtwdxs6mh7flw2mgqpmzrg480pqgunxpzjm9w0u57ttrz3cqzgq9qs` |
 | moultbook-v0 | 8 | `juno1a6szypthyj97f7ly930euqlgzzqqq07j7mlpamuh098uqx0htcdqexhsqa` |
 | agent-company | 9 | `juno1lw3677tmx37e600k8qyny6tyy2337y8lxn4ajqym6k7eft8mgaeqy0rf4d` |
 | truth-market | 10 | `juno1mv5nxlzp63v9mhrlu9z3q3lymnqkx3rg6h2r0qd4aq8x379a66mqvmqaqx` |
 | skill-registry | 11 | `juno1aylyt4ctnnac5e455lrpre5m5407hjq70dyrgfaw6hn6wn84022se090ru` |
-| marketplace | 12 | `juno1uj79fwhvt658st6u8ep6jjddtq40ctyemrrxc8jyf27ryela4smsvzjp7x` |
+| marketplace | 15 (was 12) | `juno1uj79fwhvt658st6u8ep6jjddtq40ctyemrrxc8jyf27ryela4smsvzjp7x` |
 
 `scripts/agent-e2e.ps1` drives the section 2 flow with six deterministic actors
 (`owner`, `req`, `v1`-`v3`, `atk`). Phases run in order, or one at a time with
 `-Phase setup|agent|custody|escrow|probe|prov|summary`. Result on the live
-devnet: **71 assertions, 0 failures, 2 vulnerabilities reproduced.**
+devnet before the fixes: **71 assertions, 0 failures, 2 vulnerabilities
+reproduced.** After the fixes the probe asserts the attacks fail (section 5.2):
+escrow 11/11, probe 29/29.
 
 | Phase | Asserts | Covered |
 |---|---|---|
 | setup | 8 | six actors funded (30,000,000 ujclaw each); `task-ledger.agent_company` and `truth-market.min_operators = 3` wired |
 | agent | 6 | registration fee enforced (1,000,000), agent id 1; skill published; service listed at 500,000 |
 | custody | 28 | `BlockHeightAtLeast` pre-hook blocks early completion, then allows it; hire escrows 500,000; agent `total_tasks` and `trust_score` +1; 3 operators stake 1,000,000 each; verdict guards (0 verdicts, duplicate verdict, 2 of 3 `min_operators`, non-admin finalize) all rejected; finalize with 2 matching / 1 diverging: slash 100,000 (10%), rewards 150,000 (5% of the pool); `release_on_verdict` pays the agent owner 500,000; double release rejected |
-| escrow | 11 | task with `AgentTrustAtLeast` + `EscrowObligationConfirmed` hooks stays blocked while the obligation is Pending; requester pays 250,000 off-contract and confirms with the tx hash; attacker `confirm` rejected; completion then passes and trust +1 |
-| probe | 11 | reproduction sequences for F1 and F2 (below) |
+| escrow | 11 | task with `AgentTrustAtLeast` + `EscrowObligationConfirmed` hooks (the latter pins payer, payee and minimum amount since the F2 fix) stays blocked while the obligation is Pending; requester pays 250,000 off-contract and confirms with the tx hash; attacker `confirm` rejected; completion then passes and trust +1 |
+| probe | 29 | regression checks for F1 and F2: the attacks must now fail (11 reproduction asserts before the fixes; see 5.2) |
 | prov | 7 | moultbook rejects an unknown ref, accepts a receipt citing a real entry id, `list_by_ref` finds it, credit score 100 |
 
 ### Findings (both reproduced on the devnet)
 
 Both are in the current `junoclaw/contracts` source. Neither contract is on
 juno-1 mainnet (only skill-registry, zk-verifier, jclaw-credential, moultbook are).
+**Status: both fixed and re-verified on the devnet on 2026-10-05 (section 5.2);
+the text below is the original finding.**
 
 **F1 - marketplace verdict is not bound to the hire.** `ReleaseOnVerdict
 { hire_id, batch_height }` accepts any finalized truth-market epoch the caller
@@ -207,6 +214,49 @@ ended at 250,001 (250,000 genuine + 1). Proposed fix: only the task's requester
   marketplace volume 1,000,000 (released 500,000, slashed 500,000); moultbook 2
   entries; skill-registry 1.
 
+## 5.2 F1 / F2 fixes, in-place migration, re-verification (2026-10-05)
+
+Fixed in `junoclaw` commit `b4800e1` (contracts + regression tests). Audit
+addendum: `contracts/escrow/DETERMINISTIC_AUDIT.md` section 8 (`50b3361`; F10
+re-rated LOW -> HIGH).
+
+- **F2 - escrow / task-ledger / junoclaw-common.** `escrow.Authorize` resolves
+  the task in task-ledger and admits only the hook-pinned payer (the task
+  submitter when the hook has no pin); unknown task -> `TaskNotFound`.
+  `EscrowObligationConfirmed` gained optional `payer`, `payee`, `min_amount`
+  pins (`#[serde(default)]`), enforced at `Authorize` (`PinMismatch`) and
+  re-checked at `CompleteTask`.
+- **F1 - marketplace.** `ReleaseOnVerdict` requires the finalized epoch's
+  `messages_hash` to equal the task's `output_hash` (`EpochNotForTask`).
+
+Rollout (no redeploy, addresses unchanged):
+
+1. Built wasm for task-ledger, escrow, marketplace; `store-code` -> codes 13,
+   14, 15.
+2. `tx-sender migrate --contract <addr> --code-id N --msg '{}'` for each, signed
+   by the deployer (the wasmd admin). Stats, tasks, the obligation and the hire
+   read the same before and after; hooks stored before the fix now read
+   `payer/payee/min_amount: null`.
+3. `snapshot/agent-stack-deployed.json` updated with the new codes and
+   `previous_code_id`. Codes 6, 7, 12 stay stored but unused.
+
+Re-verification on the live devnet (`scripts/agent-e2e.ps1 -Phase escrow`, then
+`-Phase probe`): **escrow 11/11, probe 29/29, 0 failures.** The probe now
+asserts the attacks fail:
+
+- Squatting a pinned task's obligation -> `Unauthorized`; authorizing a task
+  that does not exist -> `No task in task-ledger carries escrow key`; wrong
+  payee or underpayment from the pinned payer -> `Obligation does not satisfy
+  the escrow pin`. The genuine obligation is not blocked, and the task completes
+  only after the real payment is confirmed.
+- An unrelated red epoch cannot refund a completed hire (`did not verify the
+  output of task`); the hire stays escrowed, and the epoch that verified the
+  output releases 500,000 to the owner.
+
+Unit tests: escrow 19, marketplace 23, task-ledger 29 pass. The custody phase
+was not re-run after the fix; its release step already uses one hash for both
+`output_hash` and `messages_hash`, so it satisfies the new check.
+
 ## 6. Open questions
 
 - Does `agent-company` / `truth-market` call anything the sovereign VM lacks
@@ -228,6 +278,16 @@ ended at 250,001 (250,000 genuine + 1). Proposed fix: only the task's requester
   hash, and restrict `escrow.Authorize` to the task requester. Both contracts
   live in `junoclaw/contracts` (separate repo): decide fix-in-place + migrate vs.
   redeploy on the devnet, then re-run the probe phase expecting `OK`.
+  **Answered 2026-10-05:** fixed in `junoclaw` `b4800e1`, migrated in place
+  (codes 13/14/15), probe re-run green; see 5.2.
+- Marketplace epoch binding is `messages_hash == output_hash` only (5.2). An
+  agent could complete a task with an `output_hash` copied from another
+  finalized green epoch and release (replay; inferred, not tested). Close it by
+  making the epoch commit to the hire: a verification request that carries
+  `hire_id`, or a `messages_hash` derived from `(task_id, output_hash)`.
+- Escrow hooks without pins still trust the task submitter as payer. Consider
+  requiring `payer`, `payee`, `min_amount` pins on every new
+  `EscrowObligationConfirmed` hook.
 
 ## 7. Progress log (append only)
 
@@ -241,3 +301,10 @@ ended at 250,001 (250,000 genuine + 1). Proposed fix: only the task's requester
   (escrow `task_id` squatting spoofs `EscrowObligationConfirmed`), see 5.1.
   `tx-sender` gained `TX_SENDER_KEY_SEED` (devnet-only multi-actor signing).
   Next: fix F1/F2 in `junoclaw/contracts` and re-run probes; then claw-relay R0.
+- 2026-10-05 (night): Fixed F1 and F2 in `junoclaw/contracts` (`b4800e1`) with
+  regression tests (escrow 19, marketplace 23, task-ledger 29 pass) and an audit
+  addendum (`50b3361`; F10 re-rated LOW -> HIGH). Built wasm, stored codes
+  13/14/15 and migrated task-ledger, escrow, marketplace in place with the new
+  `tx-sender migrate`. Probe phase inverted to assert the attacks fail; live
+  re-run: escrow 11/11, probe 29/29, 0 failures. Next: claw-relay R0 (relay
+  plan), then the residual hardening items in section 6.

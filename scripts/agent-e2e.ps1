@@ -249,9 +249,9 @@ function Phase-Escrow {
     $own = $S['addr.owner']; $aid = [int64]$S['agent_id']
     $tB = Next-TaskId
     $S['taskB'] = $tB
-    $hooks = @(@{ agent_trust_at_least = @{ agent_id = $aid; min_score = 1 } }, @{ escrow_obligation_confirmed = @{ escrow = $ES; task_id = $tB } })
+    $hooks = @(@{ agent_trust_at_least = @{ agent_id = $aid; min_score = 1 } }, @{ escrow_obligation_confirmed = @{ escrow = $ES; task_id = $tB; payer = $S['addr.req']; payee = $own; min_amount = '250000' } })
     $r = Invoke-Exec $Seeds.owner $TL @{ submit_task = @{ agent_id = $aid; input_hash = 'sha256:e2e-input-B'; execution_tier = 'local'; pre_hooks = $hooks; post_hooks = @() } } 'submit-B'
-    Check "submit task B (trust>=1 + escrow confirmed, id=$tB)" $r | Out-Null
+    Check "submit task B (trust>=1 + pinned escrow hook, id=$tB)" $r | Out-Null
     Assert-Eq 'task B id' (Newest-Id (Invoke-Query $TL @{ get_tasks_by_agent = @{ agent_id = $aid; limit = 50 } })) $tB
     Check 'requester authorizes obligation 250000' (Invoke-Exec $Seeds.req $ES @{ authorize = @{ task_id = $tB; payee = $own; amount = '250000' } } 'auth-B') | Out-Null
     Check 'complete B before payment confirmed must fail' (Invoke-Exec '' $TL @{ complete_task = @{ task_id = $tB; output_hash = 'sha256:e2e-output-B'; cost_ujuno = $null } } 'complete-B-early') $false 'pre_hook' | Out-Null
@@ -270,20 +270,26 @@ function Phase-Escrow {
 }
 
 function Phase-Probe {
-    Log '== probe F2: escrow task_id squatting spoofs the payment hook =='
-    $own = $S['addr.owner']; $aid = [int64]$S['agent_id']; $atk = $S['addr.atk']
+    Log '== regression F2: escrow task_id squatting is rejected and cannot spoof the payment hook =='
+    $own = $S['addr.owner']; $aid = [int64]$S['agent_id']; $atk = $S['addr.atk']; $req = $S['addr.req']
     $tC = Next-TaskId
     $S['taskC'] = $tC
-    $hook = @{ escrow_obligation_confirmed = @{ escrow = $ES; task_id = $tC } }
-    Check "submit task C (escrow hook, id=$tC)" (Submit-Task $aid 'sha256:e2e-input-C' $hook @() 'submit-C') | Out-Null
-    Check 'attacker squats obligation for task C (payee=attacker, 1)' (Invoke-Exec $Seeds.atk $ES @{ authorize = @{ task_id = $tC; payee = $atk; amount = '1' } } 'squat-C') | Out-Null
-    Check 'real payer authorize now fails (AlreadyAuthorized)' (Invoke-Exec $Seeds.req $ES @{ authorize = @{ task_id = $tC; payee = $own; amount = '250000' } } 'auth-C') $false | Out-Null
-    Check 'attacker self-confirms its 1 ujclaw obligation' (Invoke-Exec $Seeds.atk $ES @{ confirm = @{ task_id = $tC; tx_hash = 'self' } } 'confirm-C') | Out-Null
-    $r = Complete-Task $tC 'sha256:e2e-output-C'
-    $spoofed = $r.ok
-    Log ("[{0}] F2 reproduced: task C completed although owner was never paid = {1}" -f $(if ($spoofed) { 'FINDING' } else { 'OK' }), $spoofed)
+    $hook = @{ escrow_obligation_confirmed = @{ escrow = $ES; task_id = $tC; payer = $req; payee = $own; min_amount = '250000' } }
+    Check "submit task C (pinned escrow hook, id=$tC)" (Submit-Task $aid 'sha256:e2e-input-C' $hook @() 'submit-C') | Out-Null
+    Check 'attacker squat of task C obligation must fail' (Invoke-Exec $Seeds.atk $ES @{ authorize = @{ task_id = $tC; payee = $atk; amount = '1' } } 'squat-C') $false 'Unauthorized' | Out-Null
+    Check 'attacker authorize for a task that does not exist must fail' (Invoke-Exec $Seeds.atk $ES @{ authorize = @{ task_id = ($tC + 1000); payee = $atk; amount = '1' } } 'squat-future') $false 'carries escrow key' | Out-Null
+    Check 'requester authorize with a non-pinned payee must fail' (Invoke-Exec $Seeds.req $ES @{ authorize = @{ task_id = $tC; payee = $atk; amount = '250000' } } 'auth-C-badpayee') $false 'escrow pin' | Out-Null
+    Check 'requester authorize below the pinned minimum must fail' (Invoke-Exec $Seeds.req $ES @{ authorize = @{ task_id = $tC; payee = $own; amount = '1' } } 'auth-C-underpay') $false 'escrow pin' | Out-Null
+    Check 'requester authorizes the pinned obligation (not blocked by the squat attempts)' (Invoke-Exec $Seeds.req $ES @{ authorize = @{ task_id = $tC; payee = $own; amount = '250000' } } 'auth-C') | Out-Null
+    Check 'attacker confirm must fail (not payer)' (Invoke-Exec $Seeds.atk $ES @{ confirm = @{ task_id = $tC; tx_hash = 'self' } } 'confirm-C-atk') $false | Out-Null
+    Check 'complete C before payment confirmed must fail' (Invoke-Exec '' $TL @{ complete_task = @{ task_id = $tC; output_hash = 'sha256:e2e-output-C'; cost_ujuno = $null } } 'complete-C-early') $false 'pre_hook' | Out-Null
+    $pay = Invoke-Send $Seeds.req $own '250000'
+    Check 'requester pays owner off-contract (bank send)' $pay | Out-Null
+    Check 'requester confirms with tx hash' (Invoke-Exec $Seeds.req $ES @{ confirm = @{ task_id = $tC; tx_hash = $pay.hash } } 'confirm-C') | Out-Null
+    Check 'complete C (hook satisfied by the real obligation)' (Complete-Task $tC 'sha256:e2e-output-C') | Out-Null
+    Assert-Eq 'obligation C payee is the owner' (Invoke-Query $ES @{ get_obligation_by_task = @{ task_id = $tC } }).payee $own
 
-    Log '== probe F1: marketplace verdict is not bound to the hire/task =='
+    Log '== regression F1: marketplace verdict must be bound to the hire/task =='
     $tA2 = Next-TaskId
     Check 'submit task A2' (Submit-Task $aid 'sha256:e2e-input-A2' @() @() 'submit-A2') | Out-Null
     Check 'requester hires listing for A2 (500000)' (Invoke-Exec $Seeds.req $MP @{ hire_service = @{ listing_id = [int64]$S['listing_id']; task_id = $tA2 } } 'hire-A2' '500000') | Out-Null
@@ -295,9 +301,18 @@ function Phase-Probe {
     }
     Check 'finalize unrelated batch as red' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $redBatch; consensus_verdict = 'red'; messages_hash = 'sha256:UNRELATED' } } 'fin-red') | Out-Null
     $before = Get-Bal $S['addr.req']
-    $rel = Invoke-Exec $Seeds.req $MP @{ release_on_verdict = @{ hire_id = [int64]$hire.id; batch_height = $redBatch } } 'release-A2-red'
-    Log ("[{0}] F1 reproduced: unrelated red epoch refunded a completed hire = {1}" -f $(if ($rel.ok) { 'FINDING' } else { 'OK' }), $rel.ok)
-    Log ("  hire A2 status now: " + (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire.id } }).status + "; requester delta " + ((Get-Bal $S['addr.req']) - $before))
+    Check 'refund of a completed hire via an unrelated red epoch must fail' (Invoke-Exec $Seeds.req $MP @{ release_on_verdict = @{ hire_id = [int64]$hire.id; batch_height = $redBatch } } 'release-A2-red') $false 'did not verify the output' | Out-Null
+    Assert-Eq 'hire A2 still escrowed' (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire.id } }).status 'escrowed'
+    Assert-Eq 'requester balance did not increase' ([bool](((Get-Bal $S['addr.req']) - $before) -le 0)) $true
+    $greenBatch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 2000
+    foreach ($k in 'v1', 'v2', 'v3') {
+        Check "$k verdict green on the batch that verified A2's output" (Invoke-Exec $Seeds[$k] $TM @{ submit_verdict = @{ batch_height = $greenBatch; verdict = 'green'; messages_hash = 'sha256:e2e-output-A2' } } "green2-$k") | Out-Null
+    }
+    Check 'finalize the A2 batch as green' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $greenBatch; consensus_verdict = 'green'; messages_hash = 'sha256:e2e-output-A2' } } 'fin-green2') | Out-Null
+    $before = Get-Bal $S['addr.owner']
+    Check 'release hire A2 on the epoch that verified its output' (Invoke-Exec $Seeds.req $MP @{ release_on_verdict = @{ hire_id = [int64]$hire.id; batch_height = $greenBatch } } 'release-A2') | Out-Null
+    Assert-Eq 'hire A2 status' (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire.id } }).status 'released'
+    Assert-Eq 'owner balance +500000' ((Get-Bal $S['addr.owner']) - $before) 500000
     Save-S
 }
 
