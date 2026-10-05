@@ -20,6 +20,7 @@
 //!   tx-sender store-code [--grpc 127.0.0.1:9090] --wasm path/to/contract.wasm [--sequence N]
 //!   tx-sender instantiate [--grpc 127.0.0.1:9090] --code-id 1 [--label root] [--msg '{...}'] [--sequence N]
 //!   tx-sender execute [--grpc 127.0.0.1:9090] --contract juno1... --msg '{...}' [--sequence N]
+//!   tx-sender migrate [--grpc 127.0.0.1:9090] --contract juno1... --code-id N [--msg '{}'] [--sequence N]
 //!   tx-sender query [--grpc 127.0.0.1:9090] --contract juno1... [--msg '{}']
 
 use cosmrs::{
@@ -46,7 +47,7 @@ use layer_proto::cosmos::tx::v1beta1::{
     SimulateRequest,
 };
 use layer_proto::cosmwasm::wasm::v1::{
-    MsgExecuteContract, MsgInstantiateContract, MsgStoreCode,
+    MsgExecuteContract, MsgInstantiateContract, MsgMigrateContract, MsgStoreCode,
     QueryCodeRequest, QueryCodeResponse,
     QueryContractsByCodeRequest, QueryContractsByCodeResponse,
     QuerySmartContractStateRequest, QuerySmartContractStateResponse,
@@ -73,6 +74,7 @@ const FEE_DENOM: &str = "ujclaw";
 const TYPE_URL_MSG_STORE_CODE: &str = "/cosmwasm.wasm.v1.MsgStoreCode";
 const TYPE_URL_MSG_INSTANTIATE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgInstantiateContract";
 const TYPE_URL_MSG_EXECUTE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgExecuteContract";
+const TYPE_URL_MSG_MIGRATE_CONTRACT: &str = "/cosmwasm.wasm.v1.MsgMigrateContract";
 const TYPE_URL_MSG_SEND: &str = "/cosmos.bank.v1beta1.MsgSend";
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ fn print_usage() {
     eprintln!("  store-code  Upload WASM bytecode (MsgStoreCode)");
     eprintln!("  instantiate Instantiate a contract (MsgInstantiateContract)");
     eprintln!("  execute     Execute a contract (MsgExecuteContract)");
+    eprintln!("  migrate     Migrate a contract to a new code id (MsgMigrateContract)");
     eprintln!("  send        Send tokens (MsgSend bank transfer)");
     eprintln!("  simulate    Dry-run a MsgSend via cosmos.tx.v1beta1.Service/Simulate");
     eprintln!("  get-tx      Query a committed tx by hash (cosmos.tx.v1beta1.Service/GetTx)");
@@ -113,6 +116,12 @@ fn print_usage() {
     eprintln!("  --msg <json>         JSON execute message (required)");
     eprintln!("  --amount <N>         Attach funds to the execute (optional)");
     eprintln!("  --denom <denom>      Denom for attached funds (default: ujclaw)");
+    eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
+    eprintln!();
+    eprintln!("migrate flags:");
+    eprintln!("  --contract <addr>    Contract address (required)");
+    eprintln!("  --code-id <N>        New code ID (required)");
+    eprintln!("  --msg <json>         JSON migrate message (default: {{}})");
     eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
     eprintln!();
     eprintln!("send flags:");
@@ -705,6 +714,71 @@ async fn cmd_execute(
     Ok(())
 }
 
+async fn cmd_migrate(
+    grpc_addr: &str,
+    contract: &str,
+    code_id: u64,
+    msg_json: &str,
+    explicit_sequence: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sender = deployer_address().to_string();
+    println!("Deployer address: {}", sender);
+
+    let sequence = match explicit_sequence {
+        Some(seq) => {
+            println!("Using explicit sequence: {}", seq);
+            seq
+        }
+        None => query_account_sequence(grpc_addr, &sender).await?,
+    };
+    println!("Account sequence: {}", sequence);
+
+    let msg = MsgMigrateContract {
+        sender: sender.clone(),
+        contract: contract.to_string(),
+        code_id,
+        msg: msg_json.as_bytes().to_vec(),
+    };
+    let proto_bytes = msg.encode_to_vec();
+    let cosmrs_any = cosmrs::Any {
+        type_url: TYPE_URL_MSG_MIGRATE_CONTRACT.to_string(),
+        value: proto_bytes,
+    };
+
+    let tx_bytes = sign_tx(cosmrs_any, sequence);
+    println!("Signed tx size: {} bytes", tx_bytes.len());
+    println!("txhash: {}", tx_hash_hex(&tx_bytes));
+
+    let channel = connect(grpc_addr).await?;
+    let mut client = TxServiceClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    let response = client
+        .broadcast_tx(BroadcastTxRequest {
+            tx_bytes,
+            mode: 1, // BROADCAST_MODE_SYNC
+        })
+        .await?;
+
+    let tx_response = response.into_inner().tx_response;
+    if let Some(ref resp) = tx_response {
+        println!(
+            "BroadcastTx response: code={}, log={}",
+            resp.code, resp.raw_log
+        );
+        if resp.code == 0 {
+            println!("MigrateContract TX submitted successfully");
+        } else {
+            println!("Warning: tx returned non-zero code — check node logs");
+        }
+    } else {
+        println!("MigrateContract TX submitted (no response body)");
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Subcommand: send (MsgSend bank transfer)
 // ---------------------------------------------------------------------------
@@ -1280,6 +1354,18 @@ async fn main() {
                 .amount
                 .map(|a| (a, args.denom.clone()));
             cmd_execute(&args.grpc, &contract, &msg, funds, args.sequence).await
+        }
+        "migrate" => {
+            let contract = args.contract.unwrap_or_else(|| {
+                eprintln!("Error: --contract is required for migrate");
+                std::process::exit(1);
+            });
+            let code_id = args.code_id.unwrap_or_else(|| {
+                eprintln!("Error: --code-id is required for migrate");
+                std::process::exit(1);
+            });
+            let msg = if args.msg.is_empty() { "{}".to_string() } else { args.msg };
+            cmd_migrate(&args.grpc, &contract, code_id, &msg, args.sequence).await
         }
         "query" => {
             let contract = args.contract.unwrap_or_else(|| {
