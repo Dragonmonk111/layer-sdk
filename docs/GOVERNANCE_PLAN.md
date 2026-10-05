@@ -48,6 +48,22 @@ considered:
 - `wasm.gov_account` = same address. It is the contract-admin / root caller.
 - Single-operator custody is **acceptable for devnet only**.
 
+### Devnet deployment (live-verified 2026-10-04)
+
+`junoclaw-dao` lock-to-vote contract (stake→lock rename; vote weight comes
+from the `LOCKED` map, not the live bank balance — blocks the
+transfer-revote attack):
+
+- **code_id 4** — `data_hash 94a9d5590aed4a50454887b3756d0875c3e994f027357c0edcd713f0acbf10de`
+- **contract** `juno1tsgw7mek36kge5kw2e8jwg06u0lkwc0ehl0vfp97v5lynzslvwzqq9hfs2`
+  (instantiated h276887, tx `266CFAA0…`; init params in `snapshot/dao-init.json`)
+- E2E verified: `Lock{}` + 500M ujclaw → `GetLock` = 500000000; `Vote` yes →
+  `GetTally.yes_votes` = 500000000; `Unlock` mid-vote correctly rejected
+  (`Tokens locked until block 278796`); `GetLockStats.spendable` = 0.
+- Serialization notes: unit enum variants take bare strings
+  (`"proposal_type":"text"`, `"vote":"yes"`); `u128` fields take JSON
+  numbers; use `tx-sender --msg-file` (PowerShell mangles inline JSON).
+
 ### G1 ceremony (testnet genesis bundle)
 
 - A **ceremony key** is generated at the key ceremony (offline, split custody:
