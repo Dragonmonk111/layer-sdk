@@ -327,8 +327,14 @@ fn parse_args() -> Result<Args, String> {
 ///
 /// Uses the same seed as `default_genesis()` in `app/slay3rd/src/main.rs`:
 /// SHA256("junoclaw-deployer-v1")[0..32]
+///
+/// Devnet only: setting `TX_SENDER_KEY_SEED=<label>` derives the key from
+/// SHA256(<label>) instead, so test actors (agent owner, requester,
+/// operators) can sign from the same tool.
 fn deployer_key() -> cosmrs::crypto::secp256k1::SigningKey {
-    let seed = Sha256::digest(b"junoclaw-deployer-v1");
+    let label = std::env::var("TX_SENDER_KEY_SEED")
+        .unwrap_or_else(|_| "junoclaw-deployer-v1".to_string());
+    let seed = Sha256::digest(label.as_bytes());
     cosmrs::crypto::secp256k1::SigningKey::from_slice(&seed[..32])
         .expect("valid secp256k1 key from SHA256 seed")
 }
