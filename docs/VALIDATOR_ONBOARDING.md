@@ -22,7 +22,7 @@ Every validator has equal weight; finality requires a threshold of BLS shares.
 ### Software
 
 - Linux (Ubuntu 22.04+ recommended) or Docker
-- Rust 1.85+ (if building from source)
+- Rust 1.97+ and `clang g++ libclang-dev cmake` (if building from source)
 - Open ports: P2P (default `7001`), gRPC (default `9090`, optional public)
 
 ### Keys
@@ -45,10 +45,12 @@ Each validator needs **two keys**, both stored in a single `keys.json`:
 ### Option A — Build from source
 
 ```bash
-git clone <junoclaw-chain-repo>
+git clone -b commonware https://github.com/Dragonmonk111/layer-sdk.git junoclaw-chain
 cd junoclaw-chain
-cargo build --release -p slay3rd
-# binary: target/release/slay3rd
+git checkout 90451d8          # devnet binary since 2026-10-06; older builds cannot join
+cc -c -o /tmp/shim.o docker/shim.c   # x86_64: wasmer still links __rust_probestack
+RUSTFLAGS="-C link-arg=/tmp/shim.o" cargo build --release -p slay3rd --features rocksdb
+# binary: target/release/slay3rd (rocksdb = state persists across restarts)
 ```
 
 ### Option B — Docker
@@ -103,7 +105,8 @@ bls_key_path      = "/keys/validator-0/keys.json"
 identity_key_path = "/keys/validator-0/keys.json"
 
 data_dir     = "/data"
-genesis_path = ""               # set when mainnet genesis exists
+genesis_path = ""               # devnet: empty = built-in genesis (needs insecure_devnet)
+insecure_devnet = true          # devnet only: built-in genesis + coordinator-dealt keys
 
 # Consensus tuning (defaults are fine for devnet)
 mempool_max_pending        = 10000
@@ -121,6 +124,11 @@ address    = "<host>:7001"
 - `validator_index` must match the index your `keys.json` was generated for.
 - `[[peers]]` lists the *other* validators — your own entry is optional/ignored.
 - `chain_id` must be identical across the set.
+- Without `insecure_devnet`, the node refuses an empty `genesis_path`, key files without
+  ceremony `share_hex`, and genesis files that fund or empower a built-in devnet address.
+  Never set it outside the devnet.
+- Block time is the proposer's wall clock; validators reject proposals stamped more
+  than 2 s ahead of their own clock. Run NTP.
 
 ---
 
@@ -140,7 +148,7 @@ The devnet compose file mounts `devnet/config/node-<i>.toml` and
 ### Bare metal / single node
 
 ```bash
-slay3rd --config /path/to/node.toml
+slay3rd /path/to/node.toml
 ```
 
 ---
@@ -163,7 +171,8 @@ If your node is up but not signing, check:
 1. `validator_index` matches your key share index
 2. Peers are reachable on their P2P ports
 3. `chain_id` matches the rest of the set
-4. Clock sync (NTP) — simplex timeouts are wall-clock sensitive
+4. Clock sync (NTP) — a clock skewed by more than 2 s makes peers refuse your
+   proposals (or you refuse theirs)
 
 ---
 
