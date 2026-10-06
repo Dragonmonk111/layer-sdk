@@ -696,11 +696,14 @@ fn cmd_assemble_genesis(args: &[String]) {
              bls_key_path = \"/keys/keys.json\"\n\
              identity_key_path = \"/keys/keys.json\"\n\
              data_dir = \"/data\"\n\
-             genesis_path = \"\"\n\
+             genesis_path = \"/config/genesis.json\"\n\
              mempool_max_pending = 10000\n\
              leader_timeout_ms = 3000\n\
              certification_timeout_ms = 5000\n"
         );
+        if validator_mayo_public_keys.is_some() {
+            toml.push_str("hybrid_consensus = true\n");
+        }
         for (j, peer) in requests.iter().enumerate() {
             if j == i {
                 continue;

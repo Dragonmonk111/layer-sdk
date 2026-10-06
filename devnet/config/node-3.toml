@@ -10,6 +10,7 @@ mempool_max_pending = 10000
 leader_timeout_ms = 3000
 certification_timeout_ms = 5000
 hybrid_consensus = true
+insecure_devnet = true
 
 # State-sync bootstrap: when /data has no committed state, adopt a
 # peer snapshot instead of genesis (docs/STATE_SYNC.md). The certified

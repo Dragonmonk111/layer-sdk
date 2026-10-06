@@ -80,10 +80,7 @@ use slay3rd::{
     relay::LayerRelay,
 };
 
-use layer_app::{
-    genesis::{BankAccount, GenesisState, WasmParams},
-    App, AppConfig, StateMachine,
-};
+use layer_app::{App, AppConfig, StateMachine};
 use layer_storage::PersistentStorage;
 
 #[cfg(feature = "rocksdb")]
@@ -416,7 +413,13 @@ async fn run_node(
                 }
             } else {
                 info!("No stored state — initializing from genesis");
-                let genesis = default_genesis();
+                let genesis = match slay3rd::genesis::resolve_genesis(&config) {
+                    Ok(g) => g,
+                    Err(e) => {
+                        error!(error = %e, "Cannot initialize from genesis");
+                        return;
+                    }
+                };
                 let app_state = match serde_json::to_vec(&genesis) {
                     Ok(b) => b,
                     Err(e) => {
@@ -481,6 +484,10 @@ async fn run_node(
         }
     };
     let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
+    if config.fault_inject.is_some() && !config.insecure_devnet {
+        error!("fault_inject requires insecure_devnet = true — chaos testing is devnet-only");
+        return;
+    }
     let layer_node = layer_node.with_fault_inject(config.fault_inject.clone());
     let layer_node = layer_node.with_pruning(config.prune_keep_heights());
     info!(
@@ -701,6 +708,15 @@ async fn run_node(
         info!("BLS share loaded from keys.json (ceremony key material)");
         (sharing, share)
     } else {
+        if !config.insecure_devnet {
+            error!(
+                "key file has no ceremony sharing_hex/share_hex; the fallback seed-0 BLS deal \
+                 is public (anyone can derive every share). Run the key ceremony, or set \
+                 insecure_devnet = true on a devnet"
+            );
+            return;
+        }
+        warn!("insecure_devnet: BLS shares come from the public seed-0 deal");
         // Use the same seeded RNG as the keygen tool to reproduce the same DKG output.
         let mut rng = ChaCha8Rng::seed_from_u64(0);
         // Skip Ed25519 key generation (same as keygen tool does first) to advance RNG state.
@@ -1349,37 +1365,5 @@ async fn run_node(
     match tokio::signal::ctrl_c().await {
         Ok(()) => info!("Shutdown signal received — stopping slay3rd"),
         Err(e) => warn!(error = %e, "Error waiting for shutdown signal"),
-    }
-}
-
-/// Default genesis state for testnet bootstrapping.
-///
-/// Includes a pre-funded deployer account for the tx-sender tool.
-/// The deployer's secp256k1 private key is derived deterministically:
-///   SHA256("junoclaw-deployer-v1")[0..32] (32 bytes)
-/// The corresponding bech32 address is computed from the public key.
-///
-/// The tx-sender tool uses the same derivation to sign transactions.
-fn default_genesis() -> GenesisState {
-    use sha2::{Digest, Sha256};
-
-    // Deterministic deployer key — same seed used by tools/tx-sender
-    let seed = Sha256::digest(b"junoclaw-deployer-v1");
-    let deployer_key = cosmrs::crypto::secp256k1::SigningKey::from_slice(&seed[..32])
-        .expect("valid secp256k1 key from SHA256 seed");
-    let deployer_addr = deployer_key
-        .public_key()
-        .account_id(layer_std::BECH32_PREFIX)
-        .expect("valid bech32 address")
-        .to_string();
-
-    GenesisState {
-        bank: vec![BankAccount {
-            address: deployer_addr,
-            balance: vec![cosmwasm_std::coin(1_000_000_000_000, "ujclaw")],
-        }],
-        wasm: WasmParams {
-            gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
-        },
     }
 }

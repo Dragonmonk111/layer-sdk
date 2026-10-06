@@ -106,6 +106,14 @@ pub struct NodeConfig {
     #[serde(default)]
     pub fault_inject: Option<String>,
 
+    /// DEVNET ONLY. Permits bootstrap material anyone can derive from the
+    /// source: the built-in genesis when `genesis_path` is empty (its
+    /// deployer key is SHA256("junoclaw-deployer-v1")), the seed-0 BLS deal
+    /// for key files without ceremony `sharing_hex`/`share_hex`, and
+    /// `fault_inject`. Without it the node refuses all three.
+    #[serde(default)]
+    pub insecure_devnet: bool,
+
     /// Sidecar pruning tier. `"_"` -prefixed keys (`_payload/`, `_ts/`,
     /// `_txres/`) are node-local serving data — never part of app_hash —
     /// so each node may prune them at its own rate. Modes:
@@ -171,6 +179,7 @@ impl Default for NodeConfig {
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
+            insecure_devnet: false,
             pruning: default_pruning(),
             pruning_keep_heights: None,
         }
@@ -277,6 +286,7 @@ mod tests {
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
+            insecure_devnet: false,
             pruning: default_pruning(),
             pruning_keep_heights: None,
         };

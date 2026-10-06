@@ -20,6 +20,7 @@ mempool_max_pending = 10000
 leader_timeout_ms = 3000
 certification_timeout_ms = 5000
 hybrid_consensus = true
+insecure_devnet = true
 
 [state_sync]
 peers = ["172.28.0.20:9090", "172.28.0.10:9090"]

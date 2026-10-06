@@ -2,6 +2,7 @@
 
 pub mod block;
 pub mod config;
+pub mod genesis;
 pub mod grpc;
 pub mod hybrid_scheme;
 pub mod mempool;

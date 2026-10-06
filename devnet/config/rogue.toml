@@ -15,6 +15,7 @@ mempool_max_pending = 10000
 leader_timeout_ms = 1000
 certification_timeout_ms = 2000
 hybrid_consensus = true
+insecure_devnet = true
 
 # No [state_sync] — initializes from genesis.
 # Empty peers — single-validator chain, no P2P partners.

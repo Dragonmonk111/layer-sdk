@@ -10,6 +10,7 @@ mempool_max_pending = 10000
 leader_timeout_ms = 3000
 certification_timeout_ms = 5000
 hybrid_consensus = true
+insecure_devnet = true
 
 [[peers]]
 address = "172.28.0.11:7001"
@@ -22,3 +23,5 @@ public_key = "28833a25d511f2e03efca77d87ddc3eedd5f5181adb947143d17e2e87e2fa685"
 [[peers]]
 address = "172.28.0.13:7001"
 public_key = "5d25ada62d8910a9e43e3711c5b581b6a0860aa338954fe65a847eea8d48c1a2"
+
+
