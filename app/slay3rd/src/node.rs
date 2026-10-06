@@ -459,7 +459,8 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
     }
 
     /// Serve a payload by height for peer backfill requests: pending
-    /// (not-yet-executed) payloads first, then the durable store.
+    /// (not-yet-executed) payloads first, then the durable store, then the
+    /// app's `_payload/` sidecar (kept for the pruning-tier window).
     pub async fn payload_by_height(&self, height: u64) -> Option<BlockPayload> {
         {
             let pending = self.pending_payloads.lock().await;
@@ -467,10 +468,16 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 return Some(p.clone());
             }
         }
-        self.store
+        let stored = self
+            .store
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .get_by_height(height)
+            .get_by_height(height);
+        if stored.is_some() {
+            return stored;
+        }
+        let bytes = self.app.read().await.get_block_payload(height)?;
+        BlockPayload::from_bytes(&bytes).ok()
     }
 
     /// Admit a payload received from a peer into `pending_payloads`.
@@ -668,8 +675,9 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         result
     }
 
-    /// Drop `_payload/`+`_ts/`+`_txres/` sidecars below `tip − keep`, per
-    /// the node's pruning tier (`NodeConfig::pruning`). Node-local only —
+    /// Drop `_payload/`+`_ts/`+`_txres/` sidecars and `_cert/`+`_proposal/`
+    /// finality records below `tip − keep`, per the node's pruning tier
+    /// (`NodeConfig::pruning`). Node-local only —
     /// `_` keys never enter app_hash, so validators on different tiers
     /// still commit identical state. Batched to bound finalize latency;
     /// `_prune_floor` tracks progress so a large catch-up converges over
@@ -681,6 +689,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
 
         let Some(keep) = self.prune_keep_heights else { return };
         let target_floor = tip.saturating_sub(keep);
+        self.prune_finality_records(target_floor, MAX_PRUNE_PER_BLOCK).await;
         let old_floor = {
             let app = self.app.read().await;
             app.prune_floor()
@@ -720,6 +729,19 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 // Pruning failure is non-fatal: stale sidecars only cost disk.
                 tracing::warn!(error = ?e, floor = new_floor, "sidecar pruning failed — will retry next block");
             }
+        }
+    }
+
+    async fn prune_finality_records(&self, target_floor: u64, max_heights: u64) {
+        let old_floor = self.app.read().await.finality_prune_floor();
+        if target_floor <= old_floor {
+            return;
+        }
+        let new_floor = old_floor.saturating_add(max_heights).min(target_floor);
+        let heights: Vec<u64> = ((old_floor + 1)..=new_floor).collect();
+        let mut app = self.app.write().await;
+        if let Err(e) = app.prune_finality(&heights, new_floor) {
+            tracing::warn!(error = ?e, floor = new_floor, "finality record pruning failed — will retry next block");
         }
     }
 
@@ -1776,6 +1798,42 @@ mod tests {
         rt().block_on(async {
             assert_eq!(node.payload_by_height(7).await, Some(expected));
             assert_eq!(node.payload_by_height(8).await, None);
+        });
+    }
+
+    #[test]
+    fn test_payload_by_height_falls_back_to_app_sidecar() {
+        let node = make_layer_node();
+        let payload = make_payload_at_genesis_time(9, [8u8; 32]);
+        let expected = payload.clone();
+        rt().block_on(async {
+            assert_eq!(node.payload_by_height(9).await, None);
+            node.app
+                .write()
+                .await
+                .set_block_payload(9, payload.to_bytes())
+                .unwrap();
+            assert_eq!(node.payload_by_height(9).await, Some(expected));
+        });
+    }
+
+    #[test]
+    fn test_prune_sidecars_prunes_finality_records() {
+        let node = make_layer_node().with_pruning(Some(2));
+        rt().block_on(async {
+            {
+                let mut app = node.app.write().await;
+                for h in 1..=5u64 {
+                    app.set_block_finality(h, vec![h as u8], vec![h as u8; 2], h).unwrap();
+                }
+            }
+            node.prune_sidecars(5).await;
+            let app = node.app.read().await;
+            assert_eq!(app.finality_prune_floor(), 3);
+            assert_eq!(app.get_block_certificate(1), None);
+            assert_eq!(app.get_block_proposal(3), None);
+            assert_eq!(app.get_block_certificate(4), Some(vec![4u8]));
+            assert_eq!(app.get_block_proposal(5), Some(vec![5u8; 2]));
         });
     }
 

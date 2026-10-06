@@ -115,12 +115,13 @@ pub struct NodeConfig {
     pub insecure_devnet: bool,
 
     /// Sidecar pruning tier. `"_"` -prefixed keys (`_payload/`, `_ts/`,
-    /// `_txres/`) are node-local serving data — never part of app_hash —
-    /// so each node may prune them at its own rate. Modes:
+    /// `_txres/`, and the `_cert/` + `_proposal/` finality records) are
+    /// node-local serving data — never part of app_hash — so each node may
+    /// prune them at its own rate. Modes:
     ///   "archive"   — keep everything (state-sync donors, indexers)
-    ///   "validator" — keep the last 65,536 heights (matches the payload
-    ///                 store retention / max backfill depth)
-    ///   "rpc"       — keep the last 500,000 heights (serving history)
+    ///   "validator" — keep the last 540,000 heights (~24 h at 0.16 s
+    ///                 blocks; also the max backfill depth)
+    ///   "rpc"       — keep the last 16,200,000 heights (~30 days)
     ///   "custom"    — keep `pruning_keep_heights` heights
     /// Default "validator". Pruning is consensus-safe: `_` keys are
     /// excluded from app_hash and the state root.
@@ -163,6 +164,9 @@ fn default_max_snapshot_bytes() -> u64 {
 fn default_min_gas_price() -> String {
     "0.001ujclaw".to_string()
 }
+
+const VALIDATOR_KEEP_HEIGHTS: u64 = 540_000;
+const RPC_KEEP_HEIGHTS: u64 = 16_200_000;
 
 fn default_pruning() -> String {
     "validator".to_string()
@@ -236,15 +240,14 @@ impl NodeConfig {
     pub fn prune_keep_heights(&self) -> Option<u64> {
         match self.pruning.as_str() {
             "archive" => None,
-            // Must match PayloadStore's DEFAULT_RETAIN_HEIGHTS — the sidecar
-            // payload window is only useful while the PayloadStore can serve
-            // the same range for backfill.
-            "validator" => Some(65_536),
-            "rpc" => Some(500_000),
-            "custom" => Some(self.pruning_keep_heights.unwrap_or(65_536)),
+            // Backfill serves from the `_payload/` sidecar beyond the
+            // PayloadStore window, so this is also the backfill depth.
+            "validator" => Some(VALIDATOR_KEEP_HEIGHTS),
+            "rpc" => Some(RPC_KEEP_HEIGHTS),
+            "custom" => Some(self.pruning_keep_heights.unwrap_or(VALIDATOR_KEEP_HEIGHTS)),
             other => {
                 eprintln!("unknown pruning mode '{other}' — falling back to validator tier");
-                Some(65_536)
+                Some(VALIDATOR_KEEP_HEIGHTS)
             }
         }
     }
@@ -264,6 +267,25 @@ mod tests {
         assert_eq!(cfg.certification_timeout_ms, 5_000);
         assert_eq!(cfg.wal_path(), "data/wal");
         assert_eq!(cfg.app_data_path(), "data/app");
+    }
+
+    #[test]
+    fn test_prune_tiers() {
+        let tier = |pruning: &str, custom: Option<u64>| {
+            NodeConfig {
+                pruning: pruning.to_string(),
+                pruning_keep_heights: custom,
+                ..NodeConfig::default()
+            }
+            .prune_keep_heights()
+        };
+        assert_eq!(NodeConfig::default().prune_keep_heights(), Some(540_000));
+        assert_eq!(tier("validator", None), Some(540_000));
+        assert_eq!(tier("rpc", None), Some(16_200_000));
+        assert_eq!(tier("archive", None), None);
+        assert_eq!(tier("custom", Some(1_000)), Some(1_000));
+        assert_eq!(tier("custom", None), Some(540_000));
+        assert_eq!(tier("bogus", None), Some(540_000));
     }
 
     #[test]

@@ -24,7 +24,8 @@ certificate. So `state_root @ H` is already consensus-authenticated: it's the
 same trust anchor the BLS light client verifies today.
 
 A joining node picks a certified height **H** (any height with a retrievable
-finality record — bounded by `DEFAULT_RETAIN_HEIGHTS` = 65,536 today), pins:
+finality record — bounded by the donor's pruning tier: 540,000 heights on
+validators, unbounded on archive nodes), pins:
 
 - `cert_H` — BLS threshold cert over `BlockPayload_H`
 - `root_H` — `BlockPayload_H.state_root`, extracted after cert verification

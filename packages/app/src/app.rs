@@ -208,6 +208,7 @@ const TX_RESPONSE_KEY_PREFIX: &str = "_txres/";
 /// tier on an already-synced chain (catch-up from the old floor).
 /// Node-local — same "_" app_hash-exclusion convention.
 const PRUNE_FLOOR: Item<u64> = Item::new("_prune_floor");
+const FINALITY_PRUNE_FLOOR: Item<u64> = Item::new("_finality_prune_floor");
 
 /// Storage item holding the latest committed state root — the Merkle root
 /// over all non-`'_'`-prefixed KV entries, recomputed at the end of every
@@ -913,9 +914,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// keys it claims are gone.
     ///
     /// `_payload/` (the dominant growth), `_ts/`, and `_txres/` are pruned.
-    /// `_cert/` and `_proposal/` are kept — 32-byte cert + proposal bytes
-    /// per height is small, and membership proofs / state-sync anchors may
-    /// need them even for heights below the payload window.
+    /// `_cert/` and `_proposal/` are pruned by `prune_finality`, which keeps
+    /// its own watermark.
     ///
     /// Consensus-safe: every touched key is `_`-prefixed, so app_hash and
     /// the state root are untouched; two nodes with different tiers still
@@ -944,6 +944,34 @@ impl<T: PersistentStorage + 'static> App<T> {
             removed += 1;
         }
         PRUNE_FLOOR.save(&mut writer, &meter, &new_floor)?;
+        writer.commit(&meter)?;
+        Ok(removed)
+    }
+
+    pub fn finality_prune_floor(&self) -> u64 {
+        let meter = GasMeter::infinite();
+        let reader = self.storage.reader();
+        let result = FINALITY_PRUNE_FLOOR
+            .may_load(&reader, &meter)
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+        reader.abort();
+        result
+    }
+
+    pub fn prune_finality(&mut self, heights: &[u64], new_floor: u64) -> PulsarResult<usize> {
+        let meter = GasMeter::infinite();
+        let mut writer = self.storage.writer();
+        let mut removed = 0usize;
+        for h in heights {
+            for prefix in [BLOCK_CERTIFICATE_KEY_PREFIX, BLOCK_PROPOSAL_KEY_PREFIX] {
+                let key = format!("{}{}", prefix, h);
+                Item::<Vec<u8>>::new(&key).remove(&mut writer, &meter)?;
+                removed += 1;
+            }
+        }
+        FINALITY_PRUNE_FLOOR.save(&mut writer, &meter, &new_floor)?;
         writer.commit(&meter)?;
         Ok(removed)
     }
@@ -1017,7 +1045,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             .map(|b| b.height)
             .unwrap_or(0);
 
-        let iter = reader.range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+        let iter = consensus_entries(&reader, &meter)?;
 
         let mut leaves: Vec<[u8; 32]> = Vec::new();
         let mut found: Option<(usize, Vec<u8>)> = None;
@@ -1074,7 +1102,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             .map(|b| b.height)
             .unwrap_or(0);
 
-        let iter = reader.range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+        let iter = consensus_entries(&reader, &meter)?;
         let mut leaves: Vec<[u8; 32]> = Vec::new();
         let mut chunks: Vec<SnapshotChunk> = Vec::new();
         let mut cur: Vec<u8> = Vec::new();
@@ -1178,12 +1206,24 @@ impl<T: PersistentStorage + 'static> App<T> {
     }
 }
 
+const SIDECAR_PREFIX: &[u8] = b"_";
+const SIDECAR_PREFIX_END: &[u8] = b"`";
+
+fn consensus_entries<'a>(
+    store: &'a dyn ReadonlyStorage,
+    meter: &'a GasMeter,
+) -> PulsarResult<impl Iterator<Item = layer_std::GasResult<cosmwasm_std::Record>> + 'a> {
+    let below = store.range(meter, None, Some(SIDECAR_PREFIX), cosmwasm_std::Order::Ascending)?;
+    let above = store.range(meter, Some(SIDECAR_PREFIX_END), None, cosmwasm_std::Order::Ascending)?;
+    Ok(below.chain(above))
+}
+
 /// State root over every non-sidecar (`'_'`-prefixed keys excluded) entry of
 /// `store`, in ascending key order. Works over a reader (committed state) or
 /// a writer (state including its uncommitted writes).
 fn state_root_over(store: &dyn ReadonlyStorage) -> PulsarResult<[u8; 32]> {
     let meter = GasMeter::infinite();
-    let iter = store.range(&meter, None, None, cosmwasm_std::Order::Ascending)?;
+    let iter = consensus_entries(store, &meter)?;
     let mut leaves: Vec<[u8; 32]> = Vec::new();
     for entry in iter {
         let (key, value) = entry?;
@@ -1517,6 +1557,50 @@ mod tests {
             app_hash,
             "pruning '_' sidecar keys must not change app_hash"
         );
+    }
+
+    #[test]
+    fn prune_finality_removes_old_records_without_touching_consensus() {
+        let genesis = GenesisState {
+            bank: vec![],
+            wasm: WasmParams {
+                gov_account: "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx".to_string(),
+            },
+        };
+        let mut app = App::new(
+            MemoryStore::default(),
+            StateMachine::new(&AppConfig::new("/tmp/slay3r/prune_finality")),
+        );
+        app.init(mock_init(&genesis)).unwrap();
+
+        let mut app_hash = vec![];
+        for h in 1..=3u64 {
+            let res = app
+                .finalize_block(Block {
+                    txs: vec![],
+                    height: h,
+                    time: Timestamp::from_seconds(1690406618 + h),
+                    proposer_address: vec![1u8; 32],
+                    last_votes: vec![],
+                    certificate: None,
+                })
+                .unwrap();
+            app.set_block_finality(h, vec![h as u8; 4], vec![h as u8; 8], 1690406618 + h)
+                .unwrap();
+            app_hash = res.app_hash;
+        }
+        assert_eq!(app.finality_prune_floor(), 0);
+
+        let removed = app.prune_finality(&[1, 2], 2).unwrap();
+
+        assert_eq!(removed, 4, "2 certificates + 2 proposals");
+        assert_eq!(app.get_block_certificate(1), None);
+        assert_eq!(app.get_block_proposal(2), None);
+        assert_eq!(app.get_block_certificate(3), Some(vec![3u8; 4]));
+        assert_eq!(app.get_block_proposal(3), Some(vec![3u8; 8]));
+        assert_eq!(app.get_block_timestamp(1), Some(1690406619));
+        assert_eq!(app.finality_prune_floor(), 2);
+        assert_eq!(app.app_hash(), app_hash);
     }
 
     // this emulates the run of a transaction being submitted
@@ -1865,6 +1949,48 @@ mod tests {
         let updated = vec![0x01, 0x02];
         app.set_tx_response("ABCDEF", &updated).unwrap();
         assert_eq!(app.get_tx_response("ABCDEF"), Some(updated));
+    }
+
+    #[test]
+    fn state_root_scan_skips_sidecar_range() {
+        let storage = MemoryStore::default();
+        let meter = GasMeter::infinite();
+        let keys: [&[u8]; 11] = [
+            b"\x00", b"A", b"^", b"^\xff", b"_", b"_cert/1", b"_\xff\xff", b"`", b"`a", b"a",
+            b"\xff\xff",
+        ];
+        let mut writer = storage.writer();
+        for (i, key) in keys.into_iter().enumerate() {
+            writer.set(&meter, key, &[i as u8]).unwrap();
+        }
+        writer.commit(&meter).unwrap();
+
+        let reader = storage.reader();
+        let expected: Vec<(Vec<u8>, Vec<u8>)> = reader
+            .range(&meter, None, None, cosmwasm_std::Order::Ascending)
+            .unwrap()
+            .map(Result::unwrap)
+            .filter(|(k, _)| k.first() != Some(&b'_'))
+            .collect();
+        let scanned: Vec<(Vec<u8>, Vec<u8>)> = consensus_entries(&reader, &meter)
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(expected.len(), 8);
+        assert_eq!(scanned, expected);
+
+        let leaves: Vec<[u8; 32]> = expected
+            .iter()
+            .map(|(k, v)| {
+                let mut h = Sha256::new();
+                h.update([0x00u8]);
+                h.update(k);
+                h.update(v);
+                h.finalize().into()
+            })
+            .collect();
+        assert_eq!(state_root_over(&reader).unwrap(), merkle_root(&leaves));
+        reader.abort();
     }
 
     /// State-sync export: chunk round-trip decodes every record, the

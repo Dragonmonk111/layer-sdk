@@ -15,10 +15,10 @@ use crate::block::BlockPayload;
 
 /// Default number of executed heights retained on disk.
 ///
-/// This is also the maximum backfill depth a peer can serve: a node that
-/// falls further behind than this cannot be brought to tip by payload
-/// backfill and needs a state-sync path instead. 64k empty-block payloads
-/// cost ~20 MB on disk — cheap insurance for devnet outages of hours.
+/// Backfill beyond this window is served from the app's `_payload/`
+/// sidecar, which the node's pruning tier retains (validator: 540,000
+/// heights); past that, a node needs state sync. 64k payload files cost
+/// ~270 MB on disk (one 4 KiB block each).
 pub const DEFAULT_RETAIN_HEIGHTS: u64 = 65_536;
 
 pub struct PayloadStore {
