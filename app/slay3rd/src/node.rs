@@ -21,7 +21,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use commonware_consensus::{Automaton, CertifiableAutomaton};
 use commonware_consensus::simplex::types::Context;
@@ -87,7 +87,8 @@ const SOLICITED_HEIGHT_TTL: Duration = Duration::from_secs(30);
 /// inserts still need a bound (16k × ~128B payloads ≈ 2 MiB worst case).
 const MAX_PENDING_PAYLOADS_TOTAL: usize = 16_384;
 
-const GENESIS_TIME_NS: u64 = 1_673_194_026_078_305_426;
+/// How far ahead of a validator's clock a proposed timestamp may run.
+const MAX_FUTURE_DRIFT: Duration = Duration::from_secs(2);
 
 /// A payload fetch this node wants peers to answer over the P2P relay.
 /// Digest requests serve the finalize() walk; HeightRange requests serve
@@ -128,9 +129,17 @@ pub fn genesis_parent() -> [u8; 32] {
     hasher.finalize().0
 }
 
-/// Deterministic block timestamp for a consensus view.
-pub fn view_timestamp_nanos(view: u64) -> u64 {
-    GENESIS_TIME_NS.saturating_add(view.saturating_mul(1_000_000_000))
+/// Local wall clock in nanoseconds since the UNIX epoch.
+fn now_nanos() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX))
+}
+
+/// Proposal timestamp: the proposer's wall clock, nudged past the parent
+/// when the clock trails it so block time stays strictly increasing.
+pub fn proposal_timestamp_nanos(parent_nanos: u64, now_nanos: u64) -> u64 {
+    now_nanos.max(parent_nanos.saturating_add(1))
 }
 
 /// Pure consensus-validity check for a proposed payload, evaluated against
@@ -140,7 +149,8 @@ pub fn validate_payload(
     parent: &[u8; 32],
     expected_height: u64,
     expected_state_root: &[u8; 32],
-    expected_timestamp_nanos: u64,
+    parent_timestamp_nanos: u64,
+    now_nanos: u64,
     expected_proposer: &[u8],
 ) -> Result<(), &'static str> {
     if payload.parent_digest != *parent {
@@ -152,8 +162,11 @@ pub fn validate_payload(
     if payload.state_root != *expected_state_root {
         return Err("state_root does not match local post-parent state");
     }
-    if payload.timestamp_nanos != expected_timestamp_nanos {
-        return Err("timestamp does not match view");
+    if payload.timestamp_nanos <= parent_timestamp_nanos {
+        return Err("timestamp is not after the parent block");
+    }
+    if payload.timestamp_nanos > now_nanos.saturating_add(MAX_FUTURE_DRIFT.as_nanos() as u64) {
+        return Err("timestamp is too far ahead of the local clock");
     }
     if payload.proposer.as_slice() != expected_proposer {
         return Err("proposer is not the view leader");
@@ -916,13 +929,17 @@ where
             // here first so height and state_root (post-parent state, app-hash
             // semantics) are well-defined and identical on every validator.
             let start = Instant::now();
-            let (height, state_root) = loop {
+            let (height, state_root, parent_time) = loop {
                 {
                     let h = node.current_height.lock().await;
                     let last = node.last_digest.lock().await;
                     if *last == parent {
                         let app = node.app.read().await;
-                        break (*h + 1, app.state_root().unwrap_or([0u8; 32]));
+                        break (
+                            *h + 1,
+                            app.state_root().unwrap_or([0u8; 32]),
+                            app.info().map_or(0, |b| b.time.nanos()),
+                        );
                     }
                 }
                 if start.elapsed() >= PROPOSE_WAIT_MAX {
@@ -954,7 +971,7 @@ where
 
             let mut payload = BlockPayload {
                 height,
-                timestamp_nanos: view_timestamp_nanos(view_num),
+                timestamp_nanos: proposal_timestamp_nanos(parent_time, now_nanos()),
                 proposer,
                 txs: raw_txs,
                 parent_digest: parent,
@@ -1026,13 +1043,16 @@ where
                     let h = node.current_height.lock().await;
                     let last = node.last_digest.lock().await;
                     if *last == parent {
-                        let root = node.app.read().await.state_root().unwrap_or([0u8; 32]);
+                        let app = node.app.read().await;
+                        let root = app.state_root().unwrap_or([0u8; 32]);
+                        let parent_time = app.info().map_or(0, |b| b.time.nanos());
                         break validate_payload(
                             &p,
                             &parent,
                             *h + 1,
                             &root,
-                            view_timestamp_nanos(view_num),
+                            parent_time,
+                            now_nanos(),
                             &leader,
                         );
                     }
@@ -1128,6 +1148,11 @@ mod tests {
 
     use crate::block::BlockPayload;
     use crate::mempool::Mempool;
+
+    /// Test-chain genesis time plus one second per view.
+    fn view_timestamp_nanos(view: u64) -> u64 {
+        1_673_194_026_078_305_426 + view * 1_000_000_000
+    }
 
     // Use ed25519::PublicKey as the test key type (simpler to construct than BLS)
     use commonware_cryptography::ed25519;
@@ -1758,24 +1783,59 @@ mod tests {
     fn test_validate_payload_rejects_bad_fields() {
         let parent = [3u8; 32];
         let root = [4u8; 32];
+        let parent_time = view_timestamp_nanos(8);
+        let now = view_timestamp_nanos(9);
         let good = BlockPayload {
             height: 5,
-            timestamp_nanos: view_timestamp_nanos(9),
+            timestamp_nanos: now,
             proposer: vec![1u8; 32],
             txs: vec![],
             parent_digest: parent,
             state_root: root,
         };
-        let check = |p: &BlockPayload| validate_payload(p, &parent, 5, &root, view_timestamp_nanos(9), &[1u8; 32]);
+        let check = |p: &BlockPayload| validate_payload(p, &parent, 5, &root, parent_time, now, &[1u8; 32]);
         assert!(check(&good).is_ok());
         let mut p = good.clone(); p.parent_digest = [0u8; 32]; assert!(check(&p).is_err());
         let mut p = good.clone(); p.height = 6; assert!(check(&p).is_err());
         let mut p = good.clone(); p.state_root = [0u8; 32]; assert!(check(&p).is_err());
-        let mut p = good.clone(); p.timestamp_nanos += 1; assert!(check(&p).is_err());
+        let mut p = good.clone(); p.timestamp_nanos = parent_time; assert!(check(&p).is_err());
         let mut p = good.clone(); p.proposer = vec![2u8; 32]; assert!(check(&p).is_err());
         let mut p = good.clone();
         p.txs = vec![bytes::Bytes::from(vec![0u8; MAX_BLOCK_TX_BYTES / 2 + 1]); 2];
         assert!(check(&p).is_err(), "block byte budget must be enforced");
+    }
+
+    #[test]
+    fn test_validate_payload_timestamp_window() {
+        let parent = [3u8; 32];
+        let root = [4u8; 32];
+        let parent_time = view_timestamp_nanos(100);
+        let now = parent_time + 5_000_000_000;
+        let drift = MAX_FUTURE_DRIFT.as_nanos() as u64;
+        let at = |t: u64| {
+            let p = BlockPayload {
+                height: 5,
+                timestamp_nanos: t,
+                proposer: vec![1u8; 32],
+                txs: vec![],
+                parent_digest: parent,
+                state_root: root,
+            };
+            validate_payload(&p, &parent, 5, &root, parent_time, now, &[1u8; 32])
+        };
+        assert!(at(parent_time).is_err(), "must be strictly after the parent");
+        assert!(at(parent_time + 1).is_ok());
+        assert!(at(now).is_ok());
+        assert!(at(now + drift).is_ok());
+        assert!(at(now + drift + 1).is_err(), "too far ahead of the local clock");
+    }
+
+    #[test]
+    fn test_proposal_timestamp_tracks_clock_and_stays_monotonic() {
+        assert_eq!(proposal_timestamp_nanos(100, 500), 500);
+        assert_eq!(proposal_timestamp_nanos(500, 500), 501);
+        assert_eq!(proposal_timestamp_nanos(900, 500), 901);
+        assert!(now_nanos() > view_timestamp_nanos(0), "wall clock is past the test genesis");
     }
 
     /// Build a properly signed Cosmos tx bytes (cosmos.tx.v1beta1.TxRaw encoded) using cosmrs.

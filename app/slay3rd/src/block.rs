@@ -15,7 +15,9 @@ use sha2::{Digest as Sha2Digest, Sha256};
 pub struct BlockPayload {
     /// Block height (monotonically increasing, never skips)
     pub height: u64,
-    /// Block timestamp in nanoseconds — from consensus context, NOT SystemTime::now()
+    /// Block timestamp in nanoseconds — the proposer's wall clock, accepted by
+    /// verify() only if parent < t <= now + 2s. Execution reads it from here,
+    /// never from SystemTime::now().
     pub timestamp_nanos: u64,
     /// Proposer's public key bytes
     pub proposer: Vec<u8>,

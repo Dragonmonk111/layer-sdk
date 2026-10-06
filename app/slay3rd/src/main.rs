@@ -354,186 +354,6 @@ async fn run_node(
     km: KeyMaterial,
 ) {
     // -----------------------------------------------------------------------
-    // App initialization with feature-gated storage
-    // -----------------------------------------------------------------------
-
-    let wal_path = config.wal_path();
-    let app_data_path = config.app_data_path();
-
-    // Create data directories
-    std::fs::create_dir_all(&wal_path).expect("Failed to create WAL directory");
-    std::fs::create_dir_all(&app_data_path).expect("Failed to create app data directory");
-
-    #[cfg(feature = "rocksdb")]
-    let storage = RockStore::open(&app_data_path);
-    #[cfg(not(feature = "rocksdb"))]
-    let storage = MemoryStore::default();
-
-    let logic = StateMachine::new(&AppConfig::new(&wal_path));
-    let mut app = App::new(storage, logic);
-
-    // Validator-local min gas price (mempool admission filter, CheckTx only).
-    // e.g. "0.001ujclaw"; "0<denom>" disables the floor.
-    match layer_app::MinGasPrice::parse(&config.min_gas_price) {
-        Some(mgp) => {
-            info!(min_gas_price = %config.min_gas_price, "Min gas price set");
-            app.set_min_gas_price(Some(mgp));
-        }
-        None => {
-            warn!(min_gas_price = %config.min_gas_price, "Invalid min_gas_price — fee floor disabled");
-        }
-    }
-
-    // Attempt to load state; if none exists, initialize from genesis.
-    use layer_app::AppLoadError;
-    match app.load_from_storage() {
-        Ok(()) => {
-            info!("App loaded from existing storage");
-        }
-        Err(AppLoadError::NoStoredState) => {
-            if let Some(ss) = &config.state_sync {
-                // State-sync bootstrap: adopt a peer's snapshot — the only
-                // trust anchor is the BLS-certified BlockPayload.state_root
-                // (docs/STATE_SYNC.md §4). Failure is FATAL: falling back
-                // to genesis would fork the node onto a divergent state.
-                info!(peers = ?ss.peers, min_anchor_agree = ss.min_anchor_agree,
-                    "No stored state — attempting state-sync");
-                match slay3rd::state_sync::adopt_snapshot(
-                    &mut app,
-                    ss,
-                    &config.chain_id,
-                )
-                .await
-                {
-                    Ok(h) => info!(height = h, "state-sync: snapshot adopted"),
-                    Err(e) => {
-                        error!(error = ?e, "state-sync failed — refusing genesis fallback");
-                        return;
-                    }
-                }
-            } else {
-                info!("No stored state — initializing from genesis");
-                let genesis = match slay3rd::genesis::resolve_genesis(&config) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        error!(error = %e, "Cannot initialize from genesis");
-                        return;
-                    }
-                };
-                let app_state = match serde_json::to_vec(&genesis) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        error!(error = %e, "Failed to serialize genesis state");
-                        return;
-                    }
-                };
-                let init_req = layer_std::api::InitChainRequest {
-                    time: cosmwasm_std::Timestamp::from_nanos(1_673_194_026_078_305_426),
-                    chain_id: config.chain_id.clone(),
-                    consensus_params: Default::default(),
-                    validators: vec![],
-                    app_state: cosmwasm_std::Binary::from(app_state),
-                    initial_height: 1,
-                };
-                if let Err(e) = app.init(init_req) {
-                    error!(error = ?e, "Failed to initialize App from genesis");
-                    return;
-                }
-            }
-        }
-        Err(e) => {
-            error!(error = ?e, "State corruption — cannot continue");
-            return;
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // LayerNode + LayerRelay (SHARED pending_payloads)
-    // -----------------------------------------------------------------------
-
-    let mempool = Arc::new(Mutex::new(Mempool::new(config.mempool_max_pending)));
-
-    // Resume block production at the app's persisted height. LayerNode tracks
-    // current_height in memory and proposes current_height+1; passing 0 always
-    // restarts at height 1, which desyncs from persisted app state on
-    // restart/recreate (BadBlockHeight). After genesis init info().height==0
-    // (next block = 1); after load_from_storage it's the last committed height.
-    let resume_height = app.info().map(|b| b.height).unwrap_or(0);
-    let app_arc = Arc::new(RwLock::new(app));
-
-    #[cfg(feature = "rocksdb")]
-    let layer_node = LayerNode::<RockStore, ed25519::PublicKey>::new(
-        app_arc.clone(),
-        mempool.clone(),
-        resume_height,
-    );
-    #[cfg(not(feature = "rocksdb"))]
-    let layer_node = LayerNode::<MemoryStore, ed25519::PublicKey>::new(
-        app_arc.clone(),
-        mempool.clone(),
-        resume_height,
-    );
-
-    // Durable payload store: certified-but-unexecuted payloads survive restart
-    // and are re-broadcast; executed payloads are retained to serve peers.
-    let payload_store = match slay3rd::payload_store::PayloadStore::open(format!("{}/payloads", config.data_dir)) {
-        Ok(s) => s,
-        Err(e) => {
-            error!(error = %e, "Failed to open payload store");
-            return;
-        }
-    };
-    let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
-    if config.fault_inject.is_some() && !config.insecure_devnet {
-        error!("fault_inject requires insecure_devnet = true — chaos testing is devnet-only");
-        return;
-    }
-    let layer_node = layer_node.with_fault_inject(config.fault_inject.clone());
-    let layer_node = layer_node.with_pruning(config.prune_keep_heights());
-    info!(
-        pruning = %config.pruning,
-        keep_heights = config.prune_keep_heights().map(|k| k.to_string()).unwrap_or_else(|| "archive".to_string()),
-        "Sidecar pruning tier"
-    );
-    if let Some(mode) = &config.fault_inject {
-        tracing::warn!(
-            mode = %mode,
-            "FAULT INJECTION ENABLED — chaos testing only, never enable on a real validator"
-        );
-    }
-    let (payload_fetch_tx, payload_fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
-    layer_node.set_fetch_sender(payload_fetch_tx);
-    info!(recovered = recovered_payloads.len(), "Payload store opened");
-    let p2p_node = layer_node.clone();
-
-    let tx_index = layer_node.tx_index();
-
-    // Create an unbounded channel to forward payload bytes from the relay's broadcast()
-    // to the background P2P sender task. The relay serializes payloads and sends them here;
-    // the background task broadcasts them to all peers via the authenticated P2P channel.
-    let (payload_broadcast_tx, payload_broadcast_rx) =
-        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
-
-    // Tx gossip: BroadcastTx-accepted raw tx bytes are pushed here by the
-    // gRPC service and forwarded to all validator peers over P2P channel 4,
-    // so a tx submitted to a non-leader does not wait for that node's own
-    // proposal slot (M1).
-    let (tx_gossip_tx, tx_gossip_rx) =
-        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
-
-    // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
-    // This is what allows non-proposer validators to find payloads in verify().
-    let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx.clone()));
-    // CONS-05: Reporter holds the app Arc so it can persist BLS certificates
-    // via set_block_certificate() when the Finalization activity fires.
-    let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
-    tokio::spawn(run_executor(app_arc.clone(), layer_node.clone(), exec_rx));
-    // The LayerReporter is constructed inside the consensus-scheme branch
-    // below — its certificate type differs between classical and hybrid mode.
-
-    info!("LayerNode and LayerRelay created (shared pending_payloads)");
-
-    // -----------------------------------------------------------------------
     // BLS12-381 threshold scheme from DKG key material
     // -----------------------------------------------------------------------
 
@@ -757,6 +577,210 @@ async fn run_node(
         threshold = %format!("{}/{}", km.threshold_required, km.threshold_total),
         "BLS12-381 threshold signing scheme initialized"
     );
+
+    // -----------------------------------------------------------------------
+    // App initialization with feature-gated storage
+    // -----------------------------------------------------------------------
+
+    let wal_path = config.wal_path();
+    let app_data_path = config.app_data_path();
+
+    // Create data directories
+    std::fs::create_dir_all(&wal_path).expect("Failed to create WAL directory");
+    std::fs::create_dir_all(&app_data_path).expect("Failed to create app data directory");
+
+    #[cfg(feature = "rocksdb")]
+    let storage = RockStore::open(&app_data_path);
+    #[cfg(not(feature = "rocksdb"))]
+    let storage = MemoryStore::default();
+
+    let logic = StateMachine::new(&AppConfig::new(&wal_path));
+    let mut app = App::new(storage, logic);
+
+    // Validator-local min gas price (mempool admission filter, CheckTx only).
+    // e.g. "0.001ujclaw"; "0<denom>" disables the floor.
+    match layer_app::MinGasPrice::parse(&config.min_gas_price) {
+        Some(mgp) => {
+            info!(min_gas_price = %config.min_gas_price, "Min gas price set");
+            app.set_min_gas_price(Some(mgp));
+        }
+        None => {
+            warn!(min_gas_price = %config.min_gas_price, "Invalid min_gas_price — fee floor disabled");
+        }
+    }
+
+    // Attempt to load state; if none exists, initialize from genesis.
+    use layer_app::AppLoadError;
+    match app.load_from_storage() {
+        Ok(()) => {
+            info!("App loaded from existing storage");
+        }
+        Err(AppLoadError::NoStoredState) => {
+            if let Some(ss) = &config.state_sync {
+                // State-sync bootstrap: adopt a peer's snapshot — the only
+                // trust anchor is the BLS-certified BlockPayload.state_root
+                // (docs/STATE_SYNC.md §4). Failure is FATAL: falling back
+                // to genesis would fork the node onto a divergent state.
+                info!(peers = ?ss.peers, min_anchor_agree = ss.min_anchor_agree,
+                    "No stored state — attempting state-sync");
+                let check: Box<slay3rd::finality::FinalityCheck> = if config.hybrid_consensus {
+                    let verifier = mayo_pks.clone().and_then(|pks| {
+                        HybridScheme::new(
+                            bls_scheme.clone(),
+                            NAMESPACE,
+                            pks,
+                            None,
+                            km.threshold_required as usize,
+                        )
+                    });
+                    let Some(verifier) = verifier else {
+                        error!("state-sync: cannot build the hybrid certificate verifier");
+                        return;
+                    };
+                    Box::new(move |p: &[u8], c: &[u8], d: &[u8]| {
+                        slay3rd::finality::verify_finality(&verifier, p, c, d)
+                    })
+                } else {
+                    let verifier = bls_scheme.clone();
+                    Box::new(move |p: &[u8], c: &[u8], d: &[u8]| {
+                        slay3rd::finality::verify_finality(&verifier, p, c, d)
+                    })
+                };
+                match slay3rd::state_sync::adopt_snapshot(
+                    &mut app,
+                    ss,
+                    &config.chain_id,
+                    check.as_ref(),
+                )
+                .await
+                {
+                    Ok(h) => info!(height = h, "state-sync: snapshot adopted"),
+                    Err(e) => {
+                        error!(error = ?e, "state-sync failed — refusing genesis fallback");
+                        return;
+                    }
+                }
+            } else {
+                info!("No stored state — initializing from genesis");
+                let genesis = match slay3rd::genesis::resolve_genesis(&config) {
+                    Ok(g) => g,
+                    Err(e) => {
+                        error!(error = %e, "Cannot initialize from genesis");
+                        return;
+                    }
+                };
+                let app_state = match serde_json::to_vec(&genesis) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        error!(error = %e, "Failed to serialize genesis state");
+                        return;
+                    }
+                };
+                let init_req = layer_std::api::InitChainRequest {
+                    time: cosmwasm_std::Timestamp::from_nanos(1_673_194_026_078_305_426),
+                    chain_id: config.chain_id.clone(),
+                    consensus_params: Default::default(),
+                    validators: vec![],
+                    app_state: cosmwasm_std::Binary::from(app_state),
+                    initial_height: 1,
+                };
+                if let Err(e) = app.init(init_req) {
+                    error!(error = ?e, "Failed to initialize App from genesis");
+                    return;
+                }
+            }
+        }
+        Err(e) => {
+            error!(error = ?e, "State corruption — cannot continue");
+            return;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // LayerNode + LayerRelay (SHARED pending_payloads)
+    // -----------------------------------------------------------------------
+
+    let mempool = Arc::new(Mutex::new(Mempool::new(config.mempool_max_pending)));
+
+    // Resume block production at the app's persisted height. LayerNode tracks
+    // current_height in memory and proposes current_height+1; passing 0 always
+    // restarts at height 1, which desyncs from persisted app state on
+    // restart/recreate (BadBlockHeight). After genesis init info().height==0
+    // (next block = 1); after load_from_storage it's the last committed height.
+    let resume_height = app.info().map(|b| b.height).unwrap_or(0);
+    let app_arc = Arc::new(RwLock::new(app));
+
+    #[cfg(feature = "rocksdb")]
+    let layer_node = LayerNode::<RockStore, ed25519::PublicKey>::new(
+        app_arc.clone(),
+        mempool.clone(),
+        resume_height,
+    );
+    #[cfg(not(feature = "rocksdb"))]
+    let layer_node = LayerNode::<MemoryStore, ed25519::PublicKey>::new(
+        app_arc.clone(),
+        mempool.clone(),
+        resume_height,
+    );
+
+    // Durable payload store: certified-but-unexecuted payloads survive restart
+    // and are re-broadcast; executed payloads are retained to serve peers.
+    let payload_store = match slay3rd::payload_store::PayloadStore::open(format!("{}/payloads", config.data_dir)) {
+        Ok(s) => s,
+        Err(e) => {
+            error!(error = %e, "Failed to open payload store");
+            return;
+        }
+    };
+    let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
+    if config.fault_inject.is_some() && !config.insecure_devnet {
+        error!("fault_inject requires insecure_devnet = true — chaos testing is devnet-only");
+        return;
+    }
+    let layer_node = layer_node.with_fault_inject(config.fault_inject.clone());
+    let layer_node = layer_node.with_pruning(config.prune_keep_heights());
+    info!(
+        pruning = %config.pruning,
+        keep_heights = config.prune_keep_heights().map(|k| k.to_string()).unwrap_or_else(|| "archive".to_string()),
+        "Sidecar pruning tier"
+    );
+    if let Some(mode) = &config.fault_inject {
+        tracing::warn!(
+            mode = %mode,
+            "FAULT INJECTION ENABLED — chaos testing only, never enable on a real validator"
+        );
+    }
+    let (payload_fetch_tx, payload_fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+    layer_node.set_fetch_sender(payload_fetch_tx);
+    info!(recovered = recovered_payloads.len(), "Payload store opened");
+    let p2p_node = layer_node.clone();
+
+    let tx_index = layer_node.tx_index();
+
+    // Create an unbounded channel to forward payload bytes from the relay's broadcast()
+    // to the background P2P sender task. The relay serializes payloads and sends them here;
+    // the background task broadcasts them to all peers via the authenticated P2P channel.
+    let (payload_broadcast_tx, payload_broadcast_rx) =
+        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+
+    // Tx gossip: BroadcastTx-accepted raw tx bytes are pushed here by the
+    // gRPC service and forwarded to all validator peers over P2P channel 4,
+    // so a tx submitted to a non-leader does not wait for that node's own
+    // proposal slot (M1).
+    let (tx_gossip_tx, tx_gossip_rx) =
+        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+
+    // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
+    // This is what allows non-proposer validators to find payloads in verify().
+    let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx.clone()));
+    // CONS-05: Reporter holds the app Arc so it can persist BLS certificates
+    // via set_block_certificate() when the Finalization activity fires.
+    let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
+    tokio::spawn(run_executor(app_arc.clone(), layer_node.clone(), exec_rx));
+    // The LayerReporter is constructed inside the consensus-scheme branch
+    // below — its certificate type differs between classical and hybrid mode.
+
+    info!("LayerNode and LayerRelay created (shared pending_payloads)");
 
     // -----------------------------------------------------------------------
     // gRPC server with Cosmos SDK query dispatch
@@ -1271,6 +1295,13 @@ async fn run_node(
             Some(s) => s,
             None => {
                 error!("Hybrid scheme creation failed — MAYO table/quorum mismatch");
+                return;
+            }
+        };
+        let scheme = match scheme.with_sig_log(format!("{}/mayo_sigs.log", config.data_dir)) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(error = %e, "Failed to open the MAYO signature log");
                 return;
             }
         };

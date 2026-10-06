@@ -24,8 +24,11 @@
 //! the pure-Rust `junoclaw-mayo-verify` crate. Devnet validators run in
 //! Linux containers, so this is a build-host limitation only.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fmt;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write as _};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use bytes::{Buf, BufMut};
@@ -194,18 +197,174 @@ impl Read for HybridCertificate {
     }
 }
 
+/// Cap on cached signatures — bounds memory (a handful of subjects per view).
+/// On overflow the oldest entry is evicted.
+const SIG_CACHE_CAP: usize = 8192;
+
+/// Longest message accepted when reloading the signature log; votes sign
+/// `namespace || proposal`, far below this.
+const MAX_LOGGED_MSG: usize = 4096;
+
+/// FIFO-bounded memo from namespaced message to its MAYO signature,
+/// optionally backed by an append-only log so it survives restarts.
+struct SigCache {
+    cap: usize,
+    sigs: HashMap<Vec<u8>, [u8; MAYO_SIG_BYTES]>,
+    order: VecDeque<Vec<u8>>,
+    log: Option<SigLog>,
+}
+
+/// Append-only record file: `[msg_len: u32 LE][msg][sig]`.
+struct SigLog {
+    path: PathBuf,
+    file: File,
+    records: usize,
+    failed: bool,
+}
+
+impl SigCache {
+    fn new(cap: usize) -> Self {
+        Self {
+            cap,
+            sigs: HashMap::new(),
+            order: VecDeque::new(),
+            log: None,
+        }
+    }
+
+    /// Loads `path` (missing = empty), drops a torn tail, and rewrites the
+    /// file to the retained entries.
+    fn open(path: &Path, cap: usize) -> io::Result<Self> {
+        let mut cache = Self::new(cap);
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => return Err(e),
+        };
+        let mut rest = &data[..];
+        while rest.len() >= 4 {
+            let len = u32::from_le_bytes([rest[0], rest[1], rest[2], rest[3]]) as usize;
+            if len > MAX_LOGGED_MSG || rest.len() < 4 + len + MAYO_SIG_BYTES {
+                break;
+            }
+            let mut sig = [0u8; MAYO_SIG_BYTES];
+            sig.copy_from_slice(&rest[4 + len..4 + len + MAYO_SIG_BYTES]);
+            cache.remember(rest[4..4 + len].to_vec(), sig);
+            rest = &rest[4 + len + MAYO_SIG_BYTES..];
+        }
+        cache.log = Some(SigLog::rewrite(path, &cache.order, &cache.sigs)?);
+        Ok(cache)
+    }
+
+    fn get(&self, msg: &[u8]) -> Option<[u8; MAYO_SIG_BYTES]> {
+        self.sigs.get(msg).copied()
+    }
+
+    /// Records `sig` for `msg`. With a log attached the record is durable
+    /// before this returns, and a failed write poisons the log, so no
+    /// signature is ever released unrecorded.
+    fn insert(&mut self, msg: Vec<u8>, sig: [u8; MAYO_SIG_BYTES]) -> io::Result<()> {
+        if let Some(log) = self.log.as_mut() {
+            log.append(&msg, &sig)?;
+        }
+        self.remember(msg, sig);
+        if let Some(log) = self.log.as_mut() {
+            if log.records > 2 * self.cap {
+                *log = SigLog::rewrite(&log.path, &self.order, &self.sigs)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn remember(&mut self, msg: Vec<u8>, sig: [u8; MAYO_SIG_BYTES]) {
+        if self.sigs.insert(msg.clone(), sig).is_none() {
+            self.order.push_back(msg);
+        }
+        while self.order.len() > self.cap {
+            if let Some(old) = self.order.pop_front() {
+                self.sigs.remove(&old);
+            }
+        }
+    }
+}
+
+impl SigLog {
+    fn rewrite(
+        path: &Path,
+        order: &VecDeque<Vec<u8>>,
+        sigs: &HashMap<Vec<u8>, [u8; MAYO_SIG_BYTES]>,
+    ) -> io::Result<Self> {
+        let mut buf = Vec::new();
+        for msg in order {
+            encode_record(&mut buf, msg, &sigs[msg]);
+        }
+        let tmp = path.with_extension("tmp");
+        let mut f = File::create(&tmp)?;
+        f.write_all(&buf)?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)?;
+        #[cfg(unix)]
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            File::open(dir)?.sync_all()?;
+        }
+        Ok(Self {
+            path: path.to_path_buf(),
+            file: OpenOptions::new().append(true).open(path)?,
+            records: order.len(),
+            failed: false,
+        })
+    }
+
+    fn append(&mut self, msg: &[u8], sig: &[u8; MAYO_SIG_BYTES]) -> io::Result<()> {
+        if self.failed {
+            return Err(io::Error::other("signature log failed earlier"));
+        }
+        let mut buf = Vec::with_capacity(4 + msg.len() + MAYO_SIG_BYTES);
+        encode_record(&mut buf, msg, sig);
+        let res = self.file.write_all(&buf).and_then(|()| self.file.sync_data());
+        if res.is_err() {
+            self.failed = true;
+        }
+        res?;
+        self.records += 1;
+        Ok(())
+    }
+}
+
+fn encode_record(buf: &mut Vec<u8>, msg: &[u8], sig: &[u8; MAYO_SIG_BYTES]) {
+    buf.extend_from_slice(&(msg.len() as u32).to_le_bytes());
+    buf.extend_from_slice(msg);
+    buf.extend_from_slice(sig);
+}
+
+/// PQ half of the certificate rule: every carried MAYO signature must
+/// verify and at least `pq_quorum` must be carried. An invalid carried
+/// signature rejects the certificate rather than being skipped, so a valid
+/// certificate cannot be re-encoded with junk signatures attached.
+fn pq_quorum_met<'s>(
+    carried: impl Iterator<Item = (Participant, &'s [u8; MAYO_SIG_BYTES])>,
+    pq_quorum: usize,
+    verify: impl Fn(Participant, &[u8; MAYO_SIG_BYTES]) -> bool,
+) -> bool {
+    let mut valid = 0usize;
+    for (signer, sig) in carried {
+        if !verify(signer, sig) {
+            return false;
+        }
+        valid += 1;
+    }
+    valid >= pq_quorum
+}
+
 /// Hybrid consensus scheme: wraps the BLS12-381 threshold scheme and binds a
 /// MAYO2 signature to every attestation. Certificates carry the classical
 /// threshold signature plus a bitmap of per-signer MAYO signatures.
 ///
 /// Validity rule (PQ_PROTOCOL_AUTH.md §4):
 ///   valid(cert) ≡ bls_threshold_verify(classical) AND
-///                 count(valid_mayo_sigs) ≥ pq_quorum
+///                 all carried mayo_sigs valid AND count(mayo_sigs) ≥ pq_quorum
 /// with `pq_quorum` set equal to the BLS `threshold_required` in Phase 2.
-/// Cap on cached signatures — bounds memory (a handful of subjects per view).
-/// On overflow the map is cleared; a cleared entry simply re-signs on demand.
-const SIG_CACHE_CAP: usize = 8192;
-
 pub struct HybridScheme {
     /// Classical threshold scheme — owns the participant set and BLS shares.
     inner: InnerScheme,
@@ -234,7 +393,7 @@ pub struct HybridScheme {
     /// bytes is equivalent to emitting the same signature twice — safe.
     ///
     /// Shared across clones via `Arc` — all clones must hit one cache.
-    sig_cache: Arc<Mutex<HashMap<Vec<u8>, [u8; MAYO_SIG_BYTES]>>>,
+    sig_cache: Arc<Mutex<SigCache>>,
 }
 
 impl HybridScheme {
@@ -269,8 +428,17 @@ impl HybridScheme {
             mayo_pks,
             mayo_seed,
             pq_quorum,
-            sig_cache: Arc::new(Mutex::new(HashMap::new())),
+            sig_cache: Arc::new(Mutex::new(SigCache::new(SIG_CACHE_CAP))),
         })
+    }
+
+    /// Backs the signature memo with an append-only log at `path`, so a
+    /// restarted validator re-emits the exact bytes it already sent for a
+    /// subject (simplex re-signs nullify votes on every timeout retry).
+    pub fn with_sig_log(self, path: impl AsRef<Path>) -> io::Result<Self> {
+        let cache = SigCache::open(path.as_ref(), SIG_CACHE_CAP)?;
+        *self.sig_cache.lock().expect("sig cache mutex poisoned") = cache;
+        Ok(self)
     }
 }
 
@@ -325,13 +493,13 @@ impl CertificateScheme for HybridScheme {
                 .lock()
                 .expect("sig cache mutex poisoned");
             match cache.get(&msg) {
-                Some(sig) => *sig,
+                Some(sig) => sig,
                 None => {
                     let sig = sign_mayo(seed, &msg)?;
-                    if cache.len() >= SIG_CACHE_CAP {
-                        cache.clear();
+                    if let Err(e) = cache.insert(msg, sig) {
+                        tracing::error!(error = %e, "MAYO signature log write failed; withholding vote");
+                        return None;
                     }
-                    cache.insert(msg, sig);
                     sig
                 }
             }
@@ -516,14 +684,15 @@ impl CertificateScheme for HybridScheme {
         // PQ half: independent quorum of valid MAYO signatures over the same
         // namespaced message.
         let msg = namespaced_message(&self.namespace, &subject);
-        let mut valid = 0usize;
-        for (signer, sig) in certificate.signers.iter().zip(&certificate.pq_sigs) {
-            match self.mayo_pks.get(usize::from(signer)) {
-                Some(pk) if mayo_verify(&msg, sig, pk) => valid += 1,
-                _ => continue,
-            }
-        }
-        valid >= self.pq_quorum
+        pq_quorum_met(
+            certificate.signers.iter().zip(&certificate.pq_sigs),
+            self.pq_quorum,
+            |signer, sig| {
+                self.mayo_pks
+                    .get(usize::from(signer))
+                    .is_some_and(|pk| mayo_verify(&msg, sig, pk))
+            },
+        )
     }
 
     fn is_attributable() -> bool {
@@ -540,5 +709,93 @@ impl CertificateScheme for HybridScheme {
 
     fn certificate_codec_config_unbounded() -> <Self::Certificate as Read>::Cfg {
         usize::MAX
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sig(b: u8) -> [u8; MAYO_SIG_BYTES] {
+        [b; MAYO_SIG_BYTES]
+    }
+
+    fn carried(n: u32) -> Vec<(Participant, [u8; MAYO_SIG_BYTES])> {
+        (0..n).map(|i| (Participant::new(i), sig(i as u8))).collect()
+    }
+
+    fn temp_log(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("slay3rd-siglog-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("mayo_sigs.log")
+    }
+
+    #[test]
+    fn pq_quorum_needs_enough_valid_signatures() {
+        let c = carried(3);
+        assert!(pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 3, |_, _| true));
+        assert!(!pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 4, |_, _| true));
+    }
+
+    #[test]
+    fn pq_quorum_rejects_an_invalid_carried_signature() {
+        let c = carried(4);
+        assert!(!pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 3, |_, s| s[0] != 3));
+    }
+
+    #[test]
+    fn sig_log_survives_reopen() {
+        let path = temp_log("reopen");
+        let mut cache = SigCache::open(&path, 8).unwrap();
+        cache.insert(b"vote-a".to_vec(), sig(1)).unwrap();
+        cache.insert(b"vote-b".to_vec(), sig(2)).unwrap();
+        drop(cache);
+        let cache = SigCache::open(&path, 8).unwrap();
+        assert_eq!(cache.get(b"vote-a"), Some(sig(1)));
+        assert_eq!(cache.get(b"vote-b"), Some(sig(2)));
+        drop(cache);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn sig_log_drops_a_torn_tail() {
+        let path = temp_log("torn");
+        let mut cache = SigCache::open(&path, 8).unwrap();
+        cache.insert(b"vote-a".to_vec(), sig(1)).unwrap();
+        drop(cache);
+        let mut f = OpenOptions::new().append(true).open(&path).unwrap();
+        f.write_all(&[6, 0, 0, 0, b'v', b'o']).unwrap();
+        drop(f);
+        let mut cache = SigCache::open(&path, 8).unwrap();
+        assert_eq!(cache.get(b"vote-a"), Some(sig(1)));
+        cache.insert(b"vote-b".to_vec(), sig(2)).unwrap();
+        drop(cache);
+        let cache = SigCache::open(&path, 8).unwrap();
+        assert_eq!(cache.get(b"vote-a"), Some(sig(1)));
+        assert_eq!(cache.get(b"vote-b"), Some(sig(2)));
+        drop(cache);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn sig_cache_evicts_oldest_first_and_compacts_the_log() {
+        let path = temp_log("evict");
+        let mut cache = SigCache::open(&path, 4).unwrap();
+        for i in 0..9u8 {
+            cache.insert(vec![i], sig(i)).unwrap();
+        }
+        assert_eq!(cache.get(&[0]), None);
+        assert_eq!(cache.get(&[8]), Some(sig(8)));
+        drop(cache);
+        let len = std::fs::metadata(&path).unwrap().len() as usize;
+        assert_eq!(len, 4 * (4 + 1 + MAYO_SIG_BYTES), "log not compacted");
+        let cache = SigCache::open(&path, 4).unwrap();
+        for i in 5..9u8 {
+            assert_eq!(cache.get(&[i]), Some(sig(i)));
+        }
+        drop(cache);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }

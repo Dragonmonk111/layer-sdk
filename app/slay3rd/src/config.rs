@@ -146,10 +146,18 @@ pub struct StateSyncConfig {
     /// fatal (Byzantine evidence). Default: 2.
     #[serde(default = "default_min_anchor_agree")]
     pub min_anchor_agree: usize,
+    /// Largest snapshot (sum of chunk bytes) the joiner downloads — the
+    /// dump is held in memory until its root is checked. Default 4 GiB.
+    #[serde(default = "default_max_snapshot_bytes")]
+    pub max_snapshot_bytes: u64,
 }
 
 fn default_min_anchor_agree() -> usize {
     2
+}
+
+fn default_max_snapshot_bytes() -> u64 {
+    4 << 30
 }
 
 fn default_min_gas_price() -> String {
