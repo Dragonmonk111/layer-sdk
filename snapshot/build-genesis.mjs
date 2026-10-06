@@ -9,7 +9,7 @@
  *   - Users claim with merkle proofs from merkle-proofs.json
  *
  * Usage:
- *   node build-genesis.mjs --snapshot <path> --output <path> --dao <addr> [--treasury <addr>] [--gov <addr>]
+ *   node build-genesis.mjs --snapshot <path> --output <path> --dao <addr> [--treasury <addr>] [--gov <addr>] [--insecure-devnet]
  *
  * --dao MUST be a key-controlled junoclaw bech32 account (20-byte payload).
  * NEVER pass a juno-1 contract/ICA address (32-byte payload) — nobody holds a
@@ -17,6 +17,10 @@
  * forever. A bech32 length guard below enforces this at build time.
  * For the G1 ceremony use the ceremony-operated key; for G2+ plan is a
  * multisig contract (see docs/GOVERNANCE_PLAN.md).
+ *
+ * The node's built-in devnet addresses (deployer key = SHA256("junoclaw-deployer-v1"),
+ * derivable by anyone) are refused for every role unless --insecure-devnet is
+ * passed; nodes likewise refuse such a genesis unless insecure_devnet = true.
  */
 
 import fs from 'fs';
@@ -29,6 +33,7 @@ let daoAddress = null;
 let treasuryAddress = null;
 let govAddress = null;
 let airdropFile = null;
+let insecureDevnet = false;
 
 for (let i = 0; i < args.length; i++) {
   switch (args[i]) {
@@ -38,11 +43,12 @@ for (let i = 0; i < args.length; i++) {
     case '--treasury': treasuryAddress = args[++i]; break;
     case '--gov': govAddress = args[++i]; break;
     case '--airdrop-file': airdropFile = args[++i]; break;
+    case '--insecure-devnet': insecureDevnet = true; break;
   }
 }
 
 if (!snapshotPath || !outputPath || !daoAddress) {
-  console.error('Usage: node build-genesis.mjs --snapshot <path> --output <path> --dao <addr> [--treasury <addr>] [--gov <addr>]');
+  console.error('Usage: node build-genesis.mjs --snapshot <path> --output <path> --dao <addr> [--treasury <addr>] [--gov <addr>] [--insecure-devnet]');
   console.error('');
   console.error('--dao is REQUIRED and must be a key-controlled junoclaw account address.');
   console.error('There is intentionally NO default — the previous default was a juno-1');
@@ -102,9 +108,33 @@ function assertKeyControlled(addr, role) {
   }
 }
 
+// --- Public devnet address guard -----------------------------------------------
+// Must match the built-in devnet addresses in app/slay3rd/src/genesis.rs.
+const PUBLIC_DEVNET_ADDRESSES = new Map([
+  ['juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992', 'devnet deployer (key = SHA256("junoclaw-deployer-v1"))'],
+  ['juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx', 'built-in devnet gov_account'],
+]);
+
+function assertNotPublicDevnet(addr, role) {
+  const what = PUBLIC_DEVNET_ADDRESSES.get(addr.toLowerCase());
+  if (!what) return;
+  if (insecureDevnet) {
+    console.warn(`WARNING: ${role} is the ${what}. Devnet-only genesis (--insecure-devnet).`);
+    return;
+  }
+  console.error(`FATAL: ${role} address "${addr}" is the ${what}.`);
+  console.error('Anyone can derive that key, so it would control the supply and gov powers.');
+  console.error('Use the ceremony key (docs/GOVERNANCE_PLAN.md). For a throwaway devnet pass');
+  console.error('--insecure-devnet (nodes then also need insecure_devnet = true to load it).');
+  process.exit(1);
+}
+
 assertKeyControlled(daoAddress, '--dao');
 if (treasuryAddress) assertKeyControlled(treasuryAddress, '--treasury');
 if (govAddress) assertKeyControlled(govAddress, '--gov');
+assertNotPublicDevnet(daoAddress, '--dao');
+if (treasuryAddress) assertNotPublicDevnet(treasuryAddress, '--treasury');
+if (govAddress) assertNotPublicDevnet(govAddress, '--gov');
 
 const TOTAL_SUPPLY = 54_660_000_000_000; // 54.66M ujclaw in micro units (6 decimals)
 const DAO_ALLOCATION = 1_090_000_000_000; // 1.09M ujclaw
