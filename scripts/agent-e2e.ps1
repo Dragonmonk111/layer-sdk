@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('setup', 'agent', 'custody', 'escrow', 'probe', 'prov', 'summary', 'all')]
+    [ValidateSet('setup', 'agent', 'custody', 'residual', 'escrow', 'probe', 'prov', 'summary', 'all')]
     [string]$Phase = 'all',
     [string]$Grpc = '127.0.0.1:9090',
     [string]$Deployed = 'snapshot\agent-stack-deployed.json',
@@ -215,16 +215,17 @@ function Phase-Custody {
     Check 'deposit rewards 3000000' (Invoke-Exec '' $TM @{ deposit_rewards = @{} } 'deposit' '3000000') | Out-Null
     $B = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $S['batchGreen'] = $B
-    Check 'finalize with 0 verdicts must fail' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = 'sha256:e2e-output-A' } } 'fin-empty') $false | Out-Null
-    Check 'v1 verdict green' (Invoke-Exec $Seeds.v1 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'green'; messages_hash = 'sha256:e2e-output-A' } } 'v1-green') | Out-Null
-    Check 'v2 verdict green' (Invoke-Exec $Seeds.v2 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'green'; messages_hash = 'sha256:e2e-output-A' } } 'v2-green') | Out-Null
+    $subjA = "task:${tA}:sha256:e2e-output-A"
+    Check 'finalize with 0 verdicts must fail' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = $subjA } } 'fin-empty') $false | Out-Null
+    Check 'v1 verdict green' (Invoke-Exec $Seeds.v1 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'green'; messages_hash = $subjA } } 'v1-green') | Out-Null
+    Check 'v2 verdict green' (Invoke-Exec $Seeds.v2 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'green'; messages_hash = $subjA } } 'v2-green') | Out-Null
     Check 'v1 duplicate verdict must fail' (Invoke-Exec $Seeds.v1 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'green'; messages_hash = 'x' } } 'v1-dup') $false | Out-Null
-    Check 'finalize with 2 of 3 min_operators must fail' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = 'sha256:e2e-output-A' } } 'fin-2') $false | Out-Null
-    Check 'v3 verdict red (diverging)' (Invoke-Exec $Seeds.v3 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'red'; messages_hash = 'sha256:e2e-output-A' } } 'v3-red') | Out-Null
-    Check 'non-admin finalize must fail' (Invoke-Exec $Seeds.v1 $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = 'sha256:e2e-output-A' } } 'fin-nonadmin') $false | Out-Null
+    Check 'finalize with 2 of 3 min_operators must fail' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = $subjA } } 'fin-2') $false | Out-Null
+    Check 'v3 verdict red (diverging)' (Invoke-Exec $Seeds.v3 $TM @{ submit_verdict = @{ batch_height = $B; verdict = 'red'; messages_hash = $subjA } } 'v3-red') | Out-Null
+    Check 'non-admin finalize must fail' (Invoke-Exec $Seeds.v1 $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = $subjA } } 'fin-nonadmin') $false | Out-Null
     $poolBefore = To-Int (Invoke-Query $TM @{ get_reward_pool = @{} })
     $v3Before = To-Int (Invoke-Query $TM @{ get_operator = @{ address = $S['addr.v3'] } }).stake
-    Check 'admin finalize consensus green' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = 'sha256:e2e-output-A' } } 'fin-green') | Out-Null
+    Check 'admin finalize consensus green' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $B; consensus_verdict = 'green'; messages_hash = $subjA } } 'fin-green') | Out-Null
     $ep = Invoke-Query $TM @{ get_epoch = @{ batch_height = $B } }
     Log ("  epoch: " + ($ep | ConvertTo-Json -Compress))
     $fee = To-Int $tmc.verification_fee
@@ -305,14 +306,94 @@ function Phase-Probe {
     Assert-Eq 'hire A2 still escrowed' (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire.id } }).status 'escrowed'
     Assert-Eq 'requester balance did not increase' ([bool](((Get-Bal $S['addr.req']) - $before) -le 0)) $true
     $greenBatch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 2000
+    $subjA2 = "task:${tA2}:sha256:e2e-output-A2"
     foreach ($k in 'v1', 'v2', 'v3') {
-        Check "$k verdict green on the batch that verified A2's output" (Invoke-Exec $Seeds[$k] $TM @{ submit_verdict = @{ batch_height = $greenBatch; verdict = 'green'; messages_hash = 'sha256:e2e-output-A2' } } "green2-$k") | Out-Null
+        Check "$k verdict green on the batch that verified A2's output" (Invoke-Exec $Seeds[$k] $TM @{ submit_verdict = @{ batch_height = $greenBatch; verdict = 'green'; messages_hash = $subjA2 } } "green2-$k") | Out-Null
     }
-    Check 'finalize the A2 batch as green' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $greenBatch; consensus_verdict = 'green'; messages_hash = 'sha256:e2e-output-A2' } } 'fin-green2') | Out-Null
+    Check 'finalize the A2 batch as green' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $greenBatch; consensus_verdict = 'green'; messages_hash = $subjA2 } } 'fin-green2') | Out-Null
     $before = Get-Bal $S['addr.owner']
     Check 'release hire A2 on the epoch that verified its output' (Invoke-Exec $Seeds.req $MP @{ release_on_verdict = @{ hire_id = [int64]$hire.id; batch_height = $greenBatch } } 'release-A2') | Out-Null
     Assert-Eq 'hire A2 status' (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire.id } }).status 'released'
     Assert-Eq 'owner balance +500000' ((Get-Bal $S['addr.owner']) - $before) 500000
+
+    Log '== regression: a copied output_hash cannot replay another task''s green epoch =='
+    $tA3 = Next-TaskId
+    Check 'submit task A3' (Submit-Task $aid 'sha256:e2e-input-A3' @() @() 'submit-A3') | Out-Null
+    Check 'requester hires listing for A3 (500000)' (Invoke-Exec $Seeds.req $MP @{ hire_service = @{ listing_id = [int64]$S['listing_id']; task_id = $tA3 } } 'hire-A3' '500000') | Out-Null
+    $hire3 = Invoke-Query $MP @{ get_hire_by_task = @{ task_id = $tA3 } }
+    Check "complete A3 with A2's output hash" (Complete-Task $tA3 'sha256:e2e-output-A2') | Out-Null
+    Check "release hire A3 on A2's green epoch must fail" (Invoke-Exec $Seeds.owner $MP @{ release_on_verdict = @{ hire_id = [int64]$hire3.id; batch_height = $greenBatch } } 'release-A3-replay') $false 'did not verify the output' | Out-Null
+    Assert-Eq 'hire A3 still escrowed' (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire3.id } }).status 'escrowed'
+    $redBatch3 = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3000
+    $subjA3 = "task:${tA3}:sha256:e2e-output-A2"
+    foreach ($k in 'v1', 'v2', 'v3') {
+        Check "$k verdict red on A3's own output" (Invoke-Exec $Seeds[$k] $TM @{ submit_verdict = @{ batch_height = $redBatch3; verdict = 'red'; messages_hash = $subjA3 } } "red3-$k") | Out-Null
+    }
+    Check 'finalize the A3 batch as red' (Invoke-Exec '' $TM @{ finalize_epoch = @{ batch_height = $redBatch3; consensus_verdict = 'red'; messages_hash = $subjA3 } } 'fin-red3') | Out-Null
+    $before = Get-Bal $S['addr.req']
+    Check 'settle hire A3 on the epoch that judged its output' (Invoke-Exec '' $MP @{ release_on_verdict = @{ hire_id = [int64]$hire3.id; batch_height = $redBatch3 } } 'release-A3') | Out-Null
+    Assert-Eq 'hire A3 status' (Invoke-Query $MP @{ get_hire = @{ hire_id = [int64]$hire3.id } }).status 'slashed'
+    Assert-Eq 'requester refunded 500000' ((Get-Bal $S['addr.req']) - $before) 500000
+    Save-S
+}
+
+function New-EscrowedTask([string]$InputHash, [string]$Tag) {
+    $t = Next-TaskId
+    $hook = @{ escrow_obligation_confirmed = @{ escrow = $ES; task_id = $t; payer = $S['addr.req']; payee = $S['addr.owner']; min_amount = '250000' } }
+    Check "submit task $Tag (pinned escrow hook, id=$t)" (Submit-Task ([int64]$S['agent_id']) $InputHash $hook @() "submit-$Tag") | Out-Null
+    Check "requester authorizes obligation $Tag (250000)" (Invoke-Exec $Seeds.req $ES @{ authorize = @{ task_id = $t; payee = $S['addr.owner']; amount = '250000' } } "auth-$Tag") | Out-Null
+    return $t
+}
+
+function Phase-Residual {
+    Log '== residual fixes: registry fee sweep, ledger escrow callbacks, escrow expiry + dispute resolution =='
+    $aid = [int64]$S['agent_id']
+
+    $treasury = Get-Addr 'e2e-treasury'
+    Check 'non-admin fee withdrawal must fail' (Invoke-Exec $Seeds.atk $AR @{ withdraw_fees = @{ recipient = $S['addr.atk']; amount = $null } } 'wd-atk') $false 'Unauthorized' | Out-Null
+    $fees = Get-Bal $AR
+    $before = Get-Bal $treasury
+    if ($before -lt 0) { $before = 0 }
+    Check "admin withdraws registry fees ($fees) to the treasury" (Invoke-Exec '' $AR @{ withdraw_fees = @{ recipient = $treasury; amount = $null } } 'wd-fees') | Out-Null
+    Assert-Eq 'treasury received the fees' ((Get-Bal $treasury) - $before) $fees
+    Assert-Eq 'registry balance emptied' ([bool]((Get-Bal $AR) -le 0)) $true
+
+    $tlc = Invoke-Query $TL @{ get_config = @{} }
+    if (-not $tlc.registry.escrow) {
+        Check 'wire escrow into the task-ledger registry' (Invoke-Exec '' $TL @{ update_registry = @{ agent_registry = $null; task_ledger = $null; escrow = $ES } } 'tl-wire-escrow') | Out-Null
+    }
+    Assert-Eq 'task-ledger registry.escrow' (Invoke-Query $TL @{ get_config = @{} }).registry.escrow $ES
+    $tD = Next-TaskId
+    Check 'submit task D (no obligation)' (Submit-Task $aid 'sha256:e2e-input-D' @() @() 'submit-D') | Out-Null
+    Check 'complete D with escrow wired and no obligation' (Complete-Task $tD 'sha256:e2e-output-D') | Out-Null
+    $tF = Next-TaskId
+    Check 'submit task F (no obligation)' (Submit-Task $aid 'sha256:e2e-input-F' @() @() 'submit-F') | Out-Null
+    Check 'fail F with escrow wired and no obligation' (Invoke-Exec '' $TL @{ fail_task = @{ task_id = $tF } } 'fail-F') | Out-Null
+
+    $tE = New-EscrowedTask 'sha256:e2e-input-E' 'E'
+    Check 'requester admin-cancel must fail' (Invoke-Exec $Seeds.req $TL @{ admin_cancel_task = @{ task_id = $tE } } 'acancel-E-req') $false 'Unauthorized' | Out-Null
+    Check 'operator admin-cancels E' (Invoke-Exec '' $TL @{ admin_cancel_task = @{ task_id = $tE } } 'acancel-E') | Out-Null
+    Assert-Eq 'task E status' (Invoke-Query $TL @{ get_task = @{ task_id = $tE } }).status 'cancelled'
+    Assert-Eq 'obligation E cancelled with the task' (Invoke-Query $ES @{ get_obligation_by_task = @{ task_id = $tE } }).status 'cancelled'
+
+    $esc = Invoke-Query $ES @{ get_config = @{} }
+    $origTimeout = if ($null -ne $esc.timeout_seconds) { [int64]$esc.timeout_seconds } else { [int64]$esc.timeout_blocks }
+    Check 'escrow timeout_seconds = 20' (Invoke-Exec '' $ES @{ update_config = @{ admin = $null; task_ledger = $null; timeout_seconds = 20 } } 'es-timeout-20') | Out-Null
+    $tH = New-EscrowedTask 'sha256:e2e-input-H' 'H'
+    Check 'expire H before the timeout must fail' (Invoke-Exec $Seeds.atk $ES @{ expire_pending = @{ task_id = $tH } } 'expire-H-early') $false 'has not expired' | Out-Null
+    Start-Sleep -Seconds 25
+    Refresh-Height
+    Check 'anyone expires H after the timeout' (Invoke-Exec $Seeds.atk $ES @{ expire_pending = @{ task_id = $tH } } 'expire-H') | Out-Null
+    Assert-Eq 'obligation H status' (Invoke-Query $ES @{ get_obligation_by_task = @{ task_id = $tH } }).status 'cancelled'
+    Check "restore escrow timeout_seconds = $origTimeout" (Invoke-Exec '' $ES @{ update_config = @{ admin = $null; task_ledger = $null; timeout_seconds = $origTimeout } } 'es-timeout-restore') | Out-Null
+    Check 'admin-cancel H (obligation already closed)' (Invoke-Exec '' $TL @{ admin_cancel_task = @{ task_id = $tH } } 'acancel-H') | Out-Null
+
+    $tI = New-EscrowedTask 'sha256:e2e-input-I' 'I'
+    Check 'requester disputes obligation I' (Invoke-Exec $Seeds.req $ES @{ dispute = @{ task_id = $tI; reason = 'e2e: work not delivered' } } 'dispute-I') | Out-Null
+    Check 'non-admin dispute resolution must fail' (Invoke-Exec $Seeds.req $ES @{ resolve_dispute = @{ task_id = $tI; resolution = 'cancel_obligation' } } 'resolve-I-req') $false 'Unauthorized' | Out-Null
+    Check 'admin resolves dispute I as cancelled' (Invoke-Exec '' $ES @{ resolve_dispute = @{ task_id = $tI; resolution = 'cancel_obligation' } } 'resolve-I') | Out-Null
+    Assert-Eq 'obligation I status' (Invoke-Query $ES @{ get_obligation_by_task = @{ task_id = $tI } }).status 'cancelled'
+    Check 'admin-cancel I (obligation already closed)' (Invoke-Exec '' $TL @{ admin_cancel_task = @{ task_id = $tI } } 'acancel-I') | Out-Null
     Save-S
 }
 
@@ -361,10 +442,10 @@ function Phase-Summary {
     Log ("  reward pool: " + (Invoke-Query $TM @{ get_reward_pool = @{} }))
 }
 
-$phases = if ($Phase -eq 'all') { @('setup', 'agent', 'custody', 'escrow', 'probe', 'prov', 'summary') } else { @($Phase) }
+$phases = if ($Phase -eq 'all') { @('setup', 'agent', 'custody', 'residual', 'escrow', 'probe', 'prov', 'summary') } else { @($Phase) }
 foreach ($p in $phases) {
     switch ($p) {
-        'setup' { Phase-Setup } 'agent' { Phase-Agent } 'custody' { Phase-Custody }
+        'setup' { Phase-Setup } 'agent' { Phase-Agent } 'custody' { Phase-Custody } 'residual' { Phase-Residual }
         'escrow' { Phase-Escrow } 'probe' { Phase-Probe } 'prov' { Phase-Prov } 'summary' { Phase-Summary }
     }
 }
