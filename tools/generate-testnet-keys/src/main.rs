@@ -550,6 +550,12 @@ fn cmd_assemble_genesis(args: &[String]) {
     let input_dir = get_arg(args, "--input-dir").unwrap_or("./share-requests").to_string();
     let output_dir = get_arg(args, "--output-dir").unwrap_or("./ceremony-out").to_string();
     let chain_id = get_arg(args, "--chain-id").unwrap_or("junoclaw-1").to_string();
+    if chain_id == "junoclaw-1" {
+        println!(
+            "WARNING: --chain-id not set, defaulting to \"junoclaw-1\". \
+             Use a dedicated id like \"junoclaw-g1\" for testnets — \"junoclaw-1\" reads like a mainnet id."
+        );
+    }
 
     if has_flag(args, "--help") || has_flag(args, "-h") {
         println!("Usage: generate-testnet-keys assemble-genesis [--input-dir <dir>] [--output-dir <dir>] [--chain-id <id>]");
@@ -699,7 +705,9 @@ fn cmd_assemble_genesis(args: &[String]) {
              genesis_path = \"/config/genesis.json\"\n\
              mempool_max_pending = 10000\n\
              leader_timeout_ms = 3000\n\
-             certification_timeout_ms = 5000\n"
+             certification_timeout_ms = 5000\n\
+             pruning = \"validator\"\n\
+             # insecure_devnet must stay unset on a real network\n"
         );
         if validator_mayo_public_keys.is_some() {
             toml.push_str("hybrid_consensus = true\n");
