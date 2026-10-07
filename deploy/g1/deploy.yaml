@@ -1,0 +1,99 @@
+version: "2.0"
+
+# JunoClaw G1 — Akash validator seat (SDL)
+#
+# Read before deploying:
+#
+# 1. IMAGE: Akash providers cannot `docker load` — the image must live in a
+#    registry. Tag + push the release image first:
+#      docker tag junoclaw-chain:v0.6.0-rc1 <registry>/junoclaw-chain:v0.6.0-rc1
+#      docker push <registry>/junoclaw-chain:v0.6.0-rc1
+#    (Docker Hub, GHCR, or any public registry.)
+#
+# 2. ENDPOINT-FIRST SEQUENCING: Akash assigns the external host:port only
+#    after the lease deploys. The node needs its advertised --p2p address
+#    BEFORE the key ceremony. So:
+#      a. Deploy this SDL once with a placeholder command (see PLACEHOLDER
+#         below). Record the assigned endpoint:
+#           provider-services lease-status --dseq <DSEQ> --provider <PROVIDER>
+#         → "forwarded_ports" → host + external port.
+#      b. Run `keygen-share --p2p <assigned-host>:<assigned-port>` on any
+#         Linux machine (the keys.json lives in the deployment env anyway,
+#         it does NOT have to be generated inside Akash).
+#      c. After the ceremony, fill in the env vars below and update the
+#         deployment (`tx deployment update` + send manifest). The lease —
+#         and its endpoint — survives the update.
+#
+# 3. SECRETS: KEYS_JSON_B64 lands in the deployment manifest, which the
+#    provider can read. Acceptable for a closed testnet (provider sees one
+#    of our own seats), NOT acceptable for mainnet — use a private registry
+#    image or encrypted fetch then.
+#
+# 4. GENESIS is fetched from GENESIS_URL (public data — keeps the manifest
+#    small; a snapshot-derived genesis can be tens of MB and will NOT fit
+#    an env var). Host it on a gist/raw URL or the OVH box over HTTP.
+#
+# 5. PLACEHOLDER deploy for step 2a: replace command/args with:
+#      command: ["sh","-c"]
+#      args: ["sleep infinity"]
+#    then update with the real block below once the endpoint is known.
+
+services:
+  slay3rd:
+    image: ghcr.io/CHANGE-ME/junoclaw-chain:v0.6.0-rc1   # see note 1
+    env:
+      # base64 -w0 keys.json       → private (per-seat)   ← note 3
+      - KEYS_JSON_B64=
+      # base64 -w0 node-<i>.toml   → seat config          (non-secret)
+      - NODE_TOML_B64=
+      # public URL serving the shared genesis.json         ← note 4
+      - GENESIS_URL=
+    command: ["sh", "-c"]
+    args:
+      - >-
+        mkdir -p /keys /config /data &&
+        echo "$KEYS_JSON_B64" | base64 -d > /keys/keys.json &&
+        chmod 400 /keys/keys.json &&
+        echo "$NODE_TOML_B64" | base64 -d > /config/node.toml &&
+        wget -q -O /config/genesis.json "$GENESIS_URL" &&
+        exec slay3rd
+    params:
+      storage:
+        data:
+          mount: /data
+          readOnly: false
+    expose:
+      - port: 7001
+        proto: tcp
+        to:
+          - global: true
+        # external port is provider-assigned unless `as:` is honored;
+        # read it from lease-status (note 2).
+
+profiles:
+  compute:
+    slay3rd:
+      resources:
+        cpu:
+          units: 2.0
+        memory:
+          size: 4Gi
+        storage:
+          - size: 20Gi
+            attributes:
+              persistent: true
+              class: beta3
+  placement:
+    g1:
+      attributes:
+        region: CHANGE-ME   # pick a region far from the other seats
+      pricing:
+        slay3rd:
+          denom: uakt
+          amount: 10000
+
+deployment:
+  slay3rd:
+    g1:
+      profile: slay3rd
+      count: 1
