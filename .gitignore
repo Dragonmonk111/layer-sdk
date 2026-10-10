@@ -39,3 +39,14 @@ snapshot/juno-1-snapshot-*.json
 
 # Validator key material — contains private keys, must never be committed
 /testnet-keys/
+
+# G1 ceremony private material - NEVER commit (share-request.json is public and allowed)
+keys.json
+bls-share.json
+**/keys.json
+**/bls-share.json
+/g1-ceremony/**/ceremony-out/
+/g1-ceremony/**/validator-*/
+*.keys.b64
+*.age
+/g1-ceremony/_secrets/

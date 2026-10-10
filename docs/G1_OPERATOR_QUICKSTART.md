@@ -1,6 +1,6 @@
 # G1 Operator Quickstart — JunoClaw `junoclaw-g1`
 
-*For invited operators (Rabi and friends). 10 minutes of ceremony, then the
+*For invited operators (Ravi and friends). 10 minutes of ceremony, then the
 node runs itself.*
 
 ## What you need

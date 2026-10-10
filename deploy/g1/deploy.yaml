@@ -40,14 +40,14 @@ version: "2.0"
 
 services:
   slay3rd:
-    image: ghcr.io/CHANGE-ME/junoclaw-chain:v0.6.0-rc1   # see note 1
+    image: ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1   # pushed via crane; package is public
     env:
       # base64 -w0 keys.json       → private (per-seat)   ← note 3
       - KEYS_JSON_B64=
       # base64 -w0 node-<i>.toml   → seat config          (non-secret)
       - NODE_TOML_B64=
-      # public URL serving the shared genesis.json         ← note 4
-      - GENESIS_URL=
+      # base64 -w0 genesis.json  (G1 genesis is ~300 B, public data) ← note 4
+      - GENESIS_B64=
     command: ["sh", "-c"]
     args:
       - >-
@@ -55,13 +55,12 @@ services:
         echo "$KEYS_JSON_B64" | base64 -d > /keys/keys.json &&
         chmod 400 /keys/keys.json &&
         echo "$NODE_TOML_B64" | base64 -d > /config/node.toml &&
-        wget -q -O /config/genesis.json "$GENESIS_URL" &&
+        echo "$GENESIS_B64" | base64 -d > /config/genesis.json &&
         exec slay3rd
-    params:
-      storage:
-        data:
-          mount: /data
-          readOnly: false
+    # NOTE: no `params.storage` mount. A named volume mount is only valid with
+    # `attributes.persistent: true`; without it providers silently drop the
+    # manifest (`kube: lease not found`). /data is ephemeral on this lease -
+    # a pod restart re-syncs from peers (backfill), identity comes from env.
     expose:
       - port: 7001
         proto: tcp
@@ -80,16 +79,11 @@ profiles:
           size: 4Gi
         storage:
           - size: 20Gi
-            attributes:
-              persistent: true
-              class: beta3
   placement:
     g1:
-      attributes:
-        region: CHANGE-ME   # pick a region far from the other seats
       pricing:
         slay3rd:
-          denom: uakt
+          denom: uact   # leases are paid in ACT (uact); uakt is gas-only on v2.x
           amount: 10000
 
 deployment:

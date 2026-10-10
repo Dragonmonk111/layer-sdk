@@ -229,6 +229,55 @@ async fn fetch_certified_payload(
         .with_context(|| format!("state-sync: anchor quorum failed at height {height}"))
 }
 
+/// Halted-chain tip fetch: the snapshot height was executed on the
+/// donor but never finalized, so no finality record exists for the
+/// `Block` query to certify. Patched donors serve a payload-only
+/// record (empty `certificate_bytes`) in that case — this fetch accepts
+/// exactly those records, validates the payload decodes and matches the
+/// requested height, and still requires `min_agree` byte-identical
+/// payloads from distinct peers.
+///
+/// Any record carrying a certificate is rejected here rather than
+/// certified: reaching this path means `fetch_certified_payload`
+/// already failed, and silently accepting a cert we did not verify
+/// would widen the trust surface for no benefit.
+async fn fetch_uncertified_tip(
+    peers: &[String],
+    height: u64,
+    min_agree: usize,
+) -> Result<Vec<u8>> {
+    let mut payloads: Vec<(String, Vec<u8>)> = Vec::new();
+    for peer in peers {
+        match fetch_block_retry(peer, height).await {
+            Ok(block) => {
+                if !block.certificate_bytes.is_empty() {
+                    tracing::warn!(peer, height,
+                        "state-sync: tip peer served a cert-bearing record after \
+                         certified fetch failed — skipping");
+                    continue;
+                }
+                match BlockPayload::from_bytes(&block.payload_bytes) {
+                    Ok(p) if p.height == height => {
+                        payloads.push((peer.clone(), block.payload_bytes));
+                    }
+                    _ => {
+                        tracing::warn!(peer, height,
+                            "state-sync: tip peer served a malformed or \
+                             height-mismatched payload — skipping");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(peer, height, error = %e,
+                    "state-sync: tip peer did not serve block");
+            }
+        }
+    }
+    select_anchor(payloads, min_agree).with_context(|| {
+        format!("state-sync: uncertified tip quorum failed at height {height}")
+    })
+}
+
 /// Fetch the finality record for `height` from one peer. The block is often
 /// AT the donor's tip — it may still be a notarized proposal rather than
 /// a finalized/certified block, so NotFound is retried briefly; other
@@ -316,21 +365,66 @@ where
 
     // Certified anchor: BlockPayload at height+1 commits to post-H state.
     // Must be served identically by the peer quorum.
-    let anchor_bytes =
-        fetch_certified_payload(&ss.peers, snap.height + 1, ss.min_anchor_agree, check).await?;
-    let payload = BlockPayload::from_bytes(&anchor_bytes)
-        .context("state-sync: certified payload decode failed")?;
-    anyhow::ensure!(
-        payload.state_root == snap.advertised_root,
-        "advertised snapshot root != certified state_root at height {}",
-        snap.height + 1
-    );
+    //
+    // Halted-chain fallback: on a stalled chain no H+1 certificate can
+    // ever exist, so the standard anchor deadlocks recovery. With
+    // `halted_chain_anchor` set, the joiner accepts the donor's
+    // advertised root (the whole-dump Merkle check in snapshot_import
+    // still runs — corruption detection, not authentication). The tip
+    // payload at snap.height is still certified-verified, which proves
+    // quorum reached the snapshot height.
+    let anchor_res =
+        fetch_certified_payload(&ss.peers, snap.height + 1, ss.min_anchor_agree, check).await;
+    let trusted_root = match anchor_res {
+        Ok(anchor_bytes) => {
+            let payload = BlockPayload::from_bytes(&anchor_bytes)
+                .context("state-sync: certified payload decode failed")?;
+            anyhow::ensure!(
+                payload.state_root == snap.advertised_root,
+                "advertised snapshot root != certified state_root at height {}",
+                snap.height + 1
+            );
+            payload.state_root
+        }
+        Err(e) => {
+            if !ss.halted_chain_anchor {
+                return Err(e);
+            }
+            tracing::warn!(
+                error = %e,
+                height = snap.height,
+                "state-sync: no certified block past snapshot tip — halted-chain \
+                 fallback, trusting donor-advertised root"
+            );
+            snap.advertised_root
+        }
+    };
 
     // Tip payload at the snapshot height — quorum-anchored identically.
     // Its timestamp field is authenticated by the quorum, unlike the
     // peer-supplied response metadata.
-    let tip_bytes =
-        fetch_certified_payload(&ss.peers, snap.height, ss.min_anchor_agree, check).await?;
+    //
+    // Halted-chain fallback: the snapshot tip may be executed but never
+    // finalized (the wedge that halted the chain), so no finality record
+    // exists. Patched donors then serve a payload-only record (empty
+    // certificate); `halted_chain_anchor` accepts it — byte-identical
+    // agreement across `min_anchor_agree` peers plus the decode/height
+    // checks below is the same trust level already granted to the donor.
+    let tip_bytes = match fetch_certified_payload(&ss.peers, snap.height, ss.min_anchor_agree, check).await {
+        Ok(b) => b,
+        Err(e) => {
+            if !ss.halted_chain_anchor {
+                return Err(e);
+            }
+            tracing::warn!(
+                error = %e,
+                height = snap.height,
+                "state-sync: snapshot tip has no finality record — halted-chain \
+                 fallback, fetching uncertified tip payload"
+            );
+            fetch_uncertified_tip(&ss.peers, snap.height, ss.min_anchor_agree).await?
+        }
+    };
     let tip_payload = BlockPayload::from_bytes(&tip_bytes)
         .context("state-sync: certified tip payload decode failed")?;
     anyhow::ensure!(
@@ -345,7 +439,7 @@ where
         chain_id: chain_id.to_string(),
     };
 
-    app.snapshot_import(block, &snap.records, &payload.state_root, &tip_bytes)?;
+    app.snapshot_import(block, &snap.records, &trusted_root, &tip_bytes)?;
     Ok(snap.height)
 }
 

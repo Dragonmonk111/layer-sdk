@@ -151,6 +151,15 @@ pub struct StateSyncConfig {
     /// dump is held in memory until its root is checked. Default 4 GiB.
     #[serde(default = "default_max_snapshot_bytes")]
     pub max_snapshot_bytes: u64,
+    /// Halted-chain recovery: if no certified block exists past the
+    /// offered snapshot tip (chain stalled — no new finalizations),
+    /// anchor on the certified tip payload at `snap.height` and accept
+    /// the donor's advertised state root instead of the standard
+    /// `snap.height + 1` anchor. WARNING: trusts the donor's snapshot
+    /// root — only enable for recovery when the chain cannot produce
+    /// new certificates. Default false.
+    #[serde(default)]
+    pub halted_chain_anchor: bool,
 }
 
 fn default_min_anchor_agree() -> usize {

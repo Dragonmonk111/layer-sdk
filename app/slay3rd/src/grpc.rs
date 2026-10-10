@@ -488,6 +488,33 @@ impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrp
             )
         };
 
+        // Certified-but-unfinalized heights (a chain that halted
+        // mid-wedge): the payload sidecar is written at execution while
+        // the finality record only lands at finalization. Serve a
+        // payload-only record — empty proposal/certificate bytes fail
+        // `verify_finality` exactly like a NotFound, so light-client
+        // verification semantics are unchanged — while halted-chain
+        // state-sync joiners can still recover the executed tip.
+        if proposal_bytes.is_none() || certificate_bytes.is_none() {
+            let pb = payload_bytes.ok_or_else(|| {
+                Status::not_found(format!(
+                    "no record stored for height {height} ? block not finalized yet"
+                ))
+            })?;
+            let payload = BlockPayload::from_bytes(&pb).map_err(|e| {
+                Status::internal(format!(
+                    "stored payload at height {height} failed to decode: {e}"
+                ))
+            })?;
+            return Ok(Response::new(QueryBlockResponse {
+                height,
+                timestamp_nanos: timestamp_nanos.unwrap_or(payload.timestamp_nanos),
+                proposal_bytes: Vec::new(),
+                certificate_bytes: Vec::new(),
+                payload_bytes: pb,
+            }));
+        }
+
         let proposal_bytes = proposal_bytes.ok_or_else(|| {
             Status::not_found(format!(
                 "no proposal stored for height {height} — block not finalized yet?"

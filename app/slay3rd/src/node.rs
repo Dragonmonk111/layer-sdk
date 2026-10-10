@@ -19,7 +19,7 @@
 //! map. Without Relay wiring, only the proposer would have payloads and
 //! non-proposers would always fail `verify()`.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -66,12 +66,30 @@ pub const MAX_PENDING_PAYLOADS: usize = 256;
 /// Outstanding fetch requests remembered (so replies bypass the lookahead).
 const MAX_REQUESTED_DIGESTS: usize = 65_536;
 /// Outstanding height-ranged backfill requests remembered.
-const MAX_REQUESTED_HEIGHTS: usize = 4_096;
+const MAX_REQUESTED_HEIGHTS: usize = 65_536;
 /// Heights covered by a single `FetchRequest::HeightRange` message.
 pub const BACKFILL_BATCH_SIZE: u64 = 64;
 /// How far above the executed tip one backfill tick may reach. Larger spans
 /// amortize the digest-walk latency over many parallel height fetches.
-const BACKFILL_MAX_SPAN: u64 = 512;
+const BACKFILL_MAX_SPAN: u64 = 540_000;
+/// Heights one backfill tick may solicit. A gap larger than this is walked
+/// in bounded ascending bursts instead of one full-range flood per tick.
+/// rc5: 1_024/tick (~4k reply messages/s) helped saturate the peers'
+/// single-threaded serve loop — cut to 128 (still ~4 requests/s).
+const BACKFILL_TICK_BUDGET: u64 = 128;
+/// How long a certified-digest fetch waits before re-asking a peer — same
+/// philosophy as HEIGHT_REASK_AFTER, for the exact-digest fetch path.
+const DIGEST_REASK_AFTER: Duration = Duration::from_secs(2);
+/// Certified digests one backfill tick may solicit by exact digest. rc5:
+/// 256/tick (~1k requests/s) saturated the peers' serve loop and the
+/// broadband uplink — the finalize walk's cursor replies drowned in that
+/// flood for 80+ seconds (2026-10-09 g1 soak). 32/tick is still ~40× the
+/// chain rate; a 1k-gap catch-up requests everything within ~10s.
+const CERTIFIED_DIGEST_BUDGET: usize = 32;
+/// Upper bound on the certified-digest queue. Replayed finalizations of
+/// heights no peer still holds would otherwise churn forever; the oldest
+/// entry is dropped (by-height backfill still covers old heights).
+const CERTIFIED_DIGEST_QUEUE_CAP: usize = 8_192;
 /// A missing height is re-requested only after its previous request is this
 /// old — bounds per-peer fetch traffic on large gaps. Re-sending every
 /// missing range every tick flooded the reply path in the 2026-10-02 C9
@@ -180,6 +198,50 @@ pub fn validate_payload(
     Ok(())
 }
 
+/// Finalized-but-not-yet-executed payload digests, in finalization order
+/// (which equals height order — consensus finalizes blocks sequentially).
+///
+/// Fed by the consensus Reporter (main.rs hands every Finalization activity
+/// here), drained via `mark_resolved` once the payload is held or executed,
+/// and fetched by exact certified digest from `backfill_tick`: digest-keyed
+/// serving is always canonical, so a lagging node's execution never stalls
+/// behind a peer's by-height index (the 2026-10-09 g1 soak stall).
+#[derive(Default)]
+struct CertifiedDigests {
+    queue: VecDeque<[u8; 32]>,
+    last_requested: HashMap<[u8; 32], Instant>,
+}
+
+impl CertifiedDigests {
+    fn push(&mut self, digest: [u8; 32]) {
+        if self.queue.len() >= CERTIFIED_DIGEST_QUEUE_CAP {
+            if let Some(dropped) = self.queue.pop_front() {
+                self.last_requested.remove(&dropped);
+            }
+        }
+        self.queue.push_back(digest);
+    }
+
+    fn mark_resolved(&mut self, digest: [u8; 32]) {
+        if self.queue.front() == Some(&digest) {
+            self.queue.pop_front();
+        } else {
+            self.queue.retain(|d| *d != digest);
+        }
+        self.last_requested.remove(&digest);
+    }
+
+    fn ready_to_request(&self, digest: [u8; 32]) -> bool {
+        self.last_requested
+            .get(&digest)
+            .map_or(true, |t| t.elapsed() >= DIGEST_REASK_AFTER)
+    }
+
+    fn note_requested(&mut self, digest: [u8; 32]) {
+        self.last_requested.insert(digest, Instant::now());
+    }
+}
+
 /// LayerNode bridges Commonware consensus to the Layer state machine.
 ///
 /// Implements `CertifiableAutomaton` — the consensus engine calls `genesis()`,
@@ -215,6 +277,12 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     /// Heights this node has asked peers for via backfill, with request
     /// time — entries expire after FETCH_RETRY so misses are re-requested.
     requested_heights: Arc<std::sync::Mutex<BTreeMap<u64, Instant>>>,
+    /// Finalized-but-unexecuted payload digests (see `CertifiedDigests`).
+    certified_digests: Arc<std::sync::Mutex<CertifiedDigests>>,
+    /// rc6: last time ensure_executed spawned a finalize walk per digest.
+    /// Bounds the exec_lock task queue across thousands of nullified views
+    /// while a certified-but-unexecuted parent blocks progress.
+    ensure_exec: Arc<std::sync::Mutex<HashMap<[u8; 32], Instant>>>,
     /// Highest payload height ever observed (admitted or rejected pushes,
     /// payloads traversed in finalize). Fetch-target hint for backfill —
     /// never used to advance execution.
@@ -246,6 +314,8 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             fetch_tx: self.fetch_tx.clone(),
             requested: self.requested.clone(),
             requested_heights: self.requested_heights.clone(),
+            certified_digests: self.certified_digests.clone(),
+            ensure_exec: self.ensure_exec.clone(),
             max_seen_height: self.max_seen_height.clone(),
             tx_index: self.tx_index.clone(),
             fault_inject: self.fault_inject.clone(),
@@ -294,6 +364,8 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             fetch_tx: Arc::new(std::sync::Mutex::new(None)),
             requested: Arc::new(std::sync::Mutex::new(HashSet::new())),
             requested_heights: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
+            certified_digests: Arc::new(std::sync::Mutex::new(CertifiedDigests::default())),
+            ensure_exec: Arc::new(std::sync::Mutex::new(HashMap::new())),
             max_seen_height: Arc::new(std::sync::atomic::AtomicU64::new(initial_height)),
             tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
             fault_inject: None,
@@ -358,12 +430,112 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             .fetch_max(height, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// One backfill step: ask peers for every height between the executed
-    /// tip and the highest observed payload height that we don't already
-    /// hold. Complements the digest walk in finalize(): that walk discovers
-    /// the chain, backfill fills it in parallel instead of one RTT per block.
+    /// rc6: kick the execution walk for a consensus-parent digest that is not
+    /// our executed tip.
+    ///
+    /// The wedge this fixes (2026-10-10 g1): a proposal can be notarized AND
+    /// certified yet never finalized — context.parent accepts certified
+    /// ancestors, so every subsequent view builds on it, but no Finalization
+    /// activity ever fires to trigger finalize(). Execution then waits for a
+    /// finalization that can only arrive via descendant proposals, which
+    /// themselves require the parent executed: a circular deadlock.
+    ///
+    /// A certified parent is the unique canonical next block (a competing
+    /// notarization in the same view would need ≥f+1 equivocators), so
+    /// executing it is safe — every future finalized chain includes it.
+    /// Throttled to one in-flight walk per digest per few seconds so the
+    /// exec_lock queue stays bounded across nullified-view churn.
+    pub fn ensure_executed(&self, parent: [u8; 32]) {
+        const THROTTLE: Duration = Duration::from_secs(6);
+        let mut g = self.ensure_exec.lock().unwrap_or_else(|e| e.into_inner());
+        let now = Instant::now();
+        if g.get(&parent).map_or(false, |t| now.duration_since(*t) < THROTTLE) {
+            return;
+        }
+        g.insert(parent, now);
+        drop(g);
+        let node = self.clone();
+        tokio::spawn(async move {
+            let (_, tip) = node.executed_tip().await;
+            if tip == parent {
+                return;
+            }
+            node.finalize(parent).await;
+        });
+    }
+
+    /// Record the digest of a payload that consensus finalized but this node
+    /// has not executed yet (called by the Reporter forwarder in main.rs).
+    /// Digests we already hold — the payload arrived with the proposal, or
+    /// the block executed long ago — are not queued; only genuinely missing
+    /// payloads are fetch targets.
+    pub async fn note_finalized(&self, digest: [u8; 32]) {
+        if self.lookup_payload(&digest).await.is_some() {
+            return;
+        }
+        self.certified_digests
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(digest);
+    }
+
+    /// One backfill step:
+    /// (1) fetch every finalized-but-unexecuted payload by its exact
+    ///     certified digest (digest-keyed serving is always canonical, so
+    ///     execution cannot stall behind a peer's by-height index — the
+    ///     2026-10-09 g1 soak stalled exactly there), and
+    /// (2) ask peers for every missing height between the executed tip and
+    ///     the highest observed payload height — complements the digest walk
+    ///     in finalize(): that walk discovers the chain, backfill fills it in
+    ///     parallel instead of one RTT per block.
     /// Called periodically by a background task in main.rs.
     pub async fn backfill_tick(&self) {
+        // (1) Certified-digest fetch: bounded per tick, paced per digest via
+        // DIGEST_REASK_AFTER; resolved digests (payload held or executed)
+        // leave the queue.
+        let snapshot: Vec<[u8; 32]> = {
+            let certified = self
+                .certified_digests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            certified.queue.iter().copied().collect()
+        };
+        let mut resolved: Vec<[u8; 32]> = Vec::new();
+        let mut to_request: Vec<[u8; 32]> = Vec::new();
+        for digest in snapshot {
+            if self.lookup_payload(&digest).await.is_some() {
+                resolved.push(digest);
+                continue;
+            }
+            if to_request.len() >= CERTIFIED_DIGEST_BUDGET {
+                break;
+            }
+            let ready = self
+                .certified_digests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .ready_to_request(digest);
+            if ready {
+                to_request.push(digest);
+            }
+        }
+        {
+            let mut certified = self
+                .certified_digests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            for digest in resolved {
+                certified.mark_resolved(digest);
+            }
+            for digest in &to_request {
+                certified.note_requested(*digest);
+            }
+        }
+        for digest in to_request {
+            self.request_payload(digest);
+        }
+
+        // (2) Height-range backfill.
         let tip = *self.current_height.lock().await;
         let target = self
             .max_seen_height
@@ -400,9 +572,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             req.retain(|_, t| t.elapsed() < SOLICITED_HEIGHT_TTL);
-            if req.len() >= MAX_REQUESTED_HEIGHTS {
-                req.clear();
-            }
+            // No wholesale clear at MAX_REQUESTED_HEIGHTS: on gaps larger
+            // than the cap the clear re-requested the entire missing range
+            // every tick, flooding the peer's inbound path. Fresh marks
+            // already suppress re-requests via HEIGHT_REASK_AFTER, and the
+            // TTL retention above bounds the map on its own.
             let mut run_start: Option<u64> = None;
             for h in (tip + 1)..=target {
                 let in_flight = req
@@ -422,8 +596,17 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 runs.push((start, target - start + 1));
             }
         }
+        // Per-tick request budget: solicit the missing range in bounded
+        // ascending bursts (executed tip first) so a large gap can never
+        // arrive at a peer as a full-range flood.
+        let mut budget: u64 = BACKFILL_TICK_BUDGET;
         for (start, count) in runs {
-            self.request_height_range(start, count);
+            if budget == 0 {
+                break;
+            }
+            let n = count.min(budget);
+            self.request_height_range(start, n);
+            budget -= n;
         }
     }
 
@@ -483,22 +666,43 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
     /// Admit a payload received from a peer into `pending_payloads`.
     ///
     /// Bounds peer-driven memory: stale and structurally oversized payloads
-    /// are always rejected; unsolicited pushes must lie within
-    /// `PEER_PAYLOAD_LOOKAHEAD` of the executed tip and fit under
-    /// `MAX_PENDING_PAYLOADS`. Replies to this node's own fetch requests
-    /// bypass the window so catch-up across a larger gap still works.
+    /// are always rejected; pushes must lie within `PEER_PAYLOAD_LOOKAHEAD`
+    /// of the executed tip, or at/below the highest payload height observed
+    /// BEFORE this push (the relay catch-up window — a lagging node's peers
+    /// relay payloads at the network tip, far above its own lookahead),
+    /// and fit under `MAX_PENDING_PAYLOADS_TOTAL`. Replies to this node's
+    /// own fetch requests bypass the window so catch-up across a larger
+    /// gap still works.
     /// Returns `Ok(true)` if newly inserted, `Ok(false)` if already known.
     pub async fn accept_peer_payload(&self, payload: BlockPayload) -> Result<bool, &'static str> {
+        self.accept_peer_relay(payload).await.0
+    }
+
+    /// Accept a peer payload and report whether the relay cascade should
+    /// echo it. Solicited fetch replies (digest or by-height — this node
+    /// asked for them) are never echoed: the serving peer already holds the
+    /// payload, and echoing them doubled the peers' inbound load during
+    /// catch-up (rc5). Only unsolicited pushes (proposals, one-hop cascades)
+    /// propagate.
+    pub async fn accept_peer_relay(
+        &self,
+        payload: BlockPayload,
+    ) -> (Result<bool, &'static str>, bool) {
         if payload.txs.len() > MAX_BLOCK_TXS
             || payload.txs.iter().map(|t| t.len()).sum::<usize>() > MAX_BLOCK_TX_BYTES
         {
-            return Err("payload exceeds block limits");
+            return (Err("payload exceeds block limits"), false);
         }
         let tip = *self.current_height.lock().await;
         if payload.height <= tip {
-            return Err("payload at or below executed tip");
+            return (Err("payload at or below executed tip"), false);
         }
         let digest = payload.digest();
+        // Relay catch-up bound: capture the observed-tip evidence from
+        // BEFORE this push, so a peer cannot self-authorize its own far
+        // payload (sending it once would otherwise advance max_seen).
+        let within_observed =
+            payload.height <= self.max_seen_height.load(std::sync::atomic::Ordering::Relaxed);
         // Always record the height — even rejected pushes are evidence of
         // the peer tip and give backfill a fetch target.
         self.note_height_observed(payload.height);
@@ -515,20 +719,16 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 .is_some();
         let mut pending = self.pending_payloads.lock().await;
         if pending.contains_key(&digest) {
-            return Ok(false);
+            return (Ok(false), false);
         }
-        if !solicited {
-            if payload.height > tip + PEER_PAYLOAD_LOOKAHEAD {
-                return Err("unsolicited payload beyond lookahead window");
-            }
-            if pending.len() >= MAX_PENDING_PAYLOADS {
-                return Err("pending payload capacity reached");
-            }
-        } else if pending.len() >= MAX_PENDING_PAYLOADS_TOTAL {
-            return Err("pending payload capacity reached (solicited)");
+        if !solicited && !within_observed && payload.height > tip + PEER_PAYLOAD_LOOKAHEAD {
+            return (Err("unsolicited payload beyond lookahead window"), false);
+        }
+        if pending.len() >= MAX_PENDING_PAYLOADS_TOTAL {
+            return (Err("pending payload capacity reached"), false);
         }
         pending.insert(digest, payload);
-        Ok(true)
+        (Ok(true), !solicited)
     }
 
     /// Look up a payload in memory, then on disk.
@@ -588,6 +788,10 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         let _exec = self.exec_lock.lock().await;
         let (tip_height, tip_digest) = self.executed_tip().await;
         if digest == tip_digest {
+            self.certified_digests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .mark_resolved(digest);
             return None;
         }
 
@@ -660,6 +864,10 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             }
             let d = payload.digest();
             self.pending_payloads.lock().await.remove(&d);
+            self.certified_digests
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .mark_resolved(d);
             result = Some(self.execute_payload(d, payload).await?);
         }
 
@@ -950,6 +1158,12 @@ where
             // Build on consensus' parent. It must be finalized and executed
             // here first so height and state_root (post-parent state, app-hash
             // semantics) are well-defined and identical on every validator.
+            //
+            // rc6: if the certified parent hasn't executed (the
+            // notarized-but-never-finalized wedge), drive the finalize walk
+            // directly instead of waiting for a Finalization activity that
+            // may never arrive.
+            node.ensure_executed(parent);
             let start = Instant::now();
             let (height, state_root, parent_time) = loop {
                 {
@@ -1050,6 +1264,11 @@ where
         let leader = context.leader.as_ref().to_vec();
         let digest_bytes: [u8; 32] = payload.0;
         tokio::spawn(async move {
+            // rc6: if the proposal's parent (a certified ancestor) hasn't
+            // executed, drive the finalize walk for it now — otherwise verify
+            // can never pass and no descendant can ever finalize, deadlocking
+            // the chain on a parent that was certified but never finalized.
+            node.ensure_executed(parent);
             let start = Instant::now();
             let mut last_request: Option<Instant> = None;
             let verdict = loop {
@@ -1605,15 +1824,20 @@ mod tests {
             big.txs = vec![bytes::Bytes::from(vec![0u8; MAX_BLOCK_TX_BYTES + 1])];
             assert!(node.accept_peer_payload(big).await.is_err(), "oversized payload rejected");
 
-            for i in 0..MAX_PENDING_PAYLOADS {
+            let mut inserted = 0usize;
+            loop {
                 let mut p = at(2);
-                p.timestamp_nanos += i as u64;
-                let _ = node.accept_peer_payload(p).await;
+                p.timestamp_nanos += inserted as u64;
+                if node.accept_peer_payload(p).await.is_err() {
+                    break;
+                }
+                inserted += 1;
             }
-            assert_eq!(node.pending_payloads.lock().await.len(), MAX_PENDING_PAYLOADS);
-            let mut extra = at(3);
-            extra.timestamp_nanos += 1;
-            assert!(node.accept_peer_payload(extra).await.is_err(), "pending cap enforced");
+            assert_eq!(
+                node.pending_payloads.lock().await.len(),
+                MAX_PENDING_PAYLOADS_TOTAL,
+                "total pending ceiling enforced for peer pushes"
+            );
         });
     }
 
@@ -1678,10 +1902,15 @@ mod tests {
                 assert!(count as u64 <= BACKFILL_BATCH_SIZE);
                 covered.extend(start..start + count as u64);
             }
+            // rc5: one tick is budget-bound (BACKFILL_TICK_BUDGET per 250ms
+            // tick) — the first tick must cover the lowest missing heights
+            // exactly, without flooding the peer with the whole gap at once.
+            // Heights above the budget follow on later ticks; re-request
+            // pacing is covered by the in-flight test below.
             assert_eq!(
                 covered,
-                (1..=150).collect::<Vec<u64>>(),
-                "backfill must request every missing height tip+1..=observed"
+                (1..=BACKFILL_TICK_BUDGET).collect::<Vec<u64>>(),
+                "first backfill tick must request the lowest missing heights, bounded by the tick budget"
             );
         });
     }
@@ -1755,6 +1984,105 @@ mod tests {
             }
             assert!(reasked > 0, "stale in-flight marks must be re-requested");
         });
+    }
+
+    /// rc4: a finalized-but-unheld digest is fetched by its exact certified
+    /// digest, is paced by DIGEST_REASK_AFTER, and leaves the queue once its
+    /// payload is held.
+    #[test]
+    fn test_certified_digest_fetch_requests_missing() {
+        let node = make_layer_node();
+        let (fetch_tx, mut fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+        node.set_fetch_sender(fetch_tx);
+        rt().block_on(async {
+            let p = BlockPayload {
+                height: 9,
+                timestamp_nanos: view_timestamp_nanos(9),
+                proposer: vec![1u8; 32],
+                txs: vec![],
+                parent_digest: [3u8; 32],
+                state_root: [0u8; 32],
+            };
+            let d = p.digest();
+            node.note_finalized(d).await;
+
+            node.backfill_tick().await;
+            let Ok(FetchRequest::Digest(requested)) = fetch_rx.try_recv() else {
+                panic!("finalized-but-unheld digest must be fetched");
+            };
+            assert_eq!(requested, d);
+
+            // Paced: an immediate second tick must not re-request.
+            node.backfill_tick().await;
+            assert!(
+                fetch_rx.try_recv().is_err(),
+                "digest fetch must respect DIGEST_REASK_AFTER"
+            );
+
+            // Held payloads resolve the digest: even after the pacing window
+            // expires, no further digest request is issued and the queue
+            // drains (by-height requests may still flow for other heights).
+            assert!(node.accept_peer_payload(p).await.is_ok());
+            {
+                let mut certified = node.certified_digests.lock().unwrap();
+                for t in certified.last_requested.values_mut() {
+                    *t = Instant::now() - DIGEST_REASK_AFTER;
+                }
+            }
+            node.backfill_tick().await;
+            while let Ok(req) = fetch_rx.try_recv() {
+                assert!(
+                    !matches!(req, FetchRequest::Digest(_)),
+                    "held digest must not be re-requested"
+                );
+            }
+            assert!(
+                node.certified_digests.lock().unwrap().queue.is_empty(),
+                "resolved digest must leave the queue"
+            );
+        });
+    }
+
+    /// rc4: finalizations of digests we already hold are never queued.
+    #[test]
+    fn test_note_finalized_skips_held_digests() {
+        let node = make_layer_node();
+        let (fetch_tx, mut fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+        node.set_fetch_sender(fetch_tx);
+        rt().block_on(async {
+            let p = BlockPayload {
+                height: 2,
+                timestamp_nanos: view_timestamp_nanos(2),
+                proposer: vec![1u8; 32],
+                txs: vec![],
+                parent_digest: [5u8; 32],
+                state_root: [0u8; 32],
+            };
+            assert_eq!(node.accept_peer_payload(p.clone()).await, Ok(true));
+            node.note_finalized(p.digest()).await;
+            node.backfill_tick().await;
+            while let Ok(req) = fetch_rx.try_recv() {
+                assert!(
+                    !matches!(req, FetchRequest::Digest(_)),
+                    "held digest must not be fetched"
+                );
+            }
+        });
+    }
+
+    /// The certified-digest queue is bounded: replayed finalizations of
+    /// heights no peer still holds cannot grow it unbounded — the oldest
+    /// entry is dropped at the cap.
+    #[test]
+    fn test_certified_digest_queue_cap() {
+        let mut q = CertifiedDigests::default();
+        for i in 0..CERTIFIED_DIGEST_QUEUE_CAP as u32 {
+            q.push([i as u8; 32]);
+        }
+        assert_eq!(q.queue.len(), CERTIFIED_DIGEST_QUEUE_CAP);
+        q.push([0xFF; 32]);
+        assert_eq!(q.queue.len(), CERTIFIED_DIGEST_QUEUE_CAP);
+        assert_eq!(*q.queue.front().unwrap(), [1u8; 32]);
     }
 
     /// fault_inject modes must corrupt the payload so honest verify()

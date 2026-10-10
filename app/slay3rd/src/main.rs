@@ -165,6 +165,9 @@ impl KeyMaterial {
 #[derive(Clone)]
 struct LayerReporter<S> {
     exec_tx: tokio::sync::mpsc::UnboundedSender<FinalizedBlock>,
+    /// rc4: feeds every finalized digest to the LayerNode's certified-digest
+    /// queue for exact-digest fetching in backfill_tick.
+    certified_digest_tx: tokio::sync::mpsc::UnboundedSender<[u8; 32]>,
     /// Certificate type flows through `Activity<S, _>`; PhantomData keeps the
     /// reporter generic over the consensus scheme (BLS-only or hybrid).
     _scheme: PhantomData<S>,
@@ -253,6 +256,10 @@ where
                 if self.exec_tx.send(f).is_err() {
                     tracing::error!("Executor task gone — finalization dropped");
                 }
+                // Queue the certified digest for the exact-digest fetch path
+                // (drained by backfill_tick). Unbounded send — report() runs
+                // inline in the consensus voter and must never block.
+                let _ = self.certified_digest_tx.send(finalization.proposal.payload.0);
             }
             Activity::Notarization(notarization) => {
                 tracing::debug!(
@@ -753,6 +760,73 @@ async fn run_node(
     let (payload_fetch_tx, payload_fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
     layer_node.set_fetch_sender(payload_fetch_tx);
     info!(recovered = recovered_payloads.len(), "Payload store opened");
+
+    // rc6: seed payloads — drop a BlockPayload.bin into {data_dir}/seed/ to
+    // inject a certified payload the network no longer serves (e.g. the
+    // certified-but-never-finalized wedge of 2026-10-10). Loaded into
+    // pending_payloads so certify/verify/execute all see it immediately.
+    let seed_dir = format!("{}/seed", config.data_dir);
+    if let Ok(rd) = std::fs::read_dir(&seed_dir) {
+        for entry in rd.flatten() {
+            let path = entry.path();
+            let bytes = match std::fs::read(&path) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            match slay3rd::block::BlockPayload::from_bytes(&bytes) {
+                Ok(p) => {
+                    let d = p.digest();
+                    info!(
+                        file = %path.display(),
+                        digest = %hex::encode(d),
+                        height = p.height,
+                        "seed: injected payload into pending set"
+                    );
+                    layer_node.pending_payloads().lock().await.insert(d, p);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        file = %path.display(),
+                        error = %e,
+                        "seed: file is not a valid BlockPayload — skipped"
+                    );
+                }
+            }
+        }
+    }
+
+    // rc9: after a state-sync adoption the tip payload lives only in the
+    // `_payload/` sidecar — consensus may immediately re-propose that exact
+    // digest (a certified-but-never-finalized wedge), and certify() polls the
+    // in-memory pending set, never the sidecar. Inject the executed tip so
+    // certify() finds it without waiting on the peer relay. Harmless on a
+    // normal restart: the extra tip entry is pruned with the next execution.
+    if resume_height > 0 {
+        let tip_bytes = {
+            let app = app_arc.read().await;
+            app.get_block_payload(resume_height)
+        };
+        if let Some(bytes) = tip_bytes {
+            match slay3rd::block::BlockPayload::from_bytes(&bytes) {
+                Ok(p) => {
+                    let d = p.digest();
+                    info!(
+                        digest = %hex::encode(d),
+                        height = p.height,
+                        "executed tip payload injected into pending set"
+                    );
+                    layer_node.pending_payloads().lock().await.insert(d, p);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        height = resume_height,
+                        "stored tip payload failed to decode — skipped"
+                    );
+                }
+            }
+        }
+    }
     let p2p_node = layer_node.clone();
 
     let tx_index = layer_node.tx_index();
@@ -777,6 +851,22 @@ async fn run_node(
     // via set_block_certificate() when the Finalization activity fires.
     let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
     tokio::spawn(run_executor(app_arc.clone(), layer_node.clone(), exec_rx));
+
+    // rc4: every Finalization activity's payload digest is also handed to
+    // the LayerNode's certified-digest queue, so finalized-but-unexecuted
+    // payloads are fetched by their exact certified digest in backfill_tick
+    // (digest-keyed serving is always canonical — execution cannot stall
+    // behind a peer's by-height index, the 2026-10-09 g1 soak stall).
+    let (certified_digest_tx, mut certified_digest_rx) =
+        tokio::sync::mpsc::unbounded_channel::<[u8; 32]>();
+    {
+        let node = layer_node.clone();
+        tokio::spawn(async move {
+            while let Some(digest) = certified_digest_rx.recv().await {
+                node.note_finalized(digest).await;
+            }
+        });
+    }
     // The LayerReporter is constructed inside the consensus-scheme branch
     // below — its certificate type differs between classical and hybrid mode.
 
@@ -999,6 +1089,7 @@ async fn run_node(
 
     // Re-broadcast payloads recovered from disk (certified but not executed
     // before restart) once peers have had time to connect.
+    let cascade_tx = payload_broadcast_tx.clone();
     {
         let tx = payload_broadcast_tx;
         tokio::spawn(async move {
@@ -1120,6 +1211,7 @@ async fn run_node(
     // Task B: receive payload pushes / requests from P2P (non-proposer path)
     {
         let node = p2p_node;
+        let cascade_tx = cascade_tx;
         let mut reply_sender = payload_p2p_sender.clone();
         tokio::spawn(async move {
             loop {
@@ -1174,7 +1266,13 @@ async fn run_node(
                                     true,
                                 ).await {
                                     tracing::warn!(error = ?e, "Payload backfill: reply send failed");
-                                    break;
+                                    // Do NOT abandon the rest of the batch: one
+                                    // failed push (slow peer mailbox) used to
+                                    // break the whole serve loop, stalling the
+                                    // requester's catch-up until every mark
+                                    // expired and re-flooded. The peer's
+                                    // mailbox recovers on its own; keep serving.
+                                    continue;
                                 }
                             }
                             continue;
@@ -1188,15 +1286,35 @@ async fn run_node(
                             Ok(payload) => {
                                 let digest = payload.digest();
                                 let height = payload.height;
-                                match node.accept_peer_payload(payload).await {
-                                    Ok(true) => tracing::info!(
-                                        height,
-                                        digest = %hex::encode(digest),
-                                        payload_bytes = psize,
-                                        "Payload relay: received from peer, inserted into pending_payloads"
-                                    ),
-                                    Ok(false) => {}
-                                    Err(reason) => tracing::debug!(
+                                match node.accept_peer_relay(payload).await {
+                                    (Ok(true), relay) => {
+                                        tracing::info!(
+                                            height,
+                                            digest = %hex::encode(digest),
+                                            payload_bytes = psize,
+                                            relay,
+                                            "Payload relay: received from peer, inserted into pending_payloads"
+                                        );
+                                        // Relay cascade (rc2): forward newly
+                                        // admitted payloads to all peers so a
+                                        // validator without a direct link to
+                                        // the proposer still gets the push
+                                        // within one hop. Each node forwards a
+                                        // payload at most once (only on first
+                                        // admission); peers that already hold
+                                        // it ignore the echo.
+                                        // rc5: solicited fetch replies are
+                                        // never echoed — the serving peer
+                                        // already holds them, and the echo
+                                        // flood was saturating the peers'
+                                        // serve loop during catch-up.
+                                        if relay {
+                                            let _ = cascade_tx
+                                                .send(bytes::Bytes::copy_from_slice(payload_bytes));
+                                        }
+                                    }
+                                    (Ok(false), _) => {}
+                                    (Err(reason), _) => tracing::debug!(
                                         height,
                                         digest = %hex::encode(digest),
                                         reason,
@@ -1309,6 +1427,7 @@ async fn run_node(
 
         let reporter = LayerReporter::<HybridScheme> {
             exec_tx,
+            certified_digest_tx: certified_digest_tx.clone(),
             _scheme: PhantomData,
         };
         let consensus_cfg = SimplexConfig {
@@ -1348,6 +1467,7 @@ async fn run_node(
     } else {
         let reporter = LayerReporter::<BlsScheme<ed25519::PublicKey, MinSig>> {
             exec_tx,
+            certified_digest_tx: certified_digest_tx.clone(),
             _scheme: PhantomData,
         };
         let consensus_cfg = SimplexConfig {
