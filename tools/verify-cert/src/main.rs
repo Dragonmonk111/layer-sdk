@@ -51,11 +51,147 @@ use commonware_cryptography::bls12381::primitives::{
     ops,
     variant::MinSig,
 };
+use junoclaw_mayo_verify::{ParameterSet as _, Mayo2};
 
 /// Key material file format (from generate-testnet-keys).
 #[derive(serde::Deserialize, Debug)]
 struct KeysFile {
     threshold_public_key_hex: String,
+    #[serde(default)]
+    threshold_required: Option<usize>,
+    #[serde(default)]
+    validator_public_keys: Option<Vec<String>>,
+    #[serde(default)]
+    validator_mayo_public_keys: Option<Vec<String>>,
+}
+
+/// Hybrid certificate envelope (PQ_PROTOCOL_AUTH.md §5):
+/// `[0x01][classical BLS cert: 48 B][signers BitMap][MAYO2 sig: 186 B × k]`
+/// where the BitMap is `[u64 BE: bit count][ceil(count/8) bytes]`
+/// (commonware_utils::bitmap::BitMap<1> codec) and `k` = popcount.
+struct HybridEnvelope {
+    classical: Vec<u8>,
+    participants: usize,
+    signers: Vec<usize>,
+    mayo_sigs: Vec<Vec<u8>>,
+}
+
+fn parse_hybrid_envelope(bytes: &[u8]) -> Result<HybridEnvelope, String> {
+    const MAYO2_SIG_BYTES: usize = 186;
+    const MIN_LEN: usize = 1 + 48 + 8 + 1;
+    if bytes.len() < MIN_LEN {
+        return Err(format!(
+            "hybrid envelope too short: {} bytes (min {MIN_LEN})",
+            bytes.len()
+        ));
+    }
+    if bytes[0] != 0x01 {
+        return Err(format!("expected 0x01 hybrid tag, got {:#04x}", bytes[0]));
+    }
+    let classical = bytes[1..49].to_vec();
+    let participants = u64::from_be_bytes(bytes[49..57].try_into().unwrap()) as usize;
+    if participants == 0 || participants > 4096 {
+        return Err(format!("implausible participant count: {participants}"));
+    }
+    let bitmap_bytes = participants.div_ceil(8);
+    if bytes.len() < 57 + bitmap_bytes {
+        return Err("signer bitmap truncated".to_string());
+    }
+    let bitmap = &bytes[57..57 + bitmap_bytes];
+    let signers: Vec<usize> = (0..participants)
+        .filter(|i| (bitmap[i / 8] >> (i % 8)) & 1 == 1)
+        .collect();
+    let rest = &bytes[57 + bitmap_bytes..];
+    if rest.len() != signers.len() * MAYO2_SIG_BYTES {
+        return Err(format!(
+            "MAYO2 block length mismatch: {} bytes for {} signer(s) (expected {})",
+            rest.len(),
+            signers.len(),
+            signers.len() * MAYO2_SIG_BYTES
+        ));
+    }
+    let mayo_sigs = signers
+        .iter()
+        .enumerate()
+        .map(|(i, _)| rest[i * MAYO2_SIG_BYTES..(i + 1) * MAYO2_SIG_BYTES].to_vec())
+        .collect();
+    Ok(HybridEnvelope {
+        classical,
+        participants,
+        signers,
+        mayo_sigs,
+    })
+}
+
+/// Verifies the PQ half per PQ_PROTOCOL_AUTH.md §4: every carried MAYO2
+/// signature must verify and the count must reach the BLS `threshold_required`
+/// (Phase 2 sets pq_quorum = threshold_required). The bitmap indexes the
+/// ascending-sorted Ed25519 participant set, while `validator_mayo_public_keys`
+/// is in validator_index order — reorder before use.
+fn verify_mayo_half(
+    envelope: &HybridEnvelope,
+    keys: &KeysFile,
+    namespace: &[u8],
+    message: &[u8],
+) -> Result<usize, String> {
+    let ed = keys
+        .validator_public_keys
+        .as_ref()
+        .ok_or("keys file lacks validator_public_keys")?;
+    let mayo = keys
+        .validator_mayo_public_keys
+        .as_ref()
+        .ok_or("keys file lacks validator_mayo_public_keys")?;
+    if ed.len() != mayo.len() || ed.is_empty() {
+        return Err("validator_public_keys/validator_mayo_public_keys mismatch".to_string());
+    }
+    let ed_bytes: Result<Vec<Vec<u8>>, _> = ed
+        .iter()
+        .map(|h| hex::decode(h.trim()).map_err(|e| format!("bad ed25519 key hex: {e}")))
+        .collect();
+    let ed_bytes = ed_bytes?;
+    // Participant index = rank in the ascending Ed25519 key order.
+    let mut validator_by_participant: Vec<usize> = (0..ed_bytes.len()).collect();
+    validator_by_participant.sort_by_key(|&vi| ed_bytes[vi].clone());
+    let participant_mayo: Result<Vec<Vec<u8>>, String> = validator_by_participant
+        .iter()
+        .map(|&vi| {
+            hex::decode(mayo[vi].trim())
+                .map_err(|e| format!("bad MAYO2 key hex for validator {vi}: {e}"))
+        })
+        .collect();
+    let participant_mayo = participant_mayo?;
+    for (rank, pk) in participant_mayo.iter().enumerate() {
+        if pk.len() != Mayo2::PK_BYTES {
+            return Err(format!(
+                "MAYO2 key for participant {rank} has {} bytes (expected {})",
+                pk.len(),
+                Mayo2::PK_BYTES
+            ));
+        }
+    }
+    if envelope.participants != participant_mayo.len() {
+        return Err(format!(
+            "bitmap covers {} participants but the key file has {}",
+            envelope.participants,
+            participant_mayo.len()
+        ));
+    }
+    let mut namespaced = Vec::with_capacity(namespace.len() + message.len());
+    namespaced.extend_from_slice(namespace);
+    namespaced.extend_from_slice(message);
+    for (pos, &signer) in envelope.signers.iter().enumerate() {
+        let ok = junoclaw_mayo_verify::verify::<Mayo2>(
+            &namespaced,
+            &envelope.mayo_sigs[pos],
+            &participant_mayo[signer],
+        )
+        .map_err(|e| format!("MAYO2 verify error for participant {signer}: {e}"))?;
+        if !ok {
+            return Err(format!("MAYO2 signature for participant {signer} FAILED"));
+        }
+    }
+    Ok(envelope.signers.len())
 }
 
 fn main() {
@@ -155,6 +291,34 @@ fn main() {
         process::exit(1);
     };
 
+    // Hybrid certificates (PQ_PROTOCOL_AUTH.md §5) wrap the classical BLS
+    // cert in a version-tagged envelope. Unwrap it so the classical half
+    // verifies below, and keep the envelope for the optional PQ check.
+    let (classical_bytes, envelope) = if cert_bytes.len() == 48 {
+        (cert_bytes.clone(), None)
+    } else if !cert_bytes.is_empty() && cert_bytes[0] == 0x01 {
+        match parse_hybrid_envelope(&cert_bytes) {
+            Ok(env) => {
+                println!(
+                    "Hybrid envelope: {} bytes = tag 0x01 + classical {} B + bitmap ({} participants, signers {:?}) + {} x 186 B MAYO2",
+                    cert_bytes.len(),
+                    env.classical.len(),
+                    env.participants,
+                    env.signers,
+                    env.mayo_sigs.len()
+                );
+                (env.classical.clone(), Some(env))
+            }
+            Err(e) => {
+                eprintln!("INVALID: Failed to parse hybrid certificate envelope: {e}");
+                process::exit(3);
+            }
+        }
+    } else {
+        // Unknown format: fall through — the G1 decode below reports it.
+        (cert_bytes.clone(), None)
+    };
+
     // Presence check: just verify the certificate is non-empty
     if check_presence {
         if cert_bytes.is_empty() {
@@ -179,6 +343,7 @@ fn main() {
     }
 
     // Load threshold public key
+    let mut parsed_keys: Option<KeysFile> = None;
     let pubkey_bytes = if let Some(hex) = pubkey_hex {
         match hex::decode(hex.trim()) {
             Ok(b) => b,
@@ -202,13 +367,15 @@ fn main() {
                 process::exit(2);
             }
         };
-        match hex::decode(&keys.threshold_public_key_hex) {
+        let b = match hex::decode(keys.threshold_public_key_hex.trim()) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("INVALID: Failed to decode threshold_public_key_hex from '{path}': {e}");
                 process::exit(2);
             }
-        }
+        };
+        parsed_keys = Some(keys);
+        b
     } else {
         eprintln!("INVALID: Provide --pubkey <hex> or --keys-file <path>");
         print_usage();
@@ -268,13 +435,14 @@ fn main() {
 
     // Decode certificate as G1 signature
     // The certificate from LayerReporter is finalization.certificate.encode().to_vec()
-    // Certificate<MinSig> wraps a Lazy<G1> (48-byte compressed G1 point)
-    let signature = match G1::decode(bytes::Bytes::from(cert_bytes.clone())) {
+    // Certificate<MinSig> wraps a Lazy<G1> (48-byte compressed G1 point);
+    // hybrid envelopes were unwrapped above into `classical_bytes`.
+    let signature = match G1::decode(bytes::Bytes::from(classical_bytes.clone())) {
         Ok(sig) => sig,
         Err(e) => {
             eprintln!("INVALID: Failed to decode certificate as G1 signature: {e}");
             eprintln!("  Expected 48-byte compressed G1 point (MinSig signature variant)");
-            eprintln!("  Got {} bytes: {}", cert_bytes.len(), hex::encode(&cert_bytes));
+            eprintln!("  Got {} bytes: {}", classical_bytes.len(), hex::encode(&classical_bytes));
             process::exit(3);
         }
     };
@@ -287,6 +455,38 @@ fn main() {
         Ok(()) => {
             println!("VALID: BLS12-381 threshold certificate verified successfully");
             println!("");
+
+            // PQ half — only hybrid certificates carry it. Verified when the
+            // keys file carries the committee's MAYO2 keys (PQ_PROTOCOL_AUTH.md §4:
+            // every carried signature must verify and the count must reach
+            // `threshold_required`, the Phase 2 pq_quorum).
+            if let Some(env) = &envelope {
+                match parsed_keys.as_ref() {
+                    Some(keys) => match verify_mayo_half(env, keys, &namespace_bytes, &message_bytes) {
+                        Ok(valid) => {
+                            let quorum = keys.threshold_required.unwrap_or(0);
+                            if valid >= quorum {
+                                println!(
+                                    "PQ half: {valid} carried MAYO2 signature(s) all valid, quorum {quorum} met — PQ_PROTOCOL_AUTH §4 satisfied"
+                                );
+                            } else {
+                                eprintln!(
+                                    "INVALID: PQ quorum NOT met: {valid} < {quorum} (PQ_PROTOCOL_AUTH §4)"
+                                );
+                                process::exit(4);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("INVALID: PQ half verification failed: {e}");
+                            process::exit(4);
+                        }
+                    },
+                    None => {
+                        println!("PQ half: NOT verified (no keys file with MAYO2 keys provided)");
+                    }
+                }
+            }
+
             println!("  Threshold public key: {}...", hex::encode(&pubkey_bytes[..pubkey_bytes.len().min(16)]));
             println!("  Signature (cert):     {}...", hex::encode(&cert_bytes[..cert_bytes.len().min(16)]));
             println!("  Message digest:       {}", hex::encode(&message_bytes));
