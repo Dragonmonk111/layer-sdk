@@ -88,19 +88,40 @@ impl PayloadStore {
     }
 
     /// Persist a payload. Write-then-rename so a crash never leaves a torn file.
+    ///
+    /// Certify-time semantics: `by_height` is first-writer-wins, so a late
+    /// certified-but-never-executed fork payload at an already-executed
+    /// height cannot redirect the backfill index away from the canonical
+    /// payload (serve-side clobber, 2026-10-11). The fork payload's file
+    /// is still written — digest-keyed fetches are unaffected.
     pub fn put(&mut self, payload: &BlockPayload) -> std::io::Result<()> {
+        self.put_with(payload, false)
+    }
+
+    /// Persist the executed (canonical) payload. Unlike [Self::put], the
+    /// height→digest index entry is claimed unconditionally — execution is
+    /// the canonical source of truth for a height and overrides whatever
+    /// a certify-time fork payload left there.
+    pub fn put_executed(&mut self, payload: &BlockPayload) -> std::io::Result<()> {
+        self.put_with(payload, true)
+    }
+
+    fn put_with(&mut self, payload: &BlockPayload, canonical: bool) -> std::io::Result<()> {
         let digest = payload.digest();
-        if self.index.contains_key(&digest) {
-            return Ok(());
+        if !self.index.contains_key(&digest) {
+            let Some(path) = self.path(&digest, payload.height) else {
+                return Ok(());
+            };
+            let tmp = path.with_extension("tmp");
+            std::fs::write(&tmp, payload.to_bytes())?;
+            std::fs::rename(&tmp, &path)?;
+            self.index.insert(digest, payload.height);
         }
-        let Some(path) = self.path(&digest, payload.height) else {
-            return Ok(());
-        };
-        let tmp = path.with_extension("tmp");
-        std::fs::write(&tmp, payload.to_bytes())?;
-        std::fs::rename(&tmp, &path)?;
-        self.index.insert(digest, payload.height);
-        self.by_height.insert(payload.height, digest);
+        if canonical {
+            self.by_height.insert(payload.height, digest);
+        } else {
+            self.by_height.entry(payload.height).or_insert(digest);
+        }
         Ok(())
     }
 
@@ -214,5 +235,41 @@ mod tests {
         let p = payload(1);
         s.put(&p).unwrap();
         assert!(s.get(&p.digest()).is_none());
+    }
+
+    /// A late certify-time fork payload must not redirect the height→digest
+    /// backfill index away from the canonical (executed) payload — the
+    /// serve-side clobber fixed 2026-10-12. Digest-keyed fetches are
+    /// unaffected: the fork payload is still served by digest.
+    #[test]
+    fn certify_time_put_does_not_clobber_canonical_by_height() {
+        let dir = temp_dir("clobber-late-fork");
+        let canonical = payload(5);
+        let mut fork = payload(5);
+        fork.state_root = [9; 32];
+        let mut s = PayloadStore::open(&dir).unwrap();
+        s.put_executed(&canonical).unwrap();
+        s.put(&fork).unwrap();
+        assert_eq!(s.get_by_height(5), Some(canonical.clone()));
+        assert_eq!(s.get(&fork.digest()), Some(fork.clone()));
+        assert_eq!(s.get(&canonical.digest()), Some(canonical.clone()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// put_executed overrides even when the canonical payload was already
+    /// persisted at certify time while a fork held the height→digest entry.
+    #[test]
+    fn executed_put_overrides_certify_time_fork() {
+        let dir = temp_dir("clobber-executed-override");
+        let canonical = payload(6);
+        let mut fork = payload(6);
+        fork.state_root = [7; 32];
+        let mut s = PayloadStore::open(&dir).unwrap();
+        s.put(&fork).unwrap();
+        assert_eq!(s.get_by_height(6), Some(fork.clone()));
+        s.put_executed(&canonical).unwrap();
+        assert_eq!(s.get_by_height(6), Some(canonical.clone()));
+        assert_eq!(s.get(&fork.digest()), Some(fork.clone()));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

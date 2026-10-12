@@ -52,9 +52,17 @@ use layer_proto::cosmwasm::wasm::v1::{
     QueryContractsByCodeRequest, QueryContractsByCodeResponse,
     QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
+use layer_proto::layer::lightclient::v1::{
+    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest,
+};
 
 /// Chain constants — must match the running testnet.
+/// Default chain id; override with TX_SENDER_CHAIN_ID (e.g. "junoclaw-g1").
 const CHAIN_ID: &str = "junoclaw-1";
+
+fn chain_id() -> String {
+    std::env::var("TX_SENDER_CHAIN_ID").unwrap_or_else(|_| CHAIN_ID.to_string())
+}
 /// Fixed account number used by the Layer chain (matches FIXED_ACCOUNT_NUMBER in layer_cosmos).
 const FIXED_ACCOUNT_NUMBER: u64 = 17;
 /// Bech32 prefix for the Layer chain.
@@ -93,6 +101,7 @@ fn print_usage() {
     eprintln!("  send        Send tokens (MsgSend bank transfer)");
     eprintln!("  simulate    Dry-run a MsgSend via cosmos.tx.v1beta1.Service/Simulate");
     eprintln!("  get-tx      Query a committed tx by hash (cosmos.tx.v1beta1.Service/GetTx)");
+    eprintln!("  block       Query a finalized block (layer.lightclient.v1.Query/Block), print sha256 fingerprints");
     eprintln!("  broadcast   Broadcast a pre-signed raw tx (hex TxRaw bytes, e.g. from hybrid-sign)");
     eprintln!("  query       Query contract state (SmartContractState)");
     eprintln!("  contracts-by-code  List contract addresses for a code id");
@@ -163,6 +172,11 @@ fn print_usage() {
     eprintln!();
     eprintln!("balance flags:");
     eprintln!("  --address <addr>     Address to query (default: deployer address)");
+    eprintln!();
+    eprintln!("block flags:");
+    eprintln!("  --height <N>         Finalized height to query (required)");
+    eprintln!("  --dump               Also print raw proposal/certificate/payload hex");
+    eprintln!("                       (feeds verify-cert --cert/--message for T11)");
 }
 
 struct Args {
@@ -183,6 +197,8 @@ struct Args {
     wait: Option<u64>,
     kind: Option<String>,
     count: Option<u64>,
+    height: Option<u64>,
+    dump: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -210,6 +226,8 @@ fn parse_args() -> Result<Args, String> {
     let mut wait: Option<u64> = None;
     let mut kind: Option<String> = None;
     let mut count: Option<u64> = None;
+    let mut height: Option<u64> = None;
+    let mut dump = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -300,6 +318,14 @@ fn parse_args() -> Result<Args, String> {
                 let s = args.get(i).ok_or("--count requires a value")?;
                 count = Some(s.parse().map_err(|_| format!("invalid --count: {}", s))?);
             }
+            "--height" => {
+                i += 1;
+                let s = args.get(i).ok_or("--height requires a value")?;
+                height = Some(s.parse().map_err(|_| format!("invalid --height: {}", s))?);
+            }
+            "--dump" => {
+                dump = true;
+            }
             flag => {
                 return Err(format!("unknown flag: {}", flag));
             }
@@ -312,6 +338,7 @@ fn parse_args() -> Result<Args, String> {
         grpc,
         wasm,
         sequence,
+        height,
         code_id,
         label,
         msg,
@@ -325,6 +352,7 @@ fn parse_args() -> Result<Args, String> {
         wait,
         kind,
         count,
+        dump,
     })
 }
 
@@ -366,7 +394,7 @@ fn deployer_address() -> AccountId {
 /// The transaction is signed with the deterministic deployer key.
 /// Returns the raw serialized tx bytes ready for BroadcastTx.
 fn sign_tx(msg: cosmrs::Any, sequence: u64) -> Vec<u8> {
-    let chain_id = CHAIN_ID.parse().expect("valid chain id");
+    let chain_id = chain_id().parse().expect("valid chain id");
     let key = deployer_key();
     let pub_key = key.public_key();
 
@@ -1155,6 +1183,54 @@ async fn cmd_get_tx(
 }
 
 // ---------------------------------------------------------------------------
+// Subcommand: block (layer.lightclient.v1.Query/Block)
+// ---------------------------------------------------------------------------
+
+/// Fetch a finalized block and print SHA-256 fingerprints of its proposal,
+/// certificate, and payload bytes. Comparing the fingerprint line across
+/// seats is the T7 determinism check: identical hashes => identical block
+/// => identical applied state (the app_hash commits to the post-state).
+async fn cmd_block(
+    grpc_addr: &str,
+    height: u64,
+    dump: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let channel = connect(grpc_addr).await?;
+    let mut client = LightClientQueryClient::new(channel)
+        .max_decoding_message_size(10 * 1024 * 1024)
+        .max_encoding_message_size(10 * 1024 * 1024);
+
+    let resp = client
+        .block(QueryBlockRequest { height })
+        .await?
+        .into_inner();
+
+    println!("block height: {}", resp.height);
+    println!("timestamp_nanos: {}", resp.timestamp_nanos);
+    println!("proposal_len: {}", resp.proposal_bytes.len());
+    println!(
+        "proposal_sha256: {}",
+        hex::encode(Sha256::digest(&resp.proposal_bytes))
+    );
+    println!("certificate_len: {}", resp.certificate_bytes.len());
+    println!(
+        "certificate_sha256: {}",
+        hex::encode(Sha256::digest(&resp.certificate_bytes))
+    );
+    println!("payload_len: {}", resp.payload_bytes.len());
+    println!(
+        "payload_sha256: {}",
+        hex::encode(Sha256::digest(&resp.payload_bytes))
+    );
+    if dump {
+        println!("proposal_hex: {}", hex::encode(&resp.proposal_bytes));
+        println!("certificate_hex: {}", hex::encode(&resp.certificate_bytes));
+        println!("payload_hex: {}", hex::encode(&resp.payload_bytes));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Subcommand: query (SmartContractState)
 // ---------------------------------------------------------------------------
 
@@ -1425,6 +1501,13 @@ async fn main() {
                 std::process::exit(1);
             });
             cmd_get_tx(&args.grpc, &hash, args.wait.unwrap_or(0)).await
+        }
+        "block" => {
+            let height = args.height.unwrap_or_else(|| {
+                eprintln!("Error: --height is required for block");
+                std::process::exit(1);
+            });
+            cmd_block(&args.grpc, height, args.dump).await
         }
         "broadcast" => {
             let tx_hex = args.tx_hex.unwrap_or_else(|| {

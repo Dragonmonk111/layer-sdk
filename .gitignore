@@ -50,3 +50,26 @@ bls-share.json
 *.keys.b64
 *.age
 /g1-ceremony/_secrets/
+
+# G1 ceremony: secrets, build cache, binaries — never commit
+g1-ceremony/_secrets/
+g1-ceremony/.build-cache/
+g1-ceremony/**/keys.json
+g1-ceremony/**/*.keys*.json
+g1-ceremony/_img-*/
+g1-ceremony/slay3rd-rc*
+g1-ceremony/slay3rd
+g1-ceremony/ceremony-out/
+g1-ceremony/vahana-rc6-bundle/
+g1-ceremony/ak-logs.txt
+releases/
+snapshot/
+n0log.txt
+n0ls.txt
+n3-*.txt
+n3log.txt
+g1-ceremony/vahana-rc6-bundle.zip
+g1-ceremony/*.bin
+
+# ceremony evidence logs are the record — re-include
+!g1-ceremony/*.log

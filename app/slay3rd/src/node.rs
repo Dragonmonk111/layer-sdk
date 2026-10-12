@@ -1102,7 +1102,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                     self.tx_index.insert(resp);
                 }
 
-                if let Err(e) = self.store.lock().unwrap_or_else(|e| e.into_inner()).put(&payload) {
+                if let Err(e) = self.store.lock().unwrap_or_else(|e| e.into_inner()).put_executed(&payload) {
                     tracing::warn!(height, error = %e, "Failed to persist executed payload to payload store");
                 }
 
