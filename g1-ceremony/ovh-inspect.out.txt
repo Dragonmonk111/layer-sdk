@@ -1,0 +1,20 @@
+vps-2cd625cf
+--- systemd ---
+??? junoclaw-g1.service - junoclaw-g1 slay3rd validator (seat ovh-uk1, validator_index=2)
+     Loaded: loaded (/etc/systemd/system/junoclaw-g1.service; enabled; vendor preset: enabled)
+     Active: active (running) since Thu 2026-10-08 18:07:32 UTC; 23h ago
+   Main PID: 1589329 (slay3rd)
+      Tasks: 21 (limit: 9247)
+     Memory: 1.4G
+        CPU: 1h 46min 32.020s
+     CGroup: /system.slice/junoclaw-g1.service
+             ??????1589329 /home/ubuntu/slay3rd /config/node.toml
+
+Oct 09 17:08:24 vps-2cd625cf slay3rd[1589329]: 2026-10-09T17:08:24.402096Z  INFO slay3rd::node: propose: selected mempool txs tx_count=0 total_tx_bytes=0 height=263262
+Oct 09 17:08:24 vps-2cd625cf slay3rd[1589329]: 2026-10-09T17:08:24.402122Z  INFO slay3rd::node: propose: built BlockPayload payload_bytes=128
+--- docker ---
+--- dirs ---
+--- slay3rd procs ---
+1589329 /home/ubuntu/slay3rd /config/node.toml
+--- node.toml location ---
+/config/node.toml

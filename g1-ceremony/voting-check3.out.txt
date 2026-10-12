@@ -1,0 +1,26 @@
+sig exists: False
+=== certify lines (last 15, with height if present) ===
+2026-10-09T18:41:25.462132Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=33d6a082732c184be24ffd54fa3ac1323ef3601aa57a03c0a30c0a3c70375fe8
+2026-10-09T18:41:25.488235Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=5c75f801f9547fa9ede387b7cf21060da657ba270dd227bcb0eb46ed248dccb2
+2026-10-09T18:41:25.514939Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=81c8604e8546c46be66fb122a7718a9e9933990a5db0034c5b221f1a50e57842
+2026-10-09T18:41:25.550431Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=548597c90f366264258ae80075ef63db64b1eafa6e071f760c1b4a1166ec85f0
+2026-10-09T18:41:25.567837Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=6ce8d664b928dbd3a6aa9c3f0c9cd2ac1522c36247b43587dc3406a404018856
+2026-10-09T18:41:25.594144Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=bbfc354852b639eada732e93e12a8f5fca92c846cfb7c0025d52139f6130c852
+2026-10-09T18:41:25.654371Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=179e21eed9b5fac581fb5f78189b9bff35887e83dfda62be0184ef787b293bae
+2026-10-09T18:41:25.672439Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=b081e9d5d0936fee4896759c0801f5474ce1e2dd315f2b12d9ee8c9b83b9a38e
+2026-10-09T18:41:25.698547Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=a2ab978de036c3a927a3d36e8318a806fea398917c2efa3bed0e86e38ca16924
+2026-10-09T18:41:25.751766Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=e156dbbeb53962ddc77714c498d0515ef5d38e1a919f29ad45f7b27b32a2a506
+2026-10-09T18:41:25.778033Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=3f669d985e28afd782a0630b5865a18bf2432bc76aa983ccee725eec603fd43e
+2026-10-09T18:41:25.804327Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=8231e2b3936f4a8508246de2fefed507f913680342f3e6dbc3b1cc4b1e443873
+2026-10-09T18:41:25.856740Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=aa3c1f748a52503efee39fcf7d49189263b17876503bffb4176923bc3ff340e0
+2026-10-09T18:41:25.864120Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=f763061be57f06f765e36b5859d2dd6ac89fb916fe0184346a2a2f733703349a
+2026-10-09T18:41:25.890606Z  INFO slay3rd::node: certify: payload unavailable within wait window digest=391b04bbb5905124acb21dda559a07a65053126c5d2eddebdcfff25f2590393f
+=== recent finalize successes ===
+2026-10-09T18:39:02.220365Z  INFO slay3rd::node: Block finalized ? certificate stored by Reporter on Finalization activity height=275987 app_hash=51165397df859e
+2026-10-09T18:39:02.222272Z  INFO slay3rd: Block finalized with BLS threshold certificate (CONS-05) height=275987 round=Round { epoch: Epoch(0), view: View(3682
+2026-10-09T18:39:02.275153Z  INFO slay3rd::node: Block finalized ? certificate stored by Reporter on Finalization activity height=275988 app_hash=51165397df859e
+2026-10-09T18:39:02.277520Z  INFO slay3rd: Block finalized with BLS threshold certificate (CONS-05) height=275988 round=Round { epoch: Epoch(0), view: View(3682
+2026-10-09T18:39:02.301389Z  INFO slay3rd::node: Block finalized ? certificate stored by Reporter on Finalization activity height=275989 app_hash=51165397df859e
+2026-10-09T18:39:02.303143Z  INFO slay3rd: Block finalized with BLS threshold certificate (CONS-05) height=275989 round=Round { epoch: Epoch(0), view: View(3682
+certify-unavail count in 1.5MB tail: 791
+finalize-unavail count: 55

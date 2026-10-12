@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; Validator-host seatbelt: even if Windows Update is ever re-armed,
+; block automatic reboots while a user is logged on. Reversible:
+; delete the AU key or set the value to 0.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
+"NoAutoRebootWithLoggedOnUsers"=dword:00000001

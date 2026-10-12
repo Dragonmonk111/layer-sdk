@@ -1,0 +1,9 @@
+ovh_g1 root : denied (root@51.195.201.74: Permission denied (publickey,password).)
+ovh_g1 ubuntu : OK -> SSH_OK vps-2cd625cf
+id_ed25519 root : denied (root@51.195.201.74: Permission denied (publickey,password).)
+id_ed25519 ubuntu : OK -> SSH_OK vps-2cd625cf
+id_rsa root : denied (root@51.195.201.74: Permission denied (publickey,password).)
+id_rsa ubuntu : denied (ubuntu@51.195.201.74: Permission denied (publickey,password).)
+id_rsa debian : denied (debian@51.195.201.74: Permission denied (publickey,password).)
+id_rsa admin : denied (admin@51.195.201.74: Permission denied (publickey,password).)
+id_rsa junoclaw : denied (junoclaw@51.195.201.74: Permission denied (publickey,password).)

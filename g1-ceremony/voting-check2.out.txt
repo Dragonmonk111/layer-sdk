@@ -1,0 +1,15 @@
+siglog: 
+=== main log: recent vote evidence ===
+last1000: notarize-ish lines:
+[2m2026-10-09T18:39:45.792500Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m5016e7713d20a67ce
+[2m2026-10-09T18:39:45.819870Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m577cf27c7276c1754
+[2m2026-10-09T18:39:45.848872Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m312605118dd700f7a
+[2m2026-10-09T18:39:45.871785Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m66e2ed199b58cd7ea
+[2m2026-10-09T18:39:45.898146Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0mb83b0d952fb5641ef
+[2m2026-10-09T18:39:45.924092Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m2058c9e51e571402a
+[2m2026-10-09T18:39:45.956889Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m64c2c91816e483363
+[2m2026-10-09T18:39:46.003744Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0mbeffcc35111ae2182
+[2m2026-10-09T18:39:46.060826Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m4262f13234bb1f80e
+[2m2026-10-09T18:39:46.083146Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m3287e00059135ef20
+[2m2026-10-09T18:39:46.109610Z[0m [32m INFO[0m [2mslay3rd::node[0m[2m:[0m certify: payload unavailable within wait window [3mdigest[0m[2m=[0m1b4b24b8eec28b734
+[2m2026-10-09T18:39:46.109676Z[0m [33m WARN[0m [2mcommonware_consensus::simplex::actors::voter::actor[0m[2m:[0m proposal failed certification [3mround[0m[2m=[

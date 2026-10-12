@@ -1,0 +1,19 @@
+﻿=== docker.exe ===
+29.7.2
+=== docker images (local junoclaw) ===
+junoclaw-chain:latest 154MB
+junoclaw-chain:v0.6.0-rc1 154MB
+junoclaw-chain:scanfix 154MB
+junoclaw-chain:hardening 154MB
+junoclaw-chain:pre-hardening 154MB
+junoclaw-hybrid-sign:latest 76MB
+=== docker creds ===
+auths: ghcr.io
+credsStore: desktop
+=== rc1 manifest inspect (anon) ===
+{
+	"schemaVersion": 2,
+	"mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+	"config": {
+		"mediaType": "application/vnd.docker.container.image.v1+json",
+		"size": 1607,

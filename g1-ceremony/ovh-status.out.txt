@@ -1,0 +1,16 @@
+activating
+Oct 09 17:14:37 vps-2cd625cf slay3rd[1604782]: /home/ubuntu/slay3rd: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found (required by /home/ubuntu/slay3rd)
+Oct 09 17:14:37 vps-2cd625cf systemd[1]: junoclaw-g1.service: Main process exited, code=exited, status=1/FAILURE
+Oct 09 17:14:37 vps-2cd625cf systemd[1]: junoclaw-g1.service: Failed with result 'exit-code'.
+Oct 09 17:14:41 vps-2cd625cf systemd[1]: junoclaw-g1.service: Scheduled restart job, restart counter is at 36.
+Oct 09 17:14:41 vps-2cd625cf systemd[1]: Stopped junoclaw-g1 slay3rd validator (seat ovh-uk1, validator_index=2).
+Oct 09 17:14:41 vps-2cd625cf systemd[1]: Started junoclaw-g1 slay3rd validator (seat ovh-uk1, validator_index=2).
+Oct 09 17:14:41 vps-2cd625cf slay3rd[1604786]: /home/ubuntu/slay3rd: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found (required by /home/ubuntu/slay3rd)
+Oct 09 17:14:41 vps-2cd625cf systemd[1]: junoclaw-g1.service: Main process exited, code=exited, status=1/FAILURE
+Oct 09 17:14:41 vps-2cd625cf systemd[1]: junoclaw-g1.service: Failed with result 'exit-code'.
+Oct 09 17:14:44 vps-2cd625cf systemd[1]: junoclaw-g1.service: Scheduled restart job, restart counter is at 37.
+Oct 09 17:14:44 vps-2cd625cf systemd[1]: Stopped junoclaw-g1 slay3rd validator (seat ovh-uk1, validator_index=2).
+Oct 09 17:14:44 vps-2cd625cf systemd[1]: Started junoclaw-g1 slay3rd validator (seat ovh-uk1, validator_index=2).
+Oct 09 17:14:44 vps-2cd625cf slay3rd[1604790]: /home/ubuntu/slay3rd: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found (required by /home/ubuntu/slay3rd)
+Oct 09 17:14:44 vps-2cd625cf systemd[1]: junoclaw-g1.service: Main process exited, code=exited, status=1/FAILURE
+Oct 09 17:14:44 vps-2cd625cf systemd[1]: junoclaw-g1.service: Failed with result 'exit-code'.

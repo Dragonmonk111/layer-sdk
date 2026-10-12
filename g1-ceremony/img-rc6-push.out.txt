@@ -1,0 +1,27 @@
+docker pull base...
+v0.6.0-rc1: Pulling from dragonmonk111/junoclaw-chain
+Digest: sha256:953b1ad64488605a99532bbe85ec9abaaab167dbf556aba5741e27964aea093b
+Status: Image is up to date for ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1
+ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1
+docker build...
+#8 exporting to image
+#8 exporting layers
+#8 exporting layers 0.2s done
+#8 writing image sha256:793000d6d974edd1a0f7543dce4fd46f719ac8e3d09e441c6d8afd8f880798c3 done
+#8 naming to ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc6 0.0s done
+#8 DONE 0.3s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wxfs6cmrljdqw329e1vn3a8ku
+verify sha inside image...
+b4270d6870b02c7c5acdd9c0400cab6bc70332d472406d3a0b8705af1a07c3db  /usr/local/bin/slay3rd
+docker push...
+69d5a68c1819: Preparing
+1d69a5fd3193: Preparing
+1d69a5fd3193: Waiting
+fc9d6d4c2203: Layer already exists
+69d5a68c1819: Layer already exists
+8c0e3b37797f: Layer already exists
+1d69a5fd3193: Layer already exists
+91c88bd8c808: Pushed
+fc4db913fb50: Pushed
+v0.6.0-rc6: digest: sha256:56f3206e4bd42f929b9b112ff128e94993076401508c33c59397acac96b7a411 size: 1588

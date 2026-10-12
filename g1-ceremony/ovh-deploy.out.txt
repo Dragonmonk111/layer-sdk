@@ -1,0 +1,9 @@
+copying binary from WSL...
+staged: 38211232 bytes
+scp to ovh...
+
+=== remote deploy ===
+-rw-rw-r-- 1 ubuntu ubuntu 38211232 Oct  9 17:11 /home/ubuntu/slay3rd.rc5
+a824e2a931bbea1f065703277f85bfa99183ca05e22d6d0da1fd080a58162b9a  /home/ubuntu/slay3rd.rc5
+26087f4cf52218d248e6622dea8872f4aeb8a586e6ff76b0265f530e6824adc5  /home/ubuntu/slay3rd
+cp: cannot create regular file '/home/ubuntu/slay3rd': Text file busy

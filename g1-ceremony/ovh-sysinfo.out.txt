@@ -1,0 +1,10 @@
+Distributor ID:	Ubuntu
+Description:	Ubuntu 22.04.5 LTS
+Release:	22.04
+Codename:	jammy
+ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35
+no docker
+4
+               total        used        free      shared  buff/cache   available
+Mem:           7.6Gi       370Mi       380Mi       1.0Mi       6.8Gi       6.9Gi
+/dev/sda1        78G   16G   62G  21% /

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Blocks commits that add real private-key values (not field names in docs/code).
+# Enable once per clone:  git config core.hooksPath .githooks
+if git diff --cached -U0 | grep -E '^\+' | grep -Eq '(ed25519|bls|mayo)_private_hex"[[:space:]]*:[[:space:]]*"[0-9a-fA-F]{64,}"'; then
+  echo "BLOCKED: staged change contains private key material (*_private_hex value)." >&2
+  exit 1
+fi
+if git diff --cached --name-only | grep -Eq '(^|/)(keys\.json|bls-share\.json)$|(^|/)_secrets/'; then
+  echo "BLOCKED: staged path is private ceremony material (keys.json / bls-share.json / _secrets/)." >&2
+  exit 1
+fi
+exit 0

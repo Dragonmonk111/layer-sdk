@@ -1,0 +1,31 @@
+=== SDL non-secret lines ===
+version: "2.0"
+# 1. IMAGE: Akash providers cannot `docker load` ??? the image must live in a
+#           provider-services lease-status --dseq <DSEQ> --provider <PROVIDER>
+#    provider can read. Acceptable for a closed testnet (provider sees one
+#    of our own seats), NOT acceptable for mainnet ??? use a private registry
+services:
+    image: ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1   # pushed via crane; package is public
+    # NOTE: no `params.storage` mount. A named volume mount is only valid with
+    # `attributes.persistent: true`; without it providers silently drop the
+    expose:
+      - port: 7001
+        proto: tcp
+        to:
+        # external port is provider-assigned unless `as:` is honored;
+profiles:
+        cpu:
+        memory:
+        storage:
+  placement:
+          denom: uact   # leases are paid in ACT (uact); uakt is gas-only on v2.x
+          amount: 10000
+      profile: slay3rd
+=== akash1/dseq refs in workspace ===
+deploy\g1\deploy.yaml :: #           provider-services lease-status --dseq <DSEQ> --provider <PROVIDER>
+docs\G1_SAFETY_AND_TEST_PLAN.md :: | 0 | akash-seat | `196.216.137.249:30823` (`provider.dl2klab.co.za`) | Akash lease dseq `28973001`, DL2K Lab (ZA) | log
+docs\ROAD_TO_TESTNET.md :: | Mempool v2 (dedupe, peek, remove-on-commit, recheck) | A3; live: stale & gapped sequences rejected at `check_tx` (`Inv
+g1-ceremony\DELIVERY.md :: 2. Push the Akash seat (`tx deployment update` + `send-manifest`) ? LAST
+g1-ceremony\g1-akash-manifest.mjs :: * g1-akash-manifest.mjs - fill deploy/g1/deploy.yaml with the Akash seat's
+g1-ceremony\INCIDENT-AND-BUGS-2026-10-08.md :: 4. Fresh akash deployment with 9090 exposed (bug 6) ? full 4/4 mesh.
+lib\cosmwasm\packages\crypto\testdata\wycheproof\ecdsa_secp256r1_sha3_512_test.json :: "publicKeyPem" : "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgobTSvoZBK51bXO/Aqa2qdseqhuD\nUa1xOnht

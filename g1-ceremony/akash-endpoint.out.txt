@@ -1,0 +1,6 @@
+=== DNS ===
+provider.dl2klab.co.za -> 196.216.137.249
+=== TCP 30823 on hostname ===
+False
+=== TCP 30823 on old IP ===
+False

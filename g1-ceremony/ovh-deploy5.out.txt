@@ -1,0 +1,23 @@
+binary: 40421016 bytes  sha256: B4270D6870B02C7C5ACDD9C0400CAB6BC70332D472406D3A0B8705AF1A07C3DB
+seed:   128 bytes  sha256: FDF4AB2EAEE1825B06BDAC54E072EA0E6DF568D0084387F49E4BF1707B327E42
+scp binary+seed...
+=== remote ===
+b4270d6870b02c7c5acdd9c0400cab6bc70332d472406d3a0b8705af1a07c3db  /home/ubuntu/slay3rd.rc6
+fdf4ab2eaee1825b06bdac54e072ea0e6df568d0084387f49e4bf1707b327e42  /home/ubuntu/fdf4ab2e.bin
+fdf4ab2eaee1825b06bdac54e072ea0e6df568d0084387f49e4bf1707b327e42  /data/seed/fdf4ab2e.bin
+active
+Oct 10 12:24:59 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:24:59.810116Z  INFO slay3rd: BLS12-381 threshold signing scheme initialized validator_index=2 threshold=3/4
+Oct 10 12:24:59 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:24:59.871785Z  INFO slay3rd: Min gas price set min_gas_price=0.001ujclaw
+Oct 10 12:24:59 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:24:59.872567Z  INFO slay3rd: App loaded from existing storage
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.002787Z  INFO slay3rd: Sidecar pruning tier pruning=validator keep_heights="540000"
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.002826Z  INFO slay3rd: Payload store opened recovered=1
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.002926Z  INFO slay3rd: seed: injected payload into pending set file=/data/seed/fdf4ab2e.bin digest=fdf4ab2eaee1825b06bdac54e072ea0e6df568d0084387f49e4bf1707b327e42 height=312344
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.003011Z  INFO slay3rd: LayerNode and LayerRelay created (shared pending_payloads)
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.003025Z  INFO slay3rd: gRPC server spawned with Cosmos query dispatch grpc_listen=0.0.0.0:9090
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.003099Z  INFO slay3rd: Starting gRPC server with Cosmos query dispatch addr=0.0.0.0:9090
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.003353Z  INFO slay3rd: Authenticated P2P network initialized (4 peers)
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.003675Z  INFO commonware_p2p::authenticated::lookup::network: network started
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.028374Z  INFO slay3rd: Hybrid BLS+MAYO2 consensus scheme initialized (PQ_PROTOCOL_AUTH Phase 2a)
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.028563Z  INFO slay3rd: Starting simplex consensus engine (epoch=0, hybrid BLS+MAYO2)...
+Oct 10 12:25:00 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:00.028624Z  INFO slay3rd: Consensus engine started with authenticated P2P and gRPC server. grpc_listen=0.0.0.0:9090
+Oct 10 12:25:05 vps-2cd625cf slay3rd[1628984]: 2026-10-10T12:25:05.004605Z  INFO slay3rd: Payload relay: broadcast to 2 peers via P2P peers=2 payload_bytes=128

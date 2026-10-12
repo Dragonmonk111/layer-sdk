@@ -1,0 +1,7 @@
+/usr/bin/akash
+=== keys ===
+No records were found in keyring
+=== balances ===
+=== deployments (all owners in keyring) ===
+=== lease for dseq 28973001 ===
+DONE

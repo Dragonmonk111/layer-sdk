@@ -1,0 +1,11 @@
+siglog: C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\g1-ceremony\_secrets\home-vb-runtime\data\mayo_sigs.log
+=== last 10 NOTARIZE/FINALIZE for v1 (home-vb) ===
+=== seat counts in tail ===
+NOTARIZE: 0
+FINALIZE: 0
+=== home-vb main log tail events ===
+log-candidate: C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\g1-ceremony\_secrets\home-vb-runtime\data\mayo_sigs.log 10/08/2026 17:48:27
+log-candidate: C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\g1-ceremony\_secrets\home-vb-runtime\data\app\000109.log 10/08/2026 17:48:27
+log-candidate: C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\tools\generate-testnet-keys\target\release\build\sriracha-mayo-9c6b725a1184395b\out\mayo-c-opt\CMakeFiles\CMakeOutput.log 10/07/2026 10:11:57
+log-candidate: C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\docker_build_pruning.log 10/06/2026 20:27:39
+log-candidate: C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\docker_build_scanfix.log 10/06/2026 19:29:19

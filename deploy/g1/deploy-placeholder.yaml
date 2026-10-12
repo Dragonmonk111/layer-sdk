@@ -1,0 +1,41 @@
+version: "2.0"
+
+# JunoClaw G1 — Akash validator seat PLACEHOLDER (step 2a of endpoint-first
+# sequencing in deploy.yaml). Runs the real image under `sleep infinity` so
+# Akash assigns the external host:port for port 7001. After keygen-share with
+# the assigned --p2p address and the ceremony, `tx deployment update` + resend
+# manifest with deploy.yaml — the lease and endpoint survive the update.
+
+services:
+  slay3rd:
+    image: ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1
+    command: ["sh", "-c"]
+    args: ["sleep infinity"]
+    expose:
+      - port: 7001
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    slay3rd:
+      resources:
+        cpu:
+          units: 2.0
+        memory:
+          size: 4Gi
+        storage:
+          - size: 20Gi
+  placement:
+    g1:
+      pricing:
+        slay3rd:
+          denom: uact
+          amount: 10000
+
+deployment:
+  slay3rd:
+    g1:
+      profile: slay3rd
+      count: 1

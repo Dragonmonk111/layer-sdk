@@ -1,0 +1,19 @@
+local binary: 40337048 bytes
+local sha256: 965A28155021D037DDF153F848F221FACD233FD64D3E3D52BABFE54908E9AFA3
+scp...
+
+=== remote ===
+965a28155021d037ddf153f848f221facd233fd64d3e3d52babfe54908e9afa3  /home/ubuntu/slay3rd.rc5g
+active
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.083663Z  INFO slay3rd: gRPC server spawned with Cosmos query dispatch grpc_listen=0.0.0.0:9090
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.083698Z  INFO slay3rd: Starting gRPC server with Cosmos query dispatch addr=0.0.0.0:9090
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.083978Z  INFO slay3rd: Authenticated P2P network initialized (4 peers)
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.084156Z  INFO commonware_p2p::authenticated::lookup::network: network started
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.104593Z  INFO slay3rd: Hybrid BLS+MAYO2 consensus scheme initialized (PQ_PROTOCOL_AUTH Phase 2a)
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.104876Z  INFO slay3rd: Starting simplex consensus engine (epoch=0, hybrid BLS+MAYO2)...
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.105053Z  INFO slay3rd: Consensus engine started with authenticated P2P and gRPC server. grpc_listen=0.0.0.0:9090
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.108661Z  INFO commonware_consensus::simplex::actors::voter::actor: consensus initialized current_view=367739 elapsed=1.288154ms
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.113710Z  INFO slay3rd::node: Block finalized ??? certificate stored by Reporter on Finalization activity height=275692 app_hash=51165397df859ec9fecfc37f134b9a8bdbcd9fd63be4c2152c4b33f6e7fc2517 digest=b0d05133044532125f4f20eedb9511b36d9cbc9b132e523afda163723af88dcb tx_count=0 exec_ms=4
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.114897Z  INFO slay3rd: Block finalized with BLS threshold certificate (CONS-05) height=275692 round=Round { epoch: Epoch(0), view: View(367738) } payload_digest=b0d05133044532125f4f20eedb9511b36d9cbc9b132e523afda163723af88dcb cert_len=616 certificate=01992ab8d197222cb1847ad3e9f58be3a7a72d4a88f9a6254853b3b2dd54d2ff5d05b2203150acdfd3a19da87aa557dc5700000000000000040d6589fb99b9db5669b635237431401189604ce00710aeb9c1dd87a39ce283ec5b6022cfe6cc149f02a38be8b2f7a9edd489551f68285f8b5d7fcb104f8d669fed00c8cb31f1ac9f72fb3d366aeb887c579f28e46bfc01bd9a4b181d4bd548e5269c126aa4278b2609dcc6d99b901829aa2d3b19401802e41bfde3cba1a08906c0355dc7dc57334667f8c725d7479004a56363921d2ff126a20731edc4f51471e02a4bfafc53c89b11d8090fb83733a2d07790cb3ccdf9ff8e72cad08c79f7b1f2667a90505b0e0ed2fb5eb04710051e37ac696dca9b315c9d52b00207a7979598b84394e1efa2eef9598794ac42caa6303e5659f07af0b10e01f115c101f249423e26d627338b7e12bca51a7ca4eeaf434d2c9931e64f14e95af33ffbc43a661a2bdc54a25fd3847368bc0634c5bab8b1b89b94839337e05fc05050eed1f45f8145503aea7b19faaed87d4bbdb34d86f5860fe47fb2c661e3776bf2f14ca787b2526fd7da75faede2a8eea052b84d171b710b5be1e7c8bd63c3befa79c139553f65ae0e50109f2aac2f354ac4d63128e566c15d786bcd49c07cc48d5bf972fd03986caece7e7bcb8a59e227e26738c92cb050cea94fea81f23a5b727394499645350af379ab41d375206b8460a5c69ada6cb3f5c4923e698cc33b3dacfec0083547dbf4ba250f7b775bbad67317c819e7452c01369ec0d6ce80b96e69840f4973fb790cea52ff176bedc89141077390a4ba68608dd6f476e118ad4cb39c9969309d67bbe8141ac0b15ad3390e4809
+Oct 09 18:26:12 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:12.115004Z  INFO slay3rd: Finality record stored (certificate, proposal, timestamp) height=275692
+Oct 09 18:26:17 vps-2cd625cf slay3rd[1606720]: 2026-10-09T18:26:17.085434Z  INFO slay3rd: Payload relay: broadcast to 0 peers via P2P peers=0 payload_bytes=128

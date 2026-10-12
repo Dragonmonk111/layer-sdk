@@ -1,0 +1,39 @@
+﻿staged binary: 40337048 bytes
+=== docker pull rc1 base ===
+v0.6.0-rc1: Pulling from dragonmonk111/junoclaw-chain
+Digest: sha256:953b1ad64488605a99532bbe85ec9abaaab167dbf556aba5741e27964aea093b
+Status: Image is up to date for ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1
+ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc1
+pull exit: 0
+=== docker build rc5 ===
+System.Management.Automation.RemoteException
+#5 [internal] load build context
+#5 transferring context: 31B 0.0s done
+#5 DONE 0.0s
+System.Management.Automation.RemoteException
+#6 [2/2] COPY slay3rd /usr/local/bin/slay3rd
+#6 CACHED
+System.Management.Automation.RemoteException
+#7 exporting to image
+#7 exporting layers done
+#7 writing image sha256:7123fbff83b71672bfd81fb229d546cd9dc46da1e66c950f949f8a96177a4382 done
+#7 naming to ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc5 done
+#7 DONE 0.0s
+System.Management.Automation.RemoteException
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/5b8v5pnisob83nun8g9o7davv
+build exit: 0
+=== verify binary in image ===
+img sha256: 965a28155021d037ddf153f848f221facd233fd64d3e3d52babfe54908e9afa3  /usr/local/bin/slay3rd
+local sha256: 965a28155021d037ddf153f848f221facd233fd64d3e3d52babfe54908e9afa3
+=== docker push ===
+8c0e3b37797f: Preparing
+fc9d6d4c2203: Preparing
+69d5a68c1819: Preparing
+1d69a5fd3193: Preparing
+1d69a5fd3193: Mounted from dragonmonk111/buzz-relay
+fc9d6d4c2203: Pushed
+945020856bd7: Pushed
+8c0e3b37797f: Pushed
+69d5a68c1819: Pushed
+v0.6.0-rc5: digest: sha256:8bd60419563eced552e56505f4a9d6f0370f7d55063d1f1b95b629790f381ad7 size: 1376
+push exit: 0

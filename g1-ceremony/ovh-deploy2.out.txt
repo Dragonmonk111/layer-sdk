@@ -1,0 +1,7 @@
+ssh.exe : cp: cannot create regular file '/home/ubuntu/slay3rd.rc1.bak': Permission denied
+At C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\g1-ceremony\ovh-deploy2.ps1:4 char:1
++ & ssh -i $key -o BatchMode=yes -o ConnectTimeout=10 -o IdentitiesOnly ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (cp: cannot crea...rmission denied:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

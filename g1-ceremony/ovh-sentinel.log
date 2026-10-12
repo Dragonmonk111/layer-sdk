@@ -1,0 +1,17 @@
+2026-10-12T13:20:28Z OK SVC=active load= mem(t/u/a)= disk(u/pct/avail)= rssMB=? hwmMB=? sync= err30m=0
+2026-10-12T13:21:47Z OK SVC=active load=0.07 mem(t/u/a)=7747/2372/5067 disk(u/pct/avail)=18G/23%/60G rssMB=2159 hwmMB=2527 sync=1 err30m=0
+2026-10-12T13:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/2373/5066 disk(u/pct/avail)=18G/23%/60G rssMB=2159 hwmMB=2527 sync=1 err30m=0
+2026-10-12T14:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/2379/5060 disk(u/pct/avail)=18G/23%/60G rssMB=2159 hwmMB=2527 sync=1 err30m=0
+2026-10-12T14:50:03Z OK SVC=active load=0.00 mem(t/u/a)=7747/2381/5058 disk(u/pct/avail)=18G/23%/60G rssMB=2159 hwmMB=2527 sync=1 err30m=0
+2026-10-12T15:20:03Z OK SVC=active load=0.00 mem(t/u/a)=7747/2377/5062 disk(u/pct/avail)=18G/23%/60G rssMB=2159 hwmMB=2527 sync=1 err30m=0
+2026-10-12T15:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/2378/5061 disk(u/pct/avail)=18G/23%/60G rssMB=2158 hwmMB=2527 sync=1 err30m=0
+2026-10-12T16:20:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/2378/5061 disk(u/pct/avail)=18G/23%/60G rssMB=2158 hwmMB=2527 sync=1 err30m=0
+2026-10-12T16:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/2383/5056 disk(u/pct/avail)=18G/23%/60G rssMB=2158 hwmMB=2527 sync=1 err30m=0
+2026-10-12T17:20:04Z OK SVC=active load=0.03 mem(t/u/a)=7747/2401/5038 disk(u/pct/avail)=18G/23%/60G rssMB=2155 hwmMB=2527 sync=1 err30m=0
+2026-10-12T17:50:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-12T18:20:03Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-12T18:50:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-12T19:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/336/7103 disk(u/pct/avail)=18G/23%/60G rssMB=94 hwmMB=94 sync=1 err30m=0
+2026-10-12T19:50:03Z OK SVC=active load=0.00 mem(t/u/a)=7747/363/7075 disk(u/pct/avail)=18G/23%/60G rssMB=126 hwmMB=126 sync=1 err30m=0
+2026-10-12T20:20:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/408/7031 disk(u/pct/avail)=18G/23%/60G rssMB=279 hwmMB=279 sync=1 err30m=0
+2026-10-12T20:50:05Z OK SVC=active load=0.65 mem(t/u/a)=7747/456/6983 disk(u/pct/avail)=18G/23%/60G rssMB=383 hwmMB=383 sync=1 err30m=0

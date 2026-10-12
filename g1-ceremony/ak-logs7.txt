@@ -1,0 +1,30 @@
+﻿node : 
+At line:1 char:18
++ ... TAIL='200'; node ..\..\junoclaw\tools\akash\g1-lease-logs.mjs 2>&1 |  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+keyring: akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.178457Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m slay3rd: starting Layer Commonware consensus node [3mchain_id[0m[2m=[0mjunoclaw-g1 [3mvalidator_index[0m[2m=[0m0 [3mp2p_listen[0m[2m=[0m0.0.0.0:7001 [3mgrpc_listen[0m[2m=[0m0.0.0.0:9090
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.178793Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m BLS key material loaded [3mvalidator_index[0m[2m=[0m0 [3mshare_index[0m[2m=[0m0 [3mthreshold[0m[2m=[0m3/4
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.183438Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Ed25519 sorted position determined for BLS share selection [3mvalidator_index[0m[2m=[0m0 [3mour_sorted_position[0m[2m=[0m0
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.184731Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m BLS share loaded from keys.json (ceremony key material)
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.192799Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m BLS12-381 threshold signing scheme initialized [3mvalidator_index[0m[2m=[0m0 [3mthreshold[0m[2m=[0m3/4
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.242834Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Min gas price set [3mmin_gas_price[0m[2m=[0m0.001ujclaw
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.242884Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m No stored state ΓÇö initializing from genesis
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.243153Z[0m [32m INFO[0m [2mslay3rd::genesis[0m[2m:[0m genesis file loaded ΓÇö every validator must load the identical file [3mpath[0m[2m=[0m"/config/genesis.json" [3msha256[0m[2m=[0mf6c0e9c0570b50927fc8a81465ba9948d66937b14133c2fb2525e713d645a7a5
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.355590Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Sidecar pruning tier [3mpruning[0m[2m=[0mvalidator [3mkeep_heights[0m[2m=[0m"540000"
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.355623Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Payload store opened [3mrecovered[0m[2m=[0m0
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.355648Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m LayerNode and LayerRelay created (shared pending_payloads)
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.355655Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m gRPC server spawned with Cosmos query dispatch [3mgrpc_listen[0m[2m=[0m0.0.0.0:9090
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.355730Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Starting gRPC server with Cosmos query dispatch [3maddr[0m[2m=[0m0.0.0.0:9090
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.355813Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Authenticated P2P network initialized (4 peers)
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.356048Z[0m [32m INFO[0m [2mcommonware_p2p::authenticated::lookup::network[0m[2m:[0m network started
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.358242Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Hybrid BLS+MAYO2 consensus scheme initialized (PQ_PROTOCOL_AUTH Phase 2a)
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.358385Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Starting simplex consensus engine (epoch=0, hybrid BLS+MAYO2)...
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.358420Z[0m [32m INFO[0m [2mslay3rd[0m[2m:[0m Consensus engine started with authenticated P2P and gRPC server. [3mgrpc_listen[0m[2m=[0m0.0.0.0:9090
+[akash1eehlc3mu8tdkhp7pc4whjkpkw329j9sq6l05dt/28973001/1/1/akash1lgkv9ska3dseh2yvd7r7ct54rwz2a4e59d44qx][slay3rd-68f7f59d56-6jrrp] [2m2026-10-10T06:56:49.359075Z[0m [32m INFO[0m [2mcommonware_consensus::simplex::actors::voter::actor[0m[2m:[0m consensus initialized [3mcurrent_view[0m[2m=[0m1 [3melapsed[0m[2m=[0m2.237┬╡s
+
+keyring scrubbed
+

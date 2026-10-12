@@ -1,0 +1,8 @@
+activating
+ssh.exe : Failed to parse timestamp: 2
+At C:\cosmos-node\node-data\config\CascadeProjects\windsurf-project\junoclaw-chain\g1-ceremony\ovh-deploy3.ps1:4 char:1
++ & ssh -i $key -o BatchMode=yes -o ConnectTimeout=10 -o IdentitiesOnly ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Failed to parse timestamp: 2:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
