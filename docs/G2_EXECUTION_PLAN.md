@@ -131,6 +131,24 @@ Per `SOAK-CLOSEOUT-RUNBOOK.md` (amended 2026-10-12):
   (drop akash + add first externals) is the first live practice.
   Phase-B epoch-based membership is the post-G2 roadmap; until then
   transitions are documented halt-and-restart ceremonies.
+- 2026-10-13 — FAILURE-DOMAIN RULE (from the h533965 wedge):
+  a seat's resilience domain = {host, ISP/power, clock, operator};
+  no two seats may share one. G1's wedge was correct-protocol
+  output of a mis-specified deployment: 2 logical seats behind
+  one home host+ISP → n_eff = 3 → one outage = quorum loss.
+  G2 onboarding pack MUST state domain independence as a seat
+  requirement; clone seats retire at the first set change.
+  Residual risk until then: another home outage can re-wedge —
+  mitigation = automatic recovery (proven 2026-10-13: 214 s
+  self-heal after hardening), not topology.
+- 2026-10-13 — InfraSingularity call: validator seat = warm/
+  partnership track; explorer+indexer = PAID engagement in their
+  framing (scoped proposal inbound — decision: paid vendor vs
+  community build, budget TBD). Their indexer confirmed it can
+  ingest CDC+gRPC directly. Custody: flexible, not a blocker.
+  Double-sign: delegated to their Ankit — pack still carries the
+  hard-fencing rule. Still to collect: their security brief,
+  post-mortems, 2-3 operator identities.
 - 2026-10-12 — G2 opening is NOT a one-time gate. The ~20:00 UTC
   moment is close-out + announcement + the FIRST set change; the
   set stays fluid through G2 via additional set-change windows —
