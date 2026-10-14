@@ -78,3 +78,4 @@ g1-ceremony/*.bin
 r9-rehearsal/w*/
 r9-rehearsal/probe/
 r9-rehearsal/bins/
+dist/release/

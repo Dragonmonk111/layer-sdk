@@ -216,4 +216,5 @@ That is a separate role from running a consensus validator.
 - [ ] Open P2P port, verify connectivity to all peers before genesis time
 - [ ] Start node, confirm first certificate finalizes
 
-Questions → JunoClaw validator channel on the buzz relay (`wss://buzz.junoclaw.xyz`).
+Questions → your onboarding contact directly (dedicated ops channel
+per-seat; public validator channel PLANNED).

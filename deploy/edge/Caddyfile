@@ -1,87 +1,53 @@
 # JunoClaw public TLS edge — hardened.
 #
-# Every site gets a per-client-IP rate limit (sliding window). Values are
-# sized for honest users + indexers, not bursts: adjust per traffic.
-# Upstream ports are the host's existing service bindings — VERIFY against
-# the live Caddyfile before deploying (merge the rate_limit blocks into the
-# existing site blocks if upstreams differ).
+# DEPLOYED 2026-10-14 on OVH (51.195.201.74) to /etc/caddy/Caddyfile.
+# This file mirrors the live config — the upstreams below are the real
+# service bindings on that host. Backups on the host:
+#   /etc/caddy/Caddyfile.bak-jc  /usr/bin/caddy.stock-bak
+#
+# The caddy binary is a custom xcaddy build (caddy v2.11.7 +
+# github.com/mholt/caddy-ratelimit) — stock caddy has no rate_limit
+# handler. To rebuild: xcaddy build v2.11.7 --with
+# github.com/mholt/caddy-ratelimit
 
 api.junoclaw.xyz {
-  encode zstd gzip
-
-  # gRPC proxied over the edge. Each unary/stream frame counts as an event;
-  # 60/min per IP is generous for query traffic, tight for flood.
-  rate_limit {
-    zone api_per_ip {
-      key    {http.request.remote.host}
-      events 60
-      window 1m
-    }
-    log_key
-  }
-
-  reverse_proxy 127.0.0.1:9090 {
-    transport http {
-      versions h2c
-    }
-  }
+	# gRPC proxied over the edge as h2c. Long-lived streams count once;
+	# 60 events/min per IP is generous for query bursts, tight for flood.
+	rate_limit {
+		zone api_per_ip {
+			key    {http.request.remote.host}
+			events 60
+			window 1m
+		}
+	}
+	reverse_proxy h2c://127.0.0.1:9090
 }
 
 explorer.junoclaw.xyz {
-  encode zstd gzip
-
-  rate_limit {
-    zone explorer_per_ip {
-      key    {http.request.remote.host}
-      events 120
-      window 1m
-    }
-  }
-
-  reverse_proxy 127.0.0.1:8085 # jc-explorer HTTP — verify port
+	rate_limit {
+		zone explorer_per_ip {
+			key    {http.request.remote.host}
+			events 120
+			window 1m
+		}
+	}
+	reverse_proxy 127.0.0.1:8081 # jc-explorer.service
 }
 
 status.junoclaw.xyz {
-  encode zstd gzip
-
-  rate_limit {
-    zone status_per_ip {
-      key    {http.request.remote.host}
-      events 120
-      window 1m
-    }
-  }
-
-  reverse_proxy 127.0.0.1:8086 # jc-status HTTP — verify port
+	rate_limit {
+		zone status_per_ip {
+			key    {http.request.remote.host}
+			events 120
+			window 1m
+		}
+	}
+	reverse_proxy 127.0.0.1:8082 # jc-status.service
 }
 
-junoclaw.xyz {
-  encode zstd gzip
-
-  rate_limit {
-    zone site_per_ip {
-      key    {http.request.remote.host}
-      events 180
-      window 1m
-    }
-  }
-
-  # Static site — file_server or reverse_proxy depending on how it's served.
-  # Keep whatever the live config uses; the rate_limit block is the change.
-  root * /srv/junoclaw-site
-  file_server
-}
-
-# Faucet goes behind the edge once deployed (faucet.junoclaw.xyz -> jc-faucet).
-# The service has its own address/IP cooldowns; the edge adds a blunt cap.
-faucet.junoclaw.xyz {
-  rate_limit {
-    zone faucet_per_ip {
-      key    {http.request.remote.host}
-      events 30
-      window 1m
-    }
-  }
-
-  reverse_proxy 127.0.0.1:8081
-}
+# junoclaw.xyz is Cloudflare-fronted (own edge/absorption layer) — not
+# proxied through this Caddy.
+#
+# faucet.junoclaw.xyz gets a block here when jc-faucet deploys
+# (reverse_proxy to its listen port + a ~30 events/min zone; the service
+# has its own address/IP cooldowns — the edge zone is a blunt outer cap).
