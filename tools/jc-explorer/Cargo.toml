@@ -19,3 +19,6 @@ sha2 = { workspace = true }
 hex = { workspace = true }
 bytes = { workspace = true }
 axum = "0.7"
+
+# Archive backend (deep history): the CDC archiver's certified blocks table.
+rusqlite = { version = "0.32", features = ["bundled"] }

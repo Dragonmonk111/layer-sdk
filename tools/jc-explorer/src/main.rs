@@ -1,14 +1,25 @@
 //! jc-explorer — thin public explorer for JunoClaw.
 //!
-//! Server-rendered MVP: polls `layer.lightclient.v1.Query` for finalized
-//! blocks, decodes the payload + hybrid certificate envelope, and serves
-//! HTML + JSON from one binary. Put it behind the Caddy edge on OVH.
+//! Server-rendered: polls `layer.lightclient.v1.Query` for finalized blocks,
+//! decodes the payload + hybrid certificate envelope, and serves HTML + JSON
+//! from one binary. Put it behind the Caddy edge on OVH.
 //!
-//!   jc-explorer --grpc 127.0.0.1:9090 --listen 127.0.0.1:8081
+//!   jc-explorer --grpc 127.0.0.1:9090 --listen 127.0.0.1:8081 \
+//!       --archive /path/to/archive.sqlite3
+//!
+//! With `--archive`, the CDC archiver's `blocks` table provides deep
+//! history: /history pages back over every certified height, and /block/{h}
+//! falls back to archive rows when the node's lightclient window has pruned
+//! them. Archive rows carry seq/height/state_root/proposer/cert — no tx
+//! payloads, so archive-sourced views are marked as such.
 //!
 //! Pages:  /            status + recent blocks (auto-refresh)
-//!         /block/{h}   block detail + hybrid cert panel
+//!         /block/{h}   block detail + hybrid cert panel (live or archive)
+//!         /history     deep history from the archive (archive mode only)
+//!         /address/{a} account page (balances/txs once traffic exists)
 //! JSON:   /api/status  /api/blocks?n=  /api/block/{h}
+//!         /api/archive/status  /api/archive/blocks?to=&n=
+//!         /api/address/{a}
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -105,7 +116,61 @@ struct Cache {
     blocks: HashMap<u64, BlockInfo>,
 }
 
-type Shared = Arc<RwLock<Cache>>;
+/// Archive row from the CDC `blocks` table — certified block metadata.
+/// The archive carries no payload bytes, so tx_count/digest stay honest:
+/// digest is absent (not stored), state_root/app_hash come from the node.
+#[derive(Clone, Serialize)]
+struct ArchiveBlock {
+    seq: u64,
+    height: u64,
+    app_hash: Option<String>,
+    state_root: Option<String>,
+    proposer: Option<String>,
+    cert_bytes: usize,
+    finalized: bool,
+    hybrid_cert: bool,
+    signers: Vec<usize>,
+    participants: usize,
+    mayo_sigs: usize,
+}
+
+/// Shared state: the live cache + an optional read-only archive connection.
+struct Shared2 {
+    grpc: String,
+    cache: RwLock<Cache>,
+    archive: Option<std::sync::Mutex<rusqlite::Connection>>,
+}
+
+type AppState = Arc<Shared2>;
+
+fn archive_lookup(conn: &rusqlite::Connection, height: u64) -> Option<ArchiveBlock> {
+    conn.query_row(
+        "SELECT seq, height, app_hash, state_root, proposer, cert FROM blocks WHERE height=?1",
+        [height as i64],
+        |r| {
+            let cert: Option<Vec<u8>> = r.get(5)?;
+            let cert = cert.unwrap_or_default();
+            let (hybrid, signers, participants, mayo) = match parse_hybrid_envelope(&cert) {
+                Ok(e) => (true, e.signers, e.participants, e.mayo_sig_count),
+                Err(_) => (false, vec![], 0, 0),
+            };
+            Ok(ArchiveBlock {
+                seq: r.get::<_, i64>(0)? as u64,
+                height: r.get::<_, i64>(1)? as u64,
+                app_hash: r.get::<_, Option<Vec<u8>>>(2)?.map(|b| hex::encode(b)),
+                state_root: r.get::<_, Option<Vec<u8>>>(3)?.map(|b| hex::encode(b)),
+                proposer: r.get::<_, Option<Vec<u8>>>(4)?.map(|b| hex::encode(b)),
+                cert_bytes: cert.len(),
+                finalized: !cert.is_empty(),
+                hybrid_cert: hybrid,
+                signers,
+                participants,
+                mayo_sigs: mayo,
+            })
+        },
+    )
+    .ok()
+}
 
 fn decode_block(height: u64, ts: u64, cert: &[u8], payload: &[u8]) -> BlockInfo {
     let (digest, tx_count, state_root, proposer) = match BlockPayload::from_bytes_ext(payload) {
@@ -234,12 +299,24 @@ fn ago(nanos: u64) -> String {
 // Handlers
 // ---------------------------------------------------------------------------
 
-async fn home(State((_, cache)): State<(String, Shared)>) -> Html<String> {
+async fn home(State(st): State<AppState>) -> Html<String> {
     let (tip, blocks) = {
-        let c = cache.read().unwrap();
+        let c = st.cache.read().unwrap();
         let mut v: Vec<BlockInfo> = c.blocks.values().cloned().collect();
         v.sort_by_key(|b| std::cmp::Reverse(b.height));
         (c.tip, v)
+    };
+    let archive_pill = st.archive.as_ref().map(|a| {
+        let conn = a.lock().unwrap();
+        let n: i64 = conn
+            .query_row("SELECT count(*) FROM blocks", [], |r| r.get(0))
+            .unwrap_or(0);
+        format!("<div class=pill><b>{n}</b><span>archived blocks</span></div>")
+    }).unwrap_or_default();
+    let history_link = if st.archive.is_some() {
+        " · <a href='/history'>deep history</a>"
+    } else {
+        ""
     };
 
     let mut rows = String::new();
@@ -275,13 +352,16 @@ async fn home(State((_, cache)): State<(String, Shared)>) -> Html<String> {
              <div class=sub>live from the chain's own light-client API — every block below carries a BLS12-381 + MAYO2 certificate you can independently verify</div>\
              <div class=pillbar>\
                <div class=pill><b>{tip}</b><span>finalized height</span></div>\
-               <div class=pill><b>{}</b><span>blocks cached</span></div>\
+               <div class=pill><b>{}</b><span>blocks cached</span></div>{archive_pill}\
                <div class=pill><b>BLS+MAYO2</b><span>certificate scheme</span></div>\
                <div class=pill><b>deterministic</b><span>CosmWasm execution</span></div>\
              </div>\
+             <form action='/search' method='get' style='margin:6px 0 14px'>\
+             <input name='q' placeholder='block height or juno1… address' style='width:420px;background:#0b0e14;color:#d7dde8;border:1px solid #1e2530;border-radius:6px;padding:7px 10px;font:inherit'>\
+             <button style='background:#1e3a5f;color:#7dd3fc;border:0;border-radius:6px;padding:7px 14px;font:inherit;cursor:pointer'>go</button></form>\
              <h2>Recent finalized blocks</h2>\
              <table><tr><th>Height</th><th>Age</th><th>Digest</th><th>Txs</th><th>Certificate</th><th>Cert bytes</th></tr>{rows}</table>\
-             <div class=sub style='margin-top:22px'>auto-refresh 10s · thin community explorer — raw cert bytes at /api/block/{{h}} verify offline with tools/verify-cert</div>\
+             <div class=sub style='margin-top:22px'>auto-refresh 10s · thin community explorer{history_link} — raw cert bytes at /api/block/{{h}} verify offline with tools/verify-cert</div>\
              <script>setTimeout(()=>location.reload(),10000)</script>",
             blocks.len()
         ),
@@ -289,19 +369,27 @@ async fn home(State((_, cache)): State<(String, Shared)>) -> Html<String> {
 }
 
 async fn block_page(
-    State((grpc, cache)): State<(String, Shared)>,
+    State(st): State<AppState>,
     Path(h): Path<u64>,
 ) -> Result<Html<String>, StatusCode> {
+    // Archive fallback: heights the node's lightclient window has pruned
+    // still render from the certified archive row.
     let b = {
-        let hit = cache.read().unwrap().blocks.get(&h).cloned();
+        let hit = st.cache.read().unwrap().blocks.get(&h).cloned();
         match hit {
-            Some(b) => b,
-            None => {
-                let b = fetch_block(&grpc, h).await.ok_or(StatusCode::NOT_FOUND)?;
-                cache.write().unwrap().blocks.insert(h, b.clone());
-                b
-            }
+            Some(b) => Some(b),
+            None => match fetch_block(&st.grpc, h).await {
+                Some(b) => {
+                    st.cache.write().unwrap().blocks.insert(h, b.clone());
+                    Some(b)
+                }
+                None => None,
+            },
         }
+    };
+    let b = match b {
+        Some(b) => b,
+        None => return archive_block_page(&st, h).await,
     };
 
     let cert_html = if b.hybrid_cert {
@@ -355,16 +443,207 @@ struct BlocksQ {
     n: Option<usize>,
 }
 
-async fn api_status(State((_, cache)): State<(String, Shared)>) -> Json<serde_json::Value> {
-    let c = cache.read().unwrap();
-    Json(serde_json::json!({"tip": c.tip, "cached_blocks": c.blocks.len()}))
+/// Block detail rendered from the archive (live lightclient window missed).
+async fn archive_block_page(st: &AppState, h: u64) -> Result<Html<String>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let ab = {
+        let conn = arc.lock().unwrap();
+        archive_lookup(&conn, h).ok_or(StatusCode::NOT_FOUND)?
+    };
+
+    let cert_html = if ab.hybrid_cert {
+        format!(
+            "<div class=kv>\
+             <div>scheme</div><div><span class='badge hyb'>HYBRID</span> BLS12-381 aggregate + MAYO2 per-signer</div>\
+             <div>participants</div><div>{}</div>\
+             <div>signers</div><div>{} ({:?})</div>\
+             <div>MAYO2 sigs</div><div>{} × 186 B</div>\
+             <div>cert size</div><div>{} bytes</div>\
+             </div>",
+            ab.participants,
+            ab.signers.len(),
+            ab.signers,
+            ab.mayo_sigs,
+            ab.cert_bytes
+        )
+    } else {
+        "<div class=sub>certificate pruned from the node's rolling window — height exists in archive</div>".into()
+    };
+
+    Ok(page(
+        &format!("Block {h}"),
+        &format!(
+            "<h1><a href='/'>←</a> Block {} <span class='badge {}'>{}</span> <span class='badge hyb'>ARCHIVE</span></h1>\
+             <div class=card><div class=kv>\
+             <div>archive seq</div><div>{}</div>\
+             <div>state root</div><div class=hash>{}</div>\
+             <div>app hash</div><div class=hash>{}</div>\
+             <div>proposer</div><div class=hash>{}</div>\
+             </div></div>\
+             <h2>Finality certificate</h2><div class=card>{cert_html}</div>\
+             <div class=sub>served from the CDC archive — payload bytes are not stored; \
+             raw row at <a href='/api/block/{h}'>/api/block/{h}</a></div>",
+            ab.height,
+            if ab.finalized { "ok" } else { "warn" },
+            if ab.finalized { "FINALIZED" } else { "UNCERTIFIED" },
+            ab.seq,
+            ab.state_root.as_deref().unwrap_or("—"),
+            ab.app_hash.as_deref().unwrap_or("—"),
+            ab.proposer.as_deref().unwrap_or("—"),
+            h = h
+        ),
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// /history — deep certified history from the archive
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct HistoryQ {
+    to: Option<u64>,
+}
+
+async fn history_page(
+    State(st): State<AppState>,
+    Query(q): Query<HistoryQ>,
+) -> Result<Html<String>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    const PAGE: i64 = 100;
+    let (rows_html, tip, oldest) = {
+        let conn = arc.lock().unwrap();
+        let tip: i64 = conn
+            .query_row("SELECT max(height) FROM blocks", [], |r| r.get(0))
+            .unwrap_or(0);
+        let to = q.to.map(|t| t.min(tip as u64)).unwrap_or(tip as u64) as i64;
+        let mut stq = conn
+            .prepare("SELECT seq, height, length(cert) FROM blocks WHERE height<=?1 ORDER BY height DESC LIMIT ?2")
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let rows = stq
+            .query_map([to, PAGE], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                ))
+            })
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut s = String::new();
+        let mut oldest = to;
+        for r in rows.flatten() {
+            oldest = r.1;
+            s += &format!(
+                "<tr><td><a href='/block/{0}'>{0}</a></td><td>{1}</td><td>{2}</td></tr>",
+                r.1, r.0, r.2
+            );
+        }
+        (s, tip, oldest)
+    };
+
+    let next = if oldest > 1 {
+        format!("<a href='/history?to={}'>older ↓</a>", oldest - 1)
+    } else {
+        String::new()
+    };
+    let newer = if q.to.map(|t| t < tip as u64).unwrap_or(false) {
+        format!("<a href='/history?to={}'>↑ newer</a> ", q.to.unwrap() + PAGE as u64)
+    } else {
+        String::new()
+    };
+
+    Ok(page(
+        "History",
+        &format!(
+            "<h1><a href='/'>←</a> Certified history</h1>\
+             <div class=sub>every row is a finalized height from the CDC archive — open one for its hybrid certificate + state root</div>\
+             <table><tr><th>Height</th><th>Archive seq</th><th>Cert bytes</th></tr>{rows_html}</table>\
+             <div class=sub style='margin-top:14px'>{newer}{next}</div>",
+        ),
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// /search + /address — block heights jump to /block; juno1… goes to /address
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct SearchQ {
+    q: Option<String>,
+}
+
+async fn search(Query(q): Query<SearchQ>) -> axum::response::Redirect {
+    let q = q.q.unwrap_or_default().trim().to_string();
+    if let Ok(h) = q.parse::<u64>() {
+        return axum::response::Redirect::to(&format!("/block/{h}"));
+    }
+    if q.starts_with("juno1") {
+        return axum::response::Redirect::to(&format!("/address/{q}"));
+    }
+    axum::response::Redirect::to("/")
+}
+
+async fn address_page(
+    State(st): State<AppState>,
+    Path(addr): Path<String>,
+) -> Result<Html<String>, StatusCode> {
+    // Balances live in the archive's typed tables once the chain sees
+    // bank traffic; until then the page is honestly empty.
+    let balances_html = match &st.archive {
+        Some(arc) => {
+            let conn = arc.lock().unwrap();
+            let mut stq = conn
+                .prepare("SELECT denom, amount FROM balances WHERE address=?1")
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let rows = stq
+                .query_map([&addr], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let mut s = String::new();
+            let mut any = false;
+            for r in rows.flatten() {
+                any = true;
+                s += &format!("<tr><td>{}</td><td>{}</td></tr>", esc(&r.0), esc(&r.1));
+            }
+            if any {
+                format!("<table><tr><th>Denom</th><th>Amount</th></tr>{s}</table>")
+            } else {
+                "<div class=sub>no balances recorded — this address has not received a finalized bank send yet</div>".into()
+            }
+        }
+        None => "<div class=sub>archive not attached — balances unavailable</div>".into(),
+    };
+
+    Ok(page(
+        &format!("Address"),
+        &format!(
+            "<h1><a href='/'>←</a> Address</h1>\
+             <div class=card><div class=kv><div>address</div><div class=hash>{}</div></div></div>\
+             <h2>Balances</h2><div class=card>{balances_html}</div>\
+             <h2>Transactions</h2><div class=card><div class=sub>not indexed yet — the chain has minimal tx traffic; the archive's tx projection lands with module traffic</div></div>",
+            esc(&addr)
+        ),
+    ))
+}
+
+async fn api_status(State(st): State<AppState>) -> Json<serde_json::Value> {
+    let c = st.cache.read().unwrap();
+    let archived = st.archive.as_ref().map(|a| {
+        a.lock()
+            .unwrap()
+            .query_row("SELECT count(*) FROM blocks", [], |r| r.get::<_, i64>(0))
+            .unwrap_or(0)
+    });
+    Json(serde_json::json!({
+        "tip": c.tip,
+        "cached_blocks": c.blocks.len(),
+        "archived_blocks": archived,
+    }))
 }
 
 async fn api_blocks(
-    State((_, cache)): State<(String, Shared)>,
+    State(st): State<AppState>,
     Query(q): Query<BlocksQ>,
 ) -> Json<serde_json::Value> {
-    let c = cache.read().unwrap();
+    let c = st.cache.read().unwrap();
     let mut v: Vec<&BlockInfo> = c.blocks.values().collect();
     v.sort_by_key(|b| std::cmp::Reverse(b.height));
     let n = q.n.unwrap_or(40).min(200);
@@ -372,15 +651,119 @@ async fn api_blocks(
 }
 
 async fn api_block(
-    State((grpc, cache)): State<(String, Shared)>,
+    State(st): State<AppState>,
     Path(h): Path<u64>,
-) -> Result<Json<BlockInfo>, StatusCode> {
-    if let Some(b) = cache.read().unwrap().blocks.get(&h) {
-        return Ok(Json(b.clone()));
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if let Some(b) = st.cache.read().unwrap().blocks.get(&h) {
+        return Ok(Json(serde_json::json!(b)));
     }
-    let b = fetch_block(&grpc, h).await.ok_or(StatusCode::NOT_FOUND)?;
-    cache.write().unwrap().blocks.insert(h, b.clone());
-    Ok(Json(b))
+    if let Some(b) = fetch_block(&st.grpc, h).await {
+        st.cache.write().unwrap().blocks.insert(h, b.clone());
+        return Ok(Json(serde_json::json!(b)));
+    }
+    // Archive fallback.
+    if let Some(arc) = &st.archive {
+        let conn = arc.lock().unwrap();
+        if let Some(ab) = archive_lookup(&conn, h) {
+            return Ok(Json(serde_json::json!({"source": "archive", "block": ab})));
+        }
+    }
+    Err(StatusCode::NOT_FOUND)
+}
+
+#[derive(Deserialize)]
+struct ArchiveBlocksQ {
+    to: Option<u64>,
+    n: Option<usize>,
+}
+
+async fn api_archive_status(State(st): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let conn = arc.lock().unwrap();
+    let total: i64 = conn
+        .query_row("SELECT count(*) FROM blocks", [], |r| r.get(0))
+        .unwrap_or(0);
+    let certs: i64 = conn
+        .query_row("SELECT count(*) FROM blocks WHERE cert IS NOT NULL", [], |r| r.get(0))
+        .unwrap_or(0);
+    let typed_seq: Option<String> = conn
+        .query_row("SELECT v FROM meta WHERE k='typed_seq'", [], |r| r.get(0))
+        .ok();
+    Ok(Json(serde_json::json!({
+        "blocks": total,
+        "with_certs": certs,
+        "typed_seq": typed_seq,
+    })))
+}
+
+/// Deep-history page of archive rows (seq/height/projection + cert info).
+fn archive_blocks_page(conn: &rusqlite::Connection, to: u64, n: i64) -> Vec<serde_json::Value> {
+    let Ok(mut stq) = conn.prepare(
+        "SELECT seq,height,app_hash,state_root,proposer,cert FROM blocks WHERE height<=?1 ORDER BY height DESC LIMIT ?2",
+    ) else {
+        return Vec::new();
+    };
+    let Ok(rows) = stq.query_map([to as i64, n], |r| {
+        let cert: Option<Vec<u8>> = r.get(5)?;
+        let cert = cert.unwrap_or_default();
+        let (hyb, signers, participants, mayo) = match parse_hybrid_envelope(&cert) {
+            Ok(e) => (true, e.signers, e.participants, e.mayo_sig_count),
+            Err(_) => (false, vec![], 0, 0),
+        };
+        Ok(serde_json::json!({
+            "seq": r.get::<_, i64>(0)?,
+            "height": r.get::<_, i64>(1)?,
+            "app_hash": r.get::<_, Option<Vec<u8>>>(2)?.map(hex::encode),
+            "state_root": r.get::<_, Option<Vec<u8>>>(3)?.map(hex::encode),
+            "proposer": r.get::<_, Option<Vec<u8>>>(4)?.map(hex::encode),
+            "cert_bytes": cert.len(),
+            "hybrid_cert": hyb,
+            "signers": signers,
+            "participants": participants,
+            "mayo_sigs": mayo,
+        }))
+    }) else {
+        return Vec::new();
+    };
+    rows.flatten().collect()
+}
+
+fn archive_tip(conn: &rusqlite::Connection) -> u64 {
+    conn.query_row("SELECT max(height) FROM blocks", [], |r| r.get::<_, i64>(0))
+        .unwrap_or(0) as u64
+}
+
+async fn api_archive_blocks(
+    State(st): State<AppState>,
+    Query(q): Query<ArchiveBlocksQ>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let n = q.n.unwrap_or(50).min(500) as i64;
+    let rows = {
+        let conn = arc.lock().unwrap();
+        let to = q.to.unwrap_or_else(|| archive_tip(&conn));
+        archive_blocks_page(&conn, to, n)
+    };
+    Ok(Json(serde_json::json!(rows)))
+}
+
+async fn api_address(
+    State(st): State<AppState>,
+    Path(addr): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let conn = arc.lock().unwrap();
+    let mut stq = conn
+        .prepare("SELECT denom, amount FROM balances WHERE address=?1")
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let balances: Vec<serde_json::Value> = stq
+        .query_map([&addr], |r| {
+            Ok(serde_json::json!({"denom": r.get::<_, String>(0)?, "amount": r.get::<_, String>(1)?}))
+        })
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .flatten()
+        .collect();
+    Ok(Json(serde_json::json!({"address": addr, "balances": balances})))
 }
 
 // ---------------------------------------------------------------------------
@@ -393,35 +776,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arg = |f: &str| args.windows(2).find(|w| w[0] == f).map(|w| w[1].clone());
     let grpc = arg("--grpc").unwrap_or_else(|| "127.0.0.1:9090".into());
     let listen = arg("--listen").unwrap_or_else(|| "127.0.0.1:8081".into());
+    let archive_path = arg("--archive");
 
-    let cache: Shared = Arc::new(RwLock::new(Cache {
-        tip: 0,
-        tip_time: None,
-        blocks: HashMap::new(),
-    }));
+    let archive = archive_path.map(|path| {
+        // Read-only open — the archiver keeps writing (WAL).
+        let conn = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+                | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("[jc-explorer] archive open failed ({path}): {e} — deep history disabled");
+            // Fall back to an in-memory empty DB so the Option stays usable.
+            rusqlite::Connection::open_in_memory().expect("in-memory sqlite")
+        });
+        std::sync::Mutex::new(conn)
+    });
+    if archive.is_some() {
+        eprintln!("[jc-explorer] archive attached — /history + deep /block fallback live");
+    }
+
+    let st = Arc::new(Shared2 {
+        grpc: grpc.clone(),
+        cache: RwLock::new(Cache {
+            tip: 0,
+            tip_time: None,
+            blocks: HashMap::new(),
+        }),
+        archive,
+    });
 
     // Poll tip every 2 s; backfill last ~150 blocks into the cache.
     {
         let grpc = grpc.clone();
-        let cache = cache.clone();
+        let cache = st.clone();
         tokio::spawn(async move {
             loop {
                 if let Ok(mut c) = lc_client(&grpc).await {
                     if let Ok(r) = c.latest_height(QueryLatestHeightRequest {}).await {
                         let tip = r.into_inner().height;
                         {
-                            let mut g = cache.write().unwrap();
+                            let mut g = cache.cache.write().unwrap();
                             g.tip = tip;
                             g.tip_time = Some(Instant::now());
                         }
                         // backfill newest unseen blocks, oldest-first batch of 20
                         let start = tip.saturating_sub(150);
                         for h in (start..=tip).rev().take(20) {
-                            if cache.read().unwrap().blocks.contains_key(&h) {
+                            if cache.cache.read().unwrap().blocks.contains_key(&h) {
                                 continue;
                             }
                             if let Some(b) = fetch_block(&grpc, h).await {
-                                let mut g = cache.write().unwrap();
+                                let mut g = cache.cache.write().unwrap();
                                 g.blocks.insert(h, b);
                                 // cap cache at 2000 entries — drop oldest
                                 if g.blocks.len() > 2000 {
@@ -438,14 +844,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    let state = (grpc.clone(), cache);
     let app = Router::new()
         .route("/", get(home))
         .route("/block/:h", get(block_page))
+        .route("/history", get(history_page))
+        .route("/search", get(search))
+        .route("/address/:a", get(address_page))
         .route("/api/status", get(api_status))
         .route("/api/blocks", get(api_blocks))
         .route("/api/block/:h", get(api_block))
-        .with_state(state);
+        .route("/api/archive/status", get(api_archive_status))
+        .route("/api/archive/blocks", get(api_archive_blocks))
+        .route("/api/address/:a", get(api_address))
+        .with_state(st);
 
     eprintln!("[jc-explorer] grpc={grpc} listening on http://{listen}");
     let listener = tokio::net::TcpListener::bind(&listen).await?;

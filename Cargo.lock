@@ -2971,6 +2971,7 @@ dependencies = [
  "bytes",
  "hex",
  "layer-proto",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2 0.10.8",
