@@ -1,0 +1,87 @@
+# JunoClaw public TLS edge — hardened.
+#
+# Every site gets a per-client-IP rate limit (sliding window). Values are
+# sized for honest users + indexers, not bursts: adjust per traffic.
+# Upstream ports are the host's existing service bindings — VERIFY against
+# the live Caddyfile before deploying (merge the rate_limit blocks into the
+# existing site blocks if upstreams differ).
+
+api.junoclaw.xyz {
+  encode zstd gzip
+
+  # gRPC proxied over the edge. Each unary/stream frame counts as an event;
+  # 60/min per IP is generous for query traffic, tight for flood.
+  rate_limit {
+    zone api_per_ip {
+      key    {http.request.remote.host}
+      events 60
+      window 1m
+    }
+    log_key
+  }
+
+  reverse_proxy 127.0.0.1:9090 {
+    transport http {
+      versions h2c
+    }
+  }
+}
+
+explorer.junoclaw.xyz {
+  encode zstd gzip
+
+  rate_limit {
+    zone explorer_per_ip {
+      key    {http.request.remote.host}
+      events 120
+      window 1m
+    }
+  }
+
+  reverse_proxy 127.0.0.1:8085 # jc-explorer HTTP — verify port
+}
+
+status.junoclaw.xyz {
+  encode zstd gzip
+
+  rate_limit {
+    zone status_per_ip {
+      key    {http.request.remote.host}
+      events 120
+      window 1m
+    }
+  }
+
+  reverse_proxy 127.0.0.1:8086 # jc-status HTTP — verify port
+}
+
+junoclaw.xyz {
+  encode zstd gzip
+
+  rate_limit {
+    zone site_per_ip {
+      key    {http.request.remote.host}
+      events 180
+      window 1m
+    }
+  }
+
+  # Static site — file_server or reverse_proxy depending on how it's served.
+  # Keep whatever the live config uses; the rate_limit block is the change.
+  root * /srv/junoclaw-site
+  file_server
+}
+
+# Faucet goes behind the edge once deployed (faucet.junoclaw.xyz -> jc-faucet).
+# The service has its own address/IP cooldowns; the edge adds a blunt cap.
+faucet.junoclaw.xyz {
+  rate_limit {
+    zone faucet_per_ip {
+      key    {http.request.remote.host}
+      events 30
+      window 1m
+    }
+  }
+
+  reverse_proxy 127.0.0.1:8081
+}

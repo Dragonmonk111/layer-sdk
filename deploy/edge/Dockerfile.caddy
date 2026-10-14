@@ -1,0 +1,9 @@
+# Caddy 2 + caddy-ratelimit for the junoclaw.xyz TLS edge.
+# Build:  docker build -f Dockerfile.caddy -t junoclaw-caddy:ratelimit .
+# The stock caddy:2-alpine image has no rate limiting — this adds
+# github.com/mholt/caddy-ratelimit.
+FROM caddy:2-builder-alpine AS builder
+RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+
+FROM caddy:2-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
