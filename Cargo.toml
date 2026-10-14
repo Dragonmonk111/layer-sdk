@@ -1,5 +1,5 @@
 [workspace]
-members = ["app/*", "contracts/*", "packages/*", "tools/tx-sender", "tools/bls-relayer", "tools/cdc-archiver", "tools/jc-explorer", "tools/jc-status"]
+members = ["app/*", "contracts/*", "packages/*", "tools/tx-sender", "tools/bls-relayer", "tools/cdc-archiver", "tools/jc-explorer", "tools/jc-status", "tools/jc-faucet"]
 exclude = [
   "tools/proto-compiler",
   "tools/hybrid-sign",  # excluded: needs sriracha-mayo (cmake/C toolchain); built in Docker only

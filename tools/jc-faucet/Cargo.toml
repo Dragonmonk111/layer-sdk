@@ -1,0 +1,28 @@
+[package]
+name = "jc-faucet"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "jc-faucet"
+path = "src/main.rs"
+
+[dependencies]
+# Cosmos tx construction and signing (same as tx-sender)
+cosmrs = { workspace = true }
+layer-proto = { workspace = true, features = ["server", "client"] }
+prost = { workspace = true }
+tonic = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+http = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+hex = { workspace = true }
+bytes = { workspace = true }
+
+# HTTP service
+axum = "0.7"
+tracing = "0.1"
+tracing-subscriber = "0.3"
