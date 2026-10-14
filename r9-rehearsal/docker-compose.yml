@@ -1,0 +1,86 @@
+# R9 devnet set-change rehearsal — formed by a Phase-A ceremony, not seed-0 keys.
+#
+# IMPORTANT: validator_index = sorted Ed25519 position, NOT the container index.
+# Each container's IP must match the p2p_address bound to its keys at ceremony
+# time. The w<N>/ip-<last-octet>/ dirs hold that seat's keys + node.toml.
+#
+# Baseline (w0): seats at .10-.13.  W1 adds a seat at .14.  W2 retires one seat.
+name: r9
+
+services:
+  node-10:
+    image: "ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc9"
+    container_name: r9-node-10
+    volumes:
+      - ./w2/ip-10:/keys:ro
+      - ./w2/ip-10/node.toml:/config/node.toml:ro
+      - ./bins/slay3rd:/usr/local/bin/slay3rd:ro
+      - r9-node10:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+    networks:
+      r9net:
+        ipv4_address: 172.31.0.10
+    ports:
+      - "19090:9090"
+
+  node-11:
+    image: "ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc9"
+    container_name: r9-node-11
+    volumes:
+      - ./w2/ip-11:/keys:ro
+      - ./w2/ip-11/node.toml:/config/node.toml:ro
+      - ./bins/slay3rd:/usr/local/bin/slay3rd:ro
+      - r9-node11:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+    networks:
+      r9net:
+        ipv4_address: 172.31.0.11
+
+  node-12:
+    image: "ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc9"
+    container_name: r9-node-12
+    volumes:
+      - ./w2/ip-12:/keys:ro
+      - ./w2/ip-12/node.toml:/config/node.toml:ro
+      - ./bins/slay3rd:/usr/local/bin/slay3rd:ro
+      - r9-node12:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+    networks:
+      r9net:
+        ipv4_address: 172.31.0.12
+
+
+  node-14:
+    image: "ghcr.io/dragonmonk111/junoclaw-chain:v0.6.0-rc9"
+    container_name: r9-node-14
+    volumes:
+      - ./w2/ip-14:/keys:ro
+      - ./w2/ip-14/node.toml:/config/node.toml:ro
+      - ./bins/slay3rd:/usr/local/bin/slay3rd:ro
+      - r9-node14:/data
+    command: ["slay3rd", "/config/node.toml"]
+    environment:
+      - RUST_LOG=info
+    networks:
+      r9net:
+        ipv4_address: 172.31.0.14
+
+networks:
+  r9net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+
+volumes:
+  r9-node10:
+  r9-node11:
+  r9-node12:
+  r9-node13:
+  r9-node14:

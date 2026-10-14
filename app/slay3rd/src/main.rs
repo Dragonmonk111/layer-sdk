@@ -746,6 +746,31 @@ async fn run_node(
     }
     let layer_node = layer_node.with_fault_inject(config.fault_inject.clone());
     let layer_node = layer_node.with_pruning(config.prune_keep_heights());
+    let layer_node = match &config.restart_anchor {
+        Some(anchor) => {
+            let raw = match hex::decode(&anchor.digest) {
+                Ok(b) => b,
+                Err(e) => {
+                    error!(error = %e, "restart_anchor.digest is not valid hex");
+                    return;
+                }
+            };
+            let digest: [u8; 32] = match raw.try_into() {
+                Ok(d) => d,
+                Err(_) => {
+                    error!("restart_anchor.digest must be exactly 32 bytes (64 hex chars)");
+                    return;
+                }
+            };
+            info!(
+                height = anchor.height,
+                digest = %anchor.digest,
+                "Set-change restart anchor configured — consensus will resume on this parent"
+            );
+            layer_node.with_restart_anchor(anchor.height, digest)
+        }
+        None => layer_node,
+    };
     info!(
         pruning = %config.pruning,
         keep_heights = config.prune_keep_heights().map(|k| k.to_string()).unwrap_or_else(|| "archive".to_string()),

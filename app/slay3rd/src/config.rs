@@ -131,6 +131,18 @@ pub struct NodeConfig {
     /// Heights retained when `pruning = "custom"`. Ignored otherwise.
     #[serde(default)]
     pub pruning_keep_heights: Option<u64>,
+
+    /// Coordinated set-change restart anchor (docs/R9_SET_CHANGE_RUNBOOK.md).
+    /// When the consensus journal is wiped for a validator-set change, every
+    /// seat must resume consensus on the SAME parent — but a non-atomic halt
+    /// leaves seats at slightly different executed heights. The coordinator
+    /// sets this to (height, payload digest) of the HIGHEST executed tip
+    /// across continuing seats. genesis() returns the anchor while the local
+    /// executed tip is behind it; lagging seats fetch+execute the gap via
+    /// the normal ensure_executed walk. Remove after the transition — a node
+    /// that ever executes past anchor.height ignores it automatically.
+    #[serde(default)]
+    pub restart_anchor: Option<RestartAnchorConfig>,
 }
 
 /// State-sync bootstrap parameters (docs/STATE_SYNC.md §4).
@@ -160,6 +172,18 @@ pub struct StateSyncConfig {
     /// new certificates. Default false.
     #[serde(default)]
     pub halted_chain_anchor: bool,
+}
+
+/// Set-change restart anchor: the agreed parent every seat builds on when
+/// consensus resumes from a wiped journal. See `restart_anchor` docs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestartAnchorConfig {
+    /// Executed height the anchor digest belongs to — the highest executed
+    /// tip observed across continuing seats at halt.
+    pub height: u64,
+    /// Hex-encoded payload digest at `height` (the `executed tip payload
+    /// injected` value logged at startup, or from the archive).
+    pub digest: String,
 }
 
 fn default_min_anchor_agree() -> usize {
@@ -203,6 +227,7 @@ impl Default for NodeConfig {
             insecure_devnet: false,
             pruning: default_pruning(),
             pruning_keep_heights: None,
+            restart_anchor: None,
         }
     }
 }
@@ -328,6 +353,7 @@ mod tests {
             insecure_devnet: false,
             pruning: default_pruning(),
             pruning_keep_heights: None,
+            restart_anchor: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");

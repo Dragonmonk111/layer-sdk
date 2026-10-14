@@ -2979,6 +2979,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "jc-status"
+version = "0.5.0"
+dependencies = [
+ "axum 0.7.6",
+ "layer-proto",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tonic 0.12.3",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"

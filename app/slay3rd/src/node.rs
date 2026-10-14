@@ -296,6 +296,11 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     /// `Some(n)` = after each executed block, drop `_payload/`+`_ts/`+
     /// `_txres/` sidecars older than tip−n. `None` = archive mode.
     prune_keep_heights: Option<u64>,
+    /// Set-change restart anchor: (height, payload digest) every seat agreed
+    /// to build on after a journal wipe. genesis() returns the anchor digest
+    /// while the executed tip is below `height`, so seats that halted at
+    /// different heights still share one consensus parent.
+    restart_anchor: Option<(u64, [u8; 32])>,
     /// Phantom to bind the P type parameter without storing P directly.
     _phantom: std::marker::PhantomData<P>,
 }
@@ -320,6 +325,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             tx_index: self.tx_index.clone(),
             fault_inject: self.fault_inject.clone(),
             prune_keep_heights: self.prune_keep_heights,
+            restart_anchor: self.restart_anchor,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -370,8 +376,15 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
             fault_inject: None,
             prune_keep_heights: None,
+            restart_anchor: None,
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Set the coordinated set-change restart anchor (NodeConfig::restart_anchor).
+    pub fn with_restart_anchor(mut self, height: u64, digest: [u8; 32]) -> Self {
+        self.restart_anchor = Some((height, digest));
+        self
     }
 
     /// Attach a durable payload store. Payloads certified but not yet executed
@@ -1142,7 +1155,41 @@ where
     async fn genesis(&mut self, _epoch: Epoch) -> Self::Digest {
         // Must be identical on every validator and across restarts: it is the
         // parent digest of the first block (see genesis_parent()).
-        sha256::Digest::from(genesis_parent())
+        //
+        // R9: with executed history, anchor on the executed tip instead of
+        // the virtual genesis parent. A fresh consensus journal (validator
+        // set change — the journal is cryptographically bound to the old
+        // participant set and cannot be replayed) starts at view 1 needing
+        // a parent; the executed tip is the only parent every node agrees
+        // on. Without this, set changes deadlock: view 1 proposes on the
+        // genesis parent while the app tip sits at height N.
+        //
+        // But a non-atomic halt leaves seats at DIFFERENT executed heights,
+        // so "my tip" is not a shared anchor. When the coordinator supplied
+        // restart_anchor (the highest tip observed at halt), seats behind it
+        // anchor on the coordinator's digest and catch up via
+        // ensure_executed; seats at/above it use their local tip, which IS
+        // the anchor digest. On a normal restart the journal replays and
+        // this is never consulted.
+        let (h, d) = self.executed_tip().await;
+        if let Some((anchor_height, anchor_digest)) = self.restart_anchor {
+            if h < anchor_height {
+                return sha256::Digest::from(anchor_digest);
+            }
+            if h == anchor_height && d != anchor_digest {
+                tracing::error!(
+                    height = h,
+                    local = %hex::encode(d),
+                    anchor = %hex::encode(anchor_digest),
+                    "restart_anchor: executed tip digest differs from the coordinator's anchor — refusing to anchor on local tip"
+                );
+            }
+        }
+        if h == 0 {
+            sha256::Digest::from(genesis_parent())
+        } else {
+            sha256::Digest::from(d)
+        }
     }
 
     async fn propose(&mut self, context: Self::Context) -> oneshot::Receiver<Self::Digest> {

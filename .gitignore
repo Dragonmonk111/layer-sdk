@@ -73,3 +73,8 @@ g1-ceremony/*.bin
 
 # ceremony evidence logs are the record — re-include
 !g1-ceremony/*.log
+
+# R9 rehearsal: staged ceremony key material + local binaries (devnet)
+r9-rehearsal/w*/
+r9-rehearsal/probe/
+r9-rehearsal/bins/
