@@ -85,6 +85,19 @@ CREATE TABLE IF NOT EXISTS contract_writes(
     PRIMARY KEY(seq, idx)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS idx_cw_bucket ON contract_writes(bucket);
+-- Per-sequence block record folded from node-local meta buckets:
+-- _cert/<height> carries the hybrid cert bytes, _app_hash/_state_root the
+-- certified state root, _proposer the leader. Certified block history,
+-- queryable even while the chain has no module-state traffic.
+CREATE TABLE IF NOT EXISTS blocks(
+    seq        INTEGER PRIMARY KEY,
+    height     INTEGER,
+    app_hash   BLOB,
+    state_root BLOB,
+    proposer   BLOB,
+    cert       BLOB
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_blocks_height ON blocks(height);
 ";
 
 fn arg(flag: &str, args: &[String]) -> Option<String> {
@@ -224,6 +237,48 @@ fn apply_typed(
                 params![seq, idx, bucket, keys, value],
             )?;
         }
+        ("", "_app_hash") => {
+            if let Some(v) = value {
+                tx.execute(
+                    "INSERT INTO blocks(seq,app_hash) VALUES(?1,?2)
+                     ON CONFLICT(seq) DO UPDATE SET app_hash=?2",
+                    params![seq, v],
+                )?;
+            }
+        }
+        ("", "_state_root") => {
+            if let Some(v) = value {
+                tx.execute(
+                    "INSERT INTO blocks(seq,state_root) VALUES(?1,?2)
+                     ON CONFLICT(seq) DO UPDATE SET state_root=?2",
+                    params![seq, v],
+                )?;
+            }
+        }
+        ("", "_proposer") => {
+            if let Some(v) = value {
+                tx.execute(
+                    "INSERT INTO blocks(seq,proposer) VALUES(?1,?2)
+                     ON CONFLICT(seq) DO UPDATE SET proposer=?2",
+                    params![seq, v],
+                )?;
+            }
+        }
+        ("", b) if b.starts_with("_cert/") => {
+            let h: i64 = b[6..].parse().unwrap_or(-1);
+            if op == "d" {
+                tx.execute(
+                    "UPDATE blocks SET cert=NULL WHERE height=?1",
+                    params![h],
+                )?;
+            } else if let Some(v) = value {
+                tx.execute(
+                    "INSERT INTO blocks(seq,height,cert) VALUES(?1,?2,?3)
+                     ON CONFLICT(seq) DO UPDATE SET height=?2, cert=?3",
+                    params![seq, h, v],
+                )?;
+            }
+        }
         _ => {}
     }
     Ok(())
@@ -231,6 +286,18 @@ fn apply_typed(
 
 /// Catch typed projections up to the raw archive (after restart or upgrade).
 fn backfill_typed(db: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Schema v2 added the `blocks` table: wipe projections + cursor once so
+    // the whole journal re-folds.
+    const SCHEMA_V: &str = "2";
+    if meta_get(db, "typed_schema_v").as_deref() != Some(SCHEMA_V) {
+        db.execute_batch(
+            "DELETE FROM accounts; DELETE FROM balances; DELETE FROM supply;
+             DELETE FROM contracts; DELETE FROM codes; DELETE FROM contract_writes;
+             DELETE FROM blocks;",
+        )?;
+        meta_set(db, "typed_seq", "-1")?;
+        meta_set(db, "typed_schema_v", SCHEMA_V)?;
+    }
     let mut typed_seq: i64 = meta_get(db, "typed_seq")
         .and_then(|v| v.parse().ok())
         .unwrap_or(-1);
