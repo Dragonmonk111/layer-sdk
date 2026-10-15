@@ -272,6 +272,39 @@ key → the client can no longer verify post-change certs. Options:
 Until the rotation path exists, every G2+ window invalidates any live
 IBC client — plan the bridge around client recreation per window.
 
+### G1 run record — 2026-10-15 (live `junoclaw-g1`)
+
+End-to-end ICS-20 completed on the live chain:
+
+| Step | Result |
+|---|---|
+| `jc-create-client` | `07-tendermint-0` registered on JunoClaw (`txhash C167B1E3…`) |
+| `create-client` | `08-wasm-7` on local-osmo, G1 group key `b27853e2…`, anchor h=1,510,247 |
+| conn handshake | `connection-0` (JC) ↔ `connection-4` (osmo), OPEN — proofs verified by the BLS client |
+| chan handshake | `transfer/channel-0` ↔ `transfer/channel-4`, OPEN, `ics20-1` unordered |
+| `jc-transfer` | 1000 ujclaw escrowed, packet commitment seq 1 (`txhash 493DEC6B…`) |
+| `recv-packet` | osmo verified the commitment against `08-wasm-7` → minted voucher `ibc/0750BB1D…D02` ×1000 |
+| `jc-ack` | commitment cleared (`txhash 77354DA1…`) |
+
+Fixes made for the live run (relayer):
+
+- `--chain-id` now signs JunoClaw-side txs (was hardcoded `junoclaw-1`;
+  default is now `junoclaw-g1`, `JUNOCLAW_CHAIN_ID` env supported).
+- `classical_cert_sig` strips the G1-era hybrid certificate
+  `[0x01][48B sig][signers][MAYO sigs]` to the 48-byte classical sig the
+  contract verifies. The pre-hybrid bare-48 format still passes through.
+- **Wasm compatibility gotcha**: the rebuilt contract wasm uses
+  bulk-memory ops which Osmosis's CosmWasm VM rejects — the demo reused
+  the previously-stored checksum `3f003fc5…` instead of a new
+  `store-code`. For a fresh store, rebuild with
+  `RUSTFLAGS="-C target-feature=-bulk-memory"`.
+- **local-osmo gas cap**: `max-gas-wanted-per-tx` (60M) is force-reset
+  by osmosisd on every start unless run with `--reject-config-defaults`;
+  the container now runs with that flag and `300M` in app.toml.
+- Gov on local-osmo: `min_deposit` 10M uosmo, voting period 2m,
+  deposit period 5m — submit store-code with `--deposit 10000000uosmo`
+  upfront or the window expires.
+
 ## Wire-format notes
 
 - **JunoClaw txs** carry the `IbcMsg` JSON-encoded in a single `Any` under

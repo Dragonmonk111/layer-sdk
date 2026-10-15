@@ -460,7 +460,7 @@ fn parse_args() -> Result<Args, String> {
         height: None,
         client_id: None,
         group_pubkey_hex: None,
-        chain_id: "junoclaw-1".into(),
+        chain_id: std::env::var("JUNOCLAW_CHAIN_ID").unwrap_or_else(|_| LAYER_CHAIN_ID.into()),
         cp_chain_id: "uni-7".into(),
         fee_denom: "ujunox".into(),
         fee_amount: 5000,
@@ -773,7 +773,7 @@ async fn update_client_to(
         },
         timestamp: block.timestamp_nanos,
         proposal_bytes: block.proposal_bytes,
-        certificate_bytes: block.certificate_bytes,
+        certificate_bytes: classical_cert_sig(&block.certificate_bytes)?,
     };
     let wasm_msg = WasmClientMessage {
         data: serde_json::to_vec(&header)?,
@@ -873,6 +873,21 @@ fn gov_authority(prefix: &str) -> Result<String, Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 // Subcommands
 // ---------------------------------------------------------------------------
+
+/// The 08-wasm contract verifies the 48-byte classical BLS threshold
+/// signature. G1-era blocks carry the hybrid envelope
+/// `[0x01][classical 48B][signers][MAYO sigs]` — strip to the classical
+/// component (the MAYO layer is JunoClaw-side PQ hardening the contract
+/// does not check). A bare 48-byte cert (pre-hybrid) passes through.
+fn classical_cert_sig(cert: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    if cert.len() == 48 {
+        return Ok(cert.to_vec());
+    }
+    if cert.first() == Some(&0x01) && cert.len() > 49 {
+        return Ok(cert[1..49].to_vec());
+    }
+    Err(format!("unrecognized certificate encoding ({} bytes)", cert.len()).into())
+}
 
 /// Resolve the target height: explicit --height N wins; 0 or omitted resolves
 /// to the last FINALIZED tip. `LatestHeight` counts the proposed tip whose
@@ -1202,8 +1217,9 @@ async fn cmd_account(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 // JunoClaw-side IBC (sovereign IbcMsg → /junoclaw.ibc.v1.Msg)
 // ---------------------------------------------------------------------------
 
-// JunoClaw signing constants — mirror tools/tx-sender.
-const LAYER_CHAIN_ID: &str = "junoclaw-1";
+// JunoClaw signing constants — mirror tools/tx-sender. The default chain-id
+// is the live G1 chain; devnet runs override via --chain-id / JUNOCLAW_CHAIN_ID.
+const LAYER_CHAIN_ID: &str = "junoclaw-g1";
 const LAYER_FEE_DENOM: &str = "ujclaw";
 const LAYER_ACCOUNT_NUMBER: u64 = 17;
 const LAYER_GAS: u64 = 4_000_000;
@@ -1243,8 +1259,9 @@ fn sign_and_encode_layer(
     msg: cosmrs::Any,
     account: &AccountInfo,
     gas_limit: u64,
+    chain_id: &str,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let chain_id: ChainId = LAYER_CHAIN_ID.parse()?;
+    let chain_id: ChainId = chain_id.parse()?;
     let fee_coin = Coin {
         amount: layer_fee_amount(gas_limit),
         denom: LAYER_FEE_DENOM.parse()?,
@@ -1271,7 +1288,7 @@ async fn submit_layer_any(
     if account.account_number == 0 {
         account.account_number = LAYER_ACCOUNT_NUMBER;
     }
-    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas_limit)?;
+    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas_limit, &a.chain_id)?;
     if a.simulate {
         simulate_report(&a.layer_grpc, tx_bytes).await?;
         return Ok("simulated".into());
