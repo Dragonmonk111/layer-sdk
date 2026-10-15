@@ -42933,3 +42933,714 @@
   home-vb      h=1417804   lag=0    period=0.125s/blk tip-age=0.5s rtt=7ms 
   ovh-uk1      h=1417804   lag=0    period=0.125s/blk tip-age=0.5s rtt=47ms 
   vahana       h=1417804   lag=0    period=0.125s/blk tip-age=0.5s rtt=71ms 
+
+[2026-10-15T08:35:46.258Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1418060   lag=1    period=0.125s/blk tip-age=0.3s rtt=7ms 
+  ovh-uk1      h=1418060   lag=1    period=0.125s/blk tip-age=0.3s rtt=37ms 
+  vahana       h=1418061   lag=0    period=0.125s/blk tip-age=0.3s rtt=83ms 
+
+[2026-10-15T08:36:16.341Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1418332   lag=0    period=0.124s/blk tip-age=0.5s rtt=6ms 
+  ovh-uk1      h=1418332   lag=0    period=0.124s/blk tip-age=0.5s rtt=39ms 
+  vahana       h=1418332   lag=0    period=0.124s/blk tip-age=0.5s rtt=77ms 
+
+[2026-10-15T08:36:46.435Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1418597   lag=1    period=0.123s/blk tip-age=0.2s rtt=5ms 
+  ovh-uk1      h=1418597   lag=1    period=0.123s/blk tip-age=0.2s rtt=37ms 
+  vahana       h=1418598   lag=0    period=0.123s/blk tip-age=0.2s rtt=89ms 
+
+[2026-10-15T08:37:16.513Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1418863   lag=1    period=0.123s/blk tip-age=0.5s rtt=4ms 
+  ovh-uk1      h=1418864   lag=0    period=0.122s/blk tip-age=0.1s rtt=42ms 
+  vahana       h=1418864   lag=0    period=0.122s/blk tip-age=0.1s rtt=72ms 
+
+[2026-10-15T08:37:46.591Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1419123   lag=0    period=0.122s/blk tip-age=0.3s rtt=6ms 
+  ovh-uk1      h=1419123   lag=0    period=0.122s/blk tip-age=0.3s rtt=37ms 
+  vahana       h=1419123   lag=0    period=0.122s/blk tip-age=0.3s rtt=71ms 
+
+[2026-10-15T08:38:16.676Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1419389   lag=1    period=0.121s/blk tip-age=0.3s rtt=11ms 
+  ovh-uk1      h=1419389   lag=1    period=0.121s/blk tip-age=0.3s rtt=38ms 
+  vahana       h=1419390   lag=0    period=0.121s/blk tip-age=0.3s rtt=78ms 
+
+[2026-10-15T08:38:46.760Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1419644   lag=0    period=0.121s/blk tip-age=0.2s rtt=11ms 
+  ovh-uk1      h=1419644   lag=0    period=0.121s/blk tip-age=0.2s rtt=38ms 
+  vahana       h=1419644   lag=0    period=0.121s/blk tip-age=0.2s rtt=78ms 
+
+[2026-10-15T08:39:16.838Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1419829   lag=0    period=0.122s/blk tip-age=0.4s rtt=10ms 
+  ovh-uk1      h=1419829   lag=0    period=0.122s/blk tip-age=0.4s rtt=37ms 
+  vahana       h=1419829   lag=0    period=0.122s/blk tip-age=0.4s rtt=72ms 
+
+[2026-10-15T08:39:46.918Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420007   lag=0    period=0.123s/blk tip-age=3.9s rtt=6ms 
+  ovh-uk1      h=1420007   lag=0    period=0.123s/blk tip-age=3.9s rtt=39ms 
+  vahana       h=1420007   lag=0    period=0.123s/blk tip-age=3.9s rtt=74ms 
+
+[2026-10-15T08:40:17.004Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420205   lag=1    period=0.124s/blk tip-age=4.1s rtt=6ms 
+  ovh-uk1      h=1420206   lag=0    period=0.124s/blk tip-age=3.8s rtt=38ms 
+  vahana       h=1420206   lag=0    period=0.124s/blk tip-age=3.8s rtt=79ms 
+
+[2026-10-15T08:40:47.256Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420416   lag=1    period=0.125s/blk tip-age=3.9s rtt=6ms 
+  ovh-uk1      h=1420416   lag=1    period=0.125s/blk tip-age=3.9s rtt=215ms 
+  vahana       h=1420417   lag=0    period=0.125s/blk tip-age=3.9s rtt=248ms 
+
+[2026-10-15T08:41:17.415Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420561   lag=1    period=0.127s/blk tip-age=-0.4s rtt=6ms 
+  ovh-uk1      h=1420562   lag=0    period=0.127s/blk tip-age=-0.9s rtt=100ms 
+  vahana       h=1420562   lag=0    period=0.127s/blk tip-age=-0.9s rtt=148ms 
+
+[2026-10-15T08:41:47.518Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420696   lag=1    period=0.130s/blk tip-age=-0.8s rtt=17ms 
+  ovh-uk1      h=1420697   lag=0    period=0.130s/blk tip-age=-0.8s rtt=61ms 
+  vahana       h=1420697   lag=0    period=0.130s/blk tip-age=-0.8s rtt=98ms 
+
+[2026-10-15T08:42:17.671Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420842   lag=1    period=0.131s/blk tip-age=-0.7s rtt=8ms 
+  ovh-uk1      h=1420842   lag=1    period=0.131s/blk tip-age=-0.7s rtt=112ms 
+  vahana       h=1420843   lag=0    period=0.131s/blk tip-age=-0.7s rtt=146ms 
+
+[2026-10-15T08:42:47.839Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1420990   lag=1    period=0.133s/blk tip-age=-0.3s rtt=5ms 
+  ovh-uk1      h=1420991   lag=0    period=0.133s/blk tip-age=-0.7s rtt=123ms 
+  vahana       h=1420991   lag=0    period=0.133s/blk tip-age=-0.7s rtt=163ms 
+
+[2026-10-15T08:43:17.972Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1421129   lag=1    period=0.135s/blk tip-age=0.0s rtt=6ms 
+  ovh-uk1      h=1421130   lag=0    period=0.135s/blk tip-age=0.0s rtt=92ms 
+  vahana       h=1421130   lag=0    period=0.135s/blk tip-age=0.0s rtt=124ms 
+
+[2026-10-15T08:43:48.109Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1421293   lag=1    period=0.138s/blk tip-age=0.3s rtt=5ms 
+  ovh-uk1      h=1421294   lag=0    period=0.138s/blk tip-age=0.3s rtt=100ms 
+  vahana       h=1421294   lag=0    period=0.138s/blk tip-age=0.3s rtt=131ms 
+
+[2026-10-15T08:44:18.244Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1421458   lag=1    period=0.141s/blk tip-age=0.4s rtt=10ms 
+  ovh-uk1      h=1421459   lag=0    period=0.141s/blk tip-age=0.4s rtt=100ms 
+  vahana       h=1421459   lag=0    period=0.141s/blk tip-age=0.4s rtt=127ms 
+
+[2026-10-15T08:44:48.398Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1421565   lag=1    period=0.145s/blk tip-age=0.6s rtt=6ms 
+  ovh-uk1      h=1421566   lag=0    period=0.145s/blk tip-age=0.5s rtt=127ms 
+  vahana       h=1421566   lag=0    period=0.145s/blk tip-age=0.5s rtt=148ms 
+
+[2026-10-15T08:45:18.489Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1421728   lag=1    period=0.148s/blk tip-age=0.6s rtt=6ms 
+  ovh-uk1      h=1421729   lag=0    period=0.148s/blk tip-age=0.2s rtt=39ms 
+  vahana       h=1421729   lag=0    period=0.148s/blk tip-age=0.2s rtt=83ms 
+
+[2026-10-15T08:45:48.567Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1421904   lag=1    period=0.151s/blk tip-age=1.8s rtt=5ms 
+  ovh-uk1      h=1421905   lag=0    period=0.151s/blk tip-age=0.9s rtt=40ms 
+  vahana       h=1421905   lag=0    period=0.151s/blk tip-age=0.9s rtt=73ms 
+
+[2026-10-15T08:46:18.848Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1422045   lag=1    period=0.154s/blk tip-age=0.5s rtt=5ms 
+  ovh-uk1      h=1422045   lag=1    period=0.154s/blk tip-age=0.5s rtt=139ms 
+  vahana       h=1422046   lag=0    period=0.154s/blk tip-age=0.5s rtt=185ms 
+
+[2026-10-15T08:46:48.939Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1422187   lag=0    period=0.158s/blk tip-age=0.2s rtt=5ms 
+  ovh-uk1      h=1422187   lag=0    period=0.158s/blk tip-age=0.2s rtt=70ms 
+  vahana       h=1422187   lag=0    period=0.158s/blk tip-age=0.2s rtt=85ms 
+
+[2026-10-15T08:47:19.193Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1422393   lag=0    period=0.160s/blk tip-age=4.1s rtt=5ms 
+  ovh-uk1      h=1422393   lag=0    period=0.160s/blk tip-age=4.1s rtt=230ms 
+  vahana       h=1422393   lag=0    period=0.160s/blk tip-age=4.1s rtt=247ms 
+
+[2026-10-15T08:47:49.277Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1422566   lag=0    period=0.164s/blk tip-age=4.4s rtt=6ms 
+  ovh-uk1      h=1422566   lag=0    period=0.164s/blk tip-age=4.4s rtt=38ms 
+  vahana       h=1422566   lag=0    period=0.164s/blk tip-age=4.4s rtt=75ms 
+
+[2026-10-15T08:48:19.361Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1422755   lag=0    period=0.167s/blk tip-age=5.4s rtt=5ms 
+  ovh-uk1      h=1422755   lag=0    period=0.167s/blk tip-age=5.4s rtt=37ms 
+  vahana       h=1422755   lag=0    period=0.167s/blk tip-age=5.4s rtt=76ms 
+
+[2026-10-15T08:48:49.440Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1422950   lag=0    period=0.170s/blk tip-age=5.4s rtt=5ms 
+  ovh-uk1      h=1422950   lag=0    period=0.170s/blk tip-age=5.4s rtt=41ms 
+  vahana       h=1422950   lag=0    period=0.170s/blk tip-age=5.4s rtt=72ms 
+
+[2026-10-15T08:49:19.527Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1423153   lag=0    period=0.172s/blk tip-age=5.0s rtt=4ms 
+  ovh-uk1      h=1423153   lag=0    period=0.172s/blk tip-age=5.0s rtt=54ms 
+  vahana       h=1423153   lag=0    period=0.172s/blk tip-age=5.0s rtt=76ms 
+
+[2026-10-15T08:49:49.611Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1423266   lag=0    period=0.179s/blk tip-age=4.8s rtt=6ms 
+  ovh-uk1      h=1423266   lag=0    period=0.179s/blk tip-age=4.8s rtt=37ms 
+  vahana       h=1423266   lag=0    period=0.179s/blk tip-age=4.8s rtt=73ms 
+
+[2026-10-15T08:50:19.701Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1423466   lag=0    period=0.181s/blk tip-age=0.4s rtt=6ms 
+  ovh-uk1      h=1423466   lag=0    period=0.181s/blk tip-age=0.4s rtt=40ms 
+  vahana       h=1423466   lag=0    period=0.181s/blk tip-age=0.4s rtt=78ms 
+
+[2026-10-15T08:50:49.788Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1423669   lag=0    period=0.180s/blk tip-age=4.7s rtt=6ms 
+  ovh-uk1      h=1423669   lag=0    period=0.180s/blk tip-age=4.7s rtt=44ms 
+  vahana       h=1423669   lag=0    period=0.180s/blk tip-age=4.7s rtt=81ms 
+
+[2026-10-15T08:51:19.873Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1423860   lag=1    period=0.180s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1423861   lag=0    period=0.180s/blk tip-age=0.4s rtt=52ms 
+  vahana       h=1423861   lag=0    period=0.180s/blk tip-age=0.4s rtt=72ms 
+
+[2026-10-15T08:51:49.952Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1424058   lag=1    period=0.180s/blk tip-age=0.5s rtt=4ms 
+  ovh-uk1      h=1424059   lag=0    period=0.180s/blk tip-age=0.2s rtt=35ms 
+  vahana       h=1424059   lag=0    period=0.180s/blk tip-age=0.2s rtt=73ms 
+
+[2026-10-15T08:52:20.031Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1424256   lag=1    period=0.180s/blk tip-age=0.3s rtt=5ms 
+  ovh-uk1      h=1424257   lag=0    period=0.180s/blk tip-age=0.3s rtt=62ms 
+  vahana       h=1424257   lag=0    period=0.180s/blk tip-age=0.3s rtt=72ms 
+
+[2026-10-15T08:52:50.109Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1424468   lag=1    period=0.177s/blk tip-age=0.5s rtt=5ms 
+  ovh-uk1      h=1424469   lag=0    period=0.177s/blk tip-age=0.2s rtt=37ms 
+  vahana       h=1424469   lag=0    period=0.177s/blk tip-age=0.2s rtt=72ms 
+
+[2026-10-15T08:53:20.191Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1424667   lag=1    period=0.174s/blk tip-age=5.2s rtt=5ms 
+  ovh-uk1      h=1424667   lag=1    period=0.174s/blk tip-age=5.2s rtt=39ms 
+  vahana       h=1424668   lag=0    period=0.174s/blk tip-age=0.4s rtt=76ms 
+
+[2026-10-15T08:53:50.271Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1424869   lag=0    period=0.172s/blk tip-age=5.2s rtt=5ms 
+  ovh-uk1      h=1424869   lag=0    period=0.172s/blk tip-age=5.2s rtt=38ms 
+  vahana       h=1424869   lag=0    period=0.172s/blk tip-age=5.2s rtt=74ms 
+
+[2026-10-15T08:54:20.353Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1425055   lag=0    period=0.170s/blk tip-age=4.7s rtt=5ms 
+  ovh-uk1      h=1425055   lag=0    period=0.170s/blk tip-age=4.7s rtt=40ms 
+  vahana       h=1425055   lag=0    period=0.170s/blk tip-age=4.7s rtt=74ms 
+
+[2026-10-15T08:54:50.431Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1425241   lag=1    period=0.168s/blk tip-age=0.5s rtt=5ms 
+  ovh-uk1      h=1425242   lag=0    period=0.168s/blk tip-age=0.2s rtt=48ms 
+  vahana       h=1425241   lag=1    period=0.168s/blk tip-age=0.5s rtt=72ms 
+
+[2026-10-15T08:55:20.512Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1425443   lag=1    period=0.167s/blk tip-age=0.3s rtt=5ms 
+  ovh-uk1      h=1425443   lag=1    period=0.167s/blk tip-age=0.3s rtt=38ms 
+  vahana       h=1425444   lag=0    period=0.167s/blk tip-age=0.3s rtt=74ms 
+
+[2026-10-15T08:55:50.591Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1425619   lag=1    period=0.166s/blk tip-age=0.1s rtt=7ms 
+  ovh-uk1      h=1425619   lag=1    period=0.166s/blk tip-age=0.1s rtt=40ms 
+  vahana       h=1425620   lag=0    period=0.166s/blk tip-age=0.1s rtt=73ms 
+
+[2026-10-15T08:56:20.723Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1425805   lag=0    period=0.163s/blk tip-age=4.1s rtt=5ms 
+  ovh-uk1      h=1425805   lag=0    period=0.163s/blk tip-age=4.1s rtt=95ms 
+  vahana       h=1425805   lag=0    period=0.163s/blk tip-age=4.1s rtt=124ms 
+
+[2026-10-15T08:56:51.046Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1425992   lag=1    period=0.162s/blk tip-age=3.9s rtt=7ms 
+  ovh-uk1      h=1425993   lag=0    period=0.162s/blk tip-age=3.9s rtt=283ms 
+  vahana       h=1425993   lag=0    period=0.162s/blk tip-age=3.9s rtt=312ms 
+
+[2026-10-15T08:57:22.034Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1426191   lag=1    period=0.162s/blk tip-age=4.0s rtt=4ms 
+  ovh-uk1      h=1426192   lag=0    period=0.162s/blk tip-age=3.7s rtt=950ms 
+  vahana       h=1426192   lag=0    period=0.162s/blk tip-age=3.7s rtt=980ms 
+
+[2026-10-15T08:57:52.120Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1426392   lag=0    period=0.159s/blk tip-age=4.9s rtt=7ms 
+  ovh-uk1      h=1426392   lag=0    period=0.159s/blk tip-age=4.9s rtt=42ms 
+  vahana       h=1426392   lag=0    period=0.160s/blk tip-age=4.9s rtt=80ms 
+
+[2026-10-15T08:58:22.212Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1426569   lag=0    period=0.158s/blk tip-age=4.8s rtt=5ms 
+  ovh-uk1      h=1426569   lag=0    period=0.158s/blk tip-age=4.8s rtt=41ms 
+  vahana       h=1426569   lag=0    period=0.158s/blk tip-age=4.8s rtt=79ms 
+
+[2026-10-15T08:58:52.297Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1426770   lag=0    period=0.158s/blk tip-age=0.4s rtt=8ms 
+  ovh-uk1      h=1426770   lag=0    period=0.158s/blk tip-age=0.4s rtt=41ms 
+  vahana       h=1426770   lag=0    period=0.158s/blk tip-age=0.4s rtt=75ms 
+
+[2026-10-15T08:59:22.381Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1426974   lag=0    period=0.157s/blk tip-age=4.2s rtt=6ms 
+  ovh-uk1      h=1426974   lag=0    period=0.157s/blk tip-age=4.2s rtt=38ms 
+  vahana       h=1426974   lag=0    period=0.157s/blk tip-age=4.2s rtt=75ms 
+
+[2026-10-15T08:59:52.460Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1427154   lag=0    period=0.158s/blk tip-age=4.0s rtt=5ms 
+  ovh-uk1      h=1427154   lag=0    period=0.158s/blk tip-age=4.0s rtt=38ms 
+  vahana       h=1427154   lag=0    period=0.158s/blk tip-age=4.0s rtt=73ms 
+
+[2026-10-15T09:00:22.545Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1427331   lag=1    period=0.158s/blk tip-age=4.0s rtt=4ms 
+  ovh-uk1      h=1427332   lag=0    period=0.158s/blk tip-age=4.0s rtt=40ms 
+  vahana       h=1427332   lag=0    period=0.158s/blk tip-age=4.0s rtt=71ms 
+
+[2026-10-15T09:00:55.172Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1427539   lag=1    period=0.159s/blk tip-age=3.8s rtt=6ms 
+  ovh-uk1      h=1427540   lag=0    period=0.159s/blk tip-age=3.4s rtt=2582ms 
+  vahana       h=1427540   lag=0    period=0.159s/blk tip-age=3.4s rtt=2620ms 
+
+[2026-10-15T09:01:25.686Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1427676   lag=0    period=0.158s/blk tip-age=3.9s rtt=5ms 
+  ovh-uk1      h=1427676   lag=0    period=0.158s/blk tip-age=3.9s rtt=465ms 
+  vahana       h=1427676   lag=0    period=0.158s/blk tip-age=3.9s rtt=503ms 
+
+[2026-10-15T09:01:55.767Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1427851   lag=0    period=0.159s/blk tip-age=3.5s rtt=6ms 
+  ovh-uk1      h=1427851   lag=0    period=0.159s/blk tip-age=3.5s rtt=38ms 
+  vahana       h=1427851   lag=0    period=0.159s/blk tip-age=3.5s rtt=74ms 
+
+[2026-10-15T09:02:25.862Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428025   lag=1    period=0.160s/blk tip-age=0.8s rtt=7ms 
+  ovh-uk1      h=1428026   lag=0    period=0.160s/blk tip-age=0.4s rtt=48ms 
+  vahana       h=1428026   lag=0    period=0.160s/blk tip-age=0.4s rtt=87ms 
+
+[2026-10-15T09:02:55.949Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428168   lag=1    period=0.162s/blk tip-age=5.2s rtt=5ms 
+  ovh-uk1      h=1428169   lag=0    period=0.162s/blk tip-age=-0.0s rtt=48ms 
+  vahana       h=1428169   lag=0    period=0.162s/blk tip-age=-0.0s rtt=81ms 
+
+[2026-10-15T09:03:26.030Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428340   lag=0    period=0.163s/blk tip-age=5.4s rtt=5ms 
+  ovh-uk1      h=1428340   lag=0    period=0.163s/blk tip-age=5.4s rtt=39ms 
+  vahana       h=1428340   lag=0    period=0.163s/blk tip-age=5.4s rtt=74ms 
+
+[2026-10-15T09:03:56.113Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428517   lag=0    period=0.163s/blk tip-age=6.1s rtt=6ms 
+  ovh-uk1      h=1428517   lag=0    period=0.163s/blk tip-age=6.1s rtt=36ms 
+  vahana       h=1428517   lag=0    period=0.163s/blk tip-age=6.1s rtt=77ms 
+
+[2026-10-15T09:04:26.200Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428649   lag=0    period=0.166s/blk tip-age=6.1s rtt=5ms 
+  ovh-uk1      h=1428649   lag=0    period=0.167s/blk tip-age=6.1s rtt=45ms 
+  vahana       h=1428649   lag=0    period=0.167s/blk tip-age=6.1s rtt=73ms 
+
+[2026-10-15T09:04:56.281Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428782   lag=1    period=0.169s/blk tip-age=0.5s rtt=5ms 
+  ovh-uk1      h=1428783   lag=0    period=0.169s/blk tip-age=0.2s rtt=37ms 
+  vahana       h=1428783   lag=0    period=0.169s/blk tip-age=0.2s rtt=72ms 
+
+[2026-10-15T09:05:26.363Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1428886   lag=0    period=0.173s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1428886   lag=0    period=0.173s/blk tip-age=0.4s rtt=76ms 
+  vahana       h=1428886   lag=0    period=0.173s/blk tip-age=0.4s rtt=76ms 
+
+[2026-10-15T09:05:56.443Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429073   lag=0    period=0.173s/blk tip-age=0.3s rtt=4ms 
+  ovh-uk1      h=1429073   lag=0    period=0.173s/blk tip-age=0.3s rtt=37ms 
+  vahana       h=1429073   lag=0    period=0.173s/blk tip-age=0.3s rtt=74ms 
+
+[2026-10-15T09:06:26.597Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429203   lag=0    period=0.176s/blk tip-age=0.4s rtt=10ms 
+  ovh-uk1      h=1429203   lag=0    period=0.176s/blk tip-age=0.4s rtt=110ms 
+  vahana       h=1429203   lag=0    period=0.176s/blk tip-age=0.4s rtt=145ms 
+
+[2026-10-15T09:06:56.817Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429302   lag=0    period=0.180s/blk tip-age=6.6s rtt=5ms 
+  ovh-uk1      h=1429302   lag=0    period=0.180s/blk tip-age=6.6s rtt=172ms 
+  vahana       h=1429302   lag=0    period=0.180s/blk tip-age=6.6s rtt=213ms 
+
+[2026-10-15T09:07:26.909Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429440   lag=1    period=0.182s/blk tip-age=0.2s rtt=20ms 
+  ovh-uk1      h=1429440   lag=1    period=0.182s/blk tip-age=0.2s rtt=45ms 
+  vahana       h=1429441   lag=0    period=0.182s/blk tip-age=0.2s rtt=81ms 
+
+[2026-10-15T09:07:57.004Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429536   lag=0    period=0.187s/blk tip-age=7.6s rtt=28ms 
+  ovh-uk1      h=1429536   lag=0    period=0.187s/blk tip-age=7.6s rtt=42ms 
+  vahana       h=1429536   lag=0    period=0.187s/blk tip-age=7.6s rtt=84ms 
+
+[2026-10-15T09:08:27.096Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429617   lag=0    period=0.192s/blk tip-age=0.6s rtt=51ms 
+  ovh-uk1      h=1429617   lag=0    period=0.192s/blk tip-age=0.6s rtt=40ms 
+  vahana       h=1429617   lag=0    period=0.192s/blk tip-age=0.6s rtt=78ms 
+
+[2026-10-15T09:08:57.180Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429694   lag=0    period=0.198s/blk tip-age=0.3s rtt=13ms 
+  ovh-uk1      h=1429694   lag=0    period=0.198s/blk tip-age=0.3s rtt=42ms 
+  vahana       h=1429694   lag=0    period=0.198s/blk tip-age=0.3s rtt=76ms 
+
+[2026-10-15T09:09:27.271Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429774   lag=0    period=0.206s/blk tip-age=0.5s rtt=17ms 
+  ovh-uk1      h=1429774   lag=0    period=0.206s/blk tip-age=0.5s rtt=42ms 
+  vahana       h=1429774   lag=0    period=0.206s/blk tip-age=0.5s rtt=76ms 
+
+[2026-10-15T09:09:57.355Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429875   lag=0    period=0.210s/blk tip-age=0.4s rtt=29ms 
+  ovh-uk1      h=1429875   lag=0    period=0.210s/blk tip-age=0.4s rtt=39ms 
+  vahana       h=1429875   lag=0    period=0.210s/blk tip-age=0.4s rtt=73ms 
+
+[2026-10-15T09:10:27.441Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1429921   lag=0    period=0.221s/blk tip-age=7.4s rtt=24ms 
+  ovh-uk1      h=1429921   lag=0    period=0.221s/blk tip-age=7.4s rtt=48ms 
+  vahana       h=1429921   lag=0    period=0.221s/blk tip-age=7.4s rtt=76ms 
+
+[2026-10-15T09:10:57.527Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430018   lag=0    period=0.228s/blk tip-age=0.4s rtt=36ms 
+  ovh-uk1      h=1430018   lag=0    period=0.228s/blk tip-age=0.4s rtt=39ms 
+  vahana       h=1430018   lag=0    period=0.228s/blk tip-age=0.4s rtt=74ms 
+
+[2026-10-15T09:11:27.627Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430111   lag=1    period=0.235s/blk tip-age=0.2s rtt=7ms 
+  ovh-uk1      h=1430111   lag=1    period=0.235s/blk tip-age=0.2s rtt=47ms 
+  vahana       h=1430112   lag=0    period=0.235s/blk tip-age=0.2s rtt=89ms 
+
+[2026-10-15T09:11:57.710Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430198   lag=0    period=0.242s/blk tip-age=0.4s rtt=6ms 
+  ovh-uk1      h=1430198   lag=0    period=0.243s/blk tip-age=0.4s rtt=49ms 
+  vahana       h=1430198   lag=0    period=0.243s/blk tip-age=0.4s rtt=73ms 
+
+[2026-10-15T09:12:27.797Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430254   lag=0    period=0.255s/blk tip-age=8.3s rtt=7ms 
+  ovh-uk1      h=1430254   lag=0    period=0.255s/blk tip-age=8.3s rtt=46ms 
+  vahana       h=1430254   lag=0    period=0.255s/blk tip-age=8.3s rtt=76ms 
+
+[2026-10-15T09:12:57.880Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430409   lag=1    period=0.253s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1430410   lag=0    period=0.253s/blk tip-age=0.0s rtt=36ms 
+  vahana       h=1430410   lag=0    period=0.253s/blk tip-age=0.0s rtt=75ms 
+
+[2026-10-15T09:13:27.969Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430601   lag=1    period=0.252s/blk tip-age=0.1s rtt=5ms 
+  ovh-uk1      h=1430601   lag=1    period=0.252s/blk tip-age=0.1s rtt=35ms 
+  vahana       h=1430602   lag=0    period=0.252s/blk tip-age=0.1s rtt=83ms 
+
+[2026-10-15T09:13:58.049Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430740   lag=0    period=0.255s/blk tip-age=0.3s rtt=7ms 
+  ovh-uk1      h=1430740   lag=0    period=0.255s/blk tip-age=0.3s rtt=37ms 
+  vahana       h=1430740   lag=0    period=0.255s/blk tip-age=0.3s rtt=74ms 
+
+[2026-10-15T09:14:28.128Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1430920   lag=0    period=0.252s/blk tip-age=-0.0s rtt=6ms 
+  ovh-uk1      h=1430920   lag=0    period=0.252s/blk tip-age=-0.0s rtt=40ms 
+  vahana       h=1430920   lag=0    period=0.252s/blk tip-age=-0.0s rtt=73ms 
+
+[2026-10-15T09:14:58.203Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1431111   lag=0    period=0.250s/blk tip-age=-0.0s rtt=4ms 
+  ovh-uk1      h=1431111   lag=0    period=0.250s/blk tip-age=-0.0s rtt=38ms 
+  vahana       h=1431111   lag=0    period=0.250s/blk tip-age=-0.0s rtt=72ms 
+
+[2026-10-15T09:15:28.280Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1431293   lag=1    period=0.249s/blk tip-age=0.1s rtt=7ms 
+  ovh-uk1      h=1431294   lag=0    period=0.249s/blk tip-age=0.1s rtt=37ms 
+  vahana       h=1431294   lag=0    period=0.249s/blk tip-age=0.1s rtt=71ms 
+
+[2026-10-15T09:15:58.362Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1431466   lag=1    period=0.246s/blk tip-age=1.0s rtt=7ms 
+  ovh-uk1      h=1431467   lag=0    period=0.246s/blk tip-age=0.4s rtt=42ms 
+  vahana       h=1431467   lag=0    period=0.246s/blk tip-age=0.4s rtt=79ms 
+
+[2026-10-15T09:16:28.442Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1431645   lag=0    period=0.242s/blk tip-age=0.3s rtt=5ms 
+  ovh-uk1      h=1431645   lag=0    period=0.242s/blk tip-age=0.3s rtt=37ms 
+  vahana       h=1431645   lag=0    period=0.242s/blk tip-age=0.3s rtt=75ms 
+
+[2026-10-15T09:16:58.521Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1431831   lag=0    period=0.235s/blk tip-age=-0.6s rtt=5ms 
+  ovh-uk1      h=1431831   lag=0    period=0.235s/blk tip-age=-0.6s rtt=38ms 
+  vahana       h=1431831   lag=0    period=0.235s/blk tip-age=-0.6s rtt=75ms 
+
+[2026-10-15T09:17:28.600Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432020   lag=1    period=0.235s/blk tip-age=0.6s rtt=7ms 
+  ovh-uk1      h=1432021   lag=0    period=0.235s/blk tip-age=0.5s rtt=38ms 
+  vahana       h=1432021   lag=0    period=0.235s/blk tip-age=0.5s rtt=73ms 
+
+[2026-10-15T09:17:58.734Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432175   lag=1    period=0.233s/blk tip-age=1.0s rtt=8ms 
+  ovh-uk1      h=1432176   lag=0    period=0.233s/blk tip-age=0.6s rtt=81ms 
+  vahana       h=1432176   lag=0    period=0.233s/blk tip-age=0.6s rtt=130ms 
+
+[2026-10-15T09:18:28.818Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432362   lag=0    period=0.226s/blk tip-age=0.8s rtt=6ms 
+  ovh-uk1      h=1432362   lag=0    period=0.226s/blk tip-age=0.8s rtt=40ms 
+  vahana       h=1432362   lag=0    period=0.226s/blk tip-age=0.8s rtt=78ms 
+
+[2026-10-15T09:18:58.945Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432514   lag=1    period=0.225s/blk tip-age=1.0s rtt=5ms 
+  ovh-uk1      h=1432515   lag=0    period=0.225s/blk tip-age=1.0s rtt=80ms 
+  vahana       h=1432515   lag=0    period=0.225s/blk tip-age=1.0s rtt=120ms 
+
+[2026-10-15T09:19:29.022Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432677   lag=0    period=0.220s/blk tip-age=1.2s rtt=5ms 
+  ovh-uk1      h=1432677   lag=0    period=0.220s/blk tip-age=1.2s rtt=39ms 
+  vahana       h=1432677   lag=0    period=0.220s/blk tip-age=1.2s rtt=73ms 
+
+[2026-10-15T09:19:59.109Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432832   lag=1    period=0.215s/blk tip-age=0.1s rtt=6ms 
+  ovh-uk1      h=1432833   lag=0    period=0.215s/blk tip-age=0.1s rtt=69ms 
+  vahana       h=1432833   lag=0    period=0.215s/blk tip-age=0.1s rtt=84ms 
+
+[2026-10-15T09:20:29.353Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1432972   lag=1    period=0.211s/blk tip-age=0.6s rtt=6ms 
+  ovh-uk1      h=1432973   lag=0    period=0.211s/blk tip-age=0.6s rtt=204ms 
+  vahana       h=1432973   lag=0    period=0.211s/blk tip-age=0.6s rtt=239ms 
+
+[2026-10-15T09:20:59.591Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433091   lag=1    period=0.209s/blk tip-age=0.6s rtt=5ms 
+  ovh-uk1      h=1433092   lag=0    period=0.209s/blk tip-age=0.6s rtt=208ms 
+  vahana       h=1433092   lag=0    period=0.209s/blk tip-age=0.6s rtt=235ms 
+
+[2026-10-15T09:21:29.674Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433205   lag=1    period=0.208s/blk tip-age=0.8s rtt=47ms 
+  ovh-uk1      h=1433206   lag=0    period=0.208s/blk tip-age=0.1s rtt=38ms 
+  vahana       h=1433206   lag=0    period=0.208s/blk tip-age=0.1s rtt=76ms 
+
+[2026-10-15T09:21:59.760Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433312   lag=0    period=0.204s/blk tip-age=0.6s rtt=24ms 
+  ovh-uk1      h=1433312   lag=0    period=0.204s/blk tip-age=0.6s rtt=44ms 
+  vahana       h=1433312   lag=0    period=0.204s/blk tip-age=0.6s rtt=82ms 
+
+[2026-10-15T09:22:29.906Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433417   lag=0    period=0.204s/blk tip-age=0.6s rtt=29ms 
+  ovh-uk1      h=1433417   lag=0    period=0.204s/blk tip-age=0.6s rtt=56ms 
+  vahana       h=1433417   lag=0    period=0.204s/blk tip-age=0.6s rtt=140ms 
+
+[2026-10-15T09:22:59.985Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433520   lag=1    period=0.203s/blk tip-age=0.2s rtt=11ms 
+  ovh-uk1      h=1433520   lag=1    period=0.203s/blk tip-age=0.2s rtt=40ms 
+  vahana       h=1433521   lag=0    period=0.203s/blk tip-age=0.2s rtt=73ms 
+
+[2026-10-15T09:23:30.067Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433632   lag=0    period=0.202s/blk tip-age=0.5s rtt=16ms 
+  ovh-uk1      h=1433632   lag=0    period=0.202s/blk tip-age=0.5s rtt=43ms 
+  vahana       h=1433632   lag=0    period=0.202s/blk tip-age=0.5s rtt=75ms 
+
+[2026-10-15T09:24:00.165Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433708   lag=0    period=0.200s/blk tip-age=0.3s rtt=64ms 
+  ovh-uk1      h=1433708   lag=0    period=0.200s/blk tip-age=0.3s rtt=60ms 
+  vahana       h=1433708   lag=0    period=0.200s/blk tip-age=0.3s rtt=92ms 
+
+[2026-10-15T09:24:30.252Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433820   lag=0    period=0.203s/blk tip-age=0.3s rtt=23ms 
+  ovh-uk1      h=1433820   lag=0    period=0.203s/blk tip-age=0.3s rtt=43ms 
+  vahana       h=1433820   lag=0    period=0.203s/blk tip-age=0.3s rtt=78ms 
+
+[2026-10-15T09:25:00.339Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1433927   lag=0    period=0.208s/blk tip-age=0.6s rtt=28ms 
+  ovh-uk1      h=1433927   lag=0    period=0.208s/blk tip-age=0.6s rtt=40ms 
+  vahana       h=1433927   lag=0    period=0.208s/blk tip-age=0.6s rtt=81ms 
+
+[2026-10-15T09:25:30.479Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434003   lag=0    period=0.212s/blk tip-age=0.5s rtt=16ms 
+  ovh-uk1      h=1434003   lag=0    period=0.212s/blk tip-age=0.5s rtt=115ms 
+  vahana       h=1434003   lag=0    period=0.212s/blk tip-age=0.5s rtt=131ms 
+
+[2026-10-15T09:26:04.486Z] junoclaw-g1  (1/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434006   lag=0    period=0.226s/blk tip-age=33.8s rtt=15ms 
+  ovh-uk1      DOWN   51.195.201.74:9090  (timeout)
+  vahana       DOWN   57.129.103.229:9090  (timeout)
+  !! below quorum (1 polled + 1 unverified log-only < 3) - chain cannot finalize
+  !! CHAIN HALTED (no new finalized height)
+
+[2026-10-15T09:26:38.503Z] junoclaw-g1  (1/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434006   lag=0    period=0.242s/blk tip-age=67.8s rtt=19ms 
+  ovh-uk1      DOWN   51.195.201.74:9090  (timeout)
+  vahana       DOWN   57.129.103.229:9090  (timeout)
+  !! below quorum (1 polled + 1 unverified log-only < 3) - chain cannot finalize
+  !! CHAIN HALTED (no new finalized height)
+
+[2026-10-15T09:27:08.586Z] junoclaw-g1  (1/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434006   lag=0    period=0.258s/blk tip-age=97.9s rtt=51ms 
+  ovh-uk1      DOWN   51.195.201.74:9090  (ERR_HTTP2_STREAM_CANCEL)
+  vahana       DOWN   57.129.103.229:9090  (ERR_HTTP2_STREAM_CANCEL)
+  !! below quorum (1 polled + 1 unverified log-only < 3) - chain cannot finalize
+  !! CHAIN HALTED (no new finalized height)
+
+[2026-10-15T09:27:39.703Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434006   lag=0    period=0.276s/blk tip-age=129.0s rtt=18ms 
+  ovh-uk1      h=1434006   lag=0    period=0.257s/blk tip-age=129.0s rtt=1100ms 
+  vahana       h=1434006   lag=0    period=0.257s/blk tip-age=129.0s rtt=1034ms 
+
+[2026-10-15T09:28:09.988Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434071   lag=1    period=0.289s/blk tip-age=3.8s rtt=85ms 
+  ovh-uk1      h=1434072   lag=0    period=0.267s/blk tip-age=3.8s rtt=186ms 
+  vahana       h=1434072   lag=0    period=0.267s/blk tip-age=3.8s rtt=213ms 
+
+[2026-10-15T09:28:40.124Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434231   lag=0    period=0.292s/blk tip-age=4.3s rtt=18ms 
+  ovh-uk1      h=1434231   lag=0    period=0.270s/blk tip-age=4.3s rtt=89ms 
+  vahana       h=1434231   lag=0    period=0.270s/blk tip-age=4.3s rtt=128ms 
+
+[2026-10-15T09:29:10.234Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434377   lag=0    period=0.298s/blk tip-age=3.8s rtt=21ms 
+  ovh-uk1      h=1434377   lag=0    period=0.272s/blk tip-age=3.8s rtt=75ms 
+  vahana       h=1434377   lag=0    period=0.272s/blk tip-age=3.8s rtt=105ms 
+
+[2026-10-15T09:29:40.490Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434550   lag=1    period=0.295s/blk tip-age=3.9s rtt=17ms 
+  ovh-uk1      h=1434551   lag=0    period=0.273s/blk tip-age=3.9s rtt=242ms 
+  vahana       h=1434551   lag=0    period=0.273s/blk tip-age=3.9s rtt=244ms 
+
+[2026-10-15T09:30:10.641Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434702   lag=1    period=0.300s/blk tip-age=4.0s rtt=45ms 
+  ovh-uk1      h=1434703   lag=0    period=0.276s/blk tip-age=4.0s rtt=113ms 
+  vahana       h=1434703   lag=0    period=0.276s/blk tip-age=4.0s rtt=145ms 
+
+[2026-10-15T09:30:40.791Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434834   lag=0    period=0.303s/blk tip-age=3.7s rtt=20ms 
+  ovh-uk1      h=1434834   lag=0    period=0.282s/blk tip-age=3.7s rtt=101ms 
+  vahana       h=1434834   lag=0    period=0.282s/blk tip-age=3.7s rtt=138ms 
+
+[2026-10-15T09:31:11.902Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1434970   lag=0    period=0.307s/blk tip-age=4.1s rtt=17ms 
+  ovh-uk1      h=1434970   lag=0    period=0.284s/blk tip-age=4.1s rtt=1060ms 
+  vahana       h=1434970   lag=0    period=0.284s/blk tip-age=4.1s rtt=1096ms 
+
+[2026-10-15T09:31:42.016Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435122   lag=1    period=0.307s/blk tip-age=4.0s rtt=19ms 
+  ovh-uk1      h=1435123   lag=0    period=0.287s/blk tip-age=3.9s rtt=64ms 
+  vahana       h=1435123   lag=0    period=0.287s/blk tip-age=3.9s rtt=94ms 
+
+[2026-10-15T09:32:13.109Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435246   lag=0    period=0.309s/blk tip-age=4.5s rtt=30ms 
+  ovh-uk1      h=1435246   lag=0    period=0.291s/blk tip-age=4.5s rtt=1054ms 
+  vahana       h=1435246   lag=0    period=0.291s/blk tip-age=4.5s rtt=1086ms 
+
+[2026-10-15T09:32:43.196Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435387   lag=1    period=0.306s/blk tip-age=0.8s rtt=18ms 
+  ovh-uk1      h=1435388   lag=0    period=0.293s/blk tip-age=0.3s rtt=41ms 
+  vahana       h=1435388   lag=0    period=0.293s/blk tip-age=0.3s rtt=78ms 
+
+[2026-10-15T09:33:13.275Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435516   lag=0    period=0.304s/blk tip-age=0.6s rtt=17ms 
+  ovh-uk1      h=1435516   lag=0    period=0.296s/blk tip-age=0.6s rtt=38ms 
+  vahana       h=1435516   lag=0    period=0.296s/blk tip-age=0.6s rtt=76ms 
+
+[2026-10-15T09:33:43.356Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435626   lag=0    period=0.304s/blk tip-age=0.8s rtt=12ms 
+  ovh-uk1      h=1435626   lag=0    period=0.299s/blk tip-age=0.8s rtt=41ms 
+  vahana       h=1435626   lag=0    period=0.299s/blk tip-age=0.8s rtt=72ms 
+
+[2026-10-15T09:34:13.439Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435787   lag=1    period=0.297s/blk tip-age=0.4s rtt=8ms 
+  ovh-uk1      h=1435788   lag=0    period=0.294s/blk tip-age=0.4s rtt=38ms 
+  vahana       h=1435788   lag=0    period=0.294s/blk tip-age=0.4s rtt=76ms 
+
+[2026-10-15T09:34:43.522Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1435933   lag=0    period=0.292s/blk tip-age=0.1s rtt=13ms 
+  ovh-uk1      h=1435933   lag=0    period=0.291s/blk tip-age=0.1s rtt=37ms 
+  vahana       h=1435933   lag=0    period=0.291s/blk tip-age=0.1s rtt=75ms 
+
+[2026-10-15T09:35:13.603Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1436169   lag=0    period=0.277s/blk tip-age=0.4s rtt=7ms 
+  ovh-uk1      h=1436169   lag=0    period=0.278s/blk tip-age=0.4s rtt=40ms 
+  vahana       h=1436169   lag=0    period=0.278s/blk tip-age=0.4s rtt=74ms 
+
+[2026-10-15T09:35:43.684Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1436402   lag=0    period=0.261s/blk tip-age=5.2s rtt=13ms 
+  ovh-uk1      h=1436402   lag=0    period=0.266s/blk tip-age=5.2s rtt=41ms 
+  vahana       h=1436402   lag=0    period=0.266s/blk tip-age=5.2s rtt=75ms 
+
+[2026-10-15T09:36:13.763Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1436556   lag=0    period=0.257s/blk tip-age=0.1s rtt=8ms 
+  ovh-uk1      h=1436556   lag=0    period=0.261s/blk tip-age=0.1s rtt=38ms 
+  vahana       h=1436556   lag=0    period=0.262s/blk tip-age=0.1s rtt=73ms 
+
+[2026-10-15T09:36:43.876Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1436634   lag=0    period=0.260s/blk tip-age=5.3s rtt=23ms 
+  ovh-uk1      h=1436634   lag=0    period=0.264s/blk tip-age=5.3s rtt=57ms 
+  vahana       h=1436634   lag=0    period=0.264s/blk tip-age=5.3s rtt=107ms 
+
+[2026-10-15T09:37:13.971Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1436806   lag=0    period=0.251s/blk tip-age=0.2s rtt=19ms 
+  ovh-uk1      h=1436806   lag=0    period=0.256s/blk tip-age=0.2s rtt=49ms 
+  vahana       h=1436806   lag=0    period=0.256s/blk tip-age=0.2s rtt=84ms 
+
+[2026-10-15T09:37:44.051Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1436941   lag=0    period=0.238s/blk tip-age=0.5s rtt=14ms 
+  ovh-uk1      h=1436941   lag=0    period=0.254s/blk tip-age=0.5s rtt=38ms 
+  vahana       h=1436941   lag=0    period=0.254s/blk tip-age=0.5s rtt=73ms 
+
+[2026-10-15T09:38:14.131Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1437101   lag=0    period=0.225s/blk tip-age=0.6s rtt=5ms 
+  ovh-uk1      h=1437101   lag=0    period=0.250s/blk tip-age=0.6s rtt=37ms 
+  vahana       h=1437101   lag=0    period=0.250s/blk tip-age=0.6s rtt=73ms 
+
+[2026-10-15T09:38:44.216Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1437279   lag=0    period=0.213s/blk tip-age=0.7s rtt=5ms 
+  ovh-uk1      h=1437279   lag=0    period=0.242s/blk tip-age=0.7s rtt=38ms 
+  vahana       h=1437279   lag=0    period=0.242s/blk tip-age=0.7s rtt=74ms 
+
+[2026-10-15T09:39:14.299Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1437467   lag=0    period=0.201s/blk tip-age=5.9s rtt=5ms 
+  ovh-uk1      h=1437467   lag=0    period=0.201s/blk tip-age=5.9s rtt=37ms 
+  vahana       h=1437467   lag=0    period=0.201s/blk tip-age=5.9s rtt=72ms 
+
+[2026-10-15T09:39:44.379Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1437683   lag=0    period=0.192s/blk tip-age=0.3s rtt=5ms 
+  ovh-uk1      h=1437683   lag=0    period=0.192s/blk tip-age=0.3s rtt=37ms 
+  vahana       h=1437683   lag=0    period=0.192s/blk tip-age=0.3s rtt=74ms 
+
+[2026-10-15T09:40:14.455Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1437879   lag=0    period=0.190s/blk tip-age=0.2s rtt=5ms 
+  ovh-uk1      h=1437879   lag=0    period=0.190s/blk tip-age=0.2s rtt=39ms 
+  vahana       h=1437879   lag=0    period=0.190s/blk tip-age=0.2s rtt=72ms 
+
+[2026-10-15T09:40:44.533Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1438082   lag=1    period=0.187s/blk tip-age=0.2s rtt=6ms 
+  ovh-uk1      h=1438082   lag=1    period=0.187s/blk tip-age=0.2s rtt=36ms 
+  vahana       h=1438083   lag=0    period=0.187s/blk tip-age=0.2s rtt=73ms 
+
+[2026-10-15T09:41:14.611Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1438266   lag=0    period=0.187s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1438266   lag=0    period=0.187s/blk tip-age=0.4s rtt=36ms 
+  vahana       h=1438266   lag=0    period=0.187s/blk tip-age=0.4s rtt=72ms 
+
+[2026-10-15T09:41:44.695Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1438467   lag=1    period=0.184s/blk tip-age=0.5s rtt=7ms 
+  ovh-uk1      h=1438468   lag=0    period=0.184s/blk tip-age=0.1s rtt=38ms 
+  vahana       h=1438468   lag=0    period=0.184s/blk tip-age=0.1s rtt=77ms 
+
+[2026-10-15T09:42:14.771Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1438672   lag=1    period=0.181s/blk tip-age=0.1s rtt=6ms 
+  ovh-uk1      h=1438672   lag=1    period=0.181s/blk tip-age=0.1s rtt=37ms 
+  vahana       h=1438673   lag=0    period=0.181s/blk tip-age=0.1s rtt=71ms 
+
+[2026-10-15T09:42:44.852Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1438837   lag=1    period=0.179s/blk tip-age=0.5s rtt=7ms 
+  ovh-uk1      h=1438838   lag=0    period=0.179s/blk tip-age=0.4s rtt=36ms 
+  vahana       h=1438838   lag=0    period=0.179s/blk tip-age=0.4s rtt=75ms 
+
+[2026-10-15T09:43:14.930Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1439032   lag=0    period=0.177s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1439032   lag=0    period=0.177s/blk tip-age=0.4s rtt=39ms 
+  vahana       h=1439032   lag=0    period=0.177s/blk tip-age=0.4s rtt=73ms 
+
+[2026-10-15T09:43:45.008Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1439196   lag=1    period=0.175s/blk tip-age=0.5s rtt=7ms 
+  ovh-uk1      h=1439197   lag=0    period=0.175s/blk tip-age=0.1s rtt=35ms 
+  vahana       h=1439197   lag=0    period=0.175s/blk tip-age=0.1s rtt=71ms 
+
+[2026-10-15T09:44:15.086Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1439384   lag=1    period=0.173s/blk tip-age=0.1s rtt=6ms 
+  ovh-uk1      h=1439385   lag=0    period=0.173s/blk tip-age=-0.3s rtt=44ms 
+  vahana       h=1439385   lag=0    period=0.173s/blk tip-age=-0.3s rtt=71ms 
+
+[2026-10-15T09:44:45.165Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1439557   lag=1    period=0.171s/blk tip-age=0.2s rtt=15ms 
+  ovh-uk1      h=1439557   lag=1    period=0.171s/blk tip-age=0.2s rtt=37ms 
+  vahana       h=1439558   lag=0    period=0.171s/blk tip-age=0.2s rtt=72ms 
+
+[2026-10-15T09:45:15.254Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1439754   lag=1    period=0.168s/blk tip-age=0.5s rtt=9ms 
+  ovh-uk1      h=1439755   lag=0    period=0.168s/blk tip-age=0.2s rtt=36ms 
+  vahana       h=1439755   lag=0    period=0.168s/blk tip-age=0.2s rtt=83ms 
+
+[2026-10-15T09:45:45.333Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1439922   lag=0    period=0.167s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1439922   lag=0    period=0.167s/blk tip-age=0.4s rtt=37ms 
+  vahana       h=1439922   lag=0    period=0.167s/blk tip-age=0.4s rtt=74ms 
+
+[2026-10-15T09:46:15.414Z] junoclaw-g1  (3/3 gRPC seats reachable; log-only: akash-seat)
+  home-vb      h=1440113   lag=1    period=0.166s/blk tip-age=0.4s rtt=5ms 
+  ovh-uk1      h=1440114   lag=0    period=0.165s/blk tip-age=0.4s rtt=40ms 
+  vahana       h=1440114   lag=0    period=0.165s/blk tip-age=0.4s rtt=75ms 

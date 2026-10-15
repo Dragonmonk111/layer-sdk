@@ -12,7 +12,7 @@
 set -eu
 
 RELEASE="${JUNOCLAW_RELEASE:-v0.6.0-rc10}"
-BASE="https://github.com/Dragonmonk111/junoclaw-chain/releases/download/${RELEASE}"
+BASE="https://github.com/Dragonmonk111/layer-sdk/releases/download/${RELEASE}"
 DEST="${DEST:-/usr/local/bin}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }

@@ -76,10 +76,10 @@ up once, offline.
 
 ## 4. Install — one command
 
-The G2 binary is tag `v0.6.0-rc9` (includes the `restart_anchor`
-consensus mechanism that makes coordinated set changes safe). The
-per-seat bundle ships a `MANIFEST.sha256` — verify the binary against
-it before first run.
+The G2 binary is tag `v0.6.0-rc10` (includes the `restart_anchor`
+consensus mechanism that makes coordinated set changes safe, plus the
+idempotent journal-prune fix). The per-seat bundle ships a
+`MANIFEST.sha256` — verify the binary against it before first run.
 
 ```bash
 # Option A — release binary (recommended; bundle link in your pack)
@@ -89,7 +89,8 @@ it before first run.
 docker build -f docker/Dockerfile.slay3rd -t junoclaw/slay3rd .
 
 # Option C — build from source (Rust 1.97+, clang/g++/cmake)
-git clone -b v0.6.0-rc9 https://github.com/Dragonmonk111/junoclaw-chain.git
+git clone -b v0.6.0-rc10 https://github.com/Dragonmonk111/layer-sdk.git junoclaw-chain
+cd junoclaw-chain
 cc -c -o /tmp/shim.o docker/shim.c
 RUSTFLAGS="-C link-arg=/tmp/shim.o" cargo build --release -p slay3rd --features rocksdb
 ```

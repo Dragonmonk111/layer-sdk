@@ -28,6 +28,11 @@ COPY lib/cosmwasm/Cargo.toml /myapp/lib/cosmwasm/Cargo.toml
 COPY lib/cosmwasm/Cargo.lock /myapp/lib/cosmwasm/Cargo.lock
 COPY lib/cosmwasm/packages /myapp/lib/cosmwasm/packages
 
+# commonware-storage fork (patched via [patch.crates-io]) — idempotent
+# journal prune, tolerates BlobMissing on already-absent sections.
+COPY lib/commonware-storage/Cargo.toml /myapp/lib/commonware-storage/Cargo.toml
+COPY lib/commonware-storage/src /myapp/lib/commonware-storage/src
+
 # Workspace member Cargo.tomls with dummy source for dependency caching
 COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
 COPY dummy.rs /myapp/app/slay3rd/src/main.rs
@@ -56,9 +61,17 @@ COPY tools/tx-sender/Cargo.toml /myapp/tools/tx-sender/Cargo.toml
 COPY dummy.rs /myapp/tools/tx-sender/src/main.rs
 COPY tools/bls-relayer/Cargo.toml /myapp/tools/bls-relayer/Cargo.toml
 COPY dummy.rs /myapp/tools/bls-relayer/src/main.rs
+COPY tools/cdc-archiver/Cargo.toml /myapp/tools/cdc-archiver/Cargo.toml
+COPY dummy.rs /myapp/tools/cdc-archiver/src/main.rs
+COPY tools/jc-explorer/Cargo.toml /myapp/tools/jc-explorer/Cargo.toml
+COPY dummy.rs /myapp/tools/jc-explorer/src/main.rs
+COPY tools/jc-status/Cargo.toml /myapp/tools/jc-status/Cargo.toml
+COPY dummy.rs /myapp/tools/jc-status/src/main.rs
+COPY tools/jc-faucet/Cargo.toml /myapp/tools/jc-faucet/Cargo.toml
+COPY dummy.rs /myapp/tools/jc-faucet/src/main.rs
 # rocksdb feature => persistent RockStore at {data_dir}/app (survives restarts).
 # Build it here too so the dep cache covers the rocksdb C++ compile.
-RUN cargo build --release --bin slay3rd --features rocksdb
+RUN cargo build --release -p slay3rd -p jc-status --features slay3rd/rocksdb
 
 # clean up these fake local deps so we compile for real later
 RUN find /myapp -name "*.rs" -path "*/src/*" -not -path "*/lib/cosmwasm/*" -delete
@@ -66,11 +79,11 @@ RUN find /myapp -name "*.rs" -path "*/src/*" -not -path "*/lib/cosmwasm/*" -dele
 # Without this, cargo sees a "fresh" fingerprint from the dummy-stub build and
 # links the stub rlib even after real sources are restored (COPY preserves
 # mtimes), producing unresolved-import errors (hit for junoclaw-mayo-verify).
-RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3rd-* target/release/.fingerprint/junoclaw-* target/release/.fingerprint/tx-sender-* target/release/.fingerprint/bls-relayer-* target/release/deps/libjunoclaw_mayo_verify-* target/release/libjunoclaw_mayo_verify*
+RUN rm -rf target/release/.fingerprint/layer-* target/release/.fingerprint/slay3rd-* target/release/.fingerprint/junoclaw-* target/release/.fingerprint/tx-sender-* target/release/.fingerprint/bls-relayer-* target/release/.fingerprint/jc-* target/release/.fingerprint/cdc-* target/release/deps/libjunoclaw_mayo_verify-* target/release/libjunoclaw_mayo_verify*
 
 # This build step should just compile the local code and be faster
 COPY . .
-RUN cargo build --release --bin slay3rd --features rocksdb
+RUN cargo build --release -p slay3rd -p jc-status --features slay3rd/rocksdb
 
 ### PRODUCTION
 
