@@ -237,10 +237,45 @@ env var for the child process only, then starts the daemon with
 `--health-addr 127.0.0.1:18080`. Run it under Task Scheduler or a terminal
 with a restart loop for the same supervision guarantee.
 
+## Re-run against `junoclaw-g1` (live chain)
+
+The 2026-09-28 run was against the pre-G1 devnet. Re-running on the live
+chain has three deltas:
+
+1. **Chain id**: sign `--chain-id junoclaw-g1` (account `17`, `ujclaw`
+   unchanged). The relayer's `--cp-chain-id` stays `local-osmo-1`.
+2. **Fresh wasm store**: the current `junoclaw_light_client.opt.wasm`
+   (`sha256 12f6cfeb…06e8f821`) is not among the 4 ibc-wasm checksums on
+   local-osmo — run `store-code` (gov prop; local-osmo validator votes).
+3. **Fresh client**: create `08-wasm-7` with the **G1 threshold pubkey**
+   `b27853e219864a6f…707daf5be893582f5208feba` (3-of-4) — see
+   `g1-ceremony/ceremony-out/shared.json`. The old clients `08-wasm-0..6`
+   track the devnet group key and cannot verify G1 headers.
+
+Then the standard sequence applies (conn-init/try/ack/confirm →
+chan-init/try/ack/confirm → `jc-transfer` → `recv-packet` → `jc-ack`),
+with `connection-4`/`channel-4` as the next free osmo-side ids.
+
+### Set-change interaction (important for G2+)
+
+The 08-wasm client's trust root is the **BLS threshold group key**. A
+validator-set re-deal (G2 window, any n→m change) produces a *new* group
+key → the client can no longer verify post-change certs. Options:
+
+- **Re-create** a client after each window (simple; the demo does this);
+- **Client update path that accepts a group-key rotation attested by the
+  old quorum** — needed for production; the light-client contract would
+  verify a signed set-change attestation (old threshold signs the new
+  group key) and swap its verification key. Not yet implemented — track
+  under mainnet IBC hardening (A56 area).
+
+Until the rotation path exists, every G2+ window invalidates any live
+IBC client — plan the bridge around client recreation per window.
+
 ## Wire-format notes
 
 - **JunoClaw txs** carry the `IbcMsg` JSON-encoded in a single `Any` under
-  `/junoclaw.ibc.v1.Msg`, signed `junoclaw-1` / account `17` / `ujclaw`.
+  `/junoclaw.ibc.v1.Msg`, signed `junoclaw-g1` / account `17` / `ujclaw`.
 - **Osmosis txs** are real ibc-go protos. `conn-open-try`'s `client_state` /
   `proof_client` / `proof_consensus` are deprecated in ibc-go v8+ and left empty.
 - The counterparty `MerklePrefix` is `"ibc/"`, so ibc-go builds
