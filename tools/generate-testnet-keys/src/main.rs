@@ -28,12 +28,16 @@
 //! This is acceptable for testnet bootstrapping. For production, use an interactive
 //! DKG ceremony with `commonware-cryptography::bls12381::dkg::{Dealer, Player}`.
 
+use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 
 use commonware_codec::codec::{Encode, Read};
 use commonware_cryptography::{
     bls12381::{
-        dkg::deal_anonymous,
+        dkg::{
+            deal_anonymous, observe, Dealer, DealerLog, DealerPrivMsg, DealerPubMsg, Info, Output,
+            Player, PlayerAck, SignedDealerLog,
+        },
         primitives::{
             group::Share,
             sharing::{Mode, ModeVersion, Sharing},
@@ -43,7 +47,8 @@ use commonware_cryptography::{
     ed25519, Signer, Verifier,
 };
 use commonware_math::algebra::Random;
-use commonware_utils::N3f1;
+use commonware_parallel::Sequential;
+use commonware_utils::{ordered::Set, N3f1};
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -125,6 +130,14 @@ fn main() {
             "keygen-share" => return cmd_keygen_share(&args[2..]),
             "assemble-genesis" => return cmd_assemble_genesis(&args[2..]),
             "finalize" => return cmd_finalize(&args[2..]),
+            // Dealer-free DKG ceremony (docs/DKG-DESIGN.md) — Joint-Feldman
+            // via commonware_cryptography::bls12381::dkg.
+            "dkg-info" => return cmd_dkg_info(&args[2..]),
+            "dkg-deal" => return cmd_dkg_deal(&args[2..]),
+            "dkg-ack" => return cmd_dkg_ack(&args[2..]),
+            "dkg-log" => return cmd_dkg_log(&args[2..]),
+            "dkg-finalize" => return cmd_dkg_finalize(&args[2..]),
+            "dkg-observe" => return cmd_dkg_observe(&args[2..]),
             _ => {}
         }
     }
@@ -861,4 +874,720 @@ fn cmd_finalize(args: &[String]) {
     println!("  threshold:       {}/{}", keys.threshold_required, keys.threshold_total);
     println!("\nPoint bls_key_path + identity_key_path at {keys_path} in node.toml.");
     println!("Delete bls-share.json — its contents now live in keys.json.");
+}
+
+// ============================================================================
+// Dealer-free DKG ceremony (docs/DKG-DESIGN.md)
+//
+// Joint-Feldman DKG over `commonware_cryptography::bls12381::dkg`. Every
+// participant is both a Dealer and a Player; no party ever holds the group
+// secret. Files move over the operators' existing secure channel:
+//
+//   coordinator: dkg-info      → publish dkg-info.json
+//   each op:     dkg-deal      → broadcast dealing-pub-*, DM dealing-priv-*
+//   each op:     dkg-ack       → broadcast ack-*
+//   each dealer: dkg-log       → broadcast log-*
+//   each op:     dkg-finalize  → produces bls-share.json (merge via finalize)
+//   anyone:      dkg-observe   → produces shared.json from public logs only
+//
+// Dealer state is deterministic from (info, identity, dealer.seed): the seed
+// file lets `dkg-log` rebuild the exact dealer that emitted the dealing.
+// ============================================================================
+
+/// DKG namespace binding: `junoclaw-dkg:<chain_id>` — transcripts are scoped
+/// per chain so a dealing can never be replayed across networks.
+fn dkg_namespace(chain_id: &str) -> Vec<u8> {
+    format!("junoclaw-dkg:{chain_id}").into_bytes()
+}
+
+type DkgPk = ed25519::PublicKey;
+type DkgInfo = Info<MinSig, DkgPk>;
+
+/// Serializable form of a round `Info` — dealers == players for fresh deals.
+#[derive(Serialize, Deserialize, Debug)]
+struct DkgInfoFile {
+    chain_id: String,
+    round: u64,
+    /// Sorted Ed25519 pubkeys (hex) — dealing participants.
+    dealers: Vec<String>,
+    /// Sorted Ed25519 pubkeys (hex) — share recipients.
+    players: Vec<String>,
+    /// Serialized `Output` of the previous round (resharing only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    previous_output_hex: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DealingPrivFile {
+    dealer: String,
+    player: String,
+    pub_msg_hex: String,
+    priv_msg_hex: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DealingPubFile {
+    dealer: String,
+    pub_msg_hex: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AckFile {
+    player: String,
+    dealer: String,
+    ack_hex: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LogFile {
+    dealer: String,
+    log_hex: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DkgOutputFile {
+    chain_id: String,
+    round: u64,
+    output_hex: String,
+    threshold_public_key_hex: String,
+    threshold_required: u32,
+    threshold_total: u32,
+}
+
+fn decode_ed_pk(hex_str: &str) -> DkgPk {
+    let bytes = hex::decode(hex_str).unwrap_or_else(|_| panic!("bad ed25519 hex: {hex_str}"));
+    DkgPk::read_cfg(&mut &bytes[..], &())
+        .unwrap_or_else(|_| panic!("undecodable ed25519 pubkey: {hex_str}"))
+}
+
+fn pk_hex(pk: &DkgPk) -> String {
+    hex::encode(pk.encode().as_ref())
+}
+
+fn short(hex_str: &str) -> &str {
+    &hex_str[..8.min(hex_str.len())]
+}
+
+fn load_json<T: for<'de> Deserialize<'de>>(path: &str) -> T {
+    serde_json::from_str(
+        &std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("Failed to read {path}: {e}")),
+    )
+    .unwrap_or_else(|e| panic!("{path} is not valid: {e}"))
+}
+
+fn write_json<T: Serialize>(path: &str, value: &T) {
+    std::fs::write(path, serde_json::to_string_pretty(value).unwrap())
+        .unwrap_or_else(|e| panic!("Failed to write {path}: {e}"));
+}
+
+fn load_identity(keys_path: &str) -> (ValidatorKeys, ed25519::PrivateKey) {
+    let keys: ValidatorKeys = load_json(keys_path);
+    let sk_bytes =
+        hex::decode(&keys.ed25519_private_hex).expect("keys.json: bad ed25519_private_hex");
+    let sk = ed25519::PrivateKey::read_cfg(&mut &sk_bytes[..], &())
+        .expect("keys.json: undecodable ed25519 private key");
+    (keys, sk)
+}
+
+fn build_info(file: &DkgInfoFile) -> DkgInfo {
+    let dealers: Vec<DkgPk> = file.dealers.iter().map(|h| decode_ed_pk(h)).collect();
+    let players: Vec<DkgPk> = file.players.iter().map(|h| decode_ed_pk(h)).collect();
+    let n = NonZeroU32::new(players.len() as u32).expect("players must be non-empty");
+    let previous = file.previous_output_hex.as_ref().map(|hex_str| {
+        let bytes = hex::decode(hex_str).expect("bad previous_output_hex");
+        Output::<MinSig, DkgPk>::read_cfg(&mut &bytes[..], &(n, ModeVersion::v0()))
+            .expect("undecodable previous Output")
+    });
+    Info::<MinSig, DkgPk>::new::<N3f1>(
+        &dkg_namespace(&file.chain_id),
+        file.round,
+        previous,
+        Mode::NonZeroCounter,
+        Set::try_from(dealers).expect("dealers must be unique"),
+        Set::try_from(players).expect("players must be unique"),
+    )
+    .expect("invalid DKG Info — check dealer/player sets and previous output")
+}
+
+fn load_info_file(path: &str) -> DkgInfoFile {
+    load_json(path)
+}
+
+fn load_and_verify_requests(input_dir: &str) -> Vec<ShareRequest> {
+    let mut requests: Vec<ShareRequest> = Vec::new();
+    let entries =
+        std::fs::read_dir(input_dir).unwrap_or_else(|e| panic!("Failed to read {input_dir}: {e}"));
+    for entry in entries {
+        let path = entry.expect("read_dir entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let contents = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
+        let req: ShareRequest = serde_json::from_str(&contents)
+            .unwrap_or_else(|e| panic!("{} is not a valid share-request: {e}", path.display()));
+
+        // Same attestation rule as assemble-genesis: `ed25519_pk` or
+        // `ed25519_pk || mayo_pk` under the DKG namespace.
+        let pk_bytes =
+            hex::decode(&req.ed25519_public_hex).expect("share-request: bad ed25519_public_hex");
+        let sig_bytes =
+            hex::decode(&req.attestation_hex).expect("share-request: bad attestation_hex");
+        let pk = decode_ed_pk(&req.ed25519_public_hex);
+        let sig = ed25519::Signature::read_cfg(&mut &sig_bytes[..], &())
+            .expect("share-request: undecodable attestation");
+        let mut attest_msg = pk_bytes.clone();
+        if let Some(mh) = &req.mayo_public_hex {
+            let mpk = hex::decode(mh).expect("share-request: bad mayo_public_hex");
+            if mpk.len() != 4912 {
+                panic!(
+                    "{}: mayo_public_hex must be a MAYO2 compact pk (4912 bytes)",
+                    req.moniker
+                );
+            }
+            attest_msg.extend_from_slice(&mpk);
+        }
+        if !pk.verify(DKG_ATTEST_NAMESPACE, &attest_msg, &sig) {
+            panic!("{}: attestation verification failed", req.moniker);
+        }
+        requests.push(req);
+    }
+    requests.sort_by(|a, b| a.ed25519_public_hex.cmp(&b.ed25519_public_hex));
+    for w in requests.windows(2) {
+        if w[0].ed25519_public_hex == w[1].ed25519_public_hex {
+            panic!(
+                "duplicate ed25519 pubkey: {} and {}",
+                w[0].moniker, w[1].moniker
+            );
+        }
+    }
+    requests
+}
+
+/// `dkg-info` — coordinator builds the round spec from share-requests.
+/// Deterministic: every participant can rebuild and compare.
+fn cmd_dkg_info(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-info --requests <dir> --chain-id <id> --round <n> [--previous <output.json>] [--out dkg-info.json] [--dealers <dir>]");
+        println!("\nBuilds the round spec for a dealer-free DKG. --dealers restricts the");
+        println!("dealer set to share-requests in a separate dir (resharing); defaults to");
+        println!("the player set (fresh deal). --previous carries the prior Output.");
+        return;
+    }
+    let input_dir = get_arg(args, "--requests")
+        .unwrap_or("./share-requests")
+        .to_string();
+    let dealers_dir = get_arg(args, "--dealers").map(|s| s.to_string());
+    let chain_id = get_arg(args, "--chain-id")
+        .expect("--chain-id required")
+        .to_string();
+    let round: u64 = get_arg(args, "--round")
+        .expect("--round required")
+        .parse()
+        .expect("--round must be a u64");
+    let out = get_arg(args, "--out").unwrap_or("./dkg-info.json").to_string();
+
+    let players = load_and_verify_requests(&input_dir);
+    let dealer_hexes: Vec<String> = match &dealers_dir {
+        Some(d) => load_and_verify_requests(d)
+            .iter()
+            .map(|r| r.ed25519_public_hex.clone())
+            .collect(),
+        None => players.iter().map(|r| r.ed25519_public_hex.clone()).collect(),
+    };
+    if players.len() < 4 {
+        eprintln!(
+            "Error: need at least 4 players for N3f1 consensus (got {})",
+            players.len()
+        );
+        std::process::exit(1);
+    }
+
+    let previous_output_hex = get_arg(args, "--previous").map(|p| {
+        let f: DkgOutputFile = load_json(&p);
+        if f.round >= round {
+            panic!("--round must exceed previous round {} (got {round})", f.round);
+        }
+        f.output_hex
+    });
+
+    let file = DkgInfoFile {
+        chain_id,
+        round,
+        dealers: dealer_hexes,
+        players: players.iter().map(|r| r.ed25519_public_hex.clone()).collect(),
+        previous_output_hex,
+    };
+    // Construct the Info now so a malformed spec fails here, not mid-ceremony.
+    build_info(&file);
+    write_json(&out, &file);
+    println!(
+        "dkg-info written: {out}  ({} dealers → {} players, round {})",
+        file.dealers.len(),
+        file.players.len(),
+        file.round
+    );
+    println!("Distribute this file to all participants; everyone runs dkg-deal.");
+}
+
+/// `dkg-deal` — each operator emits their public commitment + per-player
+/// private share files. Deterministic under `dealer.seed`.
+fn cmd_dkg_deal(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-deal --info dkg-info.json --keys keys.json [--out-dir ./dkg-out]");
+        println!("\nCreates dealer.seed (32B secret — keep private until log publish),");
+        println!("dealing-pub-<me>.json (broadcast) and dealing-priv-<me>-for-<peer>.json");
+        println!("(deliver each privately to its recipient — encrypted DM, SSH, etc.).");
+        return;
+    }
+    let info_path = get_arg(args, "--info")
+        .unwrap_or("./dkg-info.json")
+        .to_string();
+    let keys_path = get_arg(args, "--keys").unwrap_or("./keys.json").to_string();
+    let out_dir = get_arg(args, "--out-dir").unwrap_or("./dkg-out").to_string();
+
+    let file = load_info_file(&info_path);
+    let info = build_info(&file);
+    let (keys, sk) = load_identity(&keys_path);
+    let me_hex = pk_hex(&sk.public_key());
+    if !file.dealers.iter().any(|d| *d == me_hex) {
+        eprintln!("Error: {me_hex} is not a dealer in this round.");
+        std::process::exit(1);
+    }
+
+    // Prior share required when resharing.
+    let prev_share: Option<Share> = file.previous_output_hex.as_ref().map(|_| {
+        Share::read_cfg(
+            &mut &hex::decode(
+                keys.share_hex
+                    .as_deref()
+                    .expect("keys.json lacks share_hex — resharing needs a prior share"),
+            )
+            .expect("bad share_hex")[..],
+            &(),
+        )
+        .expect("undecodable share")
+    });
+
+    std::fs::create_dir_all(&out_dir)
+        .unwrap_or_else(|e| panic!("Failed to create {out_dir}: {e}"));
+    let seed_path = format!("{out_dir}/dealer.seed");
+    let seed: [u8; 32] = match std::fs::read(&seed_path) {
+        Ok(b) if b.len() == 32 => b.try_into().unwrap(),
+        Ok(_) => panic!("{seed_path} exists but is not 32 bytes"),
+        Err(_) => {
+            use rand::RngCore;
+            let mut s = [0u8; 32];
+            OsRng.fill_bytes(&mut s);
+            std::fs::write(&seed_path, s)
+                .unwrap_or_else(|e| panic!("Failed to write {seed_path}: {e}"));
+            s
+        }
+    };
+
+    let (_dealer, pub_msg, priv_msgs) = Dealer::<MinSig, _>::start::<N3f1>(
+        ChaCha8Rng::from_seed(seed),
+        info,
+        sk,
+        prev_share,
+    )
+    .expect("dealer start failed");
+
+    let pub_file = DealingPubFile {
+        dealer: me_hex.clone(),
+        pub_msg_hex: hex::encode(pub_msg.encode().as_ref()),
+    };
+    write_json(
+        &format!("{out_dir}/dealing-pub-{}.json", short(&me_hex)),
+        &pub_file,
+    );
+    for (player, priv_msg) in &priv_msgs {
+        let p_hex = pk_hex(player);
+        let f = DealingPrivFile {
+            dealer: me_hex.clone(),
+            player: p_hex.clone(),
+            pub_msg_hex: pub_file.pub_msg_hex.clone(),
+            priv_msg_hex: hex::encode(priv_msg.encode().as_ref()),
+        };
+        write_json(
+            &format!(
+                "{out_dir}/dealing-priv-{}-for-{}.json",
+                short(&me_hex),
+                short(&p_hex)
+            ),
+            &f,
+        );
+    }
+    println!("Dealing emitted (deterministic under {seed_path}):");
+    println!("  broadcast: dealing-pub-{}.json", short(&me_hex));
+    println!(
+        "  deliver privately: dealing-priv-{}-for-<peer>.json",
+        short(&me_hex)
+    );
+    println!("  keep dealer.seed until after dkg-log, then delete it.");
+}
+
+/// `dkg-ack` — each operator verifies the shares addressed to them and emits
+/// signed acks per dealer. A bad share produces a complaint (no ack).
+fn cmd_dkg_ack(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-ack --info dkg-info.json --keys keys.json --priv-dir <dir> [--out-dir ./acks]");
+        println!("\n--priv-dir holds the dealing-priv-*-for-<me>.json files you received.");
+        println!("Acks are public — broadcast them; each dealer needs its own.");
+        return;
+    }
+    let info = build_info(&load_info_file(
+        get_arg(args, "--info").unwrap_or("./dkg-info.json"),
+    ));
+    let (_, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let priv_dir = get_arg(args, "--priv-dir")
+        .expect("--priv-dir required")
+        .to_string();
+    let out_dir = get_arg(args, "--out-dir").unwrap_or("./acks").to_string();
+
+    let me = sk.public_key();
+    let me_hex = pk_hex(&me);
+    let mut player = Player::<MinSig, _>::new(info, sk).expect("not a player");
+    let bound = NonZeroU32::new(10_000).unwrap(); // decode cap: commitment coeff count
+
+    let mut acked = 0u32;
+    let mut complaints = 0u32;
+    for entry in std::fs::read_dir(&priv_dir).expect("read priv-dir") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.starts_with("dealing-priv-") || !name.ends_with(".json") {
+            continue;
+        }
+        let f: DealingPrivFile = load_json(path.to_str().unwrap());
+        if f.player != me_hex {
+            continue; // not addressed to me — ignore (and do not peek).
+        }
+        let dealer = decode_ed_pk(&f.dealer);
+        let pub_msg = DealerPubMsg::<MinSig>::read_cfg(
+            &mut &hex::decode(&f.pub_msg_hex).expect("bad pub_msg_hex")[..],
+            &bound,
+        )
+        .expect("undecodable DealerPubMsg");
+        let priv_msg = DealerPrivMsg::read_cfg(
+            &mut &hex::decode(&f.priv_msg_hex).expect("bad priv_msg_hex")[..],
+            &(),
+        )
+        .expect("undecodable DealerPrivMsg");
+        match player.dealer_message::<N3f1>(dealer, pub_msg, priv_msg) {
+            Some(ack) => {
+                let af = AckFile {
+                    player: me_hex.clone(),
+                    dealer: f.dealer.clone(),
+                    ack_hex: hex::encode(ack.encode().as_ref()),
+                };
+                std::fs::create_dir_all(&out_dir).unwrap();
+                let p = format!(
+                    "{out_dir}/ack-{}-to-{}.json",
+                    short(&me_hex),
+                    short(&f.dealer)
+                );
+                write_json(&p, &af);
+                println!("  acked dealer {}", short(&f.dealer));
+                acked += 1;
+            }
+            None => {
+                eprintln!(
+                    "  COMPLAINT: share from dealer {} failed verification — do NOT ack; \
+                     the dealer must publish a reveal in its log",
+                    short(&f.dealer)
+                );
+                complaints += 1;
+            }
+        }
+    }
+    println!("{acked} acks written to {out_dir}, {complaints} complaints.");
+    if complaints > 0 {
+        println!("Wait for the offending dealer's log — it must reveal your share.");
+    }
+}
+
+/// `dkg-log` — dealer replays received acks and publishes a signed log.
+fn cmd_dkg_log(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-log --info dkg-info.json --keys keys.json --seed-file dealer.seed --acks-dir <dir> [--out-dir ./logs]");
+        println!("\nRe-derives your dealer (seeded, deterministic), verifies each ack's");
+        println!("signature, then emits log-<me>.json — broadcast it to all players.");
+        return;
+    }
+    let file = load_info_file(get_arg(args, "--info").unwrap_or("./dkg-info.json"));
+    let info = build_info(&file);
+    let (keys, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let seed_path = get_arg(args, "--seed-file")
+        .expect("--seed-file required")
+        .to_string();
+    let acks_dir = get_arg(args, "--acks-dir")
+        .expect("--acks-dir required")
+        .to_string();
+    let out_dir = get_arg(args, "--out-dir").unwrap_or("./logs").to_string();
+
+    let seed_b = std::fs::read(&seed_path)
+        .unwrap_or_else(|e| panic!("Failed to read {seed_path} — run dkg-deal first: {e}"));
+    let seed: [u8; 32] = seed_b.try_into().expect("dealer.seed must be 32 bytes");
+    let prev_share: Option<Share> = file.previous_output_hex.as_ref().map(|_| {
+        Share::read_cfg(
+            &mut &hex::decode(keys.share_hex.clone().expect("missing share_hex"))
+                .expect("bad share_hex")[..],
+            &(),
+        )
+        .expect("undecodable share")
+    });
+    let (mut dealer, _pub_msg, _priv) = Dealer::<MinSig, _>::start::<N3f1>(
+        ChaCha8Rng::from_seed(seed),
+        info,
+        sk.clone(),
+        prev_share,
+    )
+    .expect("dealer rebuild failed");
+    let me_hex = pk_hex(&sk.public_key());
+
+    let mut accepted = 0u32;
+    for entry in std::fs::read_dir(&acks_dir).expect("read acks-dir") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.starts_with("ack-") || !name.ends_with(".json") {
+            continue;
+        }
+        let f: AckFile = load_json(path.to_str().unwrap());
+        if f.dealer != me_hex {
+            continue;
+        }
+        let player = decode_ed_pk(&f.player);
+        let ack = PlayerAck::<DkgPk>::read_cfg(
+            &mut &hex::decode(&f.ack_hex).expect("bad ack_hex")[..],
+            &(),
+        )
+        .expect("undecodable PlayerAck");
+        dealer
+            .receive_player_ack(player, ack)
+            .unwrap_or_else(|e| panic!("ack from {}: {e}", f.player));
+        accepted += 1;
+    }
+
+    let signed = dealer.finalize::<N3f1>();
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let out = format!("{out_dir}/log-{}.json", short(&me_hex));
+    write_json(
+        &out,
+        &LogFile {
+            dealer: me_hex.clone(),
+            log_hex: hex::encode(signed.encode().as_ref()),
+        },
+    );
+    println!("{accepted} acks incorporated → {out}");
+    println!("Broadcast this log to all players; then run dkg-finalize.");
+}
+
+/// Load every `log-*.json`, check signatures, return the verified log map.
+fn load_checked_logs(
+    logs_dir: &str,
+    info: &DkgInfo,
+) -> BTreeMap<DkgPk, DealerLog<MinSig, DkgPk>> {
+    let bound = NonZeroU32::new(10_000).unwrap();
+    let mut logs = BTreeMap::new();
+    for entry in std::fs::read_dir(logs_dir).expect("read logs-dir") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.starts_with("log-") || !name.ends_with(".json") {
+            continue;
+        }
+        let f: LogFile = load_json(path.to_str().unwrap());
+        let signed = SignedDealerLog::<MinSig, ed25519::PrivateKey>::read_cfg(
+            &mut &hex::decode(&f.log_hex).expect("bad log_hex")[..],
+            &bound,
+        )
+        .expect("undecodable SignedDealerLog");
+        let (dealer, log) = signed
+            .check(info)
+            .unwrap_or_else(|| panic!("{}: dealer log signature invalid", f.dealer));
+        if pk_hex(&dealer) != f.dealer {
+            panic!(
+                "{}: signed dealer key does not match filename/metadata",
+                f.dealer
+            );
+        }
+        logs.insert(dealer, log);
+    }
+    logs
+}
+
+/// `dkg-finalize` — each operator reconstructs their share from the public
+/// logs + privately received dealings. Emits a bls-share.json identical in
+/// shape to the coordinator-dealt package — `finalize` merges it unchanged.
+fn cmd_dkg_finalize(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-finalize --info dkg-info.json --keys keys.json --priv-dir <dir> --logs-dir <dir> --requests <dir> [--out bls-share.json]");
+        return;
+    }
+    let file = load_info_file(get_arg(args, "--info").unwrap_or("./dkg-info.json"));
+    let info = build_info(&file);
+    let (_, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let priv_dir = get_arg(args, "--priv-dir")
+        .expect("--priv-dir required")
+        .to_string();
+    let logs_dir = get_arg(args, "--logs-dir")
+        .expect("--logs-dir required")
+        .to_string();
+    let requests_dir = get_arg(args, "--requests")
+        .expect("--requests required")
+        .to_string();
+    let out = get_arg(args, "--out").unwrap_or("./bls-share.json").to_string();
+
+    let logs = load_checked_logs(&logs_dir, &info);
+    let me = sk.public_key();
+    let me_hex = pk_hex(&me);
+    let mut player = Player::<MinSig, _>::new(info, sk).expect("not a player");
+    let bound = NonZeroU32::new(10_000).unwrap();
+
+    // Replay dealings — regenerates identical acks (Ed25519 is deterministic).
+    for entry in std::fs::read_dir(&priv_dir).expect("read priv-dir") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.starts_with("dealing-priv-") {
+            continue;
+        }
+        let f: DealingPrivFile = load_json(path.to_str().unwrap());
+        if f.player != me_hex {
+            continue;
+        }
+        let pub_msg = DealerPubMsg::<MinSig>::read_cfg(
+            &mut &hex::decode(&f.pub_msg_hex).expect("bad pub_msg_hex")[..],
+            &bound,
+        )
+        .expect("undecodable DealerPubMsg");
+        let priv_msg = DealerPrivMsg::read_cfg(
+            &mut &hex::decode(&f.priv_msg_hex).expect("bad priv_msg_hex")[..],
+            &(),
+        )
+        .expect("undecodable DealerPrivMsg");
+        player.dealer_message::<N3f1>(decode_ed_pk(&f.dealer), pub_msg, priv_msg);
+    }
+
+    let (output, share) = player
+        .finalize::<N3f1>(logs, &Sequential)
+        .unwrap_or_else(|e| panic!("DKG finalize failed: {e}"));
+
+    let sharing = output.public().clone();
+    let requests = load_and_verify_requests(&requests_dir);
+    let validator_index = requests
+        .iter()
+        .position(|r| r.ed25519_public_hex == me_hex)
+        .expect("my pubkey not in the player set");
+    let all_mayo = requests.iter().all(|r| r.mayo_public_hex.is_some());
+
+    let package = BlsSharePackage {
+        validator_index,
+        share_index: share.index.get(),
+        ed25519_public_hex: me_hex,
+        sharing_hex: hex::encode(sharing.encode().as_ref()),
+        share_hex: hex::encode(share.encode().as_ref()),
+        threshold_public_key_hex: hex::encode(sharing.public().encode().as_ref()),
+        threshold_required: sharing.required::<N3f1>(),
+        threshold_total: sharing.total().get(),
+        validator_public_keys: requests
+            .iter()
+            .map(|r| r.ed25519_public_hex.clone())
+            .collect(),
+        validator_mayo_public_keys: all_mayo
+            .then(|| requests.iter().map(|r| r.mayo_public_hex.clone().unwrap()).collect()),
+    };
+    write_json(&out, &package);
+
+    // Sanity: share's public half must match the polynomial at our index.
+    let n_total = NonZeroU32::new(package.threshold_total).unwrap();
+    let check = Sharing::<MinSig>::read_cfg(
+        &mut &hex::decode(&package.sharing_hex).unwrap()[..],
+        &(n_total, ModeVersion::v0()),
+    )
+    .unwrap();
+    assert_eq!(
+        check.partial_public(share.index).unwrap().encode().as_ref(),
+        share.public::<MinSig>().encode().as_ref(),
+        "share does not match group polynomial"
+    );
+    println!("Share reconstructed → {out}");
+    println!(
+        "  threshold: {}/{}",
+        package.threshold_required, package.threshold_total
+    );
+    println!("  group key: {}...", &package.threshold_public_key_hex[..32]);
+    println!("Run `finalize --keys keys.json --bls-share {out}` to merge.");
+}
+
+/// `dkg-observe` — anyone reconstructs the public Output from signed logs
+/// only; writes shared.json in the same shape assemble-genesis emits.
+fn cmd_dkg_observe(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-observe --info dkg-info.json --logs-dir <dir> --requests <dir> [--out-dir ./ceremony-out]");
+        println!("\nPublic-material-only verification: derives the group key without any");
+        println!("private share. Also writes output-<round>.json for future resharing.");
+        return;
+    }
+    let file = load_info_file(get_arg(args, "--info").unwrap_or("./dkg-info.json"));
+    let info = build_info(&file);
+    let logs_dir = get_arg(args, "--logs-dir")
+        .expect("--logs-dir required")
+        .to_string();
+    let requests_dir = get_arg(args, "--requests")
+        .expect("--requests required")
+        .to_string();
+    let out_dir = get_arg(args, "--out-dir")
+        .unwrap_or("./ceremony-out")
+        .to_string();
+
+    let logs = load_checked_logs(&logs_dir, &info);
+    let output = observe::<MinSig, DkgPk, N3f1>(info, logs, &Sequential)
+        .unwrap_or_else(|e| panic!("DKG observe failed: {e}"));
+    let sharing = output.public().clone();
+
+    let requests = load_and_verify_requests(&requests_dir);
+    let threshold_public_key_hex = hex::encode(sharing.public().encode().as_ref());
+
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let shared = SharedCeremonyOutput {
+        chain_id: file.chain_id.clone(),
+        threshold_public_key_hex: threshold_public_key_hex.clone(),
+        threshold_required: sharing.required::<N3f1>(),
+        threshold_total: sharing.total().get(),
+        validators: requests
+            .iter()
+            .enumerate()
+            .map(|(i, r)| SharedValidator {
+                validator_index: i,
+                moniker: r.moniker.clone(),
+                p2p_address: r.p2p_address.clone(),
+                ed25519_public_hex: r.ed25519_public_hex.clone(),
+                mayo_public_hex: r.mayo_public_hex.clone(),
+            })
+            .collect(),
+    };
+    let shared_path = format!("{out_dir}/shared.json");
+    write_json(&shared_path, &shared);
+
+    let out_file = DkgOutputFile {
+        chain_id: file.chain_id.clone(),
+        round: file.round,
+        output_hex: hex::encode(output.encode().as_ref()),
+        threshold_public_key_hex,
+        threshold_required: shared.threshold_required,
+        threshold_total: shared.threshold_total,
+    };
+    let out_path = format!("{out_dir}/dkg-output-{}.json", file.round);
+    write_json(&out_path, &out_file);
+
+    println!("Observed Output (public material only):");
+    println!("  shared.json:       {shared_path}");
+    println!("  reshare output:    {out_path}  (pass via --previous next round)");
+    println!("  group key:         {}...", &out_file.threshold_public_key_hex[..32]);
+    if !output.revealed().is_empty() {
+        println!(
+            "  note: {} player share(s) were revealed in dealer logs",
+            output.revealed().len()
+        );
+    }
 }

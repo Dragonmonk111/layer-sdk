@@ -18,6 +18,7 @@ commonware-cryptography = "2026.3.0"
 commonware-utils = "2026.3.0"
 commonware-math = "2026.3.0"
 commonware-codec = "2026.3.0"
+commonware-parallel = "2026.3.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
