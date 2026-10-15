@@ -88,3 +88,92 @@ soak running (`g1-run.jsonl`).
 4. Fresh akash deployment with 9090 exposed (bug 6) — full 4/4 mesh.
 5. Re-run T4 (leader kill), T6 (two-down halt) once home-vb votes again.
 6. T7–T11 (tx, wasm, airdrop, lightclient) against the live chain.
+
+---
+
+# Post-G1 3-of-4 Threshold Stress Test — 2026-10-14/15
+
+Chain: `junoclaw-g1`, binary `slay3rd v0.6.0-rc9`. Timeline UTC.
+After G1 closeout the Akash seat lease was closed, leaving a deliberate
+**3-of-4 running configuration** — a live stress test of the chain at
+exactly threshold. Findings below are from that configuration.
+
+## Outcome
+
+- Stall window: **13:51:05 UTC Oct 14 → ~04:13 UTC Oct 15** (~14.4 h).
+  Last finalized height **1,295,875** (view 1,768,129).
+- Trigger: the home-vb seat panicked on journal prune
+  (`BlobMissing`); with Akash already offline, voting dropped to
+  2-of-4 — below the 3-of-4 threshold — and finality halted.
+- Recovery: plain process restart, journals intact — no wipe, no
+  ceremony. The seat replayed its journal past the internal gap and
+  resumed voting. Chain finalizing again past h=1,366,000; a faucet
+  drip pending in a peer mempool from before the stall finalized at
+  h=1,303,605 minutes after recovery, plus a second drip landed.
+
+## Timeline
+
+| UTC | Event |
+|---|---|
+| ~Oct 12 | Akash seat (`196.216.137.249:30823`) closed — 3-of-4 stress config begins (ovh-uk1, vahana, home-vb voting). |
+| 13:51:05 Oct 14 | home-vb `g1-node` panics at `simplex/actors/voter/actor.rs:229`: `unable to prune journal: Runtime(BlobMissing("slay3r-junoclaw-g1", "00000000001afab5"))`, then `resolver should not finish` (`engine.rs:237`). Voter + resolver die; executor channel closes. |
+| 13:51→ | ovh + vahana keep building/relaying proposals (`peers=2`) but no cert forms — every view times out. ~45% CPU spinning nullifies for 14 h. |
+| ~22:10 Oct 14 | WSL `Ubuntu-24.04` reboots; `g1-node` was a transient `systemd-run` unit → unit definition lost, no auto-restart. |
+| 04:13 Oct 15 | Seat restarted under a persistent unit; journal replayed past the gap, caught up ~4,600 views in seconds, quorum restored. |
+| 04:29 Oct 15 | Pending faucet drip finalized at h=1,303,605 (`tx_count=1`). |
+
+## Findings → fixes implemented
+
+1. **Non-idempotent journal prune (bug, fixed in-tree).**
+   `commonware-storage` `segmented/manager.rs::prune` propagated
+   `BlobMissing` when a section file was already absent on disk —
+   an earlier interrupted prune removed the file without advancing
+   the cursor, so the next prune hit the missing blob, panicked the
+   voter, then killed the resolver (`resolver should not finish`).
+   Journal showed a single-blob interior gap (`…1afab5` missing inside
+   `…1afab6`–`…1afac1`); disk had 930 GB free — not resource pressure.
+   **Fix: vendored `commonware-storage` at `lib/commonware-storage`
+   (crates.io `[patch]`); `prune` now treats `BlobMissing` as
+   already-pruned and continues.** Verified `cargo check -p slay3rd`
+   clean. Worth upstreaming.
+
+2. **Transient systemd units = no watchdog.** `g1-node` ran under
+   `systemd-run` — no `Restart=` policy, and the unit definition
+   vanished on WSL reboot, so a crashed seat stayed down 14 h with
+   no alert. **Fix: `/etc/systemd/system/g1-node.service` persistent
+   unit with `Restart=always`, enabled at boot.** OVH side already
+   had `Restart=always`.
+
+3. **Zombie clone seat.** `g1-seat-clone` (index 0, port 7002,
+   `/data-seat`) kept running but spun on `nullify View(1)` with
+   handshake rejections — stale Oct-10 experiment, dead weight.
+   **Stopped.**
+
+4. **No stall alerting.** `jc-status` tracked tip age in the UI only;
+   nobody was paged during the 14 h window. **Fix: `jc-status` now
+   POSTs a JSON webhook (`JC_ALERT_WEBHOOK` env) when the chain tip
+   hasn't advanced for >120 s, and a recovery notice when finality
+   resumes.** Also fixed `tip_seen_at` semantics — it now only updates
+   when the tip *advances*, so a stalled chain correctly reports
+   DEGRADED instead of staying green.
+
+5. **Stale R9 devnet containers** left running 16 h on the host —
+   stopped.
+
+## Evidence
+
+- Crash tail + journal manifest: `home-vb:/opt/g1-node/incident-2026-10-14/`
+  (`slay3rd-crash-tail.log`, `journal-blobs.txt`).
+- Panic frames: `voter/actor.rs:229` (prune `.expect`), `engine.rs:237`
+  (resolver finish), then `Executor channel closed`.
+- OVH journal: proposals for h=1,295,876 relayed to `peers=2`, no
+  certificate from 13:51:05 onward.
+
+## Lesson for G2
+
+The 3-of-4 config is fragile by construction — one fault from halt.
+The BFT itself behaved correctly (halted rather than finalizing wrong
+state); the failure was operational: no restart policy, no alert. For
+G2 (n=5, threshold 4): external seats get the persistent-unit +
+`restart_anchor` runbook, and `jc-status` alerting is the tripwire
+that replaces "someone notices."

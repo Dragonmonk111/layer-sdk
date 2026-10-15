@@ -1282,8 +1282,6 @@ dependencies = [
 [[package]]
 name = "commonware-storage"
 version = "2026.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3be226adc2994ba3b8181f9388855c7f62c5b041ebd8c6a2956651bd8cf95fe"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",

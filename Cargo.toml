@@ -113,6 +113,10 @@ cosmwasm-vm     = { path = "lib/cosmwasm/packages/vm" }
 cosmwasm-core   = { path = "lib/cosmwasm/packages/core" }
 cosmwasm-derive = { path = "lib/cosmwasm/packages/derive" }
 cosmwasm-schema-derive = { path = "lib/cosmwasm/packages/schema-derive" }
+# Vendored 2026.3.0 with idempotent journal prune (tolerates BlobMissing —
+# a section already absent on disk is already pruned). Prevents the
+# voter/resolver panic that killed the home-vb seat on 2026-10-14.
+commonware-storage = { path = "lib/commonware-storage" }
 
 [profile.release]
 # temporary to speed up testing

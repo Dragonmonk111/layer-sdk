@@ -24,6 +24,8 @@ use tonic::transport::{Channel, ClientTlsConfig};
 const PROBE_INTERVAL: Duration = Duration::from_secs(30);
 const HISTORY_LEN: usize = 2880; // 24 h of 30 s probes
 const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
+/// Tip older than this means the chain is not finalizing — alert.
+const STALL_ALERT_SECS: u64 = 120;
 
 #[derive(Clone, Serialize)]
 struct Probe {
@@ -44,6 +46,10 @@ struct Shared {
     started: u64,
     last_tip: Mutex<u64>,
     tip_seen_at: Mutex<u64>,
+    /// Webhook URL (JC_ALERT_WEBHOOK) that receives stall/recovery alerts.
+    alert_webhook: Option<String>,
+    /// Whether a stall alert has already fired for the current stall episode.
+    stall_alerted: Mutex<bool>,
 }
 
 fn now() -> u64 {
@@ -164,6 +170,60 @@ async fn probe_all(grpc: String, public: String, explorer: String) -> Vec<Probe>
     out
 }
 
+/// POST a JSON alert to the configured webhook via curl (handles HTTPS
+/// endpoints like Telegram/Discord without adding a client dependency).
+async fn send_alert(webhook: &str, text: &str) {
+    let body = serde_json::json!({"text": text}).to_string();
+    let out = tokio::process::Command::new("curl")
+        .args([
+            "-sS",
+            "-m",
+            "10",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &body,
+            webhook,
+        ])
+        .output()
+        .await;
+    match out {
+        Ok(o) if o.status.success() => eprintln!("[jc-status] alert sent: {text}"),
+        Ok(o) => eprintln!(
+            "[jc-status] alert POST failed: status={} stderr={}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr)
+        ),
+        Err(e) => eprintln!("[jc-status] alert curl spawn failed: {e}"),
+    }
+}
+
+/// Check tip age and fire/recover stall alerts. Called each probe round.
+async fn check_stall(sh: &Shared) {
+    let Some(webhook) = sh.alert_webhook.clone() else {
+        return;
+    };
+    let age = now().saturating_sub(*sh.tip_seen_at.lock().unwrap());
+    let tip = *sh.last_tip.lock().unwrap();
+    let msg = {
+        let mut alerted = sh.stall_alerted.lock().unwrap();
+        if age > STALL_ALERT_SECS && !*alerted {
+            *alerted = true;
+            Some(format!("JunoClaw STALL: chain tip {tip} has not advanced for {age}s"))
+        } else if age <= STALL_ALERT_SECS && *alerted {
+            *alerted = false;
+            Some(format!("JunoClaw RECOVERED: chain finalizing again at tip {tip}"))
+        } else {
+            None
+        }
+    };
+    if let Some(text) = msg {
+        send_alert(&webhook, &text).await;
+    }
+}
+
 fn render(sh: &Shared) -> String {
     let hist = sh.history.lock().unwrap();
     let latest = hist.back();
@@ -282,6 +342,8 @@ async fn main() {
         started: now(),
         last_tip: Mutex::new(0),
         tip_seen_at: Mutex::new(now()),
+        alert_webhook: std::env::var("JC_ALERT_WEBHOOK").ok().filter(|s| !s.is_empty()),
+        stall_alerted: Mutex::new(false),
     });
 
     {
@@ -298,9 +360,14 @@ async fn main() {
                             .and_then(|s| s.parse::<u64>().ok())
                     })
                 {
+                    let mut tip_seen = sh.tip_seen_at.lock().unwrap();
+                    if seq > *sh.last_tip.lock().unwrap() {
+                        *tip_seen = now();
+                    }
+                    drop(tip_seen);
                     *sh.last_tip.lock().unwrap() = seq;
-                    *sh.tip_seen_at.lock().unwrap() = now();
                 }
+                check_stall(&sh).await;
                 {
                     let mut h = sh.history.lock().unwrap();
                     if h.len() >= HISTORY_LEN {
