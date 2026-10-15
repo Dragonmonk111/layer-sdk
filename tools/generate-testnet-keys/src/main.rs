@@ -48,7 +48,7 @@ use commonware_cryptography::{
 };
 use commonware_math::algebra::Random;
 use commonware_parallel::Sequential;
-use commonware_utils::{ordered::Set, N3f1};
+use commonware_utils::{ordered::{Quorum, Set}, N3f1};
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -138,6 +138,9 @@ fn main() {
             "dkg-log" => return cmd_dkg_log(&args[2..]),
             "dkg-finalize" => return cmd_dkg_finalize(&args[2..]),
             "dkg-observe" => return cmd_dkg_observe(&args[2..]),
+            "dkg-synthesize-genesis-output" => {
+                return cmd_dkg_synthesize_genesis_output(&args[2..])
+            }
             _ => {}
         }
     }
@@ -1590,4 +1593,164 @@ fn cmd_dkg_observe(args: &[String]) {
             output.revealed().len()
         );
     }
+}
+
+/// `dkg-synthesize-genesis-output` — one-time bridge for the G1 set, whose
+/// BLS key was coordinator-dealt (assemble-genesis/deal_anonymous) rather than
+/// produced by a DKG round, so no prior `Output` exists for resharing.
+///
+/// Reconstructs a canonical round-0 `Output` encoding: the real public
+/// polynomial (`sharing_hex` from any G1 keys.json), players = the sorted G1
+/// validator set, dealers = same set, revealed = empty, and a deterministic
+/// transcript summary binding it to the sharing + chain id. The result feeds
+/// `dkg-info --previous`, letting the live set reshare WITHOUT rotating the
+/// group public key — preserving downstream trust roots (IBC light client).
+///
+/// Soundness: the synthesized Output is only ever used to (a) bind the
+/// reshare transcript and (b) check each dealer's share commitment against
+/// `public.partial_public(players.index(dealer))` — both use only genuine
+/// G1 public material. Dealer share scalars come from each operator's own
+/// keys.json; nothing secret is synthesized here.
+fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!("Usage: generate-testnet-keys dkg-synthesize-genesis-output --keys <g1 keys.json> --shared <g1 shared.json> [--out dkg-output-0.json]");
+        println!("\nBuilds the canonical round-0 Output for a coordinator-dealt genesis");
+        println!("so the existing set can reshare without rotating the group key.");
+        return;
+    }
+    let keys_path = get_arg(args, "--keys").expect("--keys required").to_string();
+    let shared_path = get_arg(args, "--shared")
+        .expect("--shared required")
+        .to_string();
+    let verify_dir = get_arg(args, "--verify-keys").map(|s| s.to_string());
+    let out = get_arg(args, "--out")
+        .unwrap_or("./dkg-output-0.json")
+        .to_string();
+
+    let keys: ValidatorKeys = load_json(&keys_path);
+    let shared: SharedCeremonyOutput = load_json(&shared_path);
+
+    // Players/dealers = the G1 validator set, sorted by pubkey (Set order).
+    let mut pks: Vec<DkgPk> = shared
+        .validators
+        .iter()
+        .map(|v| decode_ed_pk(&v.ed25519_public_hex))
+        .collect();
+    pks.sort();
+    pks.dedup();
+    if pks.len() != shared.validators.len() {
+        panic!("shared.json contains duplicate validator pubkeys");
+    }
+    let players: Set<DkgPk> = Set::try_from(pks.clone()).expect("players must be unique");
+
+    // Decode the genuine public polynomial dealt at genesis.
+    let sharing_bytes = hex::decode(
+        keys.sharing_hex
+            .as_deref()
+            .expect("keys.json lacks sharing_hex — is this a finalized G1 key?"),
+    )
+    .expect("keys.json: bad sharing_hex");
+    let bound = NonZeroU32::new(10_000).unwrap();
+    let sharing = Sharing::<MinSig>::read_cfg(
+        &mut &sharing_bytes[..],
+        &(bound, ModeVersion::v0()),
+    )
+    .expect("undecodable Sharing");
+    assert_eq!(
+        sharing.total().get() as usize,
+        pks.len(),
+        "sharing total ({}) != validator count ({})",
+        sharing.total(),
+        pks.len()
+    );
+
+    // Deterministic summary: binds this synthetic Output to chain-id + sharing.
+    use commonware_cryptography::transcript::Transcript;
+    let mut t = Transcript::new(b"junoclaw-genesis-output");
+    t.commit(shared.chain_id.as_bytes());
+    t.commit(sharing.encode());
+    t.commit(players.encode());
+    let summary_bytes: Vec<u8> = t.summarize().as_ref().to_vec();
+    assert_eq!(summary_bytes.len(), 32);
+
+    // Encode Output: summary || public || dealers || players || revealed.
+    let empty: Set<DkgPk> = Set::try_from(Vec::<DkgPk>::new()).expect("empty set");
+    let mut buf = Vec::new();
+    buf.extend_from_slice(&summary_bytes);
+    buf.extend_from_slice(&sharing.encode());
+    buf.extend_from_slice(&players.encode()); // dealers = the genesis set
+    buf.extend_from_slice(&players.encode()); // players = the genesis set
+    buf.extend_from_slice(&empty.encode()); // no reveals
+
+    // Round-trip through the real codec so a malformed synthesis fails here.
+    let output = Output::<MinSig, DkgPk>::read_cfg(&mut &buf[..], &(bound, ModeVersion::v0()))
+        .expect("synthesized Output failed to decode — bug");
+    assert_eq!(
+        output.public().public().encode().as_ref(),
+        sharing.public().encode().as_ref(),
+        "synthesized group key mismatch"
+    );
+
+    let group_hex = hex::encode(sharing.public().encode().as_ref());
+    assert_eq!(
+        group_hex, keys.threshold_public_key_hex,
+        "sharing group key != keys.json threshold_public_key_hex"
+    );
+
+    let file = DkgOutputFile {
+        chain_id: shared.chain_id.clone(),
+        round: 0,
+        output_hex: hex::encode(&buf),
+        threshold_public_key_hex: group_hex,
+        threshold_required: sharing.required::<N3f1>(),
+        threshold_total: sharing.total().get(),
+    };
+    write_json(&out, &file);
+    println!("Synthesized genesis Output (round 0):");
+    println!("  out:      {out}");
+    println!(
+        "  players:  {} (threshold {}/{})",
+        players.len(),
+        file.threshold_required,
+        file.threshold_total
+    );
+    println!("  group key: {}...  (unchanged — this is the whole point)", &file.threshold_public_key_hex[..32]);
+
+    // Optional: verify each available G1 keys.json — the share's public half
+    // must equal partial_public(position(pk)), exactly what Dealer::start
+    // checks during resharing. Catches any index-ordering mismatch now.
+    if let Some(dir) = verify_dir {
+        let mut verified = 0u32;
+        for entry in std::fs::read_dir(&dir).expect("read verify-keys dir") {
+            let path = entry.unwrap().path();
+            if path.extension().map(|e| e != "json").unwrap_or(true) {
+                continue;
+            }
+            let k: ValidatorKeys = load_json(path.to_str().unwrap());
+            let Some(share_hex) = k.share_hex.as_deref() else { continue };
+            let share = Share::read_cfg(&mut &hex::decode(share_hex).expect("bad share_hex")[..], &())
+                .expect("undecodable share");
+            let pk = decode_ed_pk(&k.ed25519_public_hex);
+            let participant = players
+                .index(&pk)
+                .unwrap_or_else(|| panic!("{} not in genesis player set", k.ed25519_public_hex));
+            let expected = sharing
+                .partial_public(participant)
+                .expect("partial_public failed");
+            assert_eq!(
+                expected.encode().as_ref(),
+                share.public::<MinSig>().encode().as_ref(),
+                "share commitment mismatch for {} — index ordering wrong",
+                k.ed25519_public_hex
+            );
+            verified += 1;
+            println!(
+                "  verified: {} (pos {}) share matches synthesized output",
+                short(&k.ed25519_public_hex),
+                participant.get()
+            );
+        }
+        println!("  {verified} key share(s) verified against round-0 output");
+    }
+    println!("Next: dkg-info --requests <dir> --dealers <dir> --chain-id {} --round 1 --previous {out}", shared.chain_id);
 }

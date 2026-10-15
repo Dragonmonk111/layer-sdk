@@ -1,45 +1,73 @@
 #!/usr/bin/env bash
-# Phase B step 6 — per-seat apply: finalize keys, write new node.toml with
-# restart_anchor, park the old consensus journal.
-# Runs against seats we control (ovh, home-vb, local rehearsal seat).
-# External operators get the equivalent commands in their pack.
+# Phase B — per-seat apply after the reshare ceremony.
+#
+# Each seat's working dir (local or remote) must contain:
+#   dkg-info.json            — from ceremony/
+#   logs/                    — all dealer log-*.json (public)
+#   priv-<moniker>/          — dealing-priv-*-for-<ME>.json (private, sent per-seat)
+#   share-requests/          — all four request files (public)
+#   keys/keys.json           — their keys (share gets overwritten by finalize)
+#
+# This script: dkg-finalize → finalize → new node.toml → park journal.
+# Configure the seat map below, then run. External operators get the same
+# commands via OPERATOR-PACK.md.
 set -euo pipefail
 cd "$(dirname "$0")"
-source ./anchor.env   # ANCHOR_HEIGHT, ANCHOR_DIGEST — must be filled
-: "${ANCHOR_HEIGHT:?fill anchor.env first}" "${ANCHOR_DIGEST:?}"
+source ./anchor.env
+: "${ANCHOR_HEIGHT:?run read-tips.sh first}" "${ANCHOR_DIGEST:?run read-tips.sh first}"
 
 GTK=${GTK:-/root/junoclaw-chain/tools/generate-testnet-keys/target/release/generate-testnet-keys}
-SSH="ssh -i /mnt/c/Users/Taj/.ssh/ovh_g1 -o ConnectTimeout=10"
+OUT=ceremony
 
-# map: validator_index -> (keys_dir on its host). Determined AFTER deal.sh
-# from ceremony/shared.json ordering — operators check their index there.
+apply_local() { # $1=moniker $2=keys_dir $3=config_dir $4=data_dir $5=service
+  local name=$1 keys=$2 conf=$3 data=$4 svc=$5
+  echo ">> $name (local)"
 
-apply_seat() { # $1=name $2=validator_index $3=remote "ssh ..." or "local" $4=data_dir $5=config_dir $6=keys_dir $7=service
-  local name=$1 vi=$2 where=$3 data=$4 conf=$5 keys=$6 svc=$7
-  echo ">> $name (index $vi)"
+  "$GTK" dkg-finalize \
+    --info "$OUT/dkg-info.json" --keys "$keys/keys.json" \
+    --priv-dir "$OUT/priv-$name" --logs-dir "$OUT/logs" \
+    --requests share-requests --out "$OUT/bls-share-$name.json"
+  "$GTK" finalize --keys "$keys/keys.json" \
+    --bls-share "$OUT/bls-share-$name.json" | tail -1
 
-  if [ "$where" = local ]; then
-    "$GTK" finalize --keys "$keys/keys.json" \
-      --bls-share "ceremony/validator-$vi/bls-share.json" | tail -1
-    cp "ceremony/validator-$vi/node-$vi.toml" "$conf/node.toml.g2"
-    python3 - "$conf/node.toml.g2" <<EOF
-import sys, re
-p = sys.argv[1]
-t = open(p).read()
-t += '\nrestart_anchor = { height = $ANCHOR_HEIGHT, digest = "$ANCHOR_DIGEST" }\n'
-open(p, "w").write(t)
-EOF
-    mv "$data/consensus" "$data/consensus.g2-bak"
-    mv "$conf/node.toml.g2" "$conf/node.toml"
-  else
-    # remote path — push bls-share + staged toml, operator applies locally
-    echo "   remote seat — push ceremony/validator-$vi/ and have the operator run finalize + journal park + restart"
-  fi
+  python3 mk-node-toml.py "$OUT/shared.json" "$name" \
+    "$ANCHOR_HEIGHT" "$ANCHOR_DIGEST" "$conf/node.toml" > "$conf/node.toml.g2"
+
+  mv "$data/consensus" "$data/consensus.g2-bak"
+  mv "$conf/node.toml.g2" "$conf/node.toml"
+  echo "   staged — service $svc restarts via start.sh"
 }
 
-echo "!! edit the apply_seat calls below to match the dealt indexes first !!"
-# apply_seat home-vb <i> local  /data            /config       /keys        g1-node
-# apply_seat ovh-uk1 <i> remote 51.195.201.74    /config       /keys        junoclaw-g1
-# apply_seat seat5   <i> local  /data-seat5      /config-seat5 /keys-seat5  g1-seat5
+apply_remote() { # $1=moniker $2=ssh-prefix (e.g. "ssh -i key ubuntu@host") $3=remote_workdir
+  local name=$1 sshp=$2 rwd=$3
+  echo ">> $name (remote $rwd)"
+  # Push the public material + this seat's private dealing files.
+  $sshp "mkdir -p $rwd/{logs,priv,share-requests}"
+  scp ${sshp#ssh } "$OUT/dkg-info.json" "$rwd/dkg-info.json" 2>/dev/null || \
+    $sshp "cat > $rwd/dkg-info.json" < "$OUT/dkg-info.json"
+  $sshp "cat > $rwd/shared.json" < "$OUT/shared.json"
+  for f in "$OUT"/logs/*.json; do
+    $sshp "cat > $rwd/logs/$(basename "$f")" < "$f"
+  done
+  for f in "$OUT"/priv-"$name"/*.json; do
+    $sshp "cat > $rwd/priv/$(basename "$f")" < "$f"
+  done
+  for f in share-requests/*.json; do
+    $sshp "cat > $rwd/share-requests/$(basename "$f")" < "$f"
+  done
+  echo "   pushed — run remotely:"
+  echo "   $GTK dkg-finalize --info dkg-info.json --keys keys/keys.json \\"
+  echo "     --priv-dir priv --logs-dir logs --requests share-requests --out bls-share.json"
+  echo "   $GTK finalize --keys keys/keys.json --bls-share bls-share.json"
+  echo "   then write node.toml (mk-node-toml.py), mv data/consensus aside, restart"
+}
 
-echo ">> done — now run start.sh (anchor seat FIRST)"
+echo "!! edit seat calls below per ceremony/shared.json ordering !!"
+
+# === SEAT MAP — fill after observe.sh prints the new set ===
+# apply_local  home-vb  /mnt/c/.../keys        /config       /data        g1-node
+# apply_remote ovh-uk1 "ssh -i ~/.ssh/ovh_g1 ubuntu@51.195.201.74" /home/ubuntu/g2-window
+# apply_remote vahana  "ssh ravi@57.129.103.229"                   ~/g2-window
+# apply_remote anatoly "ssh anatoly@<hetzner-ip>"                  ~/g2-window
+
+echo ">> done — verify each seat finalized, then ./start.sh (anchor seat FIRST)"
