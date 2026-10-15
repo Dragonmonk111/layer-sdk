@@ -98,6 +98,28 @@ CREATE TABLE IF NOT EXISTS blocks(
     cert       BLOB
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS idx_blocks_height ON blocks(height);
+-- Transaction results, folded from _txres/<hash> writes (empty module in
+-- the change stream; value is a prost-encoded cosmos TxResponse).
+CREATE TABLE IF NOT EXISTS txs(
+    txhash     TEXT PRIMARY KEY,
+    seq        INTEGER NOT NULL,
+    height     INTEGER,
+    code       INTEGER,
+    raw_log    TEXT,
+    gas_wanted INTEGER,
+    gas_used   INTEGER,
+    response   BLOB
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_txs_height ON txs(height);
+-- Address → tx backlink, extracted from tx event attributes holding
+-- bech32-looking values (sender/recipient/contract/etc.).
+CREATE TABLE IF NOT EXISTS tx_addrs(
+    address TEXT NOT NULL,
+    txhash  TEXT NOT NULL,
+    seq     INTEGER NOT NULL,
+    PRIMARY KEY(address, txhash)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_tx_addrs_seq ON tx_addrs(seq);
 ";
 
 fn arg(flag: &str, args: &[String]) -> Option<String> {
@@ -279,21 +301,84 @@ fn apply_typed(
                 )?;
             }
         }
+        ("", b) if b.starts_with("_txres/") => {
+            let hash = &b[7..];
+            if op == "d" {
+                tx.execute("DELETE FROM txs WHERE txhash=?1", params![hash])?;
+                tx.execute("DELETE FROM tx_addrs WHERE txhash=?1", params![hash])?;
+            } else if let Some(v) = value {
+                use layer_proto::cosmos::base::abci::v1beta1::TxResponse;
+                let resp = <TxResponse as prost::Message>::decode(v).ok();
+                let (height, code, raw_log, gas_wanted, gas_used) = resp
+                    .as_ref()
+                    .map(|r| {
+                        (
+                            Some(r.height),
+                            r.code as i64,
+                            r.raw_log.clone(),
+                            r.gas_wanted,
+                            r.gas_used,
+                        )
+                    })
+                    .unwrap_or((None, -1, String::new(), 0, 0));
+                tx.execute(
+                    "INSERT INTO txs(txhash,seq,height,code,raw_log,gas_wanted,gas_used,response)
+                     VALUES(?1,?2,?3,?4,?5,?6,?7,?8)
+                     ON CONFLICT(txhash) DO UPDATE SET seq=?2, height=?3, code=?4,
+                         raw_log=?5, gas_wanted=?6, gas_used=?7, response=?8",
+                    params![hash, seq, height, code, raw_log, gas_wanted, gas_used, v],
+                )?;
+                if let Some(r) = &resp {
+                    let mut addrs = std::collections::BTreeSet::new();
+                    for ev in &r.events {
+                        for a in &ev.attributes {
+                            if is_bech32(&a.value) {
+                                addrs.insert(a.value.clone());
+                            }
+                        }
+                    }
+                    for addr in addrs {
+                        tx.execute(
+                            "INSERT OR IGNORE INTO tx_addrs(address,txhash,seq) VALUES(?1,?2,?3)",
+                            params![addr, hash, seq],
+                        )?;
+                    }
+                }
+            }
+        }
         _ => {}
     }
     Ok(())
 }
 
+/// Bech32-ish heuristic: `<hrp>1<lowercase-alnum>` — matches juno1/osmo1/
+/// contract and account addresses in event attribute values without
+/// accepting hex hashes (uppercase) or numeric strings.
+fn is_bech32(v: &str) -> bool {
+    let Some(pos) = v.rfind('1') else {
+        return false;
+    };
+    let (hrp, data) = (&v[..pos], &v[pos + 1..]);
+    hrp.len() >= 2
+        && hrp.len() <= 8
+        && hrp.bytes().all(|b| b.is_ascii_lowercase())
+        && data.len() >= 25
+        && data.len() <= 90
+        && data
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+}
+
 /// Catch typed projections up to the raw archive (after restart or upgrade).
 fn backfill_typed(db: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-    // Schema v2 added the `blocks` table: wipe projections + cursor once so
+    // Schema v3 added `txs`/`tx_addrs`: wipe projections + cursor once so
     // the whole journal re-folds.
-    const SCHEMA_V: &str = "2";
+    const SCHEMA_V: &str = "3";
     if meta_get(db, "typed_schema_v").as_deref() != Some(SCHEMA_V) {
         db.execute_batch(
             "DELETE FROM accounts; DELETE FROM balances; DELETE FROM supply;
              DELETE FROM contracts; DELETE FROM codes; DELETE FROM contract_writes;
-             DELETE FROM blocks;",
+             DELETE FROM blocks; DELETE FROM txs; DELETE FROM tx_addrs;",
         )?;
         meta_set(db, "typed_seq", "-1")?;
         meta_set(db, "typed_schema_v", SCHEMA_V)?;

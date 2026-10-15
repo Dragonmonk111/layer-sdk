@@ -135,7 +135,21 @@ exactly threshold. Findings below are from that configuration.
    **Fix: vendored `commonware-storage` at `lib/commonware-storage`
    (crates.io `[patch]`); `prune` now treats `BlobMissing` as
    already-pruned and continues.** Verified `cargo check -p slay3rd`
-   clean. Worth upstreaming.
+   clean.
+
+   **Upstream status (Oct 15):** reported as
+   `commonwarexyz/monorepo#5266`; closed NOT_PLANNED with reference to
+   declined PR #4196. Commonware's stated contract: **any external
+   storage manipulation is undefined behavior and any storage error is
+   fatal by design.** Their position is that a single correctly-run
+   node can never see this gap (remove+sync runs lowest→highest, and
+   the blob map is rebuilt from storage on restart). Our most plausible
+   trigger was the stale duplicate workloads sharing the data dir
+   (see finding 3) — i.e. we violated the no-external-manipulation
+   assumption rather than hitting an internal race. The vendored patch
+   stays as defense-in-depth, but the operational invariant stands:
+   **never run two node processes over one data dir, never touch data
+   files while the node runs.**
 
 2. **Transient systemd units = no watchdog.** `g1-node` ran under
    `systemd-run` — no `Restart=` policy, and the unit definition

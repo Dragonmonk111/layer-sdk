@@ -30,10 +30,12 @@ use axum::http::StatusCode;
 use axum::response::{Html, Json};
 use axum::routing::get;
 use axum::Router;
+use layer_proto::cosmos::base::abci::v1beta1::TxResponse;
 use layer_proto::layer::lightclient::v1::query_client::QueryClient as LcClient;
 use layer_proto::layer::lightclient::v1::{
     QueryBlockRequest, QueryLatestHeightRequest,
 };
+use prost::Message as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tonic::transport::Channel;
@@ -100,6 +102,7 @@ struct BlockInfo {
     timestamp_nanos: u64,
     digest: String,
     tx_count: usize,
+    tx_hashes: Vec<String>,
     state_root: String,
     proposer: String,
     finalized: bool,
@@ -173,14 +176,19 @@ fn archive_lookup(conn: &rusqlite::Connection, height: u64) -> Option<ArchiveBlo
 }
 
 fn decode_block(height: u64, ts: u64, cert: &[u8], payload: &[u8]) -> BlockInfo {
-    let (digest, tx_count, state_root, proposer) = match BlockPayload::from_bytes_ext(payload) {
+    let (digest, tx_count, state_root, proposer, tx_hashes) = match BlockPayload::from_bytes_ext(payload) {
         Some(p) => (
             hex::encode(Sha256::digest(payload)),
             p.txs.len(),
             hex::encode(p.state_root),
             hex::encode(&p.proposer[..p.proposer.len().min(8)]),
+            // CometBFT convention: txhash = sha256(raw tx), upper-hex.
+            p.txs
+                .iter()
+                .map(|t| hex::encode_upper(Sha256::digest(t)))
+                .collect::<Vec<_>>(),
         ),
-        None => ("—".into(), 0, "—".into(), "—".into()),
+        None => ("—".into(), 0, "—".into(), "—".into(), vec![]),
     };
     let (hybrid, signers, participants, mayo) = match parse_hybrid_envelope(cert) {
         Ok(e) => (true, e.signers, e.participants, e.mayo_sig_count),
@@ -191,6 +199,7 @@ fn decode_block(height: u64, ts: u64, cert: &[u8], payload: &[u8]) -> BlockInfo 
         timestamp_nanos: ts,
         digest,
         tx_count,
+        tx_hashes,
         state_root,
         proposer,
         finalized: !cert.is_empty(),
@@ -411,6 +420,17 @@ async fn block_page(
         "<div class=sub>classical BLS certificate or not yet finalized</div>".into()
     };
 
+    let txs_html = if b.tx_hashes.is_empty() {
+        "<div class=sub>no transactions</div>".to_string()
+    } else {
+        let rows: String = b
+            .tx_hashes
+            .iter()
+            .map(|t| format!("<tr><td class=hash><a href='/tx/{t}'>{t}</a></td></tr>"))
+            .collect();
+        format!("<table><tr><th>tx hash</th></tr>{rows}</table>")
+    };
+
     Ok(page(
         &format!("Block {}", b.height),
         &format!(
@@ -422,6 +442,7 @@ async fn block_page(
              <div>proposer</div><div class=hash>{}</div>\
              <div>transactions</div><div>{}</div>\
              </div></div>\
+             <h2>Transactions</h2><div class=card>{txs_html}</div>\
              <h2>Finality certificate</h2><div class=card>{cert_html}</div>\
              <div class=sub>raw: <a href='/api/block/{h}'>/api/block/{h}</a> — independently verify with tools/verify-cert</div>",
             b.height,
@@ -576,7 +597,11 @@ async fn search(Query(q): Query<SearchQ>) -> axum::response::Redirect {
     if let Ok(h) = q.parse::<u64>() {
         return axum::response::Redirect::to(&format!("/block/{h}"));
     }
-    if q.starts_with("juno1") {
+    // 64-char hex = sha256 txhash (CometBFT convention).
+    if q.len() == 64 && q.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return axum::response::Redirect::to(&format!("/tx/{}", q.to_ascii_uppercase()));
+    }
+    if q.starts_with("juno1") || q.starts_with("osmo1") {
         return axum::response::Redirect::to(&format!("/address/{q}"));
     }
     axum::response::Redirect::to("/")
@@ -612,14 +637,154 @@ async fn address_page(
         None => "<div class=sub>archive not attached — balances unavailable</div>".into(),
     };
 
+    // Recent txs touching this address (from the archive's tx_addrs index).
+    let txs_html = match &st.archive {
+        Some(arc) => {
+            let conn = arc.lock().unwrap();
+            let mut stq = conn
+                .prepare(
+                    "SELECT t.txhash, t.height, t.code FROM tx_addrs a \
+                     JOIN txs t ON t.txhash = a.txhash \
+                     WHERE a.address=?1 ORDER BY t.seq DESC LIMIT 50",
+                )
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let rows = stq
+                .query_map([&addr], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, Option<i64>>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
+                })
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let mut s = String::new();
+            let mut any = false;
+            for r in rows.flatten() {
+                any = true;
+                let badge = if r.2 == 0 {
+                    "<span class='badge ok'>OK</span>"
+                } else {
+                    "<span class='badge warn'>FAIL</span>"
+                };
+                s += &format!(
+                    "<tr><td class=hash><a href='/tx/{}'>{}</a></td><td>{}</td><td>{}</td></tr>",
+                    esc(&r.0),
+                    esc(&r.0),
+                    r.1.map(|h| h.to_string()).unwrap_or("—".into()),
+                    badge
+                );
+            }
+            if any {
+                format!("<table><tr><th>tx hash</th><th>height</th><th>result</th></tr>{s}</table>")
+            } else {
+                "<div class=sub>no indexed transactions touch this address yet</div>".into()
+            }
+        }
+        None => "<div class=sub>archive not attached — tx history unavailable</div>".into(),
+    };
+
     Ok(page(
         &format!("Address"),
         &format!(
             "<h1><a href='/'>←</a> Address</h1>\
              <div class=card><div class=kv><div>address</div><div class=hash>{}</div></div></div>\
              <h2>Balances</h2><div class=card>{balances_html}</div>\
-             <h2>Transactions</h2><div class=card><div class=sub>not indexed yet — the chain has minimal tx traffic; the archive's tx projection lands with module traffic</div></div>",
+             <h2>Transactions</h2><div class=card>{txs_html}</div>",
             esc(&addr)
+        ),
+    ))
+}
+
+/// Transaction detail from the archive's `txs` table.
+async fn tx_page(
+    State(st): State<AppState>,
+    Path(hash): Path<String>,
+) -> Result<Html<String>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let row = {
+        let conn = arc.lock().unwrap();
+        conn.query_row(
+            "SELECT txhash, seq, height, code, raw_log, gas_wanted, gas_used, response \
+             FROM txs WHERE txhash=?1",
+            [&hash],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, Option<i64>>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, i64>(5)?,
+                    r.get::<_, i64>(6)?,
+                    r.get::<_, Option<Vec<u8>>>(7)?,
+                ))
+            },
+        )
+        .ok()
+    };
+    let Some((txhash, _seq, height, code, raw_log, gas_wanted, gas_used, resp_bytes)) = row else {
+        return Ok(page(
+            "Tx",
+            &format!(
+                "<h1><a href='/'>←</a> Transaction</h1>\
+                 <div class=card><div class=kv><div>hash</div><div class=hash>{}</div></div></div>\
+                 <div class=sub>not in the archive index — the tx may be pruned, \
+                 pending, or the hash is wrong</div>",
+                esc(&hash)
+            ),
+        ));
+    };
+
+    let (badge, status) = if code == 0 {
+        ("ok", "SUCCESS")
+    } else {
+        ("warn", "FAILED")
+    };
+
+    // Decode the stored TxResponse for the event log.
+    let events_html = resp_bytes
+        .and_then(|b| TxResponse::decode(b.as_slice()).ok())
+        .map(|r| {
+            let mut s = String::new();
+            for ev in &r.events {
+                s += &format!("<tr><td colspan=2><b>{}</b></td></tr>", esc(&ev.r#type));
+                for a in &ev.attributes {
+                    s += &format!(
+                        "<tr><td class=sub>{}</td><td class=hash>{}</td></tr>",
+                        esc(&a.key),
+                        esc(&a.value)
+                    );
+                }
+            }
+            if s.is_empty() {
+                "<div class=sub>no events</div>".into()
+            } else {
+                format!("<table>{s}</table>")
+            }
+        })
+        .unwrap_or_else(|| "<div class=sub>response bytes undecodable</div>".into());
+
+    Ok(page(
+        "Transaction",
+        &format!(
+            "<h1><a href='/'>←</a> Transaction <span class='badge {badge}'>{status}</span></h1>\
+             <div class=card><div class=kv>\
+             <div>hash</div><div class=hash>{}</div>\
+             <div>height</div><div>{}</div>\
+             <div>code</div><div>{}</div>\
+             <div>gas</div><div>{} used / {} wanted</div>\
+             <div>log</div><div class=hash>{}</div>\
+             </div></div>\
+             <h2>Events</h2><div class=card>{events_html}</div>\
+             <div class=sub>raw: <a href='/api/tx/{}'>/api/tx/{}</a></div>",
+            esc(&txhash),
+            height.map(|h| h.to_string()).unwrap_or("—".into()),
+            code,
+            gas_used,
+            gas_wanted,
+            esc(&raw_log),
+            esc(&txhash),
+            esc(&txhash),
         ),
     ))
 }
@@ -763,7 +928,81 @@ async fn api_address(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .flatten()
         .collect();
-    Ok(Json(serde_json::json!({"address": addr, "balances": balances})))
+    let txs: Vec<serde_json::Value> = conn
+        .prepare(
+            "SELECT t.txhash, t.height, t.code FROM tx_addrs a \
+             JOIN txs t ON t.txhash = a.txhash \
+             WHERE a.address=?1 ORDER BY t.seq DESC LIMIT 50",
+        )
+        .and_then(|mut s| {
+            let rows = s
+                .query_map([&addr], |r| {
+                    Ok(serde_json::json!({
+                        "txhash": r.get::<_, String>(0)?,
+                        "height": r.get::<_, Option<i64>>(1)?,
+                        "code": r.get::<_, i64>(2)?,
+                    }))
+                })?
+                .flatten()
+                .collect();
+            Ok(rows)
+        })
+        .unwrap_or_default();
+    Ok(Json(serde_json::json!({"address": addr, "balances": balances, "txs": txs})))
+}
+
+async fn api_tx(
+    State(st): State<AppState>,
+    Path(hash): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let conn = arc.lock().unwrap();
+    let row = conn
+        .query_row(
+            "SELECT txhash, seq, height, code, raw_log, gas_wanted, gas_used, response \
+             FROM txs WHERE txhash=?1",
+            [&hash],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, Option<i64>>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, i64>(5)?,
+                    r.get::<_, i64>(6)?,
+                    r.get::<_, Option<Vec<u8>>>(7)?,
+                ))
+            },
+        )
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let events: Vec<serde_json::Value> = row
+        .7
+        .and_then(|b| TxResponse::decode(b.as_slice()).ok())
+        .map(|r| {
+            r.events
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "type": e.r#type,
+                        "attributes": e.attributes.iter().map(|a| {
+                            serde_json::json!({"key": a.key, "value": a.value})
+                        }).collect::<Vec<_>>(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(Json(serde_json::json!({
+        "txhash": row.0,
+        "seq": row.1,
+        "height": row.2,
+        "code": row.3,
+        "raw_log": row.4,
+        "gas_wanted": row.5,
+        "gas_used": row.6,
+        "events": events,
+    })))
 }
 
 // ---------------------------------------------------------------------------
@@ -850,12 +1089,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/history", get(history_page))
         .route("/search", get(search))
         .route("/address/:a", get(address_page))
+        .route("/tx/:hash", get(tx_page))
         .route("/api/status", get(api_status))
         .route("/api/blocks", get(api_blocks))
         .route("/api/block/:h", get(api_block))
         .route("/api/archive/status", get(api_archive_status))
         .route("/api/archive/blocks", get(api_archive_blocks))
         .route("/api/address/:a", get(api_address))
+        .route("/api/tx/:hash", get(api_tx))
         .with_state(st);
 
     eprintln!("[jc-explorer] grpc={grpc} listening on http://{listen}");
