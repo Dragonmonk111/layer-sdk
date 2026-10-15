@@ -82,6 +82,12 @@ Phase C — verify:
    appears in leader rotation, confirms `peers` count = n−1, and that
    the retired seat cannot rejoin.
 
+Phase D — hygiene (REQUIRED, not optional):
+9. `POST-CEREMONY-CLEANUP.md` — walk the checklist. Dealer seeds,
+   per-player dealing files, stray share/key copies get deleted;
+   `dkg-output-<n>.json` and `shared.json` are KEPT (public, needed
+   for the next reshare round). Do this while the ceremony is fresh.
+
 ## Rollback
 
 Journals are moved to `/data/consensus.g2-bak` (not deleted). To roll
