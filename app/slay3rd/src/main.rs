@@ -592,6 +592,20 @@ async fn run_node(
     let wal_path = config.wal_path();
     let app_data_path = config.app_data_path();
 
+    // state_sync.force: discard stored app state BEFORE the DB opens so
+    // the sync path below fires even when state exists (G2 lesson: a
+    // node that booted once on a stale config holds genesis state
+    // forever — load_from_storage() returns Ok and sync never runs).
+    #[cfg(feature = "rocksdb")]
+    if config.state_sync.as_ref().is_some_and(|s| s.force)
+        && std::path::Path::new(&app_data_path).exists()
+    {
+        warn!(path = %app_data_path,
+            "state-sync force=true — removing stored app state before open");
+        std::fs::remove_dir_all(&app_data_path)
+            .expect("force_state_sync: failed to remove app data directory");
+    }
+
     // Create data directories
     std::fs::create_dir_all(&wal_path).expect("Failed to create WAL directory");
     std::fs::create_dir_all(&app_data_path).expect("Failed to create app data directory");
@@ -621,6 +635,11 @@ async fn run_node(
     match app.load_from_storage() {
         Ok(()) => {
             info!("App loaded from existing storage");
+            if config.state_sync.is_some() {
+                warn!("[state_sync] is configured but stored state already \
+                       exists — sync skipped. To discard local state and \
+                       re-sync, set force = true under [state_sync].");
+            }
         }
         Err(AppLoadError::NoStoredState) => {
             if let Some(ss) = &config.state_sync {
@@ -1083,10 +1102,18 @@ async fn run_node(
     //   enabling non-proposer validators to succeed in verify().
     // -----------------------------------------------------------------------
 
+    // Mesh diagnostics: every payload broadcast returns the peers it was
+    // delivered to — keep a rolling set of recently-reached peers so the
+    // log answers "am I meshed?" without socket counting (G2 lesson).
+    let mesh_reached: Arc<Mutex<std::collections::HashMap<String, std::time::Instant>>> =
+        Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let mesh_peer_total = config.peers.len();
+
     // Task A: forward payload bytes from relay to P2P (proposer path)
     {
         let mut sender = payload_p2p_sender.clone();
         let mut rx = payload_broadcast_rx;
+        let mesh_reached = mesh_reached.clone();
         tokio::spawn(async move {
             while let Some(payload_bytes) = rx.recv().await {
                 let psize = payload_bytes.len();
@@ -1096,6 +1123,13 @@ async fn run_node(
                 let payload_bytes = bytes::Bytes::from(framed);
                 match P2pSender::send(&mut sender, Recipients::All, payload_bytes, true).await {
                     Ok(sent_to) => {
+                        {
+                            let mut m = mesh_reached.lock().await;
+                            let now = std::time::Instant::now();
+                            for pk in &sent_to {
+                                m.insert(pk.to_string(), now);
+                            }
+                        }
                         tracing::info!(
                             peers = sent_to.len(),
                             payload_bytes = psize,
@@ -1109,6 +1143,38 @@ async fn run_node(
                 }
             }
             tracing::info!("Payload relay broadcast task exited");
+        });
+    }
+
+    // Periodic mesh-health log: peers we delivered to in the last 2
+    // minutes vs the configured peer count. WARN names the missing peers
+    // (by public-key prefix) when the mesh is thin.
+    {
+        let mesh_reached = mesh_reached.clone();
+        let peer_keys: Vec<String> =
+            config.peers.iter().map(|p| p.public_key.clone()).collect();
+        let quorum = km.threshold_required as usize;
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                let mut m = mesh_reached.lock().await;
+                let now = std::time::Instant::now();
+                m.retain(|_, t| now.duration_since(*t) < Duration::from_secs(120));
+                let connected = m.len();
+                if connected >= mesh_peer_total {
+                    tracing::info!(connected, configured = mesh_peer_total, quorum,
+                        "peer mesh: reached {connected}/{mesh_peer_total} peers in last 2m");
+                } else {
+                    let missing: Vec<String> = peer_keys
+                        .iter()
+                        .filter(|k| !m.contains_key(k.as_str()))
+                        .map(|k| k.chars().take(8).collect())
+                        .collect();
+                    tracing::warn!(connected, configured = mesh_peer_total, quorum,
+                        missing = ?missing,
+                        "peer mesh: only {connected}/{mesh_peer_total} peers reached in last 2m");
+                }
+            }
         });
     }
 

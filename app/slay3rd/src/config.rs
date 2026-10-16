@@ -172,6 +172,14 @@ pub struct StateSyncConfig {
     /// new certificates. Default false.
     #[serde(default)]
     pub halted_chain_anchor: bool,
+    /// Discard stored app state before open so the state-sync path
+    /// triggers even on a node that already has data — e.g. one that
+    /// booted once on a stale config and now holds genesis state it can
+    /// never execute from. DESTRUCTIVE to `{data_dir}/app`; the
+    /// consensus journal, payload store and other siblings are
+    /// untouched. Default false.
+    #[serde(default)]
+    pub force: bool,
 }
 
 /// Set-change restart anchor: the agreed parent every seat builds on when
