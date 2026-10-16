@@ -9,7 +9,11 @@ that already runs a **vendored CosmWasm 2.3.2 VM as a first-class module**
 — store-code, instantiate, instantiate2, execute, migrate, submsg/reply,
 admin ACLs, gas metering — and just completed a **live ICS-20 transfer
 into a stock ibc-go chain** (Osmosis), verified on-chain by a BLS
-threshold light client inside an 08-wasm contract.
+threshold light client inside an 08-wasm contract — and has now run a
+**live five-operator validator-set change** (G1 → G2): three
+independent operators joined/coordinated a dealer-free Joint-Feldman
+reshare that preserved the BLS group key, then the network halted and
+resumed finality under the new 4-of-5 set.
 
 We'd like to port the DAO DAO contract suite onto it as the chain's
 native governance surface. As far as we can tell, DAO DAO core is pure
@@ -102,7 +106,10 @@ narrow. The risks we'd verify first, in order:
   `dao-interface` initially (its chain-registry coupling is heavy); a
   purpose-built console is faster and we can revisit.
 - **P3 — dogfood:** run the next validator-set change through a
-  SubDAO vote, then hand execution to the operators.
+  SubDAO vote, then hand execution to the operators. (The G2 change
+  already ran the full lifecycle manually — DKG reshare, halt, anchor,
+  coordinated restart — so the operational surface a DAO would govern
+  is proven, not theoretical.)
 - **P4 — coordinate upstream:** if the port works, the interesting
   outcome is DAO DAO officially shipping on a non-Cosmos chain. We'd
   rather upstream any contract changes than fork the suite — and we
@@ -122,13 +129,16 @@ narrow. The risks we'd verify first, in order:
 ## Honest caveats
 
 - JunoClaw is a young testnet network — G1 ran multi-operator for
-  weeks including one public incident (root-caused, patched, deployed).
-  This is not a mainnet TVL pitch; it's a "your contracts are portable
-  and here's a chain that proves it" pitch.
+  weeks including one public incident (root-caused, patched, deployed),
+  and G2 now runs a five-operator set that onboarded via resharing and
+  a coordinated halt/cutover. This is not a mainnet TVL pitch; it's a
+  "your contracts are portable and here's a chain that proves it"
+  pitch.
 - Our wasm module is real but young — the P0 audit exists precisely
   because we expect edge cases. We'd rather find them on devnet than
   claim compatibility we haven't demonstrated.
 - A fresh validator-set deal rotates the BLS group key; we use
-  Joint-Feldman resharing to preserve it across set changes, which
-  keeps trust roots (IBC client, any contract-bound quorum checks)
-  stable. DAO contracts themselves are unaffected either way.
+  Joint-Feldman resharing to preserve it across set changes — just
+  exercised live in the G1 → G2 transition, which kept the group key
+  (and therefore the IBC client trust root) byte-identical across the
+  operator change. DAO contracts themselves are unaffected either way.

@@ -25,7 +25,8 @@
 //!
 //! Multi-peer anchor: the certified payload bytes must also be served
 //! byte-identically by at least `min_anchor_agree` distinct peers
-//! (`StateSyncConfig`), as defense in depth.
+//! (`StateSyncConfig`), as defense in depth. The halted-chain fallback
+//! applies the same quorum to donor-advertised snapshot roots.
 //!
 //! Download bound: the dump is held in memory until its root is checked,
 //! so the joiner stops once the chunks exceed `max_snapshot_bytes`.
@@ -40,7 +41,9 @@ use layer_storage::PersistentStorage;
 use layer_proto::layer::lightclient::v1::query_client::QueryClient as LightClientClient;
 use layer_proto::layer::lightclient::v1::{QueryBlockRequest, QueryBlockResponse};
 use layer_proto::layer::statesync::v1::query_client::QueryClient as StateSyncClient;
-use layer_proto::layer::statesync::v1::{ListSnapshotsRequest, LoadSnapshotChunkRequest};
+use layer_proto::layer::statesync::v1::{
+    ListSnapshotsRequest, LoadSnapshotChunkRequest, SnapshotMeta,
+};
 
 use crate::block::BlockPayload;
 use crate::config::StateSyncConfig;
@@ -93,37 +96,32 @@ pub async fn fetch_snapshot(peers: &[String], max_bytes: u64) -> Result<FetchedS
 ///
 /// The initial connect + ListSnapshots retries briefly: a joiner often
 /// boots before its donor's gRPC is serving.
-async fn fetch_snapshot_from(peer: &str, max_bytes: u64) -> Result<FetchedSnapshot> {
-    let mut client = {
-        let mut last_err = None;
-        let mut c = None;
-        for attempt in 1..=6 {
-            match StateSyncClient::connect(format!("http://{peer}")).await {
-                Ok(v) => {
-                    c = Some(v);
-                    break;
-                }
-                Err(e) => {
-                    last_err = Some(e);
-                    tracing::warn!(attempt, "state-sync: connect retry");
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                }
+/// Connect to a peer's statesync service with brief retries — a joiner
+/// often boots before its donor's gRPC is serving.
+async fn connect_statesync(
+    peer: &str,
+) -> Result<StateSyncClient<tonic::transport::Channel>> {
+    let mut last_err = None;
+    for _attempt in 1..=6 {
+        match StateSyncClient::connect(format!("http://{peer}")).await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                last_err = Some(e);
+                tracing::warn!("state-sync: connect retry");
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         }
-        match c {
-            Some(v) => v,
-            None => return Err(last_err.unwrap())
-                .with_context(|| format!("state-sync: connect to {peer}")),
-        }
-    };
+    }
+    Err(last_err.unwrap()).with_context(|| format!("state-sync: connect to {peer}"))
+}
 
-    let mut snaps = None;
+/// `ListSnapshots` with brief retries — donors may not be serving yet.
+async fn list_snapshots(
+    client: &mut StateSyncClient<tonic::transport::Channel>,
+) -> Result<Vec<SnapshotMeta>> {
     for attempt in 1..=6 {
         match client.list_snapshots(ListSnapshotsRequest {}).await {
-            Ok(r) => {
-                snaps = Some(r.into_inner().snapshots);
-                break;
-            }
+            Ok(r) => return Ok(r.into_inner().snapshots),
             Err(e) if attempt < 6 => {
                 tracing::warn!(attempt, error = %e, "state-sync: ListSnapshots retry");
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -131,16 +129,24 @@ async fn fetch_snapshot_from(peer: &str, max_bytes: u64) -> Result<FetchedSnapsh
             Err(e) => return Err(e).context("state-sync: ListSnapshots failed"),
         }
     }
-    let snaps = snaps.expect("retry loop always sets or returns");
-    // Adopt the latest offered snapshot. Height-0 (genesis) offers are
-    // skipped outright: they are unanchorable — the tip anchor at
-    // `snap.height` requires a certified block, and height 0 is never
-    // finalized (consensus starts at height 1).
-    let meta = snaps
+    unreachable!("loop returns or errors on the final attempt")
+}
+
+/// The latest usable (height > 0) offered snapshot, if any. Height-0
+/// (genesis) offers are skipped: they are unanchorable — the tip anchor
+/// at `snap.height` requires a certified block, and height 0 is never
+/// finalized (consensus starts at height 1).
+fn latest_snapshot_meta(snaps: Vec<SnapshotMeta>, peer: &str) -> Result<SnapshotMeta> {
+    snaps
         .into_iter()
         .filter(|m| m.height > 0)
         .max_by_key(|m| m.height)
-        .ok_or_else(|| anyhow!("peer {peer} offers no usable snapshot"))?;
+        .ok_or_else(|| anyhow!("peer {peer} offers no usable snapshot"))
+}
+
+async fn fetch_snapshot_from(peer: &str, max_bytes: u64) -> Result<FetchedSnapshot> {
+    let mut client = connect_statesync(peer).await?;
+    let meta = latest_snapshot_meta(list_snapshots(&mut client).await?, peer)?;
 
     anyhow::ensure!(
         meta.state_root.len() == 32,
@@ -331,6 +337,70 @@ fn select_anchor(payloads: Vec<(String, Vec<u8>)>, min_agree: usize) -> Result<V
     Ok(first.clone())
 }
 
+/// Latest advertised snapshot `(peer, height, state_root)` per peer —
+/// metadata only, no chunks. Unreachable or listing-failing peers are
+/// skipped: the quorum count in `select_advertised_root` decides
+/// whether enough donors corroborate.
+async fn fetch_advertised_roots(peers: &[String]) -> Vec<(String, u64, [u8; 32])> {
+    let mut out = Vec::new();
+    for peer in peers {
+        let res: Result<(String, u64, [u8; 32])> = async {
+            let mut client = connect_statesync(peer).await?;
+            let meta = latest_snapshot_meta(list_snapshots(&mut client).await?, peer)?;
+            anyhow::ensure!(
+                meta.state_root.len() == 32,
+                "advertised root is {} bytes, expected 32",
+                meta.state_root.len()
+            );
+            let mut root = [0u8; 32];
+            root.copy_from_slice(&meta.state_root);
+            Ok((peer.to_string(), meta.height, root))
+        }
+        .await;
+        match res {
+            Ok(v) => out.push(v),
+            Err(e) => tracing::warn!(peer, error = %e,
+                "state-sync: could not list donor's advertised root"),
+        }
+    }
+    out
+}
+
+/// Quorum check on donor-advertised snapshot roots for `height` — the
+/// halted-chain fallback's replacement for the missing H+1 certificate.
+/// Every donor advertising a snapshot AT `height` must advertise the
+/// identical root (same height = same state), and at least `min_agree`
+/// donors must corroborate. A different root at the same height is
+/// Byzantine evidence — fatal, not a vote to resolve. Donors advertising
+/// a different height simply cannot corroborate and do not count.
+fn select_advertised_root(
+    metas: &[(String, u64, [u8; 32])],
+    height: u64,
+    min_agree: usize,
+) -> Result<[u8; 32]> {
+    let same_height: Vec<&(String, u64, [u8; 32])> =
+        metas.iter().filter(|m| m.1 == height).collect();
+    let first = match same_height.first() {
+        Some(v) => *v,
+        None => anyhow::bail!("no donor advertises a snapshot at height {height}"),
+    };
+    for m in &same_height[1..] {
+        anyhow::ensure!(
+            m.2 == first.2,
+            "snapshot root disagreement: donor {} advertises a different \
+             state_root at height {height} — refusing to pick a winner",
+            m.0
+        );
+    }
+    anyhow::ensure!(
+        same_height.len() >= min_agree,
+        "snapshot-root quorum too small: {} agreeing donors < \
+         min_anchor_agree {min_agree}",
+        same_height.len()
+    );
+    Ok(first.2)
+}
+
 /// Adopt a snapshot into `app` (which must be uninitialized).
 ///
 /// The trusted root comes from the certified `BlockPayload` at
@@ -368,10 +438,12 @@ where
     //
     // Halted-chain fallback: on a stalled chain no H+1 certificate can
     // ever exist, so the standard anchor deadlocks recovery. With
-    // `halted_chain_anchor` set, the joiner accepts the donor's
-    // advertised root (the whole-dump Merkle check in snapshot_import
-    // still runs — corruption detection, not authentication). The tip
-    // payload at snap.height is still certified-verified, which proves
+    // `halted_chain_anchor` set, the joiner instead requires the donor
+    // quorum to advertise the identical snapshot root at the snapshot
+    // height — a single donor's metadata is never trusted on its own
+    // (the whole-dump Merkle check in snapshot_import still runs —
+    // corruption detection, not authentication). The tip payload at
+    // snap.height is still certified-or-quorum-agreed, which proves
     // quorum reached the snapshot height.
     let anchor_res =
         fetch_certified_payload(&ss.peers, snap.height + 1, ss.min_anchor_agree, check).await;
@@ -390,13 +462,23 @@ where
             if !ss.halted_chain_anchor {
                 return Err(e);
             }
+            let metas = fetch_advertised_roots(&ss.peers).await;
+            let root = select_advertised_root(&metas, snap.height, ss.min_anchor_agree)
+                .context("state-sync: halted-chain snapshot-root quorum failed")?;
+            anyhow::ensure!(
+                root == snap.advertised_root,
+                "donated snapshot's advertised root does not match the \
+                 donor-agreed root at height {}",
+                snap.height
+            );
             tracing::warn!(
                 error = %e,
                 height = snap.height,
+                donors = metas.len(),
                 "state-sync: no certified block past snapshot tip — halted-chain \
-                 fallback, trusting donor-advertised root"
+                 fallback, trusting donor-quorum-advertised root"
             );
-            snap.advertised_root
+            root
         }
     };
 
@@ -482,5 +564,39 @@ mod tests {
     fn anchor_single_peer_meets_quorum_of_one() {
         let res = select_anchor(vec![p(b"xy")], 1).unwrap();
         assert_eq!(res, b"xy");
+    }
+
+    fn m(peer: u8, height: u64, root: u8) -> (String, u64, [u8; 32]) {
+        (format!("peer-{peer}"), height, [root; 32])
+    }
+
+    #[test]
+    fn advertised_root_accepts_quorum_at_height() {
+        // Two donors agree at height 10; a third only offers height 9
+        // and cannot corroborate but does not count against.
+        let metas = vec![m(1, 10, 7), m(2, 10, 7), m(3, 9, 9)];
+        let root = select_advertised_root(&metas, 10, 2).unwrap();
+        assert_eq!(root, [7u8; 32]);
+    }
+
+    #[test]
+    fn advertised_root_rejects_same_height_divergence() {
+        // Byzantine: different root for the same height — fatal even
+        // though min_agree is 1.
+        let metas = vec![m(1, 10, 7), m(2, 10, 8)];
+        assert!(select_advertised_root(&metas, 10, 1).is_err());
+    }
+
+    #[test]
+    fn advertised_root_rejects_below_quorum() {
+        // Only one donor at the target height — insufficient.
+        let metas = vec![m(1, 10, 7), m(2, 9, 7)];
+        assert!(select_advertised_root(&metas, 10, 2).is_err());
+    }
+
+    #[test]
+    fn advertised_root_rejects_no_donor_at_height() {
+        let metas = vec![m(1, 9, 7)];
+        assert!(select_advertised_root(&metas, 10, 1).is_err());
     }
 }
