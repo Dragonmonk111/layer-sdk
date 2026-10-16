@@ -79,3 +79,12 @@ r9-rehearsal/w*/
 r9-rehearsal/probe/
 r9-rehearsal/bins/
 dist/release/
+
+# DKG ceremony working material — private dealing files, dealer seeds,
+# per-operator key copies. Only scripts/docs in g2-window are tracked.
+g2-window/g1-keys/
+g2-window/ceremony/
+g2-window/share-requests/
+g2-window/dealers/
+g2-window/acks/
+g2-window/anchor.env
