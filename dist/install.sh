@@ -11,7 +11,7 @@
 
 set -eu
 
-RELEASE="${JUNOCLAW_RELEASE:-v0.6.0-rc10}"
+RELEASE="${JUNOCLAW_RELEASE:-v0.6.0-rc11}"
 BASE="https://github.com/Dragonmonk111/layer-sdk/releases/download/${RELEASE}"
 DEST="${DEST:-/usr/local/bin}"
 
