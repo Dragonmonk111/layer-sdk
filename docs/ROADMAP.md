@@ -42,9 +42,9 @@ plus inbound interest — target 6–7 seats.
 
 | # | Item | Proof of done |
 |---|------|---------------|
-| F1 | MAYO audit readiness — per `docs/MAYO-AUDIT-PLAN.md`: pin sriracha-mayo version, publish KAT vectors + build instructions, scope the audit surface | Audit-ready package handed to auditors |
-| F2 | DAO DAO P0 audit — devnet deploy of dao-contracts suite, instantiate minimal DAO | Gap list produced; shared with DAO DAO team (doc: `docs/DAO-ON-JUNOCLAW.md`, on HackMD) |
-| F3 | Funding structure — operator infra costs, grants, treasury design | Concrete proposal; feeds Treasury SubDAO |
+| F1 | MAYO audit readiness | ✅ package done — `docs/MAYO-AUDIT-PACKAGE.md`: sriracha-mayo 0.0.4 pin + checksum, KAT corpus + regen path, audit surface, vendored-storage diff scope |
+| F2 | DAO DAO P0 audit — devnet deploy of dao-contracts suite, instantiate minimal DAO | Runbook ready — `docs/DAO-P0-RUNBOOK.md`; v2.7.1 artifacts checksum-verified; deploy tx pending GO |
+| F3 | Funding structure — operator infra costs, grants, treasury design | ✅ draft done — `docs/FUNDING-STRUCTURE.md`; feeds Treasury SubDAO |
 | F4 | Juno Agents DAO + Validator Ops SubDAO instantiation (post-F2) | Live DAO; next set-change ratified on-chain |
 
 ## Phase G — Mainnet-readiness continuous work
