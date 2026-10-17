@@ -104,6 +104,11 @@ const SOLICITED_HEIGHT_TTL: Duration = Duration::from_secs(30);
 /// solicit far-future proposals while the executed tip lags, so solicited
 /// inserts still need a bound (16k × ~128B payloads ≈ 2 MiB worst case).
 const MAX_PENDING_PAYLOADS_TOTAL: usize = 16_384;
+/// Headroom held back for solicited fetch replies: unsolicited pushes are
+/// refused once pending reaches `MAX_PENDING_PAYLOADS_TOTAL - RESERVE`,
+/// so a catch-up flood of far-tip pushes can never occupy every slot the
+/// solicited tip+1 link needs to land in (the rc11 soak deadlock).
+const PENDING_SOLICITED_RESERVE: usize = 1_024;
 
 /// How far ahead of a validator's clock a proposed timestamp may run.
 const MAX_FUTURE_DRIFT: Duration = Duration::from_secs(2);
@@ -738,6 +743,27 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             return (Err("unsolicited payload beyond lookahead window"), false);
         }
         if pending.len() >= MAX_PENDING_PAYLOADS_TOTAL {
+            if !solicited {
+                return (Err("pending payload capacity reached"), false);
+            }
+            // Solicited reply at capacity: evict the pending entry furthest
+            // above the executed tip. Rejecting a payload we explicitly asked
+            // for wedges catch-up permanently — pending only drains via
+            // execution, and execution halts on exactly the link being
+            // refused (rc11 soak: home-vb deadlocked 4.5h on this). The
+            // evicted entry is refetchable via the same backfill paths.
+            let Some(victim) = pending
+                .iter()
+                .max_by_key(|(_, p)| p.height)
+                .map(|(d, _)| *d)
+            else {
+                return (Err("pending payload capacity reached"), false);
+            };
+            pending.remove(&victim);
+        } else if !solicited && pending.len() >= MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE {
+            // Keep headroom for solicited replies so unsolicited pushes can
+            // never fill the buffer to the point the rule above engages on
+            // every catch-up reply.
             return (Err("pending payload capacity reached"), false);
         }
         pending.insert(digest, payload);
@@ -1882,9 +1908,44 @@ mod tests {
             }
             assert_eq!(
                 node.pending_payloads.lock().await.len(),
-                MAX_PENDING_PAYLOADS_TOTAL,
-                "total pending ceiling enforced for peer pushes"
+                MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE,
+                "unsolicited pushes stop at the solicited-reserve boundary"
             );
+            // Solicited replies still land inside the reserve window — fill
+            // the remaining slots with solicited inserts up to the ceiling.
+            while node.pending_payloads.lock().await.len() < MAX_PENDING_PAYLOADS_TOTAL {
+                let mut p = at(3);
+                p.timestamp_nanos += 1_000_000 + node.pending_payloads.lock().await.len() as u64;
+                node.request_payload(p.digest());
+                assert_eq!(
+                    node.accept_peer_payload(p).await,
+                    Ok(true),
+                    "solicited reply must be admitted inside the reserve"
+                );
+            }
+            // At the absolute ceiling, a solicited reply evicts the
+            // furthest-from-tip pending entry instead of being refused —
+            // refusing it is the rc11-soak catch-up wedge.
+            let victim = node
+                .pending_payloads
+                .lock()
+                .await
+                .iter()
+                .max_by_key(|(_, p)| p.height)
+                .map(|(d, _)| *d)
+                .unwrap();
+            let tip_link = at(4);
+            let tip_link_digest = tip_link.digest();
+            node.request_payload(tip_link_digest);
+            assert_eq!(
+                node.accept_peer_payload(tip_link).await,
+                Ok(true),
+                "solicited reply at capacity must evict, not be refused"
+            );
+            let pending = node.pending_payloads.lock().await;
+            assert_eq!(pending.len(), MAX_PENDING_PAYLOADS_TOTAL);
+            assert!(pending.contains_key(&tip_link_digest));
+            assert!(!pending.contains_key(&victim), "furthest entry evicted for solicited reply");
         });
     }
 

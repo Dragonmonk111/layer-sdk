@@ -1260,6 +1260,7 @@ async fn run_node(
     {
         let mut sender = payload_p2p_sender.clone();
         let mut rx = payload_fetch_rx;
+        let mesh_reached = mesh_reached.clone();
         tokio::spawn(async move {
             while let Some(req) = rx.recv().await {
                 let msg = match req {
@@ -1277,8 +1278,17 @@ async fn run_node(
                         msg
                     }
                 };
-                if let Err(e) = P2pSender::send(&mut sender, Recipients::All, bytes::Bytes::from(msg), true).await {
-                    tracing::warn!(error = ?e, "Payload fetch: request send failed");
+                match P2pSender::send(&mut sender, Recipients::All, bytes::Bytes::from(msg), true).await {
+                    Ok(sent_to) => {
+                        let mut m = mesh_reached.lock().await;
+                        let now = std::time::Instant::now();
+                        for pk in &sent_to {
+                            m.insert(pk.to_string(), now);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = ?e, "Payload fetch: request send failed");
+                    }
                 }
             }
         });
@@ -1304,10 +1314,20 @@ async fn run_node(
         let node = p2p_node;
         let cascade_tx = cascade_tx;
         let mut reply_sender = payload_p2p_sender.clone();
+        let mesh_reached = mesh_reached.clone();
         tokio::spawn(async move {
             loop {
                 match payload_p2p_receiver.recv().await {
                     Ok((sender_pk, message)) => {
+                        // Any authenticated inbound message proves the link —
+                        // the strongest mesh signal, and the only one a
+                        // non-proposing seat produces (rc11 soak: the
+                        // proposer-path-only metric read 0/4 on a stalled
+                        // node that was actually fully connected).
+                        {
+                            let mut m = mesh_reached.lock().await;
+                            m.insert(sender_pk.to_string(), std::time::Instant::now());
+                        }
                         let raw: &[u8] = message.as_ref();
                         let (tag, payload_bytes) = match raw.split_first() {
                             Some((tag, body)) => (*tag, body),
