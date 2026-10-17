@@ -125,3 +125,35 @@ $RELAYER jc-instantiate --layer-grpc $GRPC --code-id <dao_dao_core> \
 
 Gap list → appended to `DAO-ON-JUNOCLAW.md` and shared with the DAO
 DAO team as the P0 answer.
+
+## 5. RESULTS — executed 2026-10-17 against public testnet
+
+**P0 PASSED.** Full propose→vote→execute round trip verified live.
+
+| Step | Result |
+|------|--------|
+| store-code ×6 | ✅ code_ids 5–10 (factory, cw20_base, cw20_stake, proposal_single, core, voting_cw20_staked) |
+| Nested instantiate | ✅ 4 levels in ONE tx: core→voting→(cw20 token + stake) and core→proposal — `handle_success` every depth |
+| Contract→contract queries | ✅ `voting_power_at_height` crosses voting→staking→token |
+| cw20 send/receive hook | ✅ staked 500k PZERO → voting power 500000 |
+| Propose | ✅ proposal #1 open, `total_power=500000` snapshot, `Env.block.height/time` correct |
+| Vote → execute | ✅ `{"vote":{"proposal_id":1,"vote":"yes"}}` → status `passed` → `executed` |
+| Deterministic addrs | ✅ simulated contract address == real address |
+
+**Deployed DAO:**
+- core: `juno1p3pwvxzflj5qew04ydmz0vgjaxxevjlwnyeqxyyd37c8m0tu22tsfc2ylc`
+- voting: `juno1h28e7curdp7dna0q50j3ln8j2syx0nkmls44dgy8wkq2mamql49s30k9e3`
+- proposal: `juno12eztsvceuv9m5ktk0yjve8ap7sn0g9jtqnkc7jrdmptqdmxeyszqp774ns`
+- token: `juno1s4hmd50frkpjvnzv79aqs6xkq4shvjquwqzntk0zqp5vu2zrxjys93vzug`
+- staking: `juno13sa8ayd60965d87ehnkpwm52wqwx4gkze2xl2nyj8d8plsxkl2hsq6p3l8`
+
+**Gaps found:**
+1. 🐛 `store_code_gas` under-priced VM compile/instrumentation cost
+   (~15.6 gas/byte vs the 10/byte formula) — 6 txs burned fees at
+   DeliverTx while reporting "broadcast OK" (CheckTx only). Fixed in
+   `bls-relayer`: two-phase simulate → re-sign with 20% headroom.
+   Wider issue: every `submit_layer_any` caller should use this path.
+2. Caller-side notes (not chain gaps): cw20 `symbol` must match
+   `[a-zA-Z-]{3,12}`; vote msg variant is `vote`, not `cast_vote`.
+3. Open: SubDAO nesting via `cw_admin_factory` (P1), archiver event
+   indexing verification.

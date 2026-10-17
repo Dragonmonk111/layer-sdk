@@ -43,7 +43,7 @@ plus inbound interest — target 6–7 seats.
 | # | Item | Proof of done |
 |---|------|---------------|
 | F1 | MAYO audit readiness | ✅ package done — `docs/MAYO-AUDIT-PACKAGE.md`: sriracha-mayo 0.0.4 pin + checksum, KAT corpus + regen path, audit surface, vendored-storage diff scope |
-| F2 | DAO DAO P0 audit — devnet deploy of dao-contracts suite, instantiate minimal DAO | Runbook ready — `docs/DAO-P0-RUNBOOK.md`; v2.7.1 artifacts checksum-verified; deploy tx pending GO |
+| F2 | ~~DAO DAO P0 audit~~ | ✅ PASSED 2026-10-17 — full suite live on testnet (code_ids 5–10); nested instantiate 4-deep; propose→vote→execute round trip done; gap list in `DAO-P0-RUNBOOK.md` §5 |
 | F3 | Funding structure — operator infra costs, grants, treasury design | ✅ draft done — `docs/FUNDING-STRUCTURE.md`; feeds Treasury SubDAO |
 | F4 | Juno Agents DAO + Validator Ops SubDAO instantiation (post-F2) | Live DAO; next set-change ratified on-chain |
 

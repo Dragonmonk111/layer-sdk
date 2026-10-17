@@ -1227,8 +1227,11 @@ const LAYER_BECH32: &str = "juno";
 // JunoClaw charges GAS_COST_TX_BYTE=10 per tx byte at DeliverTx, metered
 // against fee.gas_limit — a store-code tx over ~400KB needs more than the
 // default 4M. estimate: tx_len ~= wasm + ~1.4KB proto/envelope overhead.
+// Wasm compilation/instrumentation adds ~3 gas per wasm byte on top of
+// the byte metering — observed via --simulate (172KB wasm: 2.72M used
+// vs 2.24M from the byte formula alone → out of gas at DeliverTx).
 fn store_code_gas(wasm_len: usize) -> u64 {
-    (wasm_len as u64 + 2048) * 10 + 500_000
+    (wasm_len as u64 + 2048) * 13 + 500_000
 }
 // Flat fee at the established 0.00125 ujclaw/gas rate (5000 @ 4M), staying
 // above the node's 0.001 ujclaw/gas min-gas-price mempool floor.
@@ -1314,13 +1317,37 @@ async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         wasm_bytes.len(),
         hex::encode(Sha256::digest(&wasm_bytes))
     );
-    let gas = store_code_gas(wasm_bytes.len());
+    let wasm_len = wasm_bytes.len();
     let msg = MsgStoreCode {
         sender: layer_sender(a)?.to_string(),
         wasm_byte_code: wasm_bytes,
     };
-    let hash = submit_layer_any(a, any_of(TYPE_URL_MSG_STORE_CODE, &msg), gas).await?;
-    println!("jc-store-code broadcast OK — txhash {hash} (gas_limit {gas})");
+    let any = any_of(TYPE_URL_MSG_STORE_CODE, &msg);
+    // Two-phase gas: the byte formula misses wasm compile/instrumentation
+    // cost (~15.6 gas/byte observed). Simulate with the formula estimate,
+    // then re-sign with 20% headroom over the real gas_used.
+    let key = layer_signer_key(a)?;
+    let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
+    if account.account_number == 0 {
+        account.account_number = LAYER_ACCOUNT_NUMBER;
+    }
+    let probe = sign_and_encode_layer(
+        &key,
+        any.clone(),
+        &account,
+        store_code_gas(wasm_len),
+        &a.chain_id,
+    )?;
+    let used = simulate(&a.layer_grpc, probe).await?;
+    let gas = used.saturating_mul(6) / 5;
+    if a.simulate {
+        println!("simulate: gas_used={used} → gas_limit {gas}");
+        return Ok(());
+    }
+    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas, &a.chain_id)?;
+    let hash = broadcast(&a.layer_grpc, tx_bytes).await?;
+    println!("jc-store-code broadcast OK — txhash {hash} (gas_limit {gas}, simulated {used})");
     Ok(())
 }
 
