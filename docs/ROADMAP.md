@@ -18,11 +18,13 @@ independently-operated except home-vb/ovh-uk1 (ours).*
 | # | Item | Proof of done |
 |---|------|---------------|
 | D0 | ~~`min_anchor_agree` on advertised snapshot root~~ | ✅ done — `b54762f`, quorum-gated halted-chain fallback, 9/9 tests |
-| D1 | `force_state_sync` config flag + startup diagnostic when `[state_sync]` is configured but incompatible stored state exists | A node with stale genesis state + state_sync config either syncs or fails loudly, never silently runs on genesis |
-| D2 | Peer-mesh diagnostics — expose authenticated peer count/identity (peer-ready) in logs or a status endpoint | Operator can answer "am I meshed?" without `ss`/journalctl |
-| D3 | rc11 release (D0+D1+D2) | Tagged release, install.sh updated |
-| D4 | Rolling validator upgrade to rc11 | All 5 seats on rc11, no finality gap |
+| D1 | ~~`force_state_sync` config flag + startup diagnostic~~ | ✅ done — `dc44099`; **proven live 2026-10-17**: home-vb wedged 4.5h, `force=true` wiped stale state, donor-quorum sync at 2,064,700, back voting in minutes |
+| D2 | ~~Peer-mesh diagnostics~~ | ✅ done — `dc44099`; live on home-vb (`peer mesh: reached 4/4`) — but see D6 (metric blind spot) |
+| D3 | ~~rc11 release (D0+D1+D2)~~ | ✅ done — `v0.6.0-rc11` tagged + published on layer-sdk releases, assets checksum-verified |
+| D4 | Rolling validator upgrade to rc11 — home-vb soaking first | All 5 seats on rc11, no finality gap |
 | D5 | Future ceremony UX: encrypt `dealing-priv-*` files to recipient pubkey (removes coordinator trust ceiling) | Design + impl in `generate-testnet-keys` |
+| D6 | **rc12: pending-capacity catch-up deadlock** — `pending_payloads` caps at 16,384; unsolicited far-tip pushes (within `within_observed`) fill it; solicited replies for the tip+1 link get *rejected* → execution permanently wedged, channel-3 mailbox goes `Full(..)`. Reproduced live on home-vb 2026-10-17 (4.5h, recovered only via state-sync). Fix: solicited replies bypass cap OR evict an unsolicited entry; consider rejecting far-tip unsolicited pushes while behind | A node >16k blocks behind recovers via payload fetch without state-sync |
+| D7 | rc12: mesh metric blind spot — it only counts payload-broadcast deliveries (proposer path); a stalled/non-proposing node reads `0/4` falsely. Track fetch-request + reply sends too | Mesh log reflects real connectivity on a non-proposing seat |
 
 ## Phase E — Next validator windows
 
