@@ -925,7 +925,30 @@ struct DealingPrivFile {
     dealer: String,
     player: String,
     pub_msg_hex: String,
-    priv_msg_hex: String,
+    /// Legacy plaintext payload — only present in files dealt with
+    /// `--plaintext-priv` (pre-encryption format; still accepted).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    priv_msg_hex: Option<String>,
+    /// Encrypted payload (D5): the share sealed to the recipient's
+    /// Ed25519-derived X25519 key. The coordinator distributing this
+    /// file cannot read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    enc: Option<EncField>,
+}
+
+/// Encrypted `priv_msg` blob inside a `dealing-priv-*` file.
+/// Scheme: ephemeral X25519 DH to the recipient's Ed25519-mapped
+/// Montgomery key → SHA-256 domain-separated key → XChaCha20-Poly1305.
+#[derive(Serialize, Deserialize, Debug)]
+struct EncField {
+    /// Always "x25519-xchacha20poly1305-v1" — lets the format evolve.
+    scheme: String,
+    /// Ephemeral X25519 public key (hex).
+    ephem_hex: String,
+    /// 24-byte XChaCha20 nonce (hex).
+    nonce_hex: String,
+    /// Ciphertext incl. Poly1305 tag (hex).
+    ct_hex: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -969,6 +992,102 @@ fn pk_hex(pk: &DkgPk) -> String {
 
 fn short(hex_str: &str) -> &str {
     &hex_str[..8.min(hex_str.len())]
+}
+
+// --- dealing-priv encryption (D5) -----------------------------------------
+//
+// Recipients are identified by Ed25519 keys, which can't encrypt. We use
+// the standard libsodium mapping: X25519 scalar = clamp(SHA-512(seed)),
+// and the public Montgomery u-coordinate = (1+y)/(1-y) of the Edwards
+// point. Files carry an ephemeral-static X25519 + XChaCha20-Poly1305
+// ciphertext, so a relaying coordinator holds only sealed shares.
+
+fn x25519_scalar_from_ed_seed(seed: &[u8]) -> [u8; 32] {
+    use sha2::Digest;
+    let h = sha2::Sha512::digest(seed);
+    let mut s = [0u8; 32];
+    s.copy_from_slice(&h[..32]);
+    s[0] &= 248;
+    s[31] &= 127;
+    s[31] |= 64;
+    s
+}
+
+fn x25519_pub_from_ed_pub(ed: &[u8]) -> [u8; 32] {
+    use curve25519_dalek_ng::edwards::CompressedEdwardsY;
+    let point = CompressedEdwardsY(ed.try_into().expect("ed pubkey must be 32 bytes"))
+        .decompress()
+        .expect("recipient ed25519 pubkey is not on the curve");
+    point.to_montgomery().0
+}
+
+fn dealing_key(shared: &[u8; 32]) -> [u8; 32] {
+    use sha2::Digest;
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&sha2::Sha256::new()
+        .chain_update(b"junoclaw-dealing-v1")
+        .chain_update(shared)
+        .finalize());
+    k
+}
+
+fn encrypt_for_recipient(recipient_ed_hex: &str, plaintext: &[u8]) -> EncField {
+    use chacha20poly1305::aead::{Aead, KeyInit};
+    let ed = hex::decode(recipient_ed_hex).expect("bad recipient ed25519 hex");
+    let recip = x25519_dalek::PublicKey::from(x25519_pub_from_ed_pub(&ed));
+    let eph = x25519_dalek::StaticSecret::random_from_rng(OsRng);
+    let shared = eph.diffie_hellman(&recip);
+    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&dealing_key(shared.as_bytes()))
+        .expect("key length");
+    let mut nonce = [0u8; 24];
+    use rand::RngCore;
+    OsRng.fill_bytes(&mut nonce);
+    let ct = cipher
+        .encrypt(chacha20poly1305::XNonce::from_slice(&nonce), plaintext)
+        .expect("aead encrypt");
+    EncField {
+        scheme: "x25519-xchacha20poly1305-v1".to_string(),
+        ephem_hex: hex::encode(x25519_dalek::PublicKey::from(&eph).to_bytes()),
+        nonce_hex: hex::encode(nonce),
+        ct_hex: hex::encode(ct),
+    }
+}
+
+fn decrypt_for_me(enc: &EncField, my_seed: &[u8]) -> Vec<u8> {
+    use chacha20poly1305::aead::{Aead, KeyInit};
+    assert_eq!(
+        enc.scheme, "x25519-xchacha20poly1305-v1",
+        "unknown dealing-priv scheme"
+    );
+    let me = x25519_dalek::StaticSecret::from(x25519_scalar_from_ed_seed(my_seed));
+    let eph_bytes: [u8; 32] = hex::decode(&enc.ephem_hex)
+        .expect("bad ephem hex")
+        .try_into()
+        .expect("ephem must be 32 bytes");
+    let shared = me.diffie_hellman(&x25519_dalek::PublicKey::from(eph_bytes));
+    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&dealing_key(shared.as_bytes()))
+        .expect("key length");
+    let nonce = hex::decode(&enc.nonce_hex).expect("bad nonce hex");
+    cipher
+        .decrypt(
+            chacha20poly1305::XNonce::from_slice(&nonce),
+            hex::decode(&enc.ct_hex).expect("bad ct hex").as_ref(),
+        )
+        .expect("dealing-priv decryption failed — is this file addressed to this keys.json?")
+}
+
+/// Return the plaintext `priv_msg` bytes whether the file is sealed (new)
+/// or legacy plaintext. `my_seed` is the recipient's raw Ed25519 seed.
+fn resolve_priv_bytes(f: &DealingPrivFile, my_seed: &[u8]) -> Vec<u8> {
+    if let Some(enc) = &f.enc {
+        return decrypt_for_me(enc, my_seed);
+    }
+    hex::decode(
+        f.priv_msg_hex
+            .as_deref()
+            .expect("dealing-priv file has neither priv_msg_hex nor enc"),
+    )
+    .expect("bad priv_msg_hex")
 }
 
 fn load_json<T: for<'de> Deserialize<'de>>(path: &str) -> T {
@@ -1138,10 +1257,13 @@ fn cmd_dkg_info(args: &[String]) {
 /// private share files. Deterministic under `dealer.seed`.
 fn cmd_dkg_deal(args: &[String]) {
     if has_flag(args, "--help") || has_flag(args, "-h") {
-        println!("Usage: generate-testnet-keys dkg-deal --info dkg-info.json --keys keys.json [--out-dir ./dkg-out]");
+        println!("Usage: generate-testnet-keys dkg-deal --info dkg-info.json --keys keys.json [--out-dir ./dkg-out] [--plaintext-priv]");
         println!("\nCreates dealer.seed (32B secret — keep private until log publish),");
         println!("dealing-pub-<me>.json (broadcast) and dealing-priv-<me>-for-<peer>.json");
-        println!("(deliver each privately to its recipient — encrypted DM, SSH, etc.).");
+        println!("Each per-player file is sealed to the recipient's Ed25519 identity");
+        println!("(X25519+XChaCha20-Poly1305) — safe to relay via a coordinator or");
+        println!("public channel. --plaintext-priv emits the legacy cleartext format.");
+        println!("Readers (dkg-ack/dkg-finalize) accept both formats.");
         return;
     }
     let info_path = get_arg(args, "--info")
@@ -1149,6 +1271,11 @@ fn cmd_dkg_deal(args: &[String]) {
         .to_string();
     let keys_path = get_arg(args, "--keys").unwrap_or("./keys.json").to_string();
     let out_dir = get_arg(args, "--out-dir").unwrap_or("./dkg-out").to_string();
+    // Per-player files are sealed to the recipient's Ed25519 identity by
+    // default — the coordinator who ferries them never holds plaintext
+    // shares. --plaintext-priv emits the legacy cleartext format for
+    // interop/debug only.
+    let plaintext_priv = has_flag(args, "--plaintext-priv");
 
     let file = load_info_file(&info_path);
     let info = build_info(&file);
@@ -1207,11 +1334,23 @@ fn cmd_dkg_deal(args: &[String]) {
     );
     for (player, priv_msg) in &priv_msgs {
         let p_hex = pk_hex(player);
-        let f = DealingPrivFile {
-            dealer: me_hex.clone(),
-            player: p_hex.clone(),
-            pub_msg_hex: pub_file.pub_msg_hex.clone(),
-            priv_msg_hex: hex::encode(priv_msg.encode().as_ref()),
+        let priv_bytes = priv_msg.encode().as_ref().to_vec();
+        let f = if plaintext_priv {
+            DealingPrivFile {
+                dealer: me_hex.clone(),
+                player: p_hex.clone(),
+                pub_msg_hex: pub_file.pub_msg_hex.clone(),
+                priv_msg_hex: Some(hex::encode(&priv_bytes)),
+                enc: None,
+            }
+        } else {
+            DealingPrivFile {
+                dealer: me_hex.clone(),
+                player: p_hex.clone(),
+                pub_msg_hex: pub_file.pub_msg_hex.clone(),
+                priv_msg_hex: None,
+                enc: Some(encrypt_for_recipient(&p_hex, &priv_bytes)),
+            }
         };
         write_json(
             &format!(
@@ -1243,7 +1382,8 @@ fn cmd_dkg_ack(args: &[String]) {
     let info = build_info(&load_info_file(
         get_arg(args, "--info").unwrap_or("./dkg-info.json"),
     ));
-    let (_, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let (keys, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let my_seed = hex::decode(&keys.ed25519_private_hex).expect("bad ed25519_private_hex");
     let priv_dir = get_arg(args, "--priv-dir")
         .expect("--priv-dir required")
         .to_string();
@@ -1273,7 +1413,7 @@ fn cmd_dkg_ack(args: &[String]) {
         )
         .expect("undecodable DealerPubMsg");
         let priv_msg = DealerPrivMsg::read_cfg(
-            &mut &hex::decode(&f.priv_msg_hex).expect("bad priv_msg_hex")[..],
+            &mut &resolve_priv_bytes(&f, &my_seed)[..],
             &(),
         )
         .expect("undecodable DealerPrivMsg");
@@ -1429,7 +1569,8 @@ fn cmd_dkg_finalize(args: &[String]) {
     }
     let file = load_info_file(get_arg(args, "--info").unwrap_or("./dkg-info.json"));
     let info = build_info(&file);
-    let (_, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let (keys, sk) = load_identity(get_arg(args, "--keys").unwrap_or("./keys.json"));
+    let my_seed = hex::decode(&keys.ed25519_private_hex).expect("bad ed25519_private_hex");
     let priv_dir = get_arg(args, "--priv-dir")
         .expect("--priv-dir required")
         .to_string();
@@ -1464,7 +1605,7 @@ fn cmd_dkg_finalize(args: &[String]) {
         )
         .expect("undecodable DealerPubMsg");
         let priv_msg = DealerPrivMsg::read_cfg(
-            &mut &hex::decode(&f.priv_msg_hex).expect("bad priv_msg_hex")[..],
+            &mut &resolve_priv_bytes(&f, &my_seed)[..],
             &(),
         )
         .expect("undecodable DealerPrivMsg");
@@ -1753,4 +1894,88 @@ fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
         println!("  {verified} key share(s) verified against round-0 output");
     }
     println!("Next: dkg-info --requests <dir> --dealers <dir> --chain-id {} --round 1 --previous {out}", shared.chain_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_identity(seed: u64) -> (Vec<u8>, String) {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let sk = ed25519::PrivateKey::random(&mut rng);
+        (sk.encode().as_ref().to_vec(), pk_hex(&sk.public_key()))
+    }
+
+    #[test]
+    fn enc_roundtrip() {
+        let (seed, pub_hex) = test_identity(1);
+        let plaintext = b"a-dealer-priv-msg-blob".to_vec();
+        let enc = encrypt_for_recipient(&pub_hex, &plaintext);
+        assert_eq!(enc.scheme, "x25519-xchacha20poly1305-v1");
+        assert_eq!(decrypt_for_me(&enc, &seed), plaintext);
+    }
+
+    #[test]
+    #[should_panic(expected = "dealing-priv decryption failed")]
+    fn enc_wrong_recipient() {
+        let (_seed_a, pub_a) = test_identity(1);
+        let (seed_b, _pub_b) = test_identity(2);
+        let enc = encrypt_for_recipient(&pub_a, b"secret".to_vec().as_ref());
+        decrypt_for_me(&enc, &seed_b);
+    }
+
+    #[test]
+    #[should_panic(expected = "dealing-priv decryption failed")]
+    fn enc_tamper() {
+        let (seed, pub_hex) = test_identity(1);
+        let mut enc = encrypt_for_recipient(&pub_hex, b"secret".to_vec().as_ref());
+        let mut ct = hex::decode(&enc.ct_hex).unwrap();
+        ct[0] ^= 1;
+        enc.ct_hex = hex::encode(ct);
+        decrypt_for_me(&enc, &seed);
+    }
+
+    #[test]
+    fn resolve_legacy_plaintext() {
+        let f = DealingPrivFile {
+            dealer: "aa".into(),
+            player: "bb".into(),
+            pub_msg_hex: "".into(),
+            priv_msg_hex: Some(hex::encode(b"legacy")),
+            enc: None,
+        };
+        assert_eq!(resolve_priv_bytes(&f, &[]), b"legacy");
+    }
+
+    #[test]
+    fn resolve_encrypted_via_struct() {
+        let (seed, pub_hex) = test_identity(7);
+        let f = DealingPrivFile {
+            dealer: "aa".into(),
+            player: pub_hex.clone(),
+            pub_msg_hex: "".into(),
+            priv_msg_hex: None,
+            enc: Some(encrypt_for_recipient(&pub_hex, b"sealed".to_vec().as_ref())),
+        };
+        assert_eq!(resolve_priv_bytes(&f, &seed), b"sealed");
+    }
+
+    #[test]
+    fn file_serde_roundtrip() {
+        let (_seed, pub_hex) = test_identity(3);
+        let f = DealingPrivFile {
+            dealer: "dd".into(),
+            player: pub_hex.clone(),
+            pub_msg_hex: "00".into(),
+            priv_msg_hex: None,
+            enc: Some(encrypt_for_recipient(&pub_hex, b"x".to_vec().as_ref())),
+        };
+        let json = serde_json::to_string_pretty(&f).unwrap();
+        // Sealed files must not carry a plaintext field at all.
+        assert!(!json.contains("priv_msg_hex"));
+        assert!(json.contains("x25519-xchacha20poly1305-v1"));
+        let back: DealingPrivFile = serde_json::from_str(&json).unwrap();
+        assert!(back.enc.is_some());
+        assert!(back.priv_msg_hex.is_none());
+    }
 }

@@ -13,8 +13,15 @@ round. Requires `generate-testnet-keys` built from `commonware` branch
 - `generate-testnet-keys` binary (cargo build in `tools/generate-testnet-keys`)
 - Your existing `keys.json` (from `keygen-share`) — Ed25519 + MAYO identity
 - `dkg-info.json` from the coordinator
-- A private channel to each other operator (encrypted DM / SSH) for the
-  `dealing-priv-*` files — the same way you'd deliver a `bls-share.json`
+
+Since v0.6.0-rc12 the `dealing-priv-*` files are sealed to each
+recipient's Ed25519 identity (ephemeral X25519 + XChaCha20-Poly1305) —
+they can travel over any channel, including a coordinator's public
+mailbox, because only the addressed `keys.json` can open them. Treat
+them as public-ish artifacts; `dealer.seed` remains the sensitive file.
+(Files dealt with `--plaintext-priv`, or by pre-rc12 binaries, still
+work — the reader accepts both formats — but contain cleartext shares
+and must use the old private-channel delivery.)
 
 ## Step 0 — coordinator publishes the round spec
 
@@ -38,9 +45,9 @@ Outputs:
 
 - `dealer.seed` — 32-byte secret. **Keep private; needed for `dkg-log`.**
 - `dealing-pub-<you>.json` — broadcast to all operators.
-- `dealing-priv-<you>-for-<peer>.json` — one per player; deliver each to
-  its recipient **privately** (encrypted DM, SSH copy). Never post these
-  publicly.
+- `dealing-priv-<you>-for-<peer>.json` — one per player, sealed to that
+  recipient's identity key. Safe to send via a shared coordinator
+  mailbox; a relaying coordinator cannot read them. (rc12+)
 
 Re-running is safe and reproduces identical files (seeded).
 

@@ -21,10 +21,10 @@ independently-operated except home-vb/ovh-uk1 (ours).*
 | D1 | ~~`force_state_sync` config flag + startup diagnostic~~ | ✅ done — `dc44099`; **proven live 2026-10-17**: home-vb wedged 4.5h, `force=true` wiped stale state, donor-quorum sync at 2,064,700, back voting in minutes |
 | D2 | ~~Peer-mesh diagnostics~~ | ✅ done — `dc44099`; live on home-vb (`peer mesh: reached 4/4`) — but see D6 (metric blind spot) |
 | D3 | ~~rc11 release (D0+D1+D2)~~ | ✅ done — `v0.6.0-rc11` tagged + published on layer-sdk releases, assets checksum-verified |
-| D4 | Rolling validator upgrade to rc11 — home-vb soaking first | All 5 seats on rc11, no finality gap |
-| D5 | Future ceremony UX: encrypt `dealing-priv-*` files to recipient pubkey (removes coordinator trust ceiling) | Design + impl in `generate-testnet-keys` |
-| D6 | **rc12: pending-capacity catch-up deadlock** — `pending_payloads` caps at 16,384; unsolicited far-tip pushes (within `within_observed`) fill it; solicited replies for the tip+1 link get *rejected* → execution permanently wedged, channel-3 mailbox goes `Full(..)`. Reproduced live on home-vb 2026-10-17 (4.5h, recovered only via state-sync). Fix: solicited replies bypass cap OR evict an unsolicited entry; consider rejecting far-tip unsolicited pushes while behind | A node >16k blocks behind recovers via payload fetch without state-sync |
-| D7 | rc12: mesh metric blind spot — it only counts payload-broadcast deliveries (proposer path); a stalled/non-proposing node reads `0/4` falsely. Track fetch-request + reply sends too | Mesh log reflects real connectivity on a non-proposing seat |
+| D4 | Rolling validator upgrade — home-vb soaked rc11 overnight; external seats go straight to **rc12** (rc11 + D6/D7) so operators upgrade once | All 5 seats on rc12, no finality gap |
+| D5 | ~~Encrypt `dealing-priv-*` files to recipient pubkey~~ | ✅ done — ephemeral X25519 + XChaCha20-Poly1305 sealed to recipient Ed25519 identity; readers auto-accept legacy plaintext; `--plaintext-priv` escape; 6/6 unit tests |
+| D6 | ~~**pending-capacity catch-up deadlock**~~ — `pending_payloads` caps at 16,384; unsolicited far-tip pushes (within `within_observed`) fill it; solicited replies for the tip+1 link get *rejected* → execution permanently wedged, channel-3 mailbox goes `Full(..)`. Reproduced live on home-vb 2026-10-17 (4.5h, recovered only via state-sync) | ✅ done — `d275579`: unsolicited admissions stop at `MAX - 1024` reserve; solicited replies may evict the furthest pending entry; tests extended |
+| D7 | ~~mesh metric blind spot~~ — it only counted payload-broadcast deliveries (proposer path); a stalled/non-proposing node read `0/4` falsely | ✅ done — `d275579`: metric now includes inbound authenticated messages + fetch/reply sends |
 
 ## Phase E — Next validator windows
 
