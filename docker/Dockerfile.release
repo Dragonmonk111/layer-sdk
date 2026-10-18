@@ -25,5 +25,9 @@ ENV RUSTFLAGS="-C link-arg=/tmp/shim.o"
 # lib/cosmwasm and lib/commonware-storage ship populated in the tree.
 COPY . .
 
-RUN cargo build --release -p slay3rd -p jc-status
+# rocksdb feature => persistent RockStore at {data_dir}/app (survives
+# restarts). WITHOUT it the binary runs an in-memory store: it boots
+# with "No stored state" next to a full on-disk state and silently
+# operates ephemerally. Hit live during the rc12 roll (2026-10-18).
+RUN cargo build --release -p slay3rd -p jc-status --features slay3rd/rocksdb
 RUN cd tools/generate-testnet-keys && cargo build --release
