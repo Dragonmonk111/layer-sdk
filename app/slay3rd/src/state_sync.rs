@@ -103,7 +103,10 @@ async fn connect_statesync(
 ) -> Result<StateSyncClient<tonic::transport::Channel>> {
     let mut last_err = None;
     for _attempt in 1..=6 {
-        match StateSyncClient::connect(format!("http://{peer}")).await {
+        match StateSyncClient::connect(format!("http://{peer}"))
+            .await
+            .map(|c| c.max_decoding_message_size(16 * 1024 * 1024))
+        {
             Ok(v) => return Ok(v),
             Err(e) => {
                 last_err = Some(e);
