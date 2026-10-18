@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JunoClaw Agents DAO</title>
+<style>
+  :root { --bg:#0b0e13; --panel:#12161e; --edge:#1f2733; --fg:#d7dee8;
+          --dim:#7a8797; --ok:#39d98a; --warn:#e8b339; --bad:#e85439;
+          --acc:#5aa9e6; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--fg); font:14px/1.55 ui-monospace,
+         "Cascadia Code",Menlo,Consolas,monospace; padding:2rem 1rem; }
+  main { max-width:960px; margin:0 auto; }
+  h1 { font-size:1.4rem; letter-spacing:.12em; }
+  h1 small { display:block; font-size:.75rem; color:var(--dim);
+             letter-spacing:.2em; margin-top:.3rem; }
+  .tag { display:inline-block; font-size:.68rem; padding:.15em .55em;
+         border:1px solid var(--warn); color:var(--warn); border-radius:3px;
+         letter-spacing:.15em; vertical-align:middle; margin-left:.8em; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+          gap:1rem; margin-top:1.5rem; }
+  .card { background:var(--panel); border:1px solid var(--edge);
+          border-radius:6px; padding:1rem 1.2rem; }
+  .card h2 { font-size:.72rem; color:var(--dim); letter-spacing:.18em;
+             margin-bottom:.7rem; }
+  .kv { display:flex; justify-content:space-between; padding:.3rem 0;
+        border-bottom:1px dashed var(--edge); }
+  .kv:last-child { border-bottom:0; }
+  .kv span:first-child { color:var(--dim); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); }
+  .dim { color:var(--dim); }
+  .mono { font-size:.8rem; word-break:break-all; }
+  ol { margin:.5rem 0 0 1.4rem; color:var(--dim); }
+  ol li { padding:.25rem 0; } ol b { color:var(--fg); font-weight:600; }
+  footer { margin-top:2rem; color:var(--dim); font-size:.75rem;
+           display:flex; gap:1.2rem; flex-wrap:wrap; }
+  footer a { color:var(--acc); text-decoration:none; }
+  #dot { display:inline-block; width:.6em; height:.6em; border-radius:50%;
+         background:var(--bad); margin-right:.4em; }
+  #dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+</style>
+</head>
+<body>
+<main>
+  <h1><span id="dot"></span>JUNOCLAW AGENTS DAO
+      <small>SOVEREIGN OPERATIONS · TOKENLESS MEMBERSHIP · CW4</small>
+      <span class="tag">STAGE 1 · READ-ONLY</span></h1>
+
+  <div class="grid">
+    <section class="card">
+      <h2>CHAIN</h2>
+      <div class="kv"><span>status</span><span id="s-status" class="dim">—</span></div>
+      <div class="kv"><span>block tip</span><span id="s-tip" class="mono">—</span></div>
+      <div class="kv"><span>uptime (observed)</span><span id="s-up" class="mono">—</span></div>
+      <div class="kv"><span>probe</span><span id="s-ago" class="mono">—</span></div>
+    </section>
+
+    <section class="card">
+      <h2>DAO — INSTANTIATION PENDING</h2>
+      <div class="kv"><span>membership</span><span>cw4_group · code 11</span></div>
+      <div class="kv"><span>voting</span><span>dao_voting_cw4 · code 12</span></div>
+      <div class="kv"><span>core + proposals</span><span>codes 5,6,7 + factory</span></div>
+      <div class="kv"><span>seats</span><span>5 operators → reshare cohort</span></div>
+      <div class="kv"><span>token</span><span class="warn">none — by design</span></div>
+    </section>
+
+    <section class="card">
+      <h2>PROPOSALS</h2>
+      <p class="dim" id="p-note">No DAO instantiated yet. First proposal:
+      operator set ratification — fires the moment governance addresses
+      land. Live proposals will appear here.</p>
+      <div id="proposals"></div>
+    </section>
+
+    <section class="card">
+      <h2>CONSOLE ROADMAP</h2>
+      <ol>
+        <li><b>Stage 1</b> — this page: chain + proposals + seats, read-only</li>
+        <li><b>Stage 2</b> — unsigned-tx generation → sign locally via
+            tx-sender → broadcast</li>
+        <li><b>Stage 3</b> — in-browser signing UX + PQ-cert badges +
+            signer-bitmap health</li>
+      </ol>
+    </section>
+  </div>
+
+  <footer>
+    <a href="https://explorer.junoclaw.xyz">explorer</a>
+    <a href="https://status.junoclaw.xyz">status</a>
+    <a href="https://api.junoclaw.xyz">api</a>
+    <a href="https://relay.junoclaw.xyz">relay (wss)</a>
+    <a href="https://github.com/Dragonmonk111/layer-sdk/tree/commonware">source</a>
+    <span class="dim">reads refresh every 15s · stage-1 read-only, nothing
+    here signs or broadcasts</span>
+  </footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+async function poll() {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) throw 0;
+    const j = await r.json();
+    const ok = j.latest.probes.every(p => p.ok);
+    $('s-status').textContent = ok ? 'OPERATIONAL' : 'DEGRADED';
+    $('s-status').className = ok ? 'ok' : 'warn';
+    $('s-tip').textContent = (+j.tip).toLocaleString();
+    $('s-up').textContent = (+j.uptime_pct_since_start).toFixed(3) + '%';
+    $('s-ago').textContent = Math.max(0, Date.now()/1000 - j.latest.ts | 0)
+      + 's ago · ' + j.latest.probes.filter(p=>p.ok).length
+      + '/' + j.latest.probes.length + ' up';
+    $('dot').classList.toggle('ok', ok);
+  } catch {
+    $('s-status').textContent = 'UNREACHABLE'; $('s-status').className='warn';
+    $('dot').classList.remove('ok');
+  }
+}
+poll(); setInterval(poll, 15000);
+</script>
+</body>
+</html>
