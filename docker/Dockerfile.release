@@ -1,0 +1,29 @@
+# docker build . -f docker/Dockerfile.release -t junoclaw-release:rc12
+# docker create --name tmp junoclaw-release:rc12
+# docker cp tmp:/myapp/target/release/slay3rd ./slay3rd-linux-amd64
+#
+# Builds the RELEASE binaries against Ubuntu 22.04 (glibc 2.35) so the
+# artifacts run on current operator images (OVH/anatoly = 22.04) as well
+# as 24.04 boxes. rust:bookworm images (glibc 2.36+) produce binaries
+# that die on 22.04 with `GLIBC_2.38 not found` — hit live during the
+# rc12 rolling upgrade on ovh-uk1 (2026-10-18).
+
+FROM ubuntu:22.04 AS builder
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update && apt install -y curl clang g++ libclang-dev cmake git build-essential pkg-config
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.99.0
+ENV PATH=/root/.cargo/bin:$PATH
+WORKDIR /myapp
+
+# wasmer 4.3.7 references __rust_probestack which was removed from Rust
+# stdlib. Provide a shim so the linker can resolve the symbol.
+COPY docker/shim.c /tmp/shim.c
+RUN cc -c -o /tmp/shim.o /tmp/shim.c
+ENV RUSTFLAGS="-C link-arg=/tmp/shim.o"
+
+# Full source (build context .dockerignore excludes **/target/).
+# lib/cosmwasm and lib/commonware-storage ship populated in the tree.
+COPY . .
+
+RUN cargo build --release -p slay3rd -p jc-status
+RUN cd tools/generate-testnet-keys && cargo build --release

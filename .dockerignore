@@ -1,12 +1,30 @@
-target/
-**/target/
-.git/
-**/.git/
-.vscode/
-.idea/
-artifacts/
-internal/
+# Whitelist-style: everything excluded unless explicitly needed for a
+# build. The repo carries GBs of ceremony/runtime data (g1-ceremony WAL
+# segments, release artifacts) that must never enter a build context.
+*
 
-# These files should not be commited
-*.log
+# Workspace manifest + shared config
+!Cargo.toml
+!Cargo.lock
+!.cargo
+!.cargo/**
 
+# Build inputs
+!docker
+!docker/shim.c
+!dummy.rs
+!lib
+!lib/**
+!app
+!app/**
+!packages
+!packages/**
+!contracts
+!contracts/**
+!tools
+!tools/**
+
+# Nested targets and caches never enter the context (rule order matters —
+# these come after the includes so they win)
+**/target
+**/target/**
