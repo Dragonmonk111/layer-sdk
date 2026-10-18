@@ -205,9 +205,10 @@ async fn fetch_snapshot_from(peer: &str, max_bytes: u64) -> Result<FetchedSnapsh
 /// distinct peers.
 ///
 /// Unreachable peers / peers still catching up to `height` are skipped
-/// (warned); a record that fails `check`, or peers that return DIFFERENT
-/// payload bytes, are Byzantine evidence — the joiner aborts rather than
-/// picks a winner.
+/// (warned); a peer whose record fails `check` is likewise skipped —
+/// logged as evidence — while `select_anchor` still requires
+/// `min_agree` byte-identical payloads, so a corrupt donor cannot
+/// lower the trust bound, it can only fail to contribute.
 async fn fetch_certified_payload(
     peers: &[String],
     height: u64,
@@ -218,15 +219,27 @@ async fn fetch_certified_payload(
     for peer in peers {
         match fetch_block_retry(peer, height).await {
             Ok(block) => {
-                check(
+                match check(
                     &block.proposal_bytes,
                     &block.certificate_bytes,
                     &block.payload_bytes,
-                )
-                .map_err(|e| {
-                    anyhow!("peer {peer} served an uncertified record at height {height}: {e}")
-                })?;
-                payloads.push((peer.clone(), block.payload_bytes));
+                ) {
+                    Ok(()) => payloads.push((peer.clone(), block.payload_bytes)),
+                    Err(e) => {
+                        // A peer serving a corrupt/unverifiable record is
+                        // skipped, not fatal: `select_anchor` still demands
+                        // `min_agree` byte-identical payloads from distinct
+                        // peers, which is the actual trust bound. Aborting on
+                        // any single bad donor wedges recovery whenever one
+                        // donor has localized storage corruption (observed:
+                        // OVH journal serves truncated records for a sparse
+                        // set of heights while every other seat serves them
+                        // clean).
+                        tracing::warn!(peer, height, error = %e,
+                            "state-sync: peer served an invalid record — \
+                             skipping peer (evidence kept in log)");
+                    }
+                }
             }
             Err(e) => {
                 tracing::warn!(peer, height, error = %e,
