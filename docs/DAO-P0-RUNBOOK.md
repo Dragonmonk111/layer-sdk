@@ -155,5 +155,19 @@ DAO team as the P0 answer.
    Wider issue: every `submit_layer_any` caller should use this path.
 2. Caller-side notes (not chain gaps): cw20 `symbol` must match
    `[a-zA-Z-]{3,12}`; vote msg variant is `vote`, not `cast_vote`.
-3. Open: SubDAO nesting via `cw_admin_factory` (P1), archiver event
-   indexing verification.
+3. ✅ **SubDAO via governance PASSED (same day):** `cw_admin_factory`
+   instantiated (`juno1wsdg3lwjpn2m2y6k9pwqnzagqkkzp2recr5c2d75a8wmvjj0lvhqsggzcw`),
+   then parent-DAO proposal #4 executed a `wasm.instantiate` of a
+   child `dao_dao_core` with `admin` = parent — full 2nd-level nesting
+   through a governed execute. Child: `juno1g8zarm4u2ezlpeejutflpjxzes9dj8eq8h6hp32ka2x2fjnps70sy8tdwc`
+   (healthy: own voting + proposal modules, admin = parent core).
+   Correct v2.7.1 msg shapes: `InstantiateInfo.admin` variants are
+   `address`/`core_module` (NOT `core_contract`); the proposal module's
+   `InstantiateMsg` has NO `dao` field — core injects it.
+4. 🐛 **Zombie contract registrations:** a failed nested instantiate
+   still registers the contract address — `ContractsByCode` lists it
+   but all queries fail (`key "admin" not found`, empty storage).
+   Two zombies from failed attempts: `juno1yf4uv…`, `juno1x2yk…`.
+   The address allocation isn't rolled back with the rest of the
+   execution context → real state-consistency bug in our wasm module.
+5. Open: archiver event indexing verification.
