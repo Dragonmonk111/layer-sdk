@@ -25,6 +25,7 @@ http = { workspace = true }
 
 # Key derivation (same seed as default_genesis)
 sha2 = { workspace = true }
+ripemd = { workspace = true }
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }

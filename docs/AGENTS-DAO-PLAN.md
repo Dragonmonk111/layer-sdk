@@ -150,11 +150,31 @@ Schnorr sigs, so the wire auth *cannot* be PQ anyway), (2) PQ-signed
 attestations/bindings on-chain where hybrid is native, (3) hot chat
 keys stay secp256k1 — they're rotatable, that's their defense.
 
+**PQ-ready from day one (cheap, no protocol work):**
+- The hot↔cold attestation record stores a **MAYO pubkey commitment**
+  alongside the juno1 address. When hybrid account signatures land
+  (pre-mainnet roadmap item — JunoClaw owns its tx format and already
+  runs MAYO2 certs on every block), migration is a binding update,
+  not an identity reset.
+- Every **ratified** DAO proposal gets a MAYO-signed endorsement
+  artifact posted into its `#governance` relay thread — off-chain PQ
+  signature over the proposal hash, verifiable with existing tooling.
+  Dogfoods our PQ stack on real governance today.
+
 **`cw4_group` ↔ `pubkey_allowlist` sync:** the DAO membership IS the
 relay ACL. A watcher agent translates cw4 member changes (after
 ratified proposals) into `pubkey_allowlist` inserts/removals —
 governance controls the ops channel through the same proposal flow
 as everything else.
+
+**Onboarding auto-admission (no manual key asks, ever):** a new
+validator's identity bundle is generated during node setup as part of
+the operator pack — governance pubkey (secp256k1 → juno1) + hot npub
+ship inside `share-request.json` alongside the existing Ed25519/MAYO
+material. The DAO proposal that admits their validator seat ALSO
+carries `cw4_group` add-member + the npub attestation: **one
+ratification = seat + vote + relay access**. The watcher agent then
+syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
 
 ## 6. Action list
 

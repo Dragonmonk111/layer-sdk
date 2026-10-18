@@ -177,6 +177,11 @@ fn print_usage() {
     eprintln!("  --height <N>         Finalized height to query (required)");
     eprintln!("  --dump               Also print raw proposal/certificate/payload hex");
     eprintln!("                       (feeds verify-cert --cert/--message for T11)");
+    eprintln!();
+    eprintln!("derive-address flags:");
+    eprintln!("  --pubkey <hex>       33-byte compressed secp256k1 pubkey (required)");
+    eprintln!("                       Prints the juno1 account address for that key");
+    eprintln!("                       (operator onboarding: cw4 member derivation)");
 }
 
 struct Args {
@@ -198,6 +203,7 @@ struct Args {
     kind: Option<String>,
     count: Option<u64>,
     height: Option<u64>,
+    pubkey: Option<String>,
     dump: bool,
 }
 
@@ -223,6 +229,7 @@ fn parse_args() -> Result<Args, String> {
     let mut denom = "ujclaw".to_string();
     let mut hash: Option<String> = None;
     let mut tx_hex: Option<String> = None;
+    let mut pubkey: Option<String> = None;
     let mut wait: Option<u64> = None;
     let mut kind: Option<String> = None;
     let mut count: Option<u64> = None;
@@ -290,6 +297,10 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 hash = Some(args.get(i).ok_or("--hash requires a value")?.clone());
             }
+            "--pubkey" => {
+                i += 1;
+                pubkey = Some(args.get(i).ok_or("--pubkey requires a value")?.clone());
+            }
             "--tx-hex" => {
                 i += 1;
                 tx_hex = Some(args.get(i).ok_or("--tx-hex requires a value")?.clone());
@@ -352,6 +363,7 @@ fn parse_args() -> Result<Args, String> {
         wait,
         kind,
         count,
+        pubkey,
         dump,
     })
 }
@@ -382,6 +394,24 @@ fn deployer_address() -> AccountId {
         .public_key()
         .account_id(BECH32_PREFIX)
         .expect("valid bech32 address")
+}
+
+/// Cosmos-style account derivation from a submitted compressed pubkey:
+/// bech32(prefix, RIPEMD160(SHA256(pubkey))[:20]). Used to turn operator
+/// onboarding pubkey submissions into cw4 member addresses without the
+/// private key ever leaving their box.
+fn cmd_derive_address(pubkey_hex: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = hex::decode(pubkey_hex.trim().trim_start_matches("0x"))?;
+    if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
+        return Err(
+            "expected 33-byte compressed secp256k1 pubkey (02/03 prefix)".into(),
+        );
+    }
+    let sha = Sha256::digest(&bytes);
+    let ripemd = ripemd::Ripemd160::digest(sha);
+    let addr = AccountId::new(BECH32_PREFIX, &ripemd[..])?;
+    println!("{}", addr);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -1546,6 +1576,13 @@ async fn main() {
                 .unwrap_or_else(|| deployer_address().to_string());
             println!("Querying balance for: {}", addr);
             cmd_query_balance(&args.grpc, &addr).await
+        }
+        "derive-address" => {
+            let pk_hex = args.pubkey.unwrap_or_else(|| {
+                eprintln!("Error: --pubkey <33-byte compressed hex> is required");
+                std::process::exit(1);
+            });
+            cmd_derive_address(&pk_hex)
         }
         sub => {
             eprintln!("Unknown subcommand: {}", sub);

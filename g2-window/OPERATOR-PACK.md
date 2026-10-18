@@ -41,6 +41,32 @@ This creates:
   ops channel). Contains your pubkeys, moniker, p2p address, and an
   attestation proving you own the key.
 
+## 3.5 Identity bundle — governance + comms (one-time, ~2 min)
+
+Your validator seat comes with DAO voting rights and relay access. Two
+more keys — deliberately separate from your node keys:
+
+**Governance cold key** (signs DAO votes — guard like `keys.json`):
+
+```bash
+openssl ecparam -name secp256k1 -genkey -noout -out dao-key.pem
+openssl ec -in dao-key.pem -pubout -outform DER | tail -c 33 | xxd -p -c 33
+```
+
+Send the printed pubkey hex with your `share-request.json` — we derive
+your `juno1` member address from it. `dao-key.pem` never leaves the box.
+
+**Chat hot key** (your npub on relay.junoclaw.xyz — rotatable, low-risk):
+
+```bash
+# any Nostr tool, e.g.:
+nak key generate        # keep the nsec private, send us the npub
+```
+
+Send the `npub` too. Your DAO onboarding proposal will carry both:
+**one ratification admits your seat, your cw4 vote, and your relay
+identity** — no separate key collection rounds later.
+
 ## 4. Firewall / ports
 
 - `7001/tcp` — P2P (must be reachable from the other validators)
