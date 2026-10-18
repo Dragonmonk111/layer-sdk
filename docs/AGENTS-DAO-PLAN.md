@@ -122,6 +122,40 @@ Custom features no generic DAO UI has: PQ-cert badges per proposal-era,
 signer-bitmap health, "this vote ran on 5-seat hybrid BLS+MAYO
 finality" provenance line, mesh status inline.
 
+## 5.5 Identity model — one identity, separated key material
+
+The "chat key = vote key" idea is refined as **unified identity, not
+unified key material**:
+
+- **Cold `juno1` key** — governance identity (cw4 member). Votes,
+  treasury. Rarely used, kept offline/operator-controlled. Eligible
+  for PQ-hybrid signing later because JunoClaw owns its tx format and
+  already runs MAYO2 certs on every block.
+- **Hot `npub`** — relay/chat identity (secp256k1 Nostr). Lives in
+  clients and agent hosts, signs constantly, rotatable. A leaked nsec
+  impersonates chat but cannot vote.
+- **On-chain attestation binds them** — the cold key signs
+  "hot npub X speaks for me until T" as a chain artifact (or cw4-held
+  record). The relay allowlist admits the hot key; governance audit
+  resolves identity through the binding. NIP-26 precedent.
+- **Bot seats use the same attestation** — a deterministic policy
+  agent's rule is the attestation payload; its npub and (optional)
+  juno1 member key are bound the same way.
+
+PQ posture: **auth isn't where PQ urgency lives** — recorded sigs
+can't be retro-forged, but recorded ciphertext can (harvest-now-
+decrypt-later). Priorities: (1) ML-KEM-768 channel encryption wrapped
+inside normal Nostr events (no wire fork — NIP-01 hard-codes 64-byte
+Schnorr sigs, so the wire auth *cannot* be PQ anyway), (2) PQ-signed
+attestations/bindings on-chain where hybrid is native, (3) hot chat
+keys stay secp256k1 — they're rotatable, that's their defense.
+
+**`cw4_group` ↔ `pubkey_allowlist` sync:** the DAO membership IS the
+relay ACL. A watcher agent translates cw4 member changes (after
+ratified proposals) into `pubkey_allowlist` inserts/removals —
+governance controls the ops channel through the same proposal flow
+as everything else.
+
 ## 6. Action list
 
 - [ ] collect operator `juno1` addrs (→ `jclaw1` after cutover)
