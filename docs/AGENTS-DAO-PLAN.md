@@ -179,8 +179,12 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
 ## 6. Action list
 
 - [ ] collect operator `juno1` addrs (→ `jclaw1` after cutover)
-- [ ] store `dao_voting_cw4` + `cw4_group` (downloaded v2.7.1,
-      sha256 `52afbd7f…` / `0019dfc4…`) — store as code_ids 11/12
+- [x] store `dao_voting_cw4` + `cw4_group` — **code_ids 12 / 11**,
+      on-chain data_hash verified against official checksums:
+      `52afbd7f…` (dao-contracts v2.7.1) / `4604a284…` (cw-plus v2.0.0).
+      Note: first cw4_group download was a 9-byte 404 page — caught by
+      size inspection; always verify artifact size + checksum before
+      recording hashes in docs.
 - [ ] instantiate Agents DAO (cw4, members = operators+core devs)
 - [ ] first ratified proposal: rc12 rollout approval
 - [ ] spawn SubDAOs via governance (proven path, runbook §5.3)
