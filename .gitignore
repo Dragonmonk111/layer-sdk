@@ -89,3 +89,4 @@ g2-window/dealers/
 g2-window/acks/
 g2-window/anchor.env
 dist/rc12-portable/
+dao/.agents-dao-instantiate.generated.json
