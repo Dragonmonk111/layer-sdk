@@ -178,7 +178,7 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
 
 ## 6. Action list
 
-- [ ] collect operator `juno1` addrs (→ `jclaw1` after cutover)
+- [~] collect operator `juno1` addrs (1/5 — vahana in) (→ `jclaw1` after cutover)
 - [x] store `dao_voting_cw4` + `cw4_group` — **code_ids 12 / 11**,
       on-chain data_hash verified against official checksums:
       `52afbd7f…` (dao-contracts v2.7.1) / `4604a284…` (cw-plus v2.0.0).
