@@ -17,8 +17,13 @@
 //!
 //! Donor list: `[state_sync] peers` in node.toml. Seats without that
 //! section simply idle (a warning is logged once at startup).
+//!
+//! Throughput design: per-height cost is dominated by unreachable
+//! donors, so (a) connects happen once per cycle with a cooldown for
+//! donors that fail, and (b) heights fetch concurrently over cloned
+//! tonic clients. A ~150k-gap store repairs in hours, not weeks.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,12 +44,19 @@ const SCAN_BATCH: u64 = 8192;
 /// Heights re-checked per cycle once caught up (live-path window ~20min
 /// of blocks — covers fast-forward gaps as they form).
 const TAIL_WINDOW: u64 = 4096;
-/// Records repaired per cycle, spread across donors (~5.5k/hour).
-const REPAIR_BATCH: usize = 64;
-/// Per-request donor timeout.
+/// Records repaired per cycle.
+const REPAIR_BATCH: usize = 256;
+/// Heights fetched from donors concurrently per chunk.
+const FETCH_CONCURRENCY: usize = 16;
+/// Per-request donor timeout (established channels only — connects
+/// use the cooldown path below).
 const DONOR_TIMEOUT: Duration = Duration::from_secs(8);
+/// Cycles a donor is skipped after a failed connect.
+const DONOR_COOLDOWN_CYCLES: u32 = 10;
 /// Cap on queued missing heights (defensive — the set is resumable).
 const MISSING_CAP: usize = 1_000_000;
+
+type ClientList = Vec<(String, LightClientQueryClient<Channel>)>;
 
 /// Spawn the backfill task. `donors` are gRPC `host:port` endpoints
 /// (the node's state-sync peer list). `app` is the shared app lock.
@@ -64,10 +76,22 @@ pub fn spawn<T: PersistentStorage + Send + Sync + 'static>(
     tokio::spawn(async move {
         // Small startup delay so the gRPC server + executor settle first.
         tokio::time::sleep(Duration::from_secs(30)).await;
-        info!(donors = donors.len(), dry_run, "finality-backfill: started");
-        let mut scan_next: u64 = 1;
+        // Floor = leftmost stored payload height. A state-synced or pruned
+        // store has nothing below it — scanning from height 1 would burn
+        // hours of no-op reads before reaching repairable records.
+        let floor = {
+            let app = app.read().await;
+            let tip = app.info().map(|i| i.height).unwrap_or(0);
+            payload_floor(&app, tip)
+        };
+        info!(donors = donors.len(), dry_run, floor, "finality-backfill: started");
+        let mut scan_next: u64 = floor.max(1);
         let mut missing: VecDeque<u64> = VecDeque::new();
-        let mut clients: Vec<(String, LightClientQueryClient<Channel>)> = Vec::new();
+        let mut clients: ClientList = Vec::new();
+        let mut cooldown: HashMap<String, u32> = donors
+            .iter()
+            .map(|d| (d.clone(), 0u32))
+            .collect();
 
         loop {
             // --- 1. advance the scan watermark, collecting gaps -----------
@@ -99,44 +123,92 @@ pub fn spawn<T: PersistentStorage + Send + Sync + 'static>(
                 scan_next = end;
             }
 
-            // --- 2. repair a bounded batch via donors ---------------------
+            // --- 2. (re)connect donors once per cycle, honoring cooldown ---
+            for left in cooldown.values_mut() {
+                if *left > 0 {
+                    *left -= 1;
+                }
+            }
+            for donor in donors.iter() {
+                let left = cooldown.get(donor).copied().unwrap_or(0);
+                if left > 0 {
+                    continue; // cooling down after a failed connect
+                }
+                if clients.iter().any(|(d, _)| d == donor) {
+                    continue; // already connected
+                }
+                let uri = format!("http://{donor}");
+                match Channel::from_shared(uri) {
+                    Ok(ep) => match tokio::time::timeout(DONOR_TIMEOUT, ep.connect()).await {
+                        Ok(Ok(c)) => {
+                            cooldown.insert(donor.clone(), 0);
+                            clients.push((donor.clone(), LightClientQueryClient::new(c)));
+                        }
+                        _ => {
+                            cooldown.insert(donor.clone(), DONOR_COOLDOWN_CYCLES);
+                            warn!(donor, "finality-backfill: donor unreachable — cooling down");
+                        }
+                    },
+                    Err(_) => {
+                        cooldown.insert(donor.clone(), DONOR_COOLDOWN_CYCLES);
+                        warn!(donor, "finality-backfill: invalid donor URI — cooling down");
+                    }
+                }
+            }
+            // Drop channels whose donor has gone back to cooling down.
+            clients.retain(|(d, _)| cooldown.get(d).copied().unwrap_or(0) == 0);
+
+            // --- 3. repair a bounded batch via donors ---------------------
             let batch: Vec<u64> = missing.drain(..REPAIR_BATCH.min(missing.len())).collect();
             if !batch.is_empty() {
+                // Pre-fetch local payloads (the correspondence anchor) and
+                // drop heights pruned mid-flight.
+                let payloads: Vec<(u64, Vec<u8>)> = {
+                    let app = app.read().await;
+                    batch
+                        .iter()
+                        .filter_map(|&h| app.get_block_payload(h).map(|p| (h, p)))
+                        .collect()
+                };
                 let mut repaired = 0u32;
-                for h in batch {
-                    // Local payload is the correspondence anchor: a donor's
-                    // record only counts if its payload_bytes byte-match the
-                    // payload we executed at this height.
-                    let local_payload = {
-                        let app = app.read().await;
-                        match app.get_block_payload(h) {
-                            Some(p) => p,
-                            None => continue, // raced with pruning — skip
-                        }
-                    };
-                    match fetch_finality(&mut clients, &donors, h, &local_payload).await {
-                        Some((prop, cert, ts)) => {
-                            if dry_run {
-                                info!(height = h, "finality-backfill: dry-run — would repair");
-                                repaired += 1;
-                                continue;
+                for chunk in payloads.chunks(FETCH_CONCURRENCY) {
+                    let futs: Vec<_> = chunk
+                        .iter()
+                        .cloned()
+                        .map(|(h, payload)| {
+                            let clients = clients.clone();
+                            async move {
+                                let r = fetch_finality(&clients, h, &payload).await;
+                                (h, r)
                             }
-                            let res = {
-                                let mut app = app.write().await;
-                                app.set_block_finality(h, cert, prop, ts)
-                            };
-                            match res {
-                                Ok(()) => {
+                        })
+                        .collect();
+                    let results = futures::future::join_all(futs).await;
+                    for (h, r) in results {
+                        match r {
+                            Some((prop, cert, ts)) => {
+                                if dry_run {
+                                    info!(height = h, "finality-backfill: dry-run — would repair");
                                     repaired += 1;
-                                    debug!(height = h, "finality-backfill: repaired");
+                                    continue;
                                 }
-                                Err(e) => {
-                                    warn!(height = h, error = %e, "finality-backfill: store write failed");
-                                    missing.push_back(h);
+                                let res = {
+                                    let mut app = app.write().await;
+                                    app.set_block_finality(h, cert, prop, ts)
+                                };
+                                match res {
+                                    Ok(()) => {
+                                        repaired += 1;
+                                        debug!(height = h, "finality-backfill: repaired");
+                                    }
+                                    Err(e) => {
+                                        warn!(height = h, error = %e, "finality-backfill: store write failed");
+                                        missing.push_back(h);
+                                    }
                                 }
                             }
+                            None => missing.push_back(h), // no donor had it — retry next cycle
                         }
-                        None => missing.push_back(h), // no donor had it — retry next cycle
                     }
                 }
                 if repaired > 0 {
@@ -153,7 +225,7 @@ pub fn spawn<T: PersistentStorage + Send + Sync + 'static>(
     });
 }
 
-/// Query every reachable donor for a complete finality record at `height`.
+/// Query every connected donor for a complete finality record at `height`.
 ///
 /// A donor response counts only when ALL of these hold:
 ///   * `proposal_bytes` and `certificate_bytes` are both non-empty
@@ -167,31 +239,16 @@ pub fn spawn<T: PersistentStorage + Send + Sync + 'static>(
 /// a validated payload match leaves no room for a wrong-but-matching
 /// record on an honest-majority chain.
 async fn fetch_finality(
-    clients: &mut Vec<(String, LightClientQueryClient<Channel>)>,
-    donors: &[String],
+    clients: &ClientList,
     height: u64,
     local_payload: &[u8],
 ) -> Option<(Vec<u8>, Vec<u8>, u64)> {
     // (prop, cert, ts) -> donor count backing it
     let mut candidates: Vec<((Vec<u8>, Vec<u8>, u64), usize)> = Vec::new();
-    for donor in donors {
-        if !clients.iter().any(|(d, _)| d == donor) {
-            let uri = format!("http://{donor}");
-            let conn = match Channel::from_shared(uri) {
-                Ok(ep) => match tokio::time::timeout(DONOR_TIMEOUT, ep.connect()).await {
-                    Ok(Ok(c)) => c,
-                    _ => continue,
-                },
-                Err(_) => continue,
-            };
-            clients.push((donor.clone(), LightClientQueryClient::new(conn)));
-        }
-        let Some(client) = clients.iter_mut().find(|(d, _)| d == donor).map(|(_, c)| c) else {
-            continue;
-        };
+    for (donor, client) in clients {
         let resp = match tokio::time::timeout(
             DONOR_TIMEOUT,
-            client.block(QueryBlockRequest { height }),
+            client.clone().block(QueryBlockRequest { height }),
         )
         .await
         {
@@ -215,11 +272,32 @@ async fn fetch_finality(
         }
     }
     let (best, votes) = candidates.into_iter().max_by_key(|(_, n)| *n)?;
-    if votes == 1 && donors.len() > 1 {
+    if votes == 1 && clients.len() > 1 {
         warn!(
             height,
             "finality-backfill: single-donor record accepted (no quorum to compare)"
         );
     }
     Some(best)
+}
+
+/// Leftmost height with a stored payload, by binary search. `get_block_payload`
+/// is an exact-key read, so the probe count is O(log tip) (~21 reads at 2.4M).
+/// Returns 1 when nothing is stored (fresh boot — the scan then no-ops at the
+/// `tip == 0` check until execution begins).
+fn payload_floor<T: PersistentStorage + 'static>(app: &App<T>, tip: u64) -> u64 {
+    let has = |h: u64| app.get_block_payload(h).is_some();
+    let (mut lo, mut hi) = (1u64, tip);
+    if !has(hi) {
+        return 1;
+    }
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if has(mid) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    lo
 }
