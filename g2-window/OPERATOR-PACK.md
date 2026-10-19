@@ -106,3 +106,41 @@ the cert is the "you're in" moment.
 - NTP deviation < 2 s ✔ (you're at ~0.1 ms)
 - Key-only SSH + firewall ✔
 - Uptime: this is a live BFT seat — flag maintenance windows in advance
+
+## 7. State-sync recovery config (add to node.toml, no restart needed until use)
+
+Every seat should carry a `[state_sync]` block so a wedged or wiped
+node recovers without coordination. Donors = the OTHER seats' 9090
+endpoints (never list yourself — self-donation is a deadlock).
+
+| Seat | state_sync peers (exclude self) |
+|------|----------------------------------|
+| anatoly-hetzner | `51.195.201.74:9090`, `57.129.103.229:9090`, `2.31.3.204:9090` |
+| posthuman | `51.195.201.74:9090`, `57.129.103.229:9090`, `5.75.244.250:9090` |
+| home-vb | `51.195.201.74:9090`, `57.129.103.229:9090`, `5.75.244.250:9090`, `2.31.3.204:9090` |
+| ovh-uk1 | `57.129.103.229:9090`, `5.75.244.250:9090`, `2.31.3.204:9090` |
+| vahana | `51.195.201.74:9090`, `5.75.244.250:9090`, `2.31.3.204:9090` |
+
+Standard block:
+
+```toml
+[state_sync]
+peers = [<two or more donor IPs from your row above>]
+min_anchor_agree = 2        # two donors must advertise the IDENTICAL
+                            # snapshot root — no single-donor trust
+```
+
+Notes:
+- `min_anchor_agree = 2` is now safe for everyone: ovh, anatoly, and
+  posthuman all expose 9090 to seat IPs. vahana's 9090 works for
+  outbound donation but its local store misses ~1/4 of finality
+  records (payload-only responses) — it stays a donor of last resort
+  until its store is repaired.
+- `halted_chain_anchor = true` was for the G1→G2 cutover era. Do NOT
+  add it for routine recovery on the live chain — it relaxes
+  successor-cert verification and is a policy flag, not a default.
+- `force = true` is a one-shot wedge recovery ONLY. Revert/remove it
+  in the same operation after a successful sync — left on, every
+  restart re-wipes app state.
+- Donor 9090s are allowlisted to seat IPs. If you rebuild on a new IP,
+  tell ops so the allowlists follow.
