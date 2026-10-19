@@ -1299,6 +1299,35 @@ async fn submit_layer_any(
     broadcast(&a.layer_grpc, tx_bytes).await
 }
 
+/// Two-phase submit for wasm msgs: sign a probe tx with the nominal gas
+/// limit, simulate it on-chain, then re-sign with 20% headroom over the
+/// real gas_used and broadcast. A fixed-gas submit passes CheckTx but can
+/// fail at DeliverTx (under-priced gas OR a rejected inner msg) while the
+/// CLI has already printed "broadcast OK" — simulate surfaces both here.
+async fn submit_layer_any_sim(
+    a: &Args,
+    any: cosmrs::Any,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let key = layer_signer_key(a)?;
+    let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
+    if account.account_number == 0 {
+        account.account_number = LAYER_ACCOUNT_NUMBER;
+    }
+    // Probe bound is deliberately generous — gas_wanted caps the
+    // simulation, so a msg needing >LAYER_GAS would fail the probe
+    // instead of reporting its real usage.
+    let probe = sign_and_encode_layer(&key, any.clone(), &account, 20_000_000, &a.chain_id)?;
+    let used = simulate(&a.layer_grpc, probe).await?;
+    let gas = used.saturating_mul(6) / 5;
+    if a.simulate {
+        println!("simulate: gas_used={used} → gas_limit {gas}");
+        return Ok("simulated".into());
+    }
+    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas, &a.chain_id)?;
+    broadcast(&a.layer_grpc, tx_bytes).await
+}
+
 /// JSON-encode an `IbcMsg` into a single `Any` and broadcast it to JunoClaw.
 async fn submit_ibc_msg(a: &Args, msg: IbcMsg) -> Result<String, Box<dyn std::error::Error>> {
     let any = cosmrs::Any {
@@ -1391,15 +1420,30 @@ async fn cmd_jc_instantiate(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
         msg: msg_json.into_bytes(),
         funds: vec![],
     };
-    let hash =
-        submit_layer_any(a, any_of(TYPE_URL_MSG_INSTANTIATE_CONTRACT, &msg), LAYER_GAS).await?;
+    let any = any_of(TYPE_URL_MSG_INSTANTIATE_CONTRACT, &msg);
+
+    // Snapshot existing contracts for this code BEFORE broadcast — the
+    // wait-loop below must return the NEW address only; a code_id that
+    // already has contracts would otherwise return instantly with stale
+    // results (observed 2026-10-19: DAO re-instantiate printed the old
+    // instance's addresses).
+    let mut client = WasmQueryClient::new(connect(&a.layer_grpc).await?);
+    let preexisting: std::collections::BTreeSet<String> = client
+        .contracts_by_code(QueryContractsByCodeRequest {
+            code_id,
+            pagination: None,
+        })
+        .await
+        .map(|r| r.into_inner().contracts.into_iter().collect())
+        .unwrap_or_default();
+
+    let hash = submit_layer_any_sim(a, any).await?;
     println!("jc-instantiate code_id={code_id} broadcast OK — txhash {hash}");
 
     // Wait for the tx to land in a finalized block, then surface the new
     // contract address via ContractsByCode (addresses are generated
     // deterministically from (sender, code_id, counter) but this avoids
     // depending on the counter).
-    let mut client = WasmQueryClient::new(connect(&a.layer_grpc).await?);
     for attempt in 0..40 {
         tokio::time::sleep(Duration::from_millis(750)).await;
         let resp = client
@@ -1409,10 +1453,15 @@ async fn cmd_jc_instantiate(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
             })
             .await;
         if let Ok(r) = resp {
-            let contracts = r.into_inner().contracts;
-            if !contracts.is_empty() {
-                for c in &contracts {
-                    println!("contract[{code_id}]: {c}");
+            let new_contracts: Vec<String> = r
+                .into_inner()
+                .contracts
+                .into_iter()
+                .filter(|c| !preexisting.contains(c))
+                .collect();
+            if !new_contracts.is_empty() {
+                for c in &new_contracts {
+                    println!("contract[{code_id}]: {c} (new)");
                 }
                 return Ok(());
             }
@@ -1420,7 +1469,7 @@ async fn cmd_jc_instantiate(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
             eprintln!("warn: ContractsByCode query failed — look the contract up via jc-contracts");
         }
     }
-    eprintln!("warn: no contract visible for code_id={code_id} after 30s");
+    eprintln!("warn: no NEW contract for code_id={code_id} after 30s — check tx result via tx-sender get-tx --hash {hash}");
     Ok(())
 }
 
@@ -1439,7 +1488,7 @@ async fn cmd_jc_execute(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         funds: vec![],
     };
     let hash =
-        submit_layer_any(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg), LAYER_GAS).await?;
+        submit_layer_any_sim(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg)).await?;
     println!("jc-execute {contract} broadcast OK — txhash {hash}");
     Ok(())
 }

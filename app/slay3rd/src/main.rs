@@ -281,6 +281,17 @@ where
 }
 
 fn main() {
+    // Panic observability: the release profile builds with
+    // panic="abort" (Cargo.toml), which otherwise leaves no trace in
+    // the log when a task dies — the process simply disappears
+    // (observed 2026-10-19 on home-vb: silent ~2min death cycles).
+    // This hook runs before the abort and force-captures a backtrace
+    // so every panic lands in stderr with location + stack.
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("FATAL PANIC: {info}");
+        eprintln!("{}", std::backtrace::Backtrace::force_capture());
+    }));
+
     // Parse CLI arguments or use env var for config path.
     let config_path = std::env::args()
         .skip(1)
@@ -683,7 +694,16 @@ async fn run_node(
                     Ok(h) => info!(height = h, "state-sync: snapshot adopted"),
                     Err(e) => {
                         error!(error = ?e, "state-sync failed — refusing genesis fallback");
-                        return;
+                        // Exit non-zero after a backoff: the supervisor
+                        // restarts us into a FRESH storage open (a partially
+                        // applied snapshot can leave app state wedged, so an
+                        // in-process retry would build on poisoned state).
+                        // The delay keeps a dead-donor situation from
+                        // spinning a tight restart loop, and the non-zero
+                        // code makes the failure visible in ExecMainStatus.
+                        warn!("state-sync: retrying via supervisor restart in 30s");
+                        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                        std::process::exit(2);
                     }
                 }
             } else {
