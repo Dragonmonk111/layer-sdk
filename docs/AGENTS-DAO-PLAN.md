@@ -178,14 +178,18 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
 
 ## 6. Action list
 
-- [~] collect operator `juno1` addrs (2/5 — vahana, anatoly in)
+- [x] collect operator `juno1` addrs — **5/5 keyed (2026-10-19)**
       (→ `jclaw1` after cutover). Staging (pubkey→addr derivation:
       sha256→ripemd160→bech32 `juno`, per `packages/std/src/pubkey.rs`):
       | seat | governance addr | hot npub binding |
       |---|---|---|
       | anatoly-hetzner | `juno1p3suqqsdzz0wd30asz3uzd0u3pfwsg36g6el8e` | allowlisted + in `/opt/buzz/state/members.json` |
       | vahana | `juno1e9c5kqtjqt6ejc0yqxacf5qdedeaq0afxh7nh8` | allowlisted (hex `4a8189fc…b279`) + binding staged |
-      Remaining: posthuman, home-vb, ovh-uk1. Relay allowlist is
+      | home-vb | `juno1sxd97afty30wmkv9szz5tgryv8d9rlnq8khg45` | chat via relay identity npub (manual allowlist) |
+      | ovh-uk1 | `juno19e5p4hvy5yk6rxszfxl9skgqsx83snary9glcg` | chat via relay identity npub (manual allowlist) |
+      | posthuman | `juno1euyhdn2442s8ge3n5ugefpw655r3wgufxmwv83` | allowlisted + binding staged |
+      All five bindings live in `/opt/buzz/state/members.json`.
+      Next: instantiate per `DAO-P0-RUNBOOK.md`. Relay allowlist is
       per-KEY not per-seat — a second operator on a shared seat (e.g.
       Luuk) may allowlist their own npub with no DAO change.
       `allowlist-add.sh` now verifies the bech32 checksum before
