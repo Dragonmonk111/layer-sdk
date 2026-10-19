@@ -207,7 +207,31 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
       Note: first cw4_group download was a 9-byte 404 page — caught by
       size inspection; always verify artifact size + checksum before
       recording hashes in docs.
-- [ ] instantiate Agents DAO (cw4, members = operators+core devs)
+- [x] instantiate Agents DAO — **LIVE 2026-10-19** (tx `B8FAA0C8…`,
+      txhash of the failed first attempt `878C75A8…` burned only fees):
+      - core `dao_dao_core`:
+        `juno1slsqfk4dgapg2tfm0t7uz9lr9vt9kl05ng7v46atdg6tkefz0uuqprpt6x`
+      - voting `dao_voting_cw4`:
+        `juno1k2l0rqedqstkv8p3el9sld3n3nwxpa0cmt5wg4r49046sx432sqqf0yuqk`
+      - proposal `dao_proposal_single`:
+        `juno1alfx20vzr9yv8hm37wga3t6kqe03r7fzzsvfhpylxjdfe8v5w34qx6hffa`
+      - group `cw4_group` (watcher target):
+        `juno185ry94ex3esnxtc8ffv2azugtyrh97u7642ktfn4qm07z660w2cspshh9d`
+      `list_members` verified on-chain: all 5 operator addrs, weight 1.
+      Relay watcher live (group_addr written; quoting bug in the
+      argv pass fixed). Note: existing allowlist rows pre-date the
+      watcher and carry manual tags — the DAO removal path only
+      removes `dao-member`-tagged rows, so member removals until
+      then need a manual allowlist pass (documented RELAY-OPS).
+      Tooling gaps found: `jc-instantiate` broadcasts with fixed
+      LAYER_GAS (no two-phase simulate — first attempt failed
+      silently at DeliverTx on a msg-schema mismatch; schema fix
+      documented here) and its ContractsByCode wait-loop returns
+      on first non-empty result (can't distinguish new contracts
+      when the code_id already has contracts). Fix both in the next
+      bls-relayer pass. dao_voting_cw4 v2.71 instantiate msg shape:
+      `{"group_contract":{"new":{"cw4_group_code_id":N,
+      "cw4_group_salt":null,"initial_members":[...]}}}`.
 - [ ] first ratified proposal: rc12 rollout approval
 - [ ] spawn SubDAOs via governance (proven path, runbook §5.3)
 - [ ] relay.junoclaw.xyz deploy → move ops coordination to it

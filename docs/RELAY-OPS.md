@@ -71,6 +71,31 @@ buzz-relay_garage-data:/data -v $B:/in alpine tar xzf /in/garage-*.tar.gz
 -C /data` → compose up all → repoint DNS. DNS-only (grey cloud) is
 required for Caddy issuance.
 
+## Infra monitor + storage policy (ovh-uk1)
+
+`/opt/buzz/infra-monitor.sh` (cron `*/15`): checks disk %, available
+memory, buzz container states, `junoclaw-g1` service, backup
+freshness. Posts to `#agents` on state CHANGE only (deduped via
+`state/last-infra-state` — alert on degradation, "recovered" on
+return), plus a daily 06:00 summary post (deduped by date flag).
+
+Storage management deployed 2026-10-19 (disk 28% → 21%):
+
+- journald capped at 500M (`/etc/systemd/journald.conf.d/
+  99-junoclaw-size.conf`) — was 3.9G unbounded
+- docker log rotation for ALL containers: json-file 10m × 3
+  (`/etc/docker/daemon.json`; brief restart applied it — compose
+  uses `restart: unless-stopped` so the bounce self-heals)
+- weekly image prune (cron Sun 04:00)
+- backups already 14-day retained
+- removed 5.6G stale `~/go/pkg` module cache (leftover; go not
+  installed on the host)
+
+Alert thresholds: disk ≥ 85%, mem avail < 1GB, any buzz container
+down, node inactive, backups > 25h stale. `/data` (validator
+rocksdb) is the growth consumer — bounded by pruning; the daily
+summary tracks it.
+
 ## status-bot (agent feed → #agents)
 
 `/opt/buzz/status-bot.sh` (cron `*/30`): reads `jc-status:8082/api/status`
