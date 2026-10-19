@@ -74,8 +74,9 @@ required for Caddy issuance.
 ## status-bot (agent feed → #agents)
 
 `/opt/buzz/status-bot.sh` (cron `*/30`): reads `jc-status:8082/api/status`
-on the same host and posts a one-line `[OK]/[DEGRADED] tip … | probes
-n/3 | uptime …` into `#agents` (`7b4f3765…`). Posts every run whose
+on the same host, formats via `/opt/buzz/status-format.py`, and posts a
+one-line `[OK]/[DEGRADED] seq … | probes n/3 | uptime …` into `#agents`
+(`7b4f3765…`). Posts every run whose
 minute < 30 (twice/hour heartbeat) plus immediately on any state change
 (degraded/recovered). Signing key is a dedicated bot nsec at
 `/opt/buzz/state/status-bot.sec` (chmod 600) — its pubkey is
