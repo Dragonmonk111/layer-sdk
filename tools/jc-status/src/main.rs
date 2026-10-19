@@ -12,12 +12,17 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use axum::extract::State;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
 use axum::response::{Html, Json};
 use axum::routing::get;
 use axum::Router;
+use layer_proto::cosmwasm::wasm::v1::{
+    query_client::QueryClient as WasmQueryClient, QuerySmartContractStateRequest,
+};
 use layer_proto::layer::sync::v1::query_client::QueryClient as SyncQueryClient;
 use layer_proto::layer::sync::v1::QueryLatestSequenceRequest;
+use std::collections::HashMap;
 use serde::Serialize;
 use tonic::transport::{Channel, ClientTlsConfig};
 
@@ -50,6 +55,8 @@ struct Shared {
     alert_webhook: Option<String>,
     /// Whether a stall alert has already fired for the current stall episode.
     stall_alerted: Mutex<bool>,
+    /// Local consensus gRPC for the wasm smart-query passthrough.
+    grpc: String,
 }
 
 fn now() -> u64 {
@@ -323,6 +330,110 @@ async fn api(State(sh): State<Arc<Shared>>) -> Json<serde_json::Value> {
     }))
 }
 
+/// Base64 decode (standard + url-safe alphabets, padding optional).
+fn b64_decode(s: &str) -> Option<Vec<u8>> {
+    let mut v = Vec::with_capacity(s.len() * 3 / 4);
+    let mut acc: u32 = 0;
+    let mut nbits = 0u32;
+    for &c in s.as_bytes() {
+        let d = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            b'=' => continue,
+            _ => return None,
+        } as u32;
+        acc = (acc << 6) | d;
+        nbits += 6;
+        if nbits >= 8 {
+            nbits -= 8;
+            v.push((acc >> nbits) as u8);
+        }
+    }
+    Some(v)
+}
+
+fn b64_encode(b: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(b.len().div_ceil(3) * 4);
+    for c in b.chunks(3) {
+        let n = ((c[0] as u32) << 16)
+            | ((*c.get(1).unwrap_or(&0) as u32) << 8)
+            | (*c.get(2).unwrap_or(&0) as u32);
+        out.push(A[(n >> 18) as usize & 63] as char);
+        out.push(A[(n >> 12) as usize & 63] as char);
+        out.push(if c.len() > 1 { A[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if c.len() > 2 { A[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
+/// GET /api/wasm/smart/{contract}?query={base64-or-json}
+///
+/// Read-only CosmWasm SmartContractState passthrough so browser frontends
+/// (dao.junoclaw.xyz) can read contract state without a gRPC client. The
+/// `query` param accepts standard/url-safe base64 or a raw JSON object
+/// (percent-encoded). Responses mirror the LCD shape: {"data": {...}}.
+async fn wasm_smart(
+    State(sh): State<Arc<Shared>>,
+    Path(contract): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let bad = |msg: &str| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": msg})),
+        )
+    };
+    if !contract.starts_with("juno1") || contract.len() < 40 || contract.len() > 70 {
+        return Err(bad("contract must be a juno1 bech32 address"));
+    }
+    let raw = params
+        .get("query")
+        .ok_or_else(|| bad("missing ?query="))?;
+    let query_data = if raw.trim_start().starts_with('{') {
+        raw.as_bytes().to_vec()
+    } else {
+        b64_decode(raw).ok_or_else(|| bad("query is not base64 or json"))?
+    };
+    if query_data.len() > 4096 {
+        return Err(bad("query too large"));
+    }
+
+    let ep = Channel::from_shared(format!("http://{}", sh.grpc))
+        .map_err(|e| bad(&e.to_string()))?;
+    let conn = tokio::time::timeout(PROBE_TIMEOUT, ep.connect())
+        .await
+        .map_err(|_| bad("grpc connect timeout"))?
+        .map_err(|e| bad(&e.to_string()))?;
+    let mut client = WasmQueryClient::new(conn);
+    let resp = tokio::time::timeout(
+        PROBE_TIMEOUT,
+        client.smart_contract_state(QuerySmartContractStateRequest {
+            address: contract,
+            query_data,
+        }),
+    )
+    .await
+    .map_err(|_| bad("query timeout"))?
+    .map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({"error": e.message()})),
+        )
+    })?
+    .into_inner();
+
+    // Contract responses are utf8 JSON; fall back to base64 for binary.
+    let data = match serde_json::from_slice::<serde_json::Value>(&resp.data) {
+        Ok(v) => v,
+        Err(_) => serde_json::Value::String(b64_encode(&resp.data)),
+    };
+    Ok(Json(serde_json::json!({"data": data})))
+}
+
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -344,6 +455,7 @@ async fn main() {
         tip_seen_at: Mutex::new(now()),
         alert_webhook: std::env::var("JC_ALERT_WEBHOOK").ok().filter(|s| !s.is_empty()),
         stall_alerted: Mutex::new(false),
+        grpc: grpc.clone(),
     });
 
     {
@@ -383,6 +495,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(page))
         .route("/api/status", get(api))
+        .route("/api/wasm/smart/:contract", get(wasm_smart))
         .with_state(sh);
     eprintln!("[jc-status] listening on {listen}");
     let l = tokio::net::TcpListener::bind(&listen).await.unwrap();

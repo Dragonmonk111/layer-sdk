@@ -97,6 +97,36 @@
 </main>
 <script>
 const $ = id => document.getElementById(id);
+
+// Filled in at Agents DAO instantiation (dao/agents-dao-instantiate.sh).
+// Empty strings => "instantiation pending" UI.
+const DAO = { core: "", voting: "", proposal: "", group: "" };
+
+const b64 = o => btoa(JSON.stringify(o));
+async function smart(contract, q) {
+  const r = await fetch(`/api/wasm/smart/${contract}?query=${encodeURIComponent(b64(q))}`);
+  if (!r.ok) throw new Error(await r.text());
+  return (await r.json()).data;
+}
+
+async function pollDao() {
+  if (!DAO.group) { $('p-note').textContent =
+    'No DAO instantiated yet. First proposal: operator set ratification ' +
+    '— fires the moment governance addresses land.'; return; }
+  try {
+    const members = await smart(DAO.group, {list_members: {}});
+    const props = await smart(DAO.proposal, {list_proposals: {}});
+    $('p-note').innerHTML =
+      '<b>' + (members.members||[]).length + ' members</b> · ' +
+      '<b>' + (props.proposals||[]).length + ' proposals</b>';
+    $('proposals').innerHTML = (props.proposals||[]).map(p =>
+      `<div class="kv"><span>#${p.id} ${p.status}</span><span class="dim mono">${
+        (p.proposal?.title||'').slice(0,48)}</span></div>`).join('');
+  } catch(e) {
+    $('p-note').textContent = 'DAO queries failing: ' + e.message;
+  }
+}
+
 async function poll() {
   try {
     const r = await fetch('/api/status');
@@ -117,6 +147,7 @@ async function poll() {
   }
 }
 poll(); setInterval(poll, 15000);
+pollDao(); setInterval(pollDao, 30000);
 </script>
 </body>
 </html>
