@@ -178,7 +178,16 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
 
 ## 6. Action list
 
-- [~] collect operator `juno1` addrs (1/5 — vahana in) (→ `jclaw1` after cutover)
+- [~] collect operator `juno1` addrs (2/5 — vahana, anatoly in)
+      (→ `jclaw1` after cutover). Staging (pubkey→addr derivation:
+      sha256→ripemd160→bech32 `juno`, per `packages/std/src/pubkey.rs`):
+      | seat | governance addr | hot npub binding |
+      |---|---|---|
+      | anatoly-hetzner | `juno1p3suqqsdzz0wd30asz3uzd0u3pfwsg36g6el8e` | allowlisted + in `/opt/buzz/state/members.json` |
+      | vahana | collected in ops chat (re-confirm at staging) | allowlisted |
+      Remaining: posthuman, home-vb, ovh-uk1. Relay allowlist is
+      per-KEY not per-seat — a second operator on a shared seat (e.g.
+      Luuk) may allowlist their own npub with no DAO change.
 - [x] store `dao_voting_cw4` + `cw4_group` — **code_ids 12 / 11**,
       on-chain data_hash verified against official checksums:
       `52afbd7f…` (dao-contracts v2.7.1) / `4604a284…` (cw-plus v2.0.0).
