@@ -184,13 +184,19 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
       | seat | governance addr | hot npub binding |
       |---|---|---|
       | anatoly-hetzner | `juno1p3suqqsdzz0wd30asz3uzd0u3pfwsg36g6el8e` | allowlisted + in `/opt/buzz/state/members.json` |
-      | vahana | `juno1e9c5kqtjqt6ejc0yqxacf5qdedeaq0afxh7nh8` | npub posted in ops chat FAILED bech32 checksum — re-send pending |
+      | vahana | `juno1e9c5kqtjqt6ejc0yqxacf5qdedeaq0afxh7nh8` | allowlisted (hex `4a8189fc…b279`) + binding staged |
       Remaining: posthuman, home-vb, ovh-uk1. Relay allowlist is
       per-KEY not per-seat — a second operator on a shared seat (e.g.
       Luuk) may allowlist their own npub with no DAO change.
       `allowlist-add.sh` now verifies the bech32 checksum before
       decoding — a mistyped npub fails loudly instead of silently
-      allowlisting a garbage key.
+      allowlisting a garbage key. (vahana's original npub had a
+      generator bug — correct 32-byte key, wrong checksum chars;
+      the corrected npub decodes to the identical allowlisted hex,
+      confirmed.) npub audit of all keys collected so far: anatoly
+      checksum-verified, vahana re-verified via corrected npub,
+      status-bot + relay identity auth-verified live — no other
+      seat used the bad generator.
 - [x] store `dao_voting_cw4` + `cw4_group` — **code_ids 12 / 11**,
       on-chain data_hash verified against official checksums:
       `52afbd7f…` (dao-contracts v2.7.1) / `4604a284…` (cw-plus v2.0.0).
