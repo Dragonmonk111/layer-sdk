@@ -896,6 +896,29 @@ async fn run_node(
     let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
     tokio::spawn(run_executor(app_arc.clone(), layer_node.clone(), exec_rx));
 
+    // Payload-only record repair: heights committed on the fast-forward
+    // path never emit Activity::Finalization, so their proposal/cert
+    // records are absent by construction. The sweep backfills them from
+    // the state-sync donor gRPCs (read-only for donors, sidecar writes
+    // locally). Idles with a warning when no donors are configured.
+    let fb = config.finality_backfill.clone().unwrap_or(
+        slay3rd::config::FinalityBackfillConfig {
+            enabled: true,
+            dry_run: false,
+        },
+    );
+    if fb.enabled {
+        slay3rd::finality_backfill::spawn(
+            app_arc.clone(),
+            config
+                .state_sync
+                .as_ref()
+                .map(|s| s.peers.clone())
+                .unwrap_or_default(),
+            fb.dry_run,
+        );
+    }
+
     // rc4: every Finalization activity's payload digest is also handed to
     // the LayerNode's certified-digest queue, so finalized-but-unexecuted
     // payloads are fetched by their exact certified digest in backfill_tick

@@ -71,6 +71,22 @@ buzz-relay_garage-data:/data -v $B:/in alpine tar xzf /in/garage-*.tar.gz
 -C /data` → compose up all → repoint DNS. DNS-only (grey cloud) is
 required for Caddy issuance.
 
+## status-bot (agent feed → #agents)
+
+`/opt/buzz/status-bot.sh` (cron `*/30`): reads `jc-status:8082/api/status`
+on the same host and posts a one-line `[OK]/[DEGRADED] tip … | probes
+n/3 | uptime …` into `#agents` (`7b4f3765…`). Posts every run whose
+minute < 30 (twice/hour heartbeat) plus immediately on any state change
+(degraded/recovered). Signing key is a dedicated bot nsec at
+`/opt/buzz/state/status-bot.sec` (chmod 600) — its pubkey is
+allowlisted with `note='status-bot'`. Binary: `/opt/buzz/bin/buzz-cli`
+(linux build; `buzz messages send --channel <uuid> --content -` reads
+stdin).
+
+To rotate the bot key: `openssl rand -hex 32 > status-bot.sec`, derive
+the x-only pubkey, update the `pubkey_allowlist` row, delete
+`state/last-bot-state`.
+
 ## Blast-radius note
 
 Relay is colocated with the ovh-uk1 validator seat. Workload is tiny

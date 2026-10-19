@@ -3,6 +3,7 @@
 pub mod block;
 pub mod config;
 pub mod finality;
+pub mod finality_backfill;
 pub mod genesis;
 pub mod grpc;
 pub mod hybrid_scheme;

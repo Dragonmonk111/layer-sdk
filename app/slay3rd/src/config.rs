@@ -143,6 +143,34 @@ pub struct NodeConfig {
     /// that ever executes past anchor.height ignores it automatically.
     #[serde(default)]
     pub restart_anchor: Option<RestartAnchorConfig>,
+
+    /// Payload-only finality-record repair sweep. Heights committed on
+    /// the fast-forward path store payload but no proposal/certificate;
+    /// the sweep refetches those records from `[state_sync] peers` donor
+    /// gRPCs. Donor list comes from `state_sync.peers` — this section only
+    /// gates the behavior. Default: enabled when donors are configured.
+    /// `dry_run = true` scans and logs candidate repairs without writing.
+    #[serde(default)]
+    pub finality_backfill: Option<FinalityBackfillConfig>,
+}
+
+/// Finality-record backfill parameters (repair of payload-only heights).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinalityBackfillConfig {
+    /// Master switch. Default true — a node with `[state_sync] peers`
+    /// already consents to peer-fetching, and the sweep only fills
+    /// sidecar records that are absent by construction.
+    #[serde(default = "default_backfill_enabled")]
+    pub enabled: bool,
+    /// Scan + donor-fetch normally but never call `set_block_finality`.
+    /// Logs every candidate repair. For staging validation of the sweep
+    /// before enabling writes on a live store.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+fn default_backfill_enabled() -> bool {
+    true
 }
 
 /// State-sync bootstrap parameters (docs/STATE_SYNC.md §4).
@@ -236,6 +264,7 @@ impl Default for NodeConfig {
             pruning: default_pruning(),
             pruning_keep_heights: None,
             restart_anchor: None,
+            finality_backfill: None,
         }
     }
 }

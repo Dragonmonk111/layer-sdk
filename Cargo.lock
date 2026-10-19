@@ -5680,6 +5680,7 @@ dependencies = [
  "layer-proto",
  "layer-std",
  "prost 0.13.3",
+ "ripemd",
  "serde",
  "serde_json",
  "sha2 0.10.8",
