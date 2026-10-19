@@ -29,5 +29,5 @@ COPY . .
 # restarts). WITHOUT it the binary runs an in-memory store: it boots
 # with "No stored state" next to a full on-disk state and silently
 # operates ephemerally. Hit live during the rc12 roll (2026-10-18).
-RUN cargo build --release -p slay3rd -p jc-status --features slay3rd/rocksdb
+RUN cargo build --release -p slay3rd -p jc-status -p bls-relayer -p jc-faucet --features slay3rd/rocksdb
 RUN cd tools/generate-testnet-keys && cargo build --release

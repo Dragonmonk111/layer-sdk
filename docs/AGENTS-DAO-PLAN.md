@@ -178,17 +178,34 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
 
 ## 6. Action list
 
-- [x] collect operator `juno1` addrs — **5/5 keyed (2026-10-19)**
-      (→ `jclaw1` after cutover). Staging (pubkey→addr derivation:
-      sha256→ripemd160→bech32 `juno`, per `packages/std/src/pubkey.rs`):
-      | seat | governance addr | hot npub binding |
+- [ ] collect operator `juno1` addrs — **3/5 re-verified (2026-10-19)**
+      (→ `jclaw1` after cutover). Canonical derivation (the ONLY
+      correct path, per `tools/tx-sender derive-address` and the
+      chain's own signature→address resolution):
+      **`ripemd160(sha256(compressed_33B_pubkey))` → bech32 `juno`**.
+      ⚠️ **Derivation incident 2026-10-19:** the first staging round
+      used `ripemd160(pubkey)` — sha256 missing — producing five
+      addresses no key can sign for. The DAO instantiated on that
+      member list is unusable and must be re-instantiated; ~5M ujclaw
+      dripped to the wrong addresses is unrecoverable. Discovered when
+      the chain resolved home-vb's vote signature to its canonical
+      address (`juno1wjtmj0…`), not the staged one. Verified canonical
+      addresses (derived from on-box PEM pubkeys, byte-exact):
+      | seat | canonical governance addr | status |
       |---|---|---|
-      | anatoly-hetzner | `juno1p3suqqsdzz0wd30asz3uzd0u3pfwsg36g6el8e` | allowlisted + in `/opt/buzz/state/members.json` |
-      | vahana | `juno1e9c5kqtjqt6ejc0yqxacf5qdedeaq0afxh7nh8` | allowlisted (hex `4a8189fc…b279`) + binding staged |
-      | home-vb | `juno1sxd97afty30wmkv9szz5tgryv8d9rlnq8khg45` | chat via relay identity npub (manual allowlist) |
-      | ovh-uk1 | `juno19e5p4hvy5yk6rxszfxl9skgqsx83snary9glcg` | chat via relay identity npub (manual allowlist) |
-      | posthuman | `juno1euyhdn2442s8ge3n5ugefpw655r3wgufxmwv83` | allowlisted + binding staged |
-      All five bindings live in `/opt/buzz/state/members.json`.
+      | home-vb | `juno1wjtmj0fekn4fkdpf8ttgctr537txvarae225a0` | pubkey verified from `/opt/g1-node/keys/dao-key.pem`; funded 1M ujclaw |
+      | ovh-uk1 | `juno134zsp2umr4vkhkvrn35uy3fv4n5uss233vnraz` | pubkey verified from `/opt/dao-keys/dao-key.pem`; funded 1M ujclaw |
+      | posthuman | `juno1yzte2lj9mtn2jlquj28apg82aedrxwywjt0k0m` | derived from operator-supplied pubkey; funded 1M ujclaw |
+      | anatoly-hetzner | TBD — awaiting pubkey re-submission | — |
+      | vahana | TBD — awaiting pubkey re-submission | — |
+      Wrong staged addrs (do NOT use): `juno1p3suqq…` `juno1e9c5kq…`
+      `juno1sxd97a…` `juno19e5p4h…` `juno1euyhdn2…`.
+      Operator re-submission path: run `tx-sender derive-address
+      --pubkey <33-byte compressed pubkey hex>` on-box, or send the
+      compressed pubkey — never the private key.
+      Old npub bindings in `/opt/buzz/state/members.json` are keyed by
+      the wrong addrs and need rebinding to canonical addrs at
+      re-instantiation.
       Next: instantiate per `DAO-P0-RUNBOOK.md`. Relay allowlist is
       per-KEY not per-seat — a second operator on a shared seat (e.g.
       Luuk) may allowlist their own npub with no DAO change.
@@ -207,6 +224,13 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
       Note: first cw4_group download was a 9-byte 404 page — caught by
       size inspection; always verify artifact size + checksum before
       recording hashes in docs.
+- [ ] re-instantiate Agents DAO with canonical member addrs —
+      **blocked on anatoly + vahana pubkeys**. First instantiation
+      (tx `B8FAA0C8…`, below) is dead: its cw4 member list contains
+      the wrongly-derived addrs, so no operator key can vote. The
+      dead instance stays on-chain; new instance gets fresh
+      addresses — update `dao.junoclaw.xyz` + relay watcher
+      `group_addr` when it lands.
 - [x] instantiate Agents DAO — **LIVE 2026-10-19** (tx `B8FAA0C8…`,
       txhash of the failed first attempt `878C75A8…` burned only fees):
       - core `dao_dao_core`:

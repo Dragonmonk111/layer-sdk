@@ -258,8 +258,8 @@ async fn drip(
     // Sign + broadcast under the sequence lock so two drips can't collide.
     let _seq_guard = st.seq_lock.lock().await;
     let sequence = st.sequence.load(Ordering::Relaxed);
-    let tx_bytes = sign_send_tx(&st.key_seed, &req.address, st.amount, sequence, &st.chain_id);
-    let txhash = {
+    let mut tx_bytes = sign_send_tx(&st.key_seed, &req.address, st.amount, sequence, &st.chain_id);
+    let mut txhash = {
         let h = Sha256::digest(&tx_bytes);
         hex::encode_upper(h)
     };
@@ -272,7 +272,7 @@ async fn drip(
             )
         })?,
     );
-    let resp = client
+    let mut resp = client
         .broadcast_tx(BroadcastTxRequest {
             tx_bytes,
             mode: 1, // BROADCAST_MODE_SYNC
@@ -287,11 +287,49 @@ async fn drip(
 
     if let Some(r) = resp.into_inner().tx_response {
         if r.code != 0 {
-            // Sequence may have drifted — resync from chain on next drip.
-            return Err(bad(
-                axum::http::StatusCode::BAD_GATEWAY,
-                &format!("check_tx rejected (code {}): {}", r.code, r.raw_log),
-            ));
+            // The faucet key is shared with the deployer account, so txs
+            // signed elsewhere advance the chain sequence out from under
+            // this process. The chain is authoritative — resync and retry
+            // once before failing (previously: every drip failed forever
+            // once drift happened).
+            let chain_seq = query_sequence(&st.grpc, &st.address)
+                .await
+                .map_err(|e| {
+                    bad(
+                        axum::http::StatusCode::BAD_GATEWAY,
+                        &format!("sequence resync query failed: {e}"),
+                    )
+                })?;
+            st.sequence.store(chain_seq, Ordering::Relaxed);
+            tx_bytes =
+                sign_send_tx(&st.key_seed, &req.address, st.amount, chain_seq, &st.chain_id);
+            txhash = {
+                let h = Sha256::digest(&tx_bytes);
+                hex::encode_upper(h)
+            };
+            resp = client
+                .broadcast_tx(BroadcastTxRequest {
+                    tx_bytes,
+                    mode: 1, // BROADCAST_MODE_SYNC
+                })
+                .await
+                .map_err(|e| {
+                    bad(
+                        axum::http::StatusCode::BAD_GATEWAY,
+                        &format!("broadcast retry failed: {e}"),
+                    )
+                })?;
+            if let Some(r) = resp.into_inner().tx_response {
+                if r.code != 0 {
+                    return Err(bad(
+                        axum::http::StatusCode::BAD_GATEWAY,
+                        &format!(
+                            "check_tx rejected after resync (code {}): {}",
+                            r.code, r.raw_log
+                        ),
+                    ));
+                }
+            }
         }
     }
 
