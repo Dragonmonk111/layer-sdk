@@ -117,6 +117,12 @@ cosmwasm-schema-derive = { path = "lib/cosmwasm/packages/schema-derive" }
 # a section already absent on disk is already pruned). Prevents the
 # voter/resolver panic that killed the home-vb seat on 2026-10-14.
 commonware-storage = { path = "lib/commonware-storage" }
+# Vendored 0.0.4 with MAYO-C/.cmake march pinned to westmere+AES — upstream
+# defaults to -march=native, baking AVX/AVX-512 into keccak on AVX-512 build
+# hosts (SIGILL on non-AVX targets, e.g. VirtualBox under Hyper-V NEM).
+# GCC westmere lacks -maes, so it is appended explicitly. Path patch required
+# because cargo treats registry sources as immutable.
+sriracha-mayo = { path = "lib/sriracha-mayo" }
 
 [profile.release]
 # temporary to speed up testing

@@ -1,0 +1,47 @@
+[package]
+name = "sriracha-mayo"
+version = "0.0.4"
+edition = "2024"
+rust-version = "1.85"
+authors = ["Ben Clabby"]
+description = "Safe Rust bindings for the MAYO post-quantum signature scheme."
+license = "Apache-2.0"
+repository = "https://github.com/clabby/sriracha-mayo"
+homepage = "https://github.com/clabby/sriracha-mayo"
+documentation = "https://docs.rs/sriracha-mayo"
+readme = "README.md"
+keywords = ["mayo", "pqcrypto", "post-quantum", "signatures", "ffi"]
+categories = ["cryptography", "external-ffi-bindings", "no-std"]
+
+[features]
+default = [ "std" ]
+opt = []
+avx2 = []
+neon = []
+serde = [ "bytes/serde", "dep:serde", "rand_core/serde", "zeroize/serde" ]
+std = [
+	"bytes/std",
+	"rand_core/std",
+	"serde?/std",
+	"thiserror/std",
+	"zeroize/std",
+]
+
+[dependencies]
+bytes = { version = "1", default-features = false }
+rand_core = { version = "0.6.4", default-features = false }
+serde = { version = "1", default-features = false, features = ["alloc", "derive"], optional = true }
+thiserror = { version = "2", default-features = false }
+zeroize = { version = "1", default-features = false, features = ["alloc", "derive"] }
+
+[dev-dependencies]
+criterion = "0.8.2"
+rand_chacha = "0.3.1"
+rstest = "0.26.1"
+
+[[bench]]
+name = "mayo"
+harness = false
+
+[build-dependencies]
+cc = "1.2.63"

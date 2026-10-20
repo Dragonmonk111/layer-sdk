@@ -23,6 +23,8 @@
 !contracts/**
 !tools
 !tools/**
+!vendor
+!vendor/**
 
 # Nested targets and caches never enter the context (rule order matters —
 # these come after the includes so they win)

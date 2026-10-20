@@ -14,7 +14,10 @@ RUN apt update && apt install -y clang g++ libclang-dev cmake
 # Provide a shim so the linker can resolve the symbol.
 COPY docker/shim.c /tmp/shim.c
 RUN cc -c -o /tmp/shim.o /tmp/shim.c
-ENV RUSTFLAGS="-C link-arg=/tmp/shim.o"
+# Pin codegen to x86-64-v2 (SSE4.2): validators may run on CPUs/hypervisors
+# without AVX (e.g. VirtualBox under Windows Hyper-V fallback); a native-flag
+# build SIGILLs on first verify. Do not raise without auditing target fleets.
+ENV RUSTFLAGS="-C link-arg=/tmp/shim.o -C target-cpu=x86-64-v2"
 
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
 COPY Cargo.lock Cargo.toml /myapp/
@@ -32,6 +35,9 @@ COPY lib/cosmwasm/packages /myapp/lib/cosmwasm/packages
 # journal prune, tolerates BlobMissing on already-absent sections.
 COPY lib/commonware-storage/Cargo.toml /myapp/lib/commonware-storage/Cargo.toml
 COPY lib/commonware-storage/src /myapp/lib/commonware-storage/src
+
+# Vendored sriracha-mayo patch (march pinned — see Cargo.toml [patch.crates-io])
+COPY lib/sriracha-mayo /myapp/lib/sriracha-mayo
 
 # Workspace member Cargo.tomls with dummy source for dependency caching
 COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
