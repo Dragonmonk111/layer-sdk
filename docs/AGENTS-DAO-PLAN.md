@@ -224,15 +224,33 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
       Note: first cw4_group download was a 9-byte 404 page — caught by
       size inspection; always verify artifact size + checksum before
       recording hashes in docs.
-- [ ] re-instantiate Agents DAO with canonical member addrs —
-      **blocked on anatoly + vahana pubkeys**. First instantiation
-      (tx `B8FAA0C8…`, below) is dead: its cw4 member list contains
-      the wrongly-derived addrs, so no operator key can vote. The
-      dead instance stays on-chain; new instance gets fresh
-      addresses — update `dao.junoclaw.xyz` + relay watcher
-      `group_addr` when it lands.
-- [x] instantiate Agents DAO — **LIVE 2026-10-19** (tx `B8FAA0C8…`,
-      txhash of the failed first attempt `878C75A8…` burned only fees):
+- [x] re-instantiate Agents DAO with canonical member addrs —
+      **DONE 2026-10-20** (tx `F59D393B…` → DeliverTx code 0,
+      `juno122s3kcms…` verified via `dump_state`):
+      - core `dao_dao_core` (code 8):
+        `juno122s3kcms43lgqu6p3h4tezcnwmpj5kslleku5jnz2a2jvat8mh0qkrqv3u`
+      - voting `dao_voting_cw4` (code 12):
+        `juno1qevagefp6dlxrl8agkas3thtzxdctw7w6grgqkuv6yvnepls9hhsg74d3l`
+      - proposal `dao_proposal_single` (code 7):
+        `juno1pt8gwn9ax4pvvlwm0s6nmxpgfvclfr9fmzr54620mqyclqa8k68q45x5wv`
+      - group `cw4_group` (code 11, watcher target):
+        `juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj`
+      `list_members` verified on-chain: all 5 CANONICAL operator addrs
+      (anatoly `juno1p3suqq…`, vahana `juno1xqyqsz…`, home-vb
+      `juno1wjtmj0…`, ovh `juno134zsp2…`, posthuman `juno1yzte2l…`),
+      weight 1 each. Config verified: majority threshold, quorum 0.60,
+      604800s voting period, only_members_execute. Anatoly's staged
+      addr was canonical all along (buggy path coincided); vahana
+      supplied a fresh key (`02d0f338…` → `juno1xqyqsz…`).
+      `/opt/buzz/state/members.json` rebound to canonical addrs +
+      `group_addr` updated; dao.junoclaw.xyz repointed.
+      Proposal #1 (rc12 ratification) reopened, proposer treasury,
+      start_height 2576326 — OVH seat YES committed.
+      First instantiation (below) remains as the dead on-chain
+      instance — do not reuse.
+- [x] instantiate Agents DAO — **DEAD INSTANCE** (tx `B8FAA0C8…`,
+      2026-10-19; 4/5 member addrs wrongly derived — superseded by
+      `juno122s3kcms…` above):
       - core `dao_dao_core`:
         `juno1slsqfk4dgapg2tfm0t7uz9lr9vt9kl05ng7v46atdg6tkefz0uuqprpt6x`
       - voting `dao_voting_cw4`:
@@ -256,7 +274,7 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
       bls-relayer pass. dao_voting_cw4 v2.71 instantiate msg shape:
       `{"group_contract":{"new":{"cw4_group_code_id":N,
       "cw4_group_salt":null,"initial_members":[...]}}}`.
-- [ ] first ratified proposal: rc12 rollout approval
+- [~] first ratified proposal: rc12 rollout approval — proposal #1 OPEN on new module (quorum 0.60); votes needed: 3/5 for quorum + majority
 - [ ] spawn SubDAOs via governance (proven path, runbook §5.3)
 - [ ] relay.junoclaw.xyz deploy → move ops coordination to it
 - [ ] bech32 `jclaw` cutover window (post-rc12 soak) → redeploy stack

@@ -5,12 +5,15 @@
 #   Each arg is a member juno1... address. All members get weight 1.
 #   Requires: bls-relayer (built), python3, network access to gRPC.
 #
-# Code IDs (stored 2026-10-18, verified vs official checksums):
+# Code IDs on junoclaw-g1 (verified by on-chain outcome 2026-10-20 —
+# the earlier comment block was off by one for core/proposal):
 #   11  cw4_group          (cw-plus v2.0.0,   4604a284…)
 #   12  dao_voting_cw4     (dao-contracts v2.7.1, 52afbd7f…)
-#    8  dao_dao_core       (dao-contracts v2.7.1, 976ccfb8…)
-#    7  dao_proposal_single(dao-contracts v2.7.1, 149599fb…)
+#    9  dao_dao_core       (dao-contracts v2.7.1, 976ccfb8…)
+#    8  dao_proposal_single(dao-contracts v2.7.1, 149599fb…)
 #    5  cw_admin_factory   (dao-contracts v2.7.1, cc6914b5…)
+#    7  cw20_stake         (NOT proposal_single — an instantiate pointed
+#                        at it fails DeliverTx with a cw20_stake parse error)
 #
 # Flow: ONE tx — dao_dao_core instantiates voting (spawns cw4_group with
 # admin = core) and the proposal module in parallel. After it lands,
@@ -22,8 +25,8 @@ RELAYER=${RELAYER:-./target/release/bls-relayer}
 GRPC=${GRPC:-51.195.201.74:9090}
 CODE_CW4_GROUP=11
 CODE_VOTING_CW4=12
-CODE_CORE=8
-CODE_PROPOSAL_SINGLE=7
+CODE_CORE=9
+CODE_PROPOSAL_SINGLE=8
 
 # Governance knobs (ops DAO: 5 seats)
 VOTING_PERIOD_SECS=${VOTING_PERIOD_SECS:-604800}   # 7d
@@ -71,7 +74,7 @@ print(base64.b64encode(json.dumps(msg).encode()).decode())
 PY
 )
 
-CORE_MSG=$("$PY" - "$VOTING_B64" "$PROPOSAL_B64" <<'PY'
+CORE_MSG=$("$PY" - "$VOTING_B64" "$PROPOSAL_B64" "$CODE_VOTING_CW4" "$CODE_PROPOSAL_SINGLE" <<'PY'
 import json, sys
 print(json.dumps({
   "name": "JunoClaw Agents DAO",
@@ -82,12 +85,12 @@ print(json.dumps({
   "automatically_add_cw721s": True,
   "voting_module_instantiate_info": {
     "admin": {"core_module": {}},
-    "code_id": 12,
+    "code_id": int(sys.argv[3]),
     "label": "agents-voting-cw4",
     "msg": sys.argv[1]},
   "proposal_modules_instantiate_info": [{
     "admin": {"core_module": {}},
-    "code_id": 7,
+    "code_id": int(sys.argv[4]),
     "label": "agents-proposal-single",
     "msg": sys.argv[2]}],
 }, indent=1))
