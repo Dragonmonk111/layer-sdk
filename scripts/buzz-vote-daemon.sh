@@ -66,12 +66,11 @@ while read -r PID VOTE EID; do
     echo "$(date -Is) dup pid=$PID existing=$EXIST" >> $B/vote-daemon.log
     continue
   fi
-  KEY_HEX=$(sudo openssl ec -in /opt/dao-keys/dao-key.pem -text -noout 2>/dev/null \
-            | awk '/^priv:/{f=1;next}/^pub:/{f=0}f' | tr -d ' :\n')
-  RES=$(bls-relayer jc-execute --contract $PM \
+  RES=$(JUNOCLAW_KEY_HEX="$(sudo openssl ec -in /opt/dao-keys/dao-key.pem -text -noout 2>/dev/null \
+        | awk '/^priv:/{f=1;next}/^pub:/{f=0}f' | tr -d ' :\n')" \
+        bls-relayer jc-execute --contract $PM \
         --msg "{\"vote\":{\"proposal_id\":$PID,\"vote\":\"$VOTE\"}}" \
-        --jc-key-hex $KEY_HEX --layer-grpc $GRPC 2>&1)
-  unset KEY_HEX
+        --layer-grpc $GRPC 2>&1)
   TXH=$(echo "$RES" | grep -oE '[0-9A-F]{64}' | head -1)
   # verify committed ballot before announcing — broadcast acceptance ≠ a vote
   BALLOT=""

@@ -134,13 +134,21 @@ Two cron jobs close the chain↔relay governance circuit:
 - **`/opt/buzz/buzz-vote-daemon.sh`** (every 2 min, per-seat): polls
   #governance for `!vote yes|no|abstain <id>` intents authored by
   **this seat's** npub (`state/my-npub.hex`), checks the seat's existing
-  ballot via `get_vote`, casts `{"vote":…}` via `bls-relayer jc-execute
-  --jc-key-hex` (raw PEM scalar — NOT a KDF seed), re-queries the ballot
+  ballot via `get_vote`, casts `{"vote":…}` via `bls-relayer jc-execute`
+  with the key passed as the `JUNOCLAW_KEY_HEX` env var (raw PEM scalar —
+  NOT a KDF seed; env, not argv, so the scalar is not readable via
+  `ps`/cmdline), re-queries the ballot
   to confirm commit, then posts `[dao:vote]` confirmation with the
   txhash. Duplicate intents are ignored with an "already voted" notice.
   State: `state/vote-daemon-seen`, log `state/vote-daemon.log`.
   Required state files: `my-npub.hex`, `my-juno1.txt`,
   `dao-keys/dao-key.pem`, `status-bot.sec`, `proposal_addr`.
+
+**Operator voting endpoint:** seat gRPC (`:9090`) is allowlisted to seat
+IPs — it does NOT answer from operator workstations. Vote through your
+own seat node via SSH tunnel (`ssh -L 9090:127.0.0.1:9090 <seat>`) and
+use `--layer-grpc 127.0.0.1:9090`, or run `tx-sender`/`bls-relayer`
+directly on the seat box.
 
 To run the daemon on another seat: copy the script, set `my-npub.hex` /
 `my-juno1.txt` to that seat's bound pair, point `dao-key.pem` at the

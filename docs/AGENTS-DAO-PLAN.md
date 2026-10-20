@@ -284,7 +284,35 @@ syncs `pubkey_allowlist` automatically — no DB edits, no re-asking.
       bls-relayer pass. dao_voting_cw4 v2.71 instantiate msg shape:
       `{"group_contract":{"new":{"cw4_group_code_id":N,
       "cw4_group_salt":null,"initial_members":[...]}}}`.
-- [~] first ratified proposal: rc12 rollout approval — proposal #1 OPEN on new module (quorum 0.60); votes needed: 3/5 for quorum + majority
+- [x] first ratified proposal: rc12 rollout approval — proposal #1
+      **PASSED 3/0/0 on 2026-10-20** (ovh `E876054F…`, home-vb
+      `5840D42E…`, posthuman `656B0305…`, h 2591489). Early-pass fired at
+      quorum as designed (`allow_revoting=false`); `msgs: []` so execute
+      is a no-op. This is the Agents DAO's first ratified act.
+- [ ] rc13 — **gRPC Simulate fix** (posthuman finding, verified against
+      `layer-sdk@7533744`): Simulate validates the signature, so an
+      empty/dummy sig returns OK with auth-only gas_used (~4.4k) and the
+      real error buried in `result.log`. Clients that size gas from
+      `gas_used` ship txs that pass CheckTx and die at DeliverTx with
+      Out of gas (fee charged, sequence bumped). Fix: skip sig verify in
+      the gRPC simulate path, meter with the simulate block meter not the
+      tx's gas_limit, return non-OK when the simulated tx fails. Also
+      `bls-relayer simulate()`: treat non-empty `result.log` as failure,
+      and after broadcast `wait_tx` for the DeliverTx code instead of
+      reporting "broadcast OK".
+- [ ] rc13 — **`--jc-key-hex` leaks the scalar via argv** (posthuman
+      finding): readable through `ps` / `/proc/<pid>/cmdline` by local
+      users while the process runs. Daemon switched to
+      `JUNOCLAW_KEY_HEX` env (2026-10-20); follow-up: add
+      `--jc-key-file <pem>` so the scalar never touches env either.
+- [ ] rc13 — **public gRPC for governance clients**: seat `:9090` is
+      IP-allowlisted, so operators must SSH-tunnel to their own seat
+      (`ssh -L 9090:127.0.0.1:9090 <seat>`) to vote — fine, but the
+      console's future unsigned-tx path and third-party agents need a
+      public TLS query endpoint. Note for console signing (posthuman,
+      verified live): SIGN_MODE_DIRECT, chain-id `junoclaw-g1`,
+      FIXED_ACCOUNT_NUMBER=17 (auth query returns 17), fee ≥0.001
+      ujclaw/gas, ~4M gas covers a vote.
 - [ ] spawn SubDAOs via governance (proven path, runbook §5.3)
 - [ ] relay.junoclaw.xyz deploy → move ops coordination to it
 - [ ] bech32 `jclaw` cutover window (post-rc12 soak) → redeploy stack
