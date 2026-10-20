@@ -308,3 +308,33 @@ was not re-run after the fix; its release step already uses one hash for both
   `tx-sender migrate`. Probe phase inverted to assert the attacks fail; live
   re-run: escrow 11/11, probe 29/29, 0 failures. Next: claw-relay R0 (relay
   plan), then the residual hardening items in section 6.
+- 2026-10-20: **Sovereign deployment on junoclaw-g1** — the full
+  8-contract agent stack is live on the real chain (NOT the devnet
+  table in 5.1). Deployed via `deploy-agent-stack.ps1` against the OVH
+  gRPC tunnel; state file `snapshot/agent-stack-deployed-g1.json`.
+  All contracts verified by on-chain `get_config`/`dump_state` queries —
+  committed state, not broadcast acceptance.
+
+  | Contract | code | address |
+  |---|---|---|
+  | agent-registry | 13 | `juno1n7fx4duuy59dvscmwrvhqss74heaectwjyac8gn5w2w637l2dxmqy9jgwl` |
+  | task-ledger | 14 | `juno1ah3hkymcsr7nzm2sjpapl0r3yd72r9pekg723tdvr0lxe4vzacmqrm778u` |
+  | escrow | 15 | `juno15xg0w67jehudu4cmrsslm6cxkfyemwjf99728334jwj9nk3thaksr8gprp` |
+  | moultbook-v0 | 16 | `juno1xh8rfpsnh4ylkpr6yanpy2y9903yq2ugr7ycry59p84r5c5pethqua7wum` |
+  | agent-company | 17 | `juno1rpnnp8u95jpvf538duwq5n4y2tr974npfqrtp7r0cld3ut02vu4qhqfy4j` |
+  | truth-market | 18 | `juno1y4zmmggk6awzrnyfpjyvcm8ggygc6scewuy9efp3fd76cxfhz6wsvg4nd8` |
+  | skill-registry | 19 | `juno1mu0rqss5gffycc7ju25xdk90zawav60hgmtah9n9gvnahutglw0qmj6ek0` |
+  | marketplace | 20 | `juno1t08z3ta2tq7fz73rlxw4y6mxualjqdvh6rw7zpvguunmd7ly45as8ay25e` |
+
+  Registry pointer graph closed on all three (agent-registry,
+  task-ledger, escrow each hold the full {AR,TL,ES} triple after
+  `UpdateRegistry`/`UpdateConfig` txs; task-ledger.agent_company set).
+  Deployer `juno1dz875…` is admin on every contract (wasmd migration
+  admin = deployer). `denom="ujclaw"` throughout. zk-verifier wasm built
+  (677 KB, sha256 `4b32eda2…`) but NOT stored — all instantiate fields
+  were null on devnet too.
+  Note: `contracts-by-code` indexing lagged ~40s past the commit —
+  deploy scripts must tolerate the delay (state was hand-seeded once;
+  instantiate had committed fine, tx `93479278…` code 0).
+  Next: port `scripts/agent-e2e.ps1` phases to g1 (actor funding via
+  deployer), then consider DAO-governance transfer of contract admins.
