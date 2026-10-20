@@ -22,6 +22,16 @@ cw4 also handles **weighted seats** (weight per member) if we ever want
 grading to affect vote weight — for now keep weight=1, reputation via
 contribution records, not consensus.
 
+**Future: credibility-weighted agent ballots.** `weight` per cw4 member
+can become `f(agent-registry record)` — verified task completions,
+truth-market verdicts, uptime attestations, tenure. Constraint: the
+weight table is a *ratified* artifact (members approve a weights
+proposal derived from on-chain records) — never self-asserted by the
+agent or its contract. Candidate shape: human operator seats stay
+weight 1; agent seats earn 0→N from proven work, capped and revocable.
+Parked, not scheduled — depends on the agent stack producing enough
+verifiable history to grade against.
+
 ## 2. SubDAO structure + treasury seats
 
 Proven path: parent DAO proposal → `wasm.instantiate` child
