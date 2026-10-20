@@ -4919,8 +4919,6 @@ dependencies = [
 [[package]]
 name = "sriracha-mayo"
 version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "386585c8bc07644b649bdc81c47f91942bd0e6897f6d381268be6ac32d05368c"
 dependencies = [
  "bytes",
  "cc",

@@ -299,10 +299,17 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
                     .collect(),
                 ..Default::default()
             },
-            Err(e) => AbciResult {
-                log: e.to_string(),
-                ..Default::default()
-            },
+            // Non-OK status on failure (POSTHUMAN g1 report): returning Ok
+            // with the error buried in result.log invites clients to read
+            // gas_info from a failed sim — auth-only gas — and then die
+            // out-of-gas in deliver_tx. The error text carries the gas
+            // actually consumed before failure for debugging.
+            Err(e) => {
+                return Err(Status::internal(format!(
+                    "{e} (gas_used={})",
+                    gas_info.gas_used
+                )))
+            }
         };
 
         Ok(Response::new(SimulateResponse {
@@ -1198,10 +1205,12 @@ mod tests {
     ///
     /// 1. Empty `tx_bytes` → `invalid_argument` (deprecated `tx` field unsupported)
     /// 2. Garbage bytes → `invalid_argument` (parse failure)
-    /// 3. Valid signed tx from an unfunded account → handler returns Ok with
-    ///    `gas_info` populated and `result.log` carrying the execution error
-    ///    (the genesis has no funded accounts, so auth fails inside execute_tx —
-    ///    which proves the tx was actually executed, not just check_tx'd)
+    /// 3. Valid signed tx from an unfunded account → non-OK status whose
+    ///    message carries the execution error and gas consumed (the genesis
+    ///    has no funded accounts, so auth fails inside the simulate path —
+    ///    which proves the tx was actually executed, not just check_tx'd).
+    ///    Simulate never returns Ok for a failed tx: a client that only
+    ///    reads gas_info would otherwise estimate from auth-only gas.
     /// 4. Nothing is persisted: LAST_BLOCK stays at the init height
     #[test]
     fn test_simulate() {
@@ -1235,22 +1244,20 @@ mod tests {
                 .expect_err("garbage bytes must be rejected");
             assert_eq!(err.code(), tonic::Code::InvalidArgument);
 
-            // --- Valid signed tx, unfunded account → Ok + error in result.log ---
+            // --- Valid signed tx, unfunded account → non-OK + error text ---
             let tx_bytes = build_signed_tx_bytes();
-            let resp = svc
+            let err = svc
                 .simulate(Request::new(SimulateRequest {
                     tx: None,
                     tx_bytes,
                 }))
                 .await
-                .expect("simulate must return Ok even when execution fails")
-                .into_inner();
-            let gas = resp.gas_info.expect("gas_info always set");
-            assert!(gas.gas_wanted > 0, "gas_wanted must reflect tx fee limit");
-            let result = resp.result.expect("result always set");
+                .expect_err("failed simulation must not return Ok");
+            assert_eq!(err.code(), tonic::Code::Internal);
             assert!(
-                !result.log.is_empty(),
-                "unfunded account must surface execution error in log"
+                err.message().contains("gas_used="),
+                "failure status must carry consumed gas: {}",
+                err.message()
             );
 
             // --- Nothing persisted: height still 0 ---

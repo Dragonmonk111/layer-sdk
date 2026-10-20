@@ -391,6 +391,7 @@ mod tests {
             pruning: default_pruning(),
             pruning_keep_heights: None,
             restart_anchor: None,
+            finality_backfill: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");

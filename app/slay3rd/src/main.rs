@@ -1068,8 +1068,16 @@ async fn run_node(
     let p2p_listen: SocketAddr = config.p2p_listen.parse()
         .expect("Invalid p2p_listen address in config");
 
-    // Config::local() minimizes handshake latency for localhost testing
-    let p2p_cfg = P2pConfig::local(
+    // Config::recommended() — production cadence. Config::local() was used
+    // here previously: its 1-conn/sec per-peer quota, 500ms dial frequency
+    // and 30s re-query kept both ends of a dropped session re-colliding in
+    // the tracker's Inert→Reserved race on a ~1s cycle, which surfaced live
+    // as the home-vb mesh oscillating 1/4↔4/4 (2026-10-20). recommended
+    // paces re-dials (1/min per peer) so a collision resolves instead of
+    // livelocking. Upstream warns Config::local is for demos, and that this
+    // config should be synchronized across the network — roll it out with
+    // the rc13 binary on all seats.
+    let p2p_cfg = P2pConfig::recommended(
         ed25519_private_key.clone(),
         b"slay3r-p2p-v1",
         p2p_listen,

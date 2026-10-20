@@ -476,6 +476,15 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// The tx runs in the context of the last committed block (SDK
     /// checkState semantics) on a `ScratchTx` overlay over a storage reader,
     /// so nothing persists and no commit/lock is taken.
+    ///
+    /// Uses `query_simulate` semantics (validate_sig=false): signature and
+    /// sequence checks are skipped — clients estimating gas sign with an
+    /// empty/dummy signature, and signature failure must not collapse the
+    /// estimate into auth-only gas (POSTHUMAN g1 report, 2026-10-20: a
+    /// client sizing gas from that response gets a tx that passes check_tx
+    /// then dies Out-of-gas in deliver_tx). The tx's own declared gas limit
+    /// is likewise ignored — metering uses the simulate block meter
+    /// (params.max_gas, else DEFAULT_SIMULATE_GAS), matching SDK simulate.
     pub fn simulate(&self, tx: Tx) -> TxResult<PulsarError> {
         let _span = debug_span!("simulate").entered();
         let data = self.data.as_ref().unwrap();
@@ -483,9 +492,15 @@ impl<T: PersistentStorage + 'static> App<T> {
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
         let block_meter = self.simulate_gas_meter();
-        let res = self.execute_tx(&mut store, &block_meter, &block, tx);
+        let res = self.logic.query_simulate(&mut store, &block_meter, &block, tx);
         reader.abort();
-        res
+        TxResult {
+            gas: GasInfo {
+                gas_wanted: block_meter.limit(),
+                gas_used: block_meter.used(),
+            },
+            result: res,
+        }
     }
 
     fn execute_tx(

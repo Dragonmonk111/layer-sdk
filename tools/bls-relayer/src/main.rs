@@ -348,6 +348,7 @@ struct Args {
     sequence: Option<u64>,
     // IBC handshake / transfer fields
     jc_key_hex: Option<String>,
+    jc_key_file: Option<String>,
     connection_id: Option<String>,
     port_id: Option<String>,
     channel_id: Option<String>,
@@ -386,7 +387,7 @@ fn print_usage() {
   keygen          Generate a secp256k1 key + print the juno address
   account         Query account_number/sequence on the counterparty");
     eprintln!();
-    eprintln!("JunoClaw sovereign IBC (signs with deployer key, or --jc-key-hex):");
+    eprintln!("JunoClaw sovereign IBC (signs with deployer key, or --jc-key-file/--jc-key-hex):");
     eprintln!("  jc-create-client  Register a nominal client for the counterparty");
     eprintln!("  jc-conn-init      ConnectionOpenInit on JunoClaw");
     eprintln!("  jc-conn-ack       ConnectionOpenAck on JunoClaw (INIT->OPEN)");
@@ -395,7 +396,7 @@ fn print_usage() {
     eprintln!("  jc-transfer       ICS-20 transfer (escrow + packet commitment)");
     eprintln!("  jc-ack            Acknowledgement (clear packet commitment)");
     eprintln!();
-    eprintln!("JunoClaw CosmWasm (signs with deployer key, or --jc-key-hex):");
+    eprintln!("JunoClaw CosmWasm (signs with deployer key, or --jc-key-file/--jc-key-hex):");
     eprintln!("  jc-store-code     MsgStoreCode — upload a .wasm to JunoClaw");
     eprintln!("  jc-instantiate    MsgInstantiateContract --code-id <n> [--label <l>] [--msg <json>]");
     eprintln!("  jc-execute        MsgExecuteContract --contract <addr> --msg <json|@file>");
@@ -416,6 +417,8 @@ fn print_usage() {
     eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
     eprintln!("  --grpc <host:port>         Counterparty gRPC (default 127.0.0.1:9190)");
     eprintln!("  --key-hex <hex>            Counterparty secp256k1 private key (or RELAYER_KEY_HEX env)");
+    eprintln!("  --jc-key-file <path>       JunoClaw secp256k1 key file (or JUNOCLAW_KEY_FILE env)");
+    eprintln!("                             preferred over --jc-key-hex — hex args show in ps/history");
     eprintln!("  --mnemonic <words>         Counterparty BIP39 mnemonic (or RELAYER_MNEMONIC env)");
     eprintln!("  --cp-chain-id <id>         Counterparty chain id (default uni-7)");
     eprintln!("  --bech32-prefix <p>        Counterparty bech32 prefix (default juno)");
@@ -475,6 +478,7 @@ fn parse_args() -> Result<Args, String> {
         simulate: false,
         sequence: None,
         jc_key_hex: std::env::var("JUNOCLAW_KEY_HEX").ok(),
+        jc_key_file: std::env::var("JUNOCLAW_KEY_FILE").ok(),
         connection_id: None,
         port_id: None,
         channel_id: None,
@@ -538,6 +542,7 @@ fn parse_args() -> Result<Args, String> {
                 a.sequence = Some(val(&mut i)?.parse().map_err(|_| "invalid --sequence")?)
             }
             "--jc-key-hex" => a.jc_key_hex = Some(val(&mut i)?),
+            "--jc-key-file" => a.jc_key_file = Some(val(&mut i)?),
             "--connection-id" => a.connection_id = Some(val(&mut i)?),
             "--port-id" => a.port_id = Some(val(&mut i)?),
             "--channel-id" => a.channel_id = Some(val(&mut i)?),
@@ -805,6 +810,14 @@ async fn simulate(grpc: &str, tx_bytes: Vec<u8>) -> Result<u64, Box<dyn std::err
         })
         .await?
         .into_inner();
+    // A failed tx carries the error in result.log (pre-rc13 nodes return Ok
+    // here even on failure). Its gas_info is auth-only — sizing gas from it
+    // produces a tx that dies out-of-gas in deliver_tx. Treat as fatal.
+    if let Some(r) = &resp.result {
+        if !r.log.is_empty() {
+            return Err(format!("simulate failed: {}", r.log).into());
+        }
+    }
     let used = resp
         .gas_info
         .map(|g| g.gas_used)
@@ -1239,9 +1252,19 @@ fn layer_fee_amount(gas_limit: u64) -> u128 {
     gas_limit as u128 / 800
 }
 
-/// JunoClaw signer — the funded deployer account by default; --jc-key-hex
-/// (or JUNOCLAW_KEY_HEX env) overrides for a different funded account.
+/// JunoClaw signer — the funded deployer account by default; --jc-key-file
+/// (or JUNOCLAW_KEY_FILE env), --jc-key-hex, or JUNOCLAW_KEY_HEX env
+/// overrides for a different funded account. Prefer the file form:
+/// `--jc-key-hex <hex>` exposes the private key in `ps` output and shell
+/// history on any multi-user host (POSTHUMAN g1 finding).
 fn layer_signer_key(a: &Args) -> Result<SigningKey, Box<dyn std::error::Error>> {
+    if let Some(path) = a.jc_key_file.as_ref() {
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| format!("--jc-key-file {path}: {e}"))?;
+        let bytes = hex::decode(contents.trim().trim_start_matches("0x"))
+            .map_err(|e| format!("--jc-key-file {path}: not hex: {e}"))?;
+        return Ok(SigningKey::from_slice(&bytes)?);
+    }
     if let Some(h) = a.jc_key_hex.as_ref() {
         let bytes = hex::decode(h.trim_start_matches("0x"))?;
         return Ok(SigningKey::from_slice(&bytes)?);
@@ -1296,7 +1319,11 @@ async fn submit_layer_any(
         simulate_report(&a.layer_grpc, tx_bytes).await?;
         return Ok("simulated".into());
     }
-    broadcast(&a.layer_grpc, tx_bytes).await
+    let hash = broadcast(&a.layer_grpc, tx_bytes).await?;
+    // Sync mode only waits for CheckTx — a msg can still fail DeliverTx.
+    // Poll GetTx so the caller's txhash means "committed", not "accepted".
+    wait_tx(&a.layer_grpc, &hash).await?;
+    Ok(hash)
 }
 
 /// Two-phase submit for wasm msgs: sign a probe tx with the nominal gas
@@ -1325,7 +1352,9 @@ async fn submit_layer_any_sim(
         return Ok("simulated".into());
     }
     let tx_bytes = sign_and_encode_layer(&key, any, &account, gas, &a.chain_id)?;
-    broadcast(&a.layer_grpc, tx_bytes).await
+    let hash = broadcast(&a.layer_grpc, tx_bytes).await?;
+    wait_tx(&a.layer_grpc, &hash).await?;
+    Ok(hash)
 }
 
 /// JSON-encode an `IbcMsg` into a single `Any` and broadcast it to JunoClaw.
@@ -1376,7 +1405,8 @@ async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     }
     let tx_bytes = sign_and_encode_layer(&key, any, &account, gas, &a.chain_id)?;
     let hash = broadcast(&a.layer_grpc, tx_bytes).await?;
-    println!("jc-store-code broadcast OK — txhash {hash} (gas_limit {gas}, simulated {used})");
+    wait_tx(&a.layer_grpc, &hash).await?;
+    println!("jc-store-code committed — txhash {hash} (gas_limit {gas}, simulated {used})");
     Ok(())
 }
 

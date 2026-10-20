@@ -103,7 +103,7 @@ impl StateMachine {
         result
     }
 
-    fn query_simulate(
+    pub(crate) fn query_simulate(
         &self,
         store: &mut dyn Storage,
         meter: &GasMeter,
