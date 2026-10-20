@@ -3,7 +3,9 @@ param(
     [string]$Phase = 'all',
     [string]$Grpc = '127.0.0.1:9090',
     [string]$Deployed = 'snapshot\agent-stack-deployed.json',
-    [string]$StateFile = 'snapshot\agent-e2e-state.json'
+    [string]$StateFile = 'snapshot\agent-e2e-state.json',
+    [int64]$FundAmount = 30000000,
+    [string]$ChainId = 'junoclaw-1'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -149,8 +151,9 @@ function Phase-Setup {
     Log ("  deployer balance raw: " + ((Invoke-Tx '' @('balance')) -replace '\s+', ' ').Trim())
     foreach ($k in $Seeds.Keys) {
         $b = Get-Bal $S["addr.$k"]
-        if ($b -ge 10000000) { Log "  $k already funded ($b)"; continue }
-        Check "fund $k" (Invoke-Send '' $S["addr.$k"] '30000000') | Out-Null
+        if ($b -ge [int64]($FundAmount/3)) { Log "  $k already funded ($b)"; continue }
+        Check "fund $k" (Invoke-Send '' $S["addr.$k"] "$FundAmount") | Out-Null
+        Start-Sleep -Seconds 8   # let the send commit before the next sequence query
     }
     foreach ($k in $Seeds.Keys) { Log ("  bal {0,-6} {1}" -f $k, (Get-Bal $S["addr.$k"])) }
     Check 'task-ledger.agent_company = agent-company' (Invoke-Exec '' $TL @{ update_config = @{ admin = $null; agent_registry = $null; agent_company = $AC } } 'cfg-tl-ac') | Out-Null
@@ -174,7 +177,7 @@ function Phase-Agent {
     Assert-Eq 'agent id resolved' ($found -gt 0) $true
     $skill = 'junoclaw-verifier-' + (Get-Date -Format 'yyyyMMddHHmmss')
     $S['skill'] = $skill
-    Check 'publish skill' (Invoke-Exec $Seeds.owner $SR @{ publish_skill = @{ dapp_name = $skill; chain_id = 'junoclaw-1'; skill_uri = 'ipfs://e2e-skill'; skill_hash = 'sha256:e2e-skill' } } 'skill' '1000000') | Out-Null
+    Check 'publish skill' (Invoke-Exec $Seeds.owner $SR @{ publish_skill = @{ dapp_name = $skill; chain_id = $ChainId; skill_uri = 'ipfs://e2e-skill'; skill_hash = 'sha256:e2e-skill' } } 'skill' '1000000') | Out-Null
     Check 'list service (price 500000)' (Invoke-Exec $Seeds.owner $MP @{ list_service = @{ skill_ref = $skill; price = '500000'; description = 'e2e verification service' } } 'list') | Out-Null
     $S['listing_id'] = Newest-Id (Invoke-Query $MP @{ list_listings_by_agent = @{ agent = $own; limit = 50 } })
     Assert-Eq 'listing id resolved' ($S['listing_id'] -gt 0) $true

@@ -257,6 +257,58 @@ Unit tests: escrow 19, marketplace 23, task-ledger 29 pass. The custody phase
 was not re-run after the fix; its release step already uses one hash for both
 `output_hash` and `messages_hash`, so it satisfies the new check.
 
+## 5.3 G1 deployment and e2e (2026-11)
+
+The same idempotent `scripts/deploy-agent-stack.ps1` deployed the full stack
+to **junoclaw-g1** (the live sovereign chain), codes 13-20, signed by the wasm
+deployer `juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992`. Deploy record:
+`snapshot/agent-stack-deployed-g1.json`.
+
+| Contract | code | address |
+|---|---|---|
+| agent-registry | 13 | `juno1n7fx4duuy59dvscmwrvhqss74heaectwjyac8gn5w2w637l2dxmqy9jgwl` |
+| task-ledger | 14 | `juno1ah3hkymcsr7nzm2sjpapl0r3yd72r9pekg723tdvr0lxe4vzacmqrm778u` |
+| escrow | 15 | `juno15xg0w67jehudu4cmrsslm6cxkfyemwjf99728334jwj9nk3thaksr8gprp` |
+| moultbook-v0 | 16 | `juno1xh8rfpsnh4ylkpr6yanpy2y9903yq2ugr7ycry59p84r5c5pethqua7wum` |
+| agent-company | 17 | `juno1rpnnp8u95jpvf538duwq5n4y2tr974npfqrtp7r0cld3ut02vu4qhqfy4j` |
+| truth-market | 18 | `juno1y4zmmggk6awzrnyfpjyvcm8ggygc6scewuy9efp3fd76cxfhz6wsvg4nd8` |
+| skill-registry | 19 | `juno1mu0rqss5gffycc7ju25xdk90zawav60hgmtah9n9gvnahutglw0qmj6ek0` |
+| marketplace | 20 | `juno1t08z3ta2tq7fz73rlxw4y6mxualjqdvh6rw7zpvguunmd7ly45as8ay25e` |
+
+The registry pointer graph was closed after instantiate:
+`agent-registry` -> {task-ledger, escrow}, `task-ledger` -> {registry, escrow,
+agent_company}, `escrow` -> {registry, task-ledger}. Verified by `get_config`
+queries, not by trusting broadcast responses.
+
+`scripts/agent-e2e.ps1` was re-run against g1 (`-Grpc 127.0.0.1:9090` tunnel,
+`-ChainId junoclaw-g1`, state in `snapshot/agent-e2e-state-g1.json`, actors
+funded ~6M ujclaw each). Final run: **custody 25/25, escrow 11/11,
+probe 41/41, prov 7/7** — every contract-level check green, including the F1
+verdict-binding and F2 task-ID squatting regressions, output-hash replay
+rejection, red-epoch slashing with requester refund, payment-gated task
+completion, and moultbook cite-only-real-entries. Live counters after the run:
+task-ledger 14 tasks, truth-market 5+ finalized epochs with real slashing and
+reward distribution, marketplace hires released and slashed, moultbook entries
+with credit score 100. `agent-company` remains instantiate+query only
+(proposal/verification flows still untested).
+
+### g1 operational lessons
+
+- **`contracts-by-code` indexing lags instantiation.** The deploy script's
+  40 s poll raced the index and reported "no new contract" for task-ledger;
+  `get-tx` showed the instantiate committed fine. Seed the state file and
+  re-run (the script is resumable).
+- **Per-account sequencing is the real serialization constraint.** Dependent
+  sends broadcast faster than commits settle race on `account sequence`; the
+  loser sits stranded in the mempool. Serialize sends or wait for the
+  committed sequence to advance.
+- **`get-tx --wait` timeouts are not failures.** code=-1 means the query
+  lagged, not that DeliverTx failed. Balance/account-sequence queries are the
+  ground truth when tx records lag.
+- **Actor funding must cover failed-tx gas too.** 2M ujclaw starved mid-run
+  (expected-failure probes still burn fees); ~6M per actor covered the full
+  suite.
+
 ## 6. Open questions
 
 - Does `agent-company` / `truth-market` call anything the sovereign VM lacks
@@ -338,3 +390,8 @@ was not re-run after the fix; its release step already uses one hash for both
   instantiate had committed fine, tx `93479278…` code 0).
   Next: port `scripts/agent-e2e.ps1` phases to g1 (actor funding via
   deployer), then consider DAO-governance transfer of contract admins.
+- 2026-11: `agent-e2e.ps1` ported to g1 and re-run green: custody 25/25,
+  escrow 11/11, probe 41/41, prov 7/7 (5.3). Actor funding ~6M ujclaw each;
+  sequence-settle delays and balance-based verification added for g1's
+  commit/index lag. First-run failures traced to actor funding starvation +
+  get-tx timeouts, not contract bugs.
