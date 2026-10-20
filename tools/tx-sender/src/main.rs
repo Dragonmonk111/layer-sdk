@@ -380,7 +380,17 @@ fn parse_args() -> Result<Args, String> {
 /// Devnet only: setting `TX_SENDER_KEY_SEED=<label>` derives the key from
 /// SHA256(<label>) instead, so test actors (agent owner, requester,
 /// operators) can sign from the same tool.
+///
+/// `TX_SENDER_KEY_HEX=<64-hex>` takes precedence: the value is the raw
+/// secp256k1 private key (e.g. a governance PEM scalar), not a KDF seed —
+/// feeding a raw key into TX_SENDER_KEY_SEED derives a *different* address.
 fn deployer_key() -> cosmrs::crypto::secp256k1::SigningKey {
+    if let Ok(hex_key) = std::env::var("TX_SENDER_KEY_HEX") {
+        let bytes = hex::decode(hex_key.trim().trim_start_matches("0x"))
+            .expect("TX_SENDER_KEY_HEX: valid hex");
+        return cosmrs::crypto::secp256k1::SigningKey::from_slice(&bytes)
+            .expect("TX_SENDER_KEY_HEX: valid secp256k1 key");
+    }
     let label = std::env::var("TX_SENDER_KEY_SEED")
         .unwrap_or_else(|_| "junoclaw-deployer-v1".to_string());
     let seed = Sha256::digest(label.as_bytes());
