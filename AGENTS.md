@@ -39,3 +39,27 @@
    coordinator sees plaintext per-player dealing messages in transit.
    Before mainnet, encrypt each `dealing-priv-*` file to the
    recipient's Ed25519 key (X25519) so transit files are ciphertext.
+
+## Live-validator change control (2026-10-21 g1 halt)
+
+9. **No host, network, or config changes on a LIVE validator outside an
+   announced maintenance window.** The Oct 21 halt (7h at height
+   2,631,739) was triggered by a mid-incident host migration on home-vb
+   that left inbound P2P half-broken → view churn → the variant-
+   execution bug fired. Any infra change goes through a verified
+   canary first, and lands in a declared window only.
+
+10. **Verify inbound P2P end-to-end after ANY network change.** A
+    VBox pf rule existed in config but never bound the port — "rule
+    configured" ≠ "port forwarded". Test inbound from a second host,
+    not just `ss -ltn` locally.
+
+11. **Downtime alerting is part of the node.** The stall ran 6+ hours
+    before anyone paged it. Minimum bar: finalization-lag alert
+    (>10 min without a `Block finalized`) + cross-seat digest parity
+    check on any suspected stall before assuming "chain fine".
+
+12. **Digest identity is consensus-critical even when app state is
+    equal.** Two payloads at the same height with identical app_hash
+    but different bytes are DIFFERENT blocks. Compare digests, not
+    just heights/state roots, when auditing seats.

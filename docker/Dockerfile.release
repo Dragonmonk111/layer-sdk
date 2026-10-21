@@ -19,7 +19,10 @@ WORKDIR /myapp
 # stdlib. Provide a shim so the linker can resolve the symbol.
 COPY docker/shim.c /tmp/shim.c
 RUN cc -c -o /tmp/shim.o /tmp/shim.c
-ENV RUSTFLAGS="-C link-arg=/tmp/shim.o"
+# Pin codegen to x86-64-v2 (SSE4.2): validators may run on CPUs/hypervisors
+# without AVX (VirtualBox under Hyper-V NEM fallback SIGILL'd rc12 on first
+# payload sign, 2026-10-20). Do not raise without auditing target fleets.
+ENV RUSTFLAGS="-C link-arg=/tmp/shim.o -C target-cpu=x86-64-v2"
 
 # Full source (build context .dockerignore excludes **/target/).
 # lib/cosmwasm and lib/commonware-storage ship populated in the tree.

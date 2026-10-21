@@ -86,6 +86,8 @@ g2-window/g1-keys/
 g2-window/ceremony/
 g2-window/share-requests/
 g2-window/dealers/
+g2-window/dealers-r2/
+g2-window/ceremony-r2/
 g2-window/acks/
 g2-window/anchor.env
 dist/rc12-portable/
