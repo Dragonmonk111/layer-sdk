@@ -59,6 +59,9 @@ const CERTIFY_WAIT_MAX: Duration = Duration::from_millis(4_000);
 const FINALIZE_FETCH_WAIT_MAX: Duration = Duration::from_millis(5_000);
 /// Minimum spacing between repeated fetch requests for the same digest.
 const FETCH_RETRY: Duration = Duration::from_millis(500);
+/// Max parent-link hops when checking a certify candidate against the
+/// executed chain. Bounds the walk so a deep historical ask can't stall voting.
+const EXECUTED_WALK_MAX: u64 = 8_192;
 /// Unsolicited peer payloads are accepted only this far above the executed tip.
 pub const PEER_PAYLOAD_LOOKAHEAD: u64 = 64;
 /// Unsolicited peer payloads are dropped once this many payloads are pending.
@@ -802,6 +805,42 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         (*h, *d)
     }
 
+    /// Compare a payload candidate against the executed chain.
+    ///
+    /// - `Some(true)`: our executed chain holds exactly this block at `p.height`.
+    /// - `Some(false)`: our executed chain holds a DIFFERENT block at `p.height`
+    ///   — the candidate is a dead variant; callers must not help finalize it.
+    /// - `None`: undetermined — candidate is above the executed tip, or the
+    ///   ancestry walk truncated (missing/pruned ancestor). Fail-open is
+    ///   deliberate: a conflicting finalization can never execute here anyway
+    ///   (finalize() fail-stops on a chain that doesn't connect to our tip),
+    ///   so an undetermined answer must not cost liveness.
+    ///
+    /// The walk reads from `lookup_payload` (pending + persistent store);
+    /// executed ancestors are always present there because certify() persists
+    /// before voting and finalize() persists before executing.
+    pub async fn consistent_with_executed_chain(&self, p: &BlockPayload) -> Option<bool> {
+        let (tip_h, mut d) = self.executed_tip().await;
+        if p.height > tip_h {
+            return None;
+        }
+        let mut h = tip_h;
+        let mut hops = 0u64;
+        while h > p.height {
+            if hops >= EXECUTED_WALK_MAX {
+                return None;
+            }
+            let anc = self.lookup_payload(&d).await?;
+            if anc.height != h {
+                return None;
+            }
+            d = anc.parent_digest;
+            h -= 1;
+            hops += 1;
+        }
+        Some(d == p.digest())
+    }
+
     /// Access to the app for external callers (e.g., gRPC query handler).
     pub fn app(&self) -> Arc<RwLock<App<T>>> {
         self.app.clone()
@@ -1433,6 +1472,21 @@ where
             let mut last_request: Option<Instant> = None;
             let ok = loop {
                 if let Some(p) = node.lookup_payload(&digest_bytes).await {
+                    // rc14: refuse to certify a payload that is provably off
+                    // our executed chain. certify() is where our finalize-vote
+                    // originates; without this check a notarized dead variant
+                    // can collect our finalize signature and contribute to a
+                    // conflicting finalization certificate. Some(false) means
+                    // our executed chain holds a different block at the same
+                    // height — deterministic conflict, not a timing artifact.
+                    if node.consistent_with_executed_chain(&p).await == Some(false) {
+                        tracing::warn!(
+                            height = p.height,
+                            digest = %hex::encode(digest_bytes),
+                            "certify: refusing to certify — conflicts with executed chain (dead variant)"
+                        );
+                        break false;
+                    }
                     let persisted = node.store.lock().unwrap_or_else(|e| e.into_inner()).put(&p);
                     match persisted {
                         Ok(()) => break true,
@@ -1871,6 +1925,77 @@ mod tests {
         // The canonical variant's FINALIZATION arrives — it executes.
         assert_eq!(rt().block_on(node.finalize(db)).map(|r| r.0), Some(1));
         assert_eq!(rt().block_on(node.executed_tip()), (1, db));
+    }
+
+    /// rc14 conflict guard (2026-10-21 g1 halt): certify() is where our
+    /// finalize-vote originates. A payload that provably conflicts with the
+    /// executed chain (different block at an executed height) must not
+    /// collect our signature — it can only ever be a dead variant. Payloads
+    /// above the tip or on our chain still certify normally.
+    #[test]
+    fn test_certify_refuses_dead_variant_at_executed_height() {
+        let mut node = make_layer_node();
+        let pa = valid_child(&node, 1, genesis_parent()); // canonical
+        let mut pb = pa.clone();
+        pb.proposer = vec![9u8; 32]; // dead variant: same height, different bytes
+        let da = insert_payload_sync(&node, pa.clone());
+        let db = insert_payload_sync(&node, pb);
+        assert_ne!(da, db);
+
+        // Canonical block finalizes and executes → tip = (1, da).
+        assert_eq!(rt().block_on(node.finalize(da)).map(|r| r.0), Some(1));
+        assert_eq!(rt().block_on(node.executed_tip()), (1, da));
+
+        // certify() on the dead variant: the walk finds our executed chain
+        // holds da at height 1, not db → refuse.
+        let ok = rt().block_on(async {
+            let rx = node
+                .certify(
+                    Round::new(Epoch::new(0), commonware_consensus::types::View::new(2)),
+                    sha256::Digest::from(db),
+                )
+                .await;
+            rx.await.unwrap()
+        });
+        assert!(!ok, "certify must refuse a payload conflicting with executed chain");
+
+        // certify() on the executed block itself still succeeds (replay path).
+        // finalize() removes executed payloads from pending — re-admit pa so
+        // certify's lookup can find it (production keeps it in PayloadStore).
+        rt().block_on(async {
+            node.pending_payloads.lock().await.insert(da, pa);
+        });
+        let ok = rt().block_on(async {
+            let rx = node
+                .certify(
+                    Round::new(Epoch::new(0), commonware_consensus::types::View::new(3)),
+                    sha256::Digest::from(da),
+                )
+                .await;
+            rx.await.unwrap()
+        });
+        assert!(ok, "certify must accept the executed block at the tip height");
+    }
+
+    /// Undetermined cases fail open: a candidate above the executed tip gets
+    /// None from the guard and certifies normally (liveness preserved).
+    #[test]
+    fn test_consistent_with_executed_chain_undetermined_fails_open() {
+        let node = make_layer_node();
+        let p1 = valid_child(&node, 1, genesis_parent());
+        assert_eq!(
+            rt().block_on(node.consistent_with_executed_chain(&p1)),
+            None,
+            "payload above tip is undetermined"
+        );
+        // Genesis parent: our chain holds genesis_parent() at height 0 — a
+        // payload at height 0 with a different digest is a proven conflict.
+        let p0 = valid_child(&node, 0, [7u8; 32]);
+        assert_eq!(
+            rt().block_on(node.consistent_with_executed_chain(&p0)),
+            Some(false),
+            "different block at executed height 0 is a proven conflict"
+        );
     }
 
     #[test]
