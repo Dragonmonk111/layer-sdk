@@ -448,21 +448,32 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             .fetch_max(height, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// rc6: kick the execution walk for a consensus-parent digest that is not
-    /// our executed tip.
+    /// rc14: a certified parent that is not our executed tip must NOT be
+    /// executed from here — only prefetched.
     ///
-    /// The wedge this fixes (2026-10-10 g1): a proposal can be notarized AND
-    /// certified yet never finalized — context.parent accepts certified
-    /// ancestors, so every subsequent view builds on it, but no Finalization
-    /// activity ever fires to trigger finalize(). Execution then waits for a
-    /// finalization that can only arrive via descendant proposals, which
-    /// themselves require the parent executed: a circular deadlock.
+    /// The rc6 version of this function called finalize(parent) to break a
+    /// "notarized-but-never-finalized" wedge, on the assumption that a
+    /// certified parent is the unique canonical next block. That assumption
+    /// only holds WITHIN a view: under view churn two different views can
+    /// certify two different same-height payloads with zero equivocation —
+    /// and that is exactly what forked g1 at height 2631739 on 2026-10-21
+    /// (4c03cc6b… vs 2039d342…, identical app hash, different digest). Seats
+    /// that eagerly executed the losing variant could never connect to the
+    /// finalized chain again: digest-level divergence with identical state.
     ///
-    /// A certified parent is the unique canonical next block (a competing
-    /// notarization in the same view would need ≥f+1 equivocators), so
-    /// executing it is safe — every future finalized chain includes it.
-    /// Throttled to one in-flight walk per digest per few seconds so the
-    /// exec_lock queue stays bounded across nullified-view churn.
+    /// The invariant now: ONLY a Finalization activity may advance execution
+    /// — finalization is unique per height (4/5 finalize votes cannot sign
+    /// two payloads). A certified view on the finalized chain is finalized
+    /// by its descendants' certificates, so waiting is safe; a certified
+    /// view that is never finalized is a dead variant and must not execute.
+    /// verify()/propose() already wait bounded on the executed tip, so a
+    /// not-yet-finalized parent simply nullifies until the certificate
+    /// arrives rather than executing speculatively.
+    ///
+    /// What remains here: prefetch the payload so the eventual finalized
+    /// walk is instant, and log loudly — a parent staying unexecuted is a
+    /// signal (dead variant or missing finalization) worth seeing.
+    /// Throttled to one probe per digest per few seconds.
     pub fn ensure_executed(&self, parent: [u8; 32]) {
         const THROTTLE: Duration = Duration::from_secs(6);
         let mut g = self.ensure_exec.lock().unwrap_or_else(|e| e.into_inner());
@@ -478,7 +489,13 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             if tip == parent {
                 return;
             }
-            node.finalize(parent).await;
+            if node.lookup_payload(&parent).await.is_none() {
+                node.request_payload(parent);
+            }
+            tracing::warn!(
+                parent = %hex::encode(parent),
+                "consensus parent certified but not executed — awaiting its finalization; never executing a merely-notarized ancestor"
+            );
         });
     }
 
@@ -1232,10 +1249,10 @@ where
             // here first so height and state_root (post-parent state, app-hash
             // semantics) are well-defined and identical on every validator.
             //
-            // rc6: if the certified parent hasn't executed (the
-            // notarized-but-never-finalized wedge), drive the finalize walk
-            // directly instead of waiting for a Finalization activity that
-            // may never arrive.
+            // rc14: if the certified parent hasn't executed, prefetch it and
+            // wait — only a Finalization activity may advance execution.
+            // A certified parent that never finalizes is a dead variant;
+            // skipping this proposal is the correct (nullify) outcome.
             node.ensure_executed(parent);
             let start = Instant::now();
             let (height, state_root, parent_time) = loop {
@@ -1337,10 +1354,10 @@ where
         let leader = context.leader.as_ref().to_vec();
         let digest_bytes: [u8; 32] = payload.0;
         tokio::spawn(async move {
-            // rc6: if the proposal's parent (a certified ancestor) hasn't
-            // executed, drive the finalize walk for it now — otherwise verify
-            // can never pass and no descendant can ever finalize, deadlocking
-            // the chain on a parent that was certified but never finalized.
+            // rc14: if the proposal's parent (a certified ancestor) hasn't
+            // executed, prefetch it and wait — only a Finalization activity
+            // may advance execution. A certified parent that never finalizes
+            // is a dead variant; rejecting here is the correct outcome.
             node.ensure_executed(parent);
             let start = Instant::now();
             let mut last_request: Option<Instant> = None;
@@ -1799,6 +1816,31 @@ mod tests {
         let hash_after = rt().block_on(async { node.app().read().await.app_hash() });
         assert_eq!(hash_before, hash_after, "certify must not mutate state");
         assert_eq!(rt().block_on(node.executed_tip()).0, 0, "certify must not advance height");
+    }
+
+    /// rc14 regression (2026-10-21 g1 halt): ensure_executed must NEVER drive
+    /// execution — a certified parent may be a dead variant (two same-height
+    /// payloads notarized in different views), and executing the loser
+    /// permanently diverges last_digest from the finalized chain.
+    #[test]
+    fn test_ensure_executed_does_not_execute_certified_parent() {
+        let node = make_layer_node();
+        let p1 = valid_child(&node, 1, genesis_parent());
+        let d1 = insert_payload_sync(&node, p1);
+        rt().block_on(async {
+            node.ensure_executed(d1);
+            // Give the spawned probe a real chance to (incorrectly) execute.
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        });
+        assert_eq!(
+            rt().block_on(node.executed_tip()),
+            (0, genesis_parent()),
+            "ensure_executed must not advance the executed tip — only finalization may"
+        );
+        assert!(
+            rt().block_on(async { node.pending_payloads.lock().await.contains_key(&d1) }),
+            "payload must remain pending for the eventual finalized walk"
+        );
     }
 
     #[test]
