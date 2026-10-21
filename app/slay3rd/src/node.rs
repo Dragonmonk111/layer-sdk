@@ -479,7 +479,15 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
     /// Throttled to one probe per digest per few seconds.
     pub fn ensure_executed(&self, parent: [u8; 32]) {
         const THROTTLE: Duration = Duration::from_secs(6);
+        /// Bound the throttle map: every distinct certified-but-unexecuted
+        /// parent (a dead variant per view) inserts an entry, and a long
+        /// stall would otherwise grow it without limit. Clearing just lets
+        /// older digests be re-fetched sooner — harmless.
+        const MAX_ENSURE_EXEC: usize = 4_096;
         let mut g = self.ensure_exec.lock().unwrap_or_else(|e| e.into_inner());
+        if g.len() >= MAX_ENSURE_EXEC {
+            g.clear();
+        }
         let now = Instant::now();
         if g.get(&parent).map_or(false, |t| now.duration_since(*t) < THROTTLE) {
             return;

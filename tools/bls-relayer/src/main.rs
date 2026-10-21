@@ -951,14 +951,23 @@ async fn cmd_fetch(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let height = resolve_height(&mut client, a.height).await?;
     let resp = finalized_block(&mut client, height).await?;
 
-    let proposal = decode_proposal(&resp.proposal_bytes)?;
     println!("height:            {}", resp.height);
     println!("timestamp_nanos:   {}", resp.timestamp_nanos);
-    println!("epoch/view/parent: {}/{}/{}", proposal.epoch, proposal.view, proposal.parent);
-    println!("payload_digest:    {}", hex::encode(proposal.payload));
-    println!("proposal_bytes:    {} bytes (b64 {})", resp.proposal_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.proposal_bytes));
-    println!("certificate_bytes: {} bytes (b64 {})", resp.certificate_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.certificate_bytes));
     println!("payload_bytes:     {} bytes", resp.payload_bytes.len());
+    // Stored-payload identity — compare across seats to detect executed
+    // payload-variant divergence at the same height. Printed before the
+    // proposal decode so fast-forwarded records (empty proposal_bytes)
+    // still yield a comparable digest.
+    println!("payload_sha256:    {}", hex::encode(Sha256::digest(&resp.payload_bytes)));
+    println!("certificate_bytes: {} bytes (b64 {})", resp.certificate_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.certificate_bytes));
+    if !resp.proposal_bytes.is_empty() {
+        let proposal = decode_proposal(&resp.proposal_bytes)?;
+        println!("epoch/view/parent: {}/{}/{}", proposal.epoch, proposal.view, proposal.parent);
+        println!("payload_digest:    {}", hex::encode(proposal.payload));
+        println!("proposal_bytes:    {} bytes (b64 {})", resp.proposal_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.proposal_bytes));
+    } else {
+        println!("proposal_bytes:    EMPTY (fast-forwarded height — cert-only record)");
+    }
     Ok(())
 }
 

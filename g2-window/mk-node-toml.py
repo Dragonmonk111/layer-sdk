@@ -1,20 +1,33 @@
 #!/usr/bin/env python3
 """Generate a G2 node.toml for a seat from ceremony/shared.json.
 
-Usage: mk-node-toml.py <shared.json> <moniker> <anchor_height> <anchor_digest> [old_node.toml]
+Usage: mk-node-toml.py <shared.json> <moniker> <anchor_height> <anchor_digest> \
+         [old_node.toml] [--state-sync-donors host:9090,host2:9090]
 
 Peers = every OTHER validator in the set (sorted order = validator_index).
 If old_node.toml is given, its listen paths/data_dir are preserved.
+--state-sync-donors emits a [state_sync] block — REQUIRED for new seats
+(lesson 7/G2: a fresh node without it cannot verify proposals, and
+state_sync only fires on NoStoredState so it must be in the FIRST toml
+the seat ever boots). Donor gRPC :9090 must be open to the joiner's IP
+before the window.
 """
 import json
 import re
 import sys
 
-shared = json.load(open(sys.argv[1]))
-moniker = sys.argv[2]
-anchor_h = sys.argv[3]
-anchor_d = sys.argv[4]
-old_toml = open(sys.argv[5]).read() if len(sys.argv) > 5 else ""
+args = sys.argv[1:]
+donors = None
+if "--state-sync-donors" in args:
+    i = args.index("--state-sync-donors")
+    donors = [d.strip() for d in args[i + 1].split(",") if d.strip()]
+    del args[i:i + 2]
+
+shared = json.load(open(args[0]))
+moniker = args[1]
+anchor_h = args[2]
+anchor_d = args[3]
+old_toml = open(args[4]).read() if len(args) > 4 else ""
 
 me = None
 for v in shared["validators"]:
@@ -48,5 +61,17 @@ for v in shared["validators"]:
     if v["validator_index"] == me["validator_index"]:
         continue
     out += f'\n[[peers]]\npublic_key = "{v["ed25519_public_hex"]}"\naddress = "{v["p2p_address"]}"\n'
+
+if donors:
+    peer_lines = "\n".join(f'  "{d}",' for d in donors)
+    out += f"""
+[state_sync]
+peers = [
+{peer_lines}
+]
+# distinct donors that must advertise the identical certified anchor
+# (Byzantine-divergence gate - never set below 2 with >=2 donors)
+min_anchor_agree = {min(2, len(donors))}
+"""
 
 sys.stdout.write(out)
