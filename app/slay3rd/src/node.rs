@@ -1843,6 +1843,36 @@ mod tests {
         );
     }
 
+    /// rc14 incident replay (2026-10-21 g1): two same-height payload variants,
+    /// identical app hash, different bytes — the dead variant is "certified"
+    /// and handed to ensure_executed, then the canonical variant's
+    /// finalization arrives. The node must execute ONLY the canonical one.
+    #[test]
+    fn test_variant_incident_replay_dead_variant_never_executes() {
+        let node = make_layer_node();
+        let pa = valid_child(&node, 1, genesis_parent()); // variant A (dead)
+        let mut pb = pa.clone();
+        pb.proposer = vec![9u8; 32]; // variant B: same height/parent/root, different bytes
+        let da = insert_payload_sync(&node, pa);
+        let db = insert_payload_sync(&node, pb);
+        assert_ne!(da, db, "variants must differ by digest");
+
+        // Consensus hands us the DEAD variant as a certified parent.
+        rt().block_on(async {
+            node.ensure_executed(da);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        });
+        assert_eq!(
+            rt().block_on(node.executed_tip()),
+            (0, genesis_parent()),
+            "dead variant must not execute on certification alone"
+        );
+
+        // The canonical variant's FINALIZATION arrives — it executes.
+        assert_eq!(rt().block_on(node.finalize(db)).map(|r| r.0), Some(1));
+        assert_eq!(rt().block_on(node.executed_tip()), (1, db));
+    }
+
     #[test]
     fn test_finalize_executes_skipped_ancestors_in_order() {
         let node = make_layer_node();
