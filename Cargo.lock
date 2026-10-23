@@ -1187,8 +1187,6 @@ dependencies = [
 [[package]]
 name = "commonware-p2p"
 version = "2026.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b493b3ff98ef12a54162d9eae90175a6ff56e12df90f7b3381eff3cea84a8deb"
 dependencies = [
  "commonware-codec",
  "commonware-cryptography",

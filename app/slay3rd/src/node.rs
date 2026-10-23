@@ -287,10 +287,12 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     requested_heights: Arc<std::sync::Mutex<BTreeMap<u64, Instant>>>,
     /// Finalized-but-unexecuted payload digests (see `CertifiedDigests`).
     certified_digests: Arc<std::sync::Mutex<CertifiedDigests>>,
-    /// rc6: last time ensure_executed spawned a finalize walk per digest.
+    /// rc6: last time ensure_executed spawned a finalize walk per digest,
+    /// plus a probe counter so a parent that stays certified-but-unexecuted
+    /// across many views escalates into a livelock alert.
     /// Bounds the exec_lock task queue across thousands of nullified views
     /// while a certified-but-unexecuted parent blocks progress.
-    ensure_exec: Arc<std::sync::Mutex<HashMap<[u8; 32], Instant>>>,
+    ensure_exec: Arc<std::sync::Mutex<HashMap<[u8; 32], (Instant, u32)>>>,
     /// Highest payload height ever observed (admitted or rejected pushes,
     /// payloads traversed in finalize). Fetch-target hint for backfill —
     /// never used to advance execution.
@@ -484,20 +486,45 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         /// stall would otherwise grow it without limit. Clearing just lets
         /// older digests be re-fetched sooner — harmless.
         const MAX_ENSURE_EXEC: usize = 4_096;
+        /// Probe count at which a still-unexecuted certified parent is
+        /// declared a livelock: ~60s of throttled probes with no
+        /// finalization is far past any normal certify→finalize window.
+        /// The 2026-10-22 and 2026-10-23 G2 halts were exactly this wedge —
+        /// the alert below names the only recovery this build has.
+        const WEDGE_PROBE_ALERT: u32 = 10;
+        /// Re-alert cadence after the first alert (~5 min of probes).
+        const WEDGE_PROBE_REALERT: u32 = 50;
         let mut g = self.ensure_exec.lock().unwrap_or_else(|e| e.into_inner());
         if g.len() >= MAX_ENSURE_EXEC {
             g.clear();
         }
         let now = Instant::now();
-        if g.get(&parent).map_or(false, |t| now.duration_since(*t) < THROTTLE) {
+        if g
+            .get(&parent)
+            .map_or(false, |(t, _)| now.duration_since(*t) < THROTTLE)
+        {
             return;
         }
-        g.insert(parent, now);
+        let probes = match g.get_mut(&parent) {
+            Some((t, n)) => {
+                *t = now;
+                *n += 1;
+                *n
+            }
+            None => {
+                g.insert(parent, (now, 1));
+                1
+            }
+        };
         drop(g);
         let node = self.clone();
         tokio::spawn(async move {
             let (_, tip) = node.executed_tip().await;
             if tip == parent {
+                node.ensure_exec
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&parent);
                 return;
             }
             if node.lookup_payload(&parent).await.is_none() {
@@ -507,6 +534,19 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 parent = %hex::encode(parent),
                 "consensus parent certified but not executed — awaiting its finalization; never executing a merely-notarized ancestor"
             );
+            if probes == WEDGE_PROBE_ALERT
+                || (probes > WEDGE_PROBE_ALERT && probes % WEDGE_PROBE_REALERT == 0)
+            {
+                tracing::warn!(
+                    parent = %hex::encode(parent),
+                    probes,
+                    "LIVELOCK SIGNATURE: certified parent never finalized across \
+                     {probes} probes — this build has no in-protocol recovery. \
+                     Recovery is coordinated, not local: ALL seats stop, archive \
+                     data/consensus (mv data/consensus data/consensus.wedge-bak), \
+                     restart together to resume from the finalized tip."
+                );
+            }
         });
     }
 

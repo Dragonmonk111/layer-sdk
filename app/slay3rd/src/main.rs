@@ -53,7 +53,7 @@ use commonware_math::algebra::Random;
 use commonware_p2p::authenticated::lookup::{Config as P2pConfig, Network};
 use commonware_p2p::{Address as P2pAddress, AddressableManager, Recipients, Receiver, Sender as P2pSender};
 use commonware_parallel::Sequential;
-use commonware_runtime::{buffer::paged::CacheRef, Metrics, Runner};
+use commonware_runtime::{buffer::paged::CacheRef, Metrics, Runner, Spawner};
 use commonware_utils::{ordered::Map, N3f1, NZU16, NZUsize};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -310,12 +310,37 @@ fn main() {
     };
 
     // Init tracing with env-filter (respects RUST_LOG).
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    //
+    // Report an unusable RUST_LOG rather than swallowing it. Two silent failure
+    // modes used to leave an operator believing they had configured logging:
+    //
+    //   * invalid directives — `try_from_default_env` returns Err and the old
+    //     `unwrap_or_else` quietly substituted "info", so a typo like
+    //     `RUST_LOG=info,slay3rd=DBG` looked like a directive that had no
+    //     effect instead of an error;
+    //   * a set-but-empty value — this parses successfully and disables logging
+    //     entirely, so the node runs silent and exits 0.
+    //
+    // The variable being UNSET stays quiet: that is the normal case and means
+    // "info". `RUST_LOG=off` remains the explicit way to silence logging.
+    let filter = match std::env::var("RUST_LOG") {
+        Err(_) => tracing_subscriber::EnvFilter::new("info"),
+        Ok(v) if v.trim().is_empty() => {
+            eprintln!(
+                "slay3rd: RUST_LOG is empty, which disables all logging; \
+                 using \"info\" (set RUST_LOG=off to silence deliberately)"
+            );
+            tracing_subscriber::EnvFilter::new("info")
+        }
+        Ok(v) => match tracing_subscriber::EnvFilter::try_new(&v) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("slay3rd: invalid RUST_LOG ({e}); using \"info\"");
+                tracing_subscriber::EnvFilter::new("info")
+            }
+        },
+    };
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     info!(
         chain_id = %config.chain_id,
@@ -371,6 +396,52 @@ async fn run_node(
     config: NodeConfig,
     km: KeyMaterial,
 ) {
+    // Optional Prometheus endpoint (`metrics_listen`).
+    //
+    // Renders the runtime's own registry through the public `Metrics` trait.
+    // Deliberately NOT `commonware_runtime::tokio::telemetry::init`: that also
+    // installs its own global tracing subscriber, which would both conflict
+    // with the fmt subscriber installed in `main` and replace the RUST_LOG
+    // env-filter with a bare level, silently dropping per-target directives.
+    if let Some(addr) = config.metrics_listen.clone() {
+        let addr: std::net::SocketAddr = addr.parse().unwrap_or_else(|e| {
+            panic!("metrics_listen '{addr}' is not a valid host:port: {e}")
+        });
+        context.with_label("metrics").spawn(move |context| async move {
+            // Never let an observability failure kill the node: a panic in
+            // a spawned task unwinds the whole process (catch_panics is
+            // off), and :9100 collides with node-exporter on monitored
+            // hosts.
+            let listener = match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    warn!(%addr, error = %e,
+                        "metrics_listen: bind failed — metrics endpoint disabled");
+                    return;
+                }
+            };
+            let app = axum::Router::new().route(
+                "/metrics",
+                axum::routing::get({
+                    let context = context.clone();
+                    move || {
+                        let context = context.clone();
+                        async move {
+                            (
+                                [(axum::http::header::CONTENT_TYPE,
+                                  "text/plain; version=0.0.4")],
+                                context.encode(),
+                            )
+                        }
+                    }
+                }),
+            );
+            if let Err(e) = axum::serve(listener, app).await {
+                warn!(%addr, error = %e, "metrics_listen: server stopped");
+            }
+        });
+    }
+
     // -----------------------------------------------------------------------
     // BLS12-381 threshold scheme from DKG key material
     // -----------------------------------------------------------------------
@@ -608,13 +679,16 @@ async fn run_node(
     // node that booted once on a stale config holds genesis state
     // forever — load_from_storage() returns Ok and sync never runs).
     #[cfg(feature = "rocksdb")]
-    if config.state_sync.as_ref().is_some_and(|s| s.force)
-        && std::path::Path::new(&app_data_path).exists()
-    {
-        warn!(path = %app_data_path,
-            "state-sync force=true — removing stored app state before open");
-        std::fs::remove_dir_all(&app_data_path)
-            .expect("force_state_sync: failed to remove app data directory");
+    if config.state_sync.as_ref().is_some_and(|s| s.force) {
+        warn!("state-sync force=true — one-shot flag: stored app state is \
+               discarded on EVERY restart while set; remove it after a \
+               successful sync");
+        if std::path::Path::new(&app_data_path).exists() {
+            warn!(path = %app_data_path,
+                "state-sync force=true — removing stored app state before open");
+            std::fs::remove_dir_all(&app_data_path)
+                .expect("force_state_sync: failed to remove app data directory");
+        }
     }
 
     // Create data directories
@@ -639,6 +713,21 @@ async fn run_node(
         None => {
             warn!(min_gas_price = %config.min_gas_price, "Invalid min_gas_price — fee floor disabled");
         }
+    }
+
+    // Every seat needs donor peers for state/finality repair — a validator
+    // without [state_sync] cannot self-heal stale or divergent state and
+    // silently lags behind the executed tip (2026-10-22 G2 incident).
+    match &config.state_sync {
+        None => warn!(
+            "[state_sync] is not configured — no donor peers for state-sync or \
+             finality repair; if this seat's state diverges it cannot self-heal"
+        ),
+        Some(ss) if ss.peers.is_empty() => warn!(
+            "[state_sync] peers list is empty — no donors for state-sync or \
+             finality repair; if this seat's state diverges it cannot self-heal"
+        ),
+        _ => {}
     }
 
     // Attempt to load state; if none exists, initialize from genesis.
@@ -1077,11 +1166,32 @@ async fn run_node(
     // livelocking. Upstream warns Config::local is for demos, and that this
     // config should be synchronized across the network — roll it out with
     // the rc13 binary on all seats.
-    let p2p_cfg = P2pConfig::recommended(
+    let mut p2p_cfg = P2pConfig::recommended(
         ed25519_private_key.clone(),
         b"slay3r-p2p-v1",
         p2p_listen,
         10 * 1024 * 1024,  // 10MB max message size (accommodates large store-code txs)
+    );
+    // rc15: upstream `recommended` blocks peers for 4h — on a small validator
+    // set one churn event isolates a seat for hours (2026-10-23 G2: restart
+    // churn earned fresh soft-fault blocks fleet-wide, mesh collapsed to 0/7
+    // mid-wedge). p2p_block_secs keeps the block short enough to self-heal
+    // while still punishing repeat offenders (every offense re-blocks).
+    // Clamp to a sane range: 0 would make every block inert within seconds
+    // (remote misbehavior becomes unblockable, silently), and a huge value
+    // overflows `SystemTime + Duration` inside the tracker — a panic there
+    // kills the node mid-run, triggered by any remote fault.
+    const P2P_BLOCK_SECS_MIN: u64 = 1;
+    const P2P_BLOCK_SECS_MAX: u64 = 31_536_000; // 1 year
+    if !(P2P_BLOCK_SECS_MIN..=P2P_BLOCK_SECS_MAX).contains(&config.p2p_block_secs) {
+        warn!(configured = config.p2p_block_secs,
+            min = P2P_BLOCK_SECS_MIN, max = P2P_BLOCK_SECS_MAX,
+            "p2p_block_secs out of range — clamping");
+    }
+    p2p_cfg.block_duration = Duration::from_secs(
+        config
+            .p2p_block_secs
+            .clamp(P2P_BLOCK_SECS_MIN, P2P_BLOCK_SECS_MAX),
     );
 
     let p2p_ctx = context.with_label("p2p");

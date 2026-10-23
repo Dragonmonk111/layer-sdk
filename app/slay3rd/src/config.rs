@@ -42,6 +42,16 @@ pub struct NodeConfig {
     /// Listen address for gRPC (e.g., "0.0.0.0:9090").
     pub grpc_listen: String,
 
+    /// Optional Prometheus metrics endpoint (e.g., "127.0.0.1:9100").
+    /// When set, the node serves the runtime's metrics registry as
+    /// Prometheus text at `http://<addr>/metrics`. This is plain HTTP, on a
+    /// separate listener from `grpc_listen`. Unset = no listener (default).
+    ///
+    /// The registry names internal consensus/p2p targets and task labels, so
+    /// bind it privately (loopback) or firewall it rather than exposing it.
+    #[serde(default)]
+    pub metrics_listen: Option<String>,
+
     /// Peer configurations for other validators.
     /// Each entry has `address = "host:port"` and `public_key = "ed25519_hex"`.
     /// For a 3-node testnet, this should contain 2 entries (not including self).
@@ -80,6 +90,17 @@ pub struct NodeConfig {
     /// fee-less spam and prices block space. "0<denom>" disables the floor.
     #[serde(default = "default_min_gas_price")]
     pub min_gas_price: String,
+
+    /// Seconds a misbehaving peer stays blocked before the p2p tracker
+    /// allows reconnection. Upstream `recommended` is 4h — on a small
+    /// validator set one churn event can isolate a seat for hours
+    /// (2026-10-23 G2: restart churn earned fresh soft-fault blocks
+    /// fleet-wide, mesh collapsed to 0/7 during the wedge). 600s still
+    /// punishes persistent offenders — every offense re-blocks, and dials
+    /// are rate-limited to 1/min/peer anyway — without taking a seat out
+    /// for hours. Keep identical across the network.
+    #[serde(default = "default_p2p_block_secs")]
+    pub p2p_block_secs: u64,
 
     /// Optional state-sync bootstrap. When set and no stored state exists,
     /// the node adopts a peer's snapshot instead of initializing from
@@ -230,6 +251,10 @@ fn default_max_snapshot_bytes() -> u64 {
     4 << 30
 }
 
+fn default_p2p_block_secs() -> u64 {
+    600
+}
+
 fn default_min_gas_price() -> String {
     "0.001ujclaw".to_string()
 }
@@ -248,6 +273,7 @@ impl Default for NodeConfig {
             chain_id: "junoclaw-1".to_string(),
             p2p_listen: "0.0.0.0:7001".to_string(),
             grpc_listen: "0.0.0.0:9090".to_string(),
+            metrics_listen: None,
             peers: vec![],
             bls_key_path: "keys/bls.json".to_string(),
             identity_key_path: "keys/identity.json".to_string(),
@@ -257,6 +283,7 @@ impl Default for NodeConfig {
             leader_timeout_ms: 3_000,
             certification_timeout_ms: 5_000,
             min_gas_price: default_min_gas_price(),
+            p2p_block_secs: default_p2p_block_secs(),
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
@@ -366,6 +393,7 @@ mod tests {
             chain_id: "test-chain".to_string(),
             p2p_listen: "127.0.0.1:9001".to_string(),
             grpc_listen: "127.0.0.1:9090".to_string(),
+            metrics_listen: Some("127.0.0.1:9100".to_string()),
             peers: vec![
                 PeerConfig {
                     address: "127.0.0.1:9002".to_string(),
@@ -384,6 +412,7 @@ mod tests {
             leader_timeout_ms: 1_000,
             certification_timeout_ms: 2_000,
             min_gas_price: default_min_gas_price(),
+            p2p_block_secs: default_p2p_block_secs(),
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
@@ -401,6 +430,7 @@ mod tests {
         assert_eq!(decoded.peers[0].address, "127.0.0.1:9002");
         assert_eq!(decoded.peers[0].public_key, "aabb");
         assert_eq!(decoded.data_dir, "testdata");
+        assert_eq!(decoded.metrics_listen.as_deref(), Some("127.0.0.1:9100"));
         assert_eq!(decoded.wal_path(), "testdata/wal");
         assert_eq!(decoded.app_data_path(), "testdata/app");
     }
