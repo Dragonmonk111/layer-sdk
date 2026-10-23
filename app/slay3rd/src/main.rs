@@ -310,12 +310,37 @@ fn main() {
     };
 
     // Init tracing with env-filter (respects RUST_LOG).
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    //
+    // Report an unusable RUST_LOG rather than swallowing it. Two silent failure
+    // modes used to leave an operator believing they had configured logging:
+    //
+    //   * invalid directives — `try_from_default_env` returns Err and the old
+    //     `unwrap_or_else` quietly substituted "info", so a typo like
+    //     `RUST_LOG=info,slay3rd=DBG` looked like a directive that had no
+    //     effect instead of an error;
+    //   * a set-but-empty value — this parses successfully and disables logging
+    //     entirely, so the node runs silent and exits 0.
+    //
+    // The variable being UNSET stays quiet: that is the normal case and means
+    // "info". `RUST_LOG=off` remains the explicit way to silence logging.
+    let filter = match std::env::var("RUST_LOG") {
+        Err(_) => tracing_subscriber::EnvFilter::new("info"),
+        Ok(v) if v.trim().is_empty() => {
+            eprintln!(
+                "slay3rd: RUST_LOG is empty, which disables all logging; \
+                 using \"info\" (set RUST_LOG=off to silence deliberately)"
+            );
+            tracing_subscriber::EnvFilter::new("info")
+        }
+        Ok(v) => match tracing_subscriber::EnvFilter::try_new(&v) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("slay3rd: invalid RUST_LOG ({e}); using \"info\"");
+                tracing_subscriber::EnvFilter::new("info")
+            }
+        },
+    };
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     info!(
         chain_id = %config.chain_id,
