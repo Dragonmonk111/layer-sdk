@@ -53,7 +53,7 @@ use commonware_math::algebra::Random;
 use commonware_p2p::authenticated::lookup::{Config as P2pConfig, Network};
 use commonware_p2p::{Address as P2pAddress, AddressableManager, Recipients, Receiver, Sender as P2pSender};
 use commonware_parallel::Sequential;
-use commonware_runtime::{buffer::paged::CacheRef, Metrics, Runner};
+use commonware_runtime::{buffer::paged::CacheRef, Metrics, Runner, Spawner};
 use commonware_utils::{ordered::Map, N3f1, NZU16, NZUsize};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -396,6 +396,43 @@ async fn run_node(
     config: NodeConfig,
     km: KeyMaterial,
 ) {
+    // Optional Prometheus endpoint (`metrics_listen`).
+    //
+    // Renders the runtime's own registry through the public `Metrics` trait.
+    // Deliberately NOT `commonware_runtime::tokio::telemetry::init`: that also
+    // installs its own global tracing subscriber, which would both conflict
+    // with the fmt subscriber installed in `main` and replace the RUST_LOG
+    // env-filter with a bare level, silently dropping per-target directives.
+    if let Some(addr) = config.metrics_listen.clone() {
+        let addr: std::net::SocketAddr = addr.parse().unwrap_or_else(|e| {
+            panic!("metrics_listen '{addr}' is not a valid host:port: {e}")
+        });
+        context.with_label("metrics").spawn(move |context| async move {
+            let listener = tokio::net::TcpListener::bind(addr)
+                .await
+                .expect("Failed to bind metrics server");
+            let app = axum::Router::new().route(
+                "/metrics",
+                axum::routing::get({
+                    let context = context.clone();
+                    move || {
+                        let context = context.clone();
+                        async move {
+                            (
+                                [(axum::http::header::CONTENT_TYPE,
+                                  "text/plain; version=0.0.4")],
+                                context.encode(),
+                            )
+                        }
+                    }
+                }),
+            );
+            axum::serve(listener, app)
+                .await
+                .expect("Could not serve metrics");
+        });
+    }
+
     // -----------------------------------------------------------------------
     // BLS12-381 threshold scheme from DKG key material
     // -----------------------------------------------------------------------

@@ -42,6 +42,16 @@ pub struct NodeConfig {
     /// Listen address for gRPC (e.g., "0.0.0.0:9090").
     pub grpc_listen: String,
 
+    /// Optional Prometheus metrics endpoint (e.g., "127.0.0.1:9100").
+    /// When set, the node serves the runtime's metrics registry as
+    /// Prometheus text at `http://<addr>/metrics`. This is plain HTTP, on a
+    /// separate listener from `grpc_listen`. Unset = no listener (default).
+    ///
+    /// The registry names internal consensus/p2p targets and task labels, so
+    /// bind it privately (loopback) or firewall it rather than exposing it.
+    #[serde(default)]
+    pub metrics_listen: Option<String>,
+
     /// Peer configurations for other validators.
     /// Each entry has `address = "host:port"` and `public_key = "ed25519_hex"`.
     /// For a 3-node testnet, this should contain 2 entries (not including self).
@@ -263,6 +273,7 @@ impl Default for NodeConfig {
             chain_id: "junoclaw-1".to_string(),
             p2p_listen: "0.0.0.0:7001".to_string(),
             grpc_listen: "0.0.0.0:9090".to_string(),
+            metrics_listen: None,
             peers: vec![],
             bls_key_path: "keys/bls.json".to_string(),
             identity_key_path: "keys/identity.json".to_string(),
@@ -382,6 +393,7 @@ mod tests {
             chain_id: "test-chain".to_string(),
             p2p_listen: "127.0.0.1:9001".to_string(),
             grpc_listen: "127.0.0.1:9090".to_string(),
+            metrics_listen: Some("127.0.0.1:9100".to_string()),
             peers: vec![
                 PeerConfig {
                     address: "127.0.0.1:9002".to_string(),
@@ -418,6 +430,7 @@ mod tests {
         assert_eq!(decoded.peers[0].address, "127.0.0.1:9002");
         assert_eq!(decoded.peers[0].public_key, "aabb");
         assert_eq!(decoded.data_dir, "testdata");
+        assert_eq!(decoded.metrics_listen.as_deref(), Some("127.0.0.1:9100"));
         assert_eq!(decoded.wal_path(), "testdata/wal");
         assert_eq!(decoded.app_data_path(), "testdata/app");
     }
