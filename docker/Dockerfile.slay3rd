@@ -36,6 +36,12 @@ COPY lib/cosmwasm/packages /myapp/lib/cosmwasm/packages
 COPY lib/commonware-storage/Cargo.toml /myapp/lib/commonware-storage/Cargo.toml
 COPY lib/commonware-storage/src /myapp/lib/commonware-storage/src
 
+# commonware-p2p vendored 2026.3.0 (patched via [patch.crates-io]) —
+# roster-scoped tracker blocks. Path dep: cargo resolves it eagerly, so the
+# manifest AND sources must exist before the dep-cache build.
+COPY lib/commonware-p2p/Cargo.toml /myapp/lib/commonware-p2p/Cargo.toml
+COPY lib/commonware-p2p/src /myapp/lib/commonware-p2p/src
+
 # Vendored sriracha-mayo patch (march pinned — see Cargo.toml [patch.crates-io])
 COPY lib/sriracha-mayo /myapp/lib/sriracha-mayo
 

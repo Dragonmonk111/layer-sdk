@@ -201,6 +201,22 @@ impl<E: Spawner + Rng + Clock + RuntimeMetrics, C: PublicKey> Directory<E, C> {
         }
         self.sets.insert(index, peers.into_keys());
 
+        // Bind blocks earned before any peer set existed to this set: a
+        // pre-set block applies under the first roster it sees, regardless
+        // of that set's index (peer-set indexes need not start at zero).
+        if self.sets.len() == 1 {
+            let unbound: Vec<(C, SystemTime)> = self
+                .blocked
+                .iter()
+                .filter_map(|(peer, (block_index, until))| {
+                    block_index.is_none().then(|| (peer.clone(), *until))
+                })
+                .collect();
+            for (peer, until) in unbound {
+                self.blocked.put(peer, (Some(index), until));
+            }
+        }
+
         // Remove oldest entries if necessary
         let mut deleted_peers = Vec::new();
         while self.sets.len() > self.max_sets {
@@ -1963,6 +1979,43 @@ mod tests {
             // Update with different address should succeed again
             let addr_3 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10)), 1237);
             assert!(directory.overwrite(&pk_1, addr(addr_3)));
+        });
+    }
+
+    #[test]
+    fn test_pre_set_block_applies_to_nonzero_first_index() {
+        let runtime = deterministic::Runner::default();
+        let my_pk = ed25519::PrivateKey::from_seed(0).public_key();
+        let (tx, _rx) = UnboundedMailbox::new();
+        let releaser = super::Releaser::new(tx);
+        let config = super::Config {
+            allow_private_ips: true,
+            allow_dns: true,
+            bypass_ip_check: false,
+            max_sets: 3,
+            rate_limit: Quota::per_second(NZU32!(10)),
+            block_duration: Duration::from_secs(100),
+        };
+
+        let pk_1 = ed25519::PrivateKey::from_seed(1).public_key();
+        let addr_1 = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1235);
+
+        runtime.start(|context| async move {
+            let mut directory = Directory::init(context, my_pk, config, releaser);
+
+            // A block earned before any peer set is tracked binds to the
+            // first tracked set whatever its index (indexes need not start
+            // at zero - they can be consensus epochs), then goes inert on
+            // the next set like any scoped block.
+            directory.block(&pk_1);
+            directory
+                .add_set(5, [(pk_1.clone(), addr(addr_1))].try_into().unwrap())
+                .unwrap();
+            assert!(!directory.eligible(&pk_1));
+            directory
+                .add_set(6, [(pk_1.clone(), addr(addr_1))].try_into().unwrap())
+                .unwrap();
+            assert!(directory.eligible(&pk_1));
         });
     }
 }
