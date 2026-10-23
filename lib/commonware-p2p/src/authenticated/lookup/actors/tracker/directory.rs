@@ -179,9 +179,9 @@ impl<E: Spawner + Rng + Clock + RuntimeMetrics, C: PublicKey> Directory<E, C> {
 
         // Create and store new peer set (all peers are tracked regardless of address validity).
         //
-        // Blocks earned under earlier peer-set indexes become inert here:
-        // `is_blocked` only honors entries stamped with the latest index, and
-        // `unblock_expired` garbage-collects the stale entries.
+        // Blocks earned under earlier peer-set indexes are flushed below
+        // (after the pre-set rebind); `is_blocked` also only honors entries
+        // stamped with the latest index as a second line of defense.
         let mut changed_peers = Vec::new();
         for (peer, addr) in &peers {
             let record = match self.peers.entry(peer.clone()) {
@@ -215,6 +215,28 @@ impl<E: Spawner + Rng + Clock + RuntimeMetrics, C: PublicKey> Directory<E, C> {
             for (peer, until) in unbound {
                 self.blocked.put(peer, (Some(index), until));
             }
+        }
+
+        // Flush blocks earned under earlier peer sets. Faults like signer
+        // mismatch or stale-view conflicts are judgments about an index
+        // inside one validator set; the same identity is not guilty under
+        // the next set. Keeping them inert would also poison the sweep:
+        // `wait_for_unblock` sleeps on the front (lowest-index) entry, so
+        // a stale block with a far expiry would oversleep and delay the
+        // pop of a genuinely expired current-set block.
+        let stale: Vec<C> = self
+            .blocked
+            .iter()
+            .filter_map(|(peer, (block_index, _))| {
+                block_index
+                    .is_some_and(|i| i < index)
+                    .then(|| peer.clone())
+            })
+            .collect();
+        for peer in stale {
+            debug!(?peer, "unblocking peer on peer set change");
+            self.blocked.remove(&peer);
+            self.metrics.blocked.remove(&metrics::Peer::new(&peer));
         }
 
         // Remove oldest entries if necessary
@@ -712,7 +734,7 @@ mod tests {
     }
 
     #[test]
-    fn test_blocked_peer_remains_blocked_on_update() {
+    fn test_block_flushed_on_update_via_new_set() {
         let runtime = deterministic::Runner::default();
         let my_pk = ed25519::PrivateKey::from_seed(0).public_key();
         let (tx, _rx) = UnboundedMailbox::new();
@@ -748,18 +770,30 @@ mod tests {
                 "Record still has address (blocking is at Directory level)"
             );
 
-            // Update the address while blocked
+            // A new peer set flushes the block earned under the previous
+            // set — the same identity is not guilty under the next roster —
+            // while the address update still lands.
             directory.add_set(1, [(pk_1.clone(), addr(addr_2))].try_into().unwrap());
             assert!(
-                directory.blocked.contains(&pk_1),
-                "Blocked peer should remain blocked after update"
+                !directory.blocked.contains(&pk_1),
+                "Block earned under set 0 should be flushed by set 1"
             );
-            // Address is updated
+            assert!(
+                !directory.is_blocked(&pk_1),
+                "Peer should be connectable after its set-scoped block flushed"
+            );
             let record = directory.peers.get(&pk_1).unwrap();
             assert_eq!(
                 record.ingress(),
                 Some(Ingress::Socket(addr_2)),
                 "Record has updated address"
+            );
+
+            // A fresh offense under the new set re-blocks with the new index.
+            directory.block(&pk_1);
+            assert!(
+                directory.is_blocked(&pk_1),
+                "Peer should be blocked again after re-offending under set 1"
             );
 
             // Advance time past block duration and unblock
@@ -1154,7 +1188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unblock_expired_peer_removed_and_readded() {
+    fn test_block_flushed_when_peer_removed_and_readded() {
         let runtime = deterministic::Runner::default();
         let my_pk = ed25519::PrivateKey::from_seed(0).public_key();
         let (tx, _rx) = UnboundedMailbox::new();
@@ -1200,8 +1234,9 @@ mod tests {
                 "pk_1 should be marked blocked"
             );
 
-            // Add a new set that evicts pk_1 (max_sets=1)
-            // The blocked metric should remain since the block persists
+            // Add a new set that evicts pk_1 (max_sets=1). The set change
+            // also flushes the block pk_1 earned under set 0, so the blocked
+            // metric is cleared as well.
             directory.add_set(1, [(pk_2.clone(), addr(addr_2))].try_into().unwrap());
             assert!(
                 !directory.peers.contains_key(&pk_1),
@@ -1212,24 +1247,34 @@ mod tests {
                     .metrics
                     .blocked
                     .get(&metrics::Peer::new(&pk_1))
-                    .is_some(),
-                "blocked metric should persist after peer removal"
+                    .is_none(),
+                "blocked metric should clear when the set-scoped block flushes"
             );
 
-            // Re-add pk_1 - should still be blocked because block persists
+            // Re-add pk_1 — it is not blocked: the block was scoped to set 0
+            // and says nothing about this identity under set 2.
             directory.add_set(2, [(pk_1.clone(), addr(addr_1))].try_into().unwrap());
             assert!(
-                directory.blocked.contains(&pk_1),
-                "Re-added pk_1 should still be blocked"
+                !directory.blocked.contains(&pk_1),
+                "Re-added pk_1 should not be blocked (set-scoped block flushed)"
+            );
+            assert!(
+                !directory.is_blocked(&pk_1),
+                "Re-added pk_1 should be connectable"
             );
             assert!(
                 directory
                     .metrics
                     .blocked
                     .get(&metrics::Peer::new(&pk_1))
-                    .is_some(),
-                "blocked metric should persist after re-add"
+                    .is_none(),
+                "blocked metric should stay cleared after re-add"
             );
+
+            // A fresh offense under the new set re-blocks and expires
+            // normally.
+            directory.block(&pk_1);
+            assert!(directory.is_blocked(&pk_1));
 
             // Advance time past block duration
             context.sleep(block_duration + Duration::from_secs(1)).await;

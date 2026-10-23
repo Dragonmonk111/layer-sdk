@@ -408,9 +408,18 @@ async fn run_node(
             panic!("metrics_listen '{addr}' is not a valid host:port: {e}")
         });
         context.with_label("metrics").spawn(move |context| async move {
-            let listener = tokio::net::TcpListener::bind(addr)
-                .await
-                .expect("Failed to bind metrics server");
+            // Never let an observability failure kill the node: a panic in
+            // a spawned task unwinds the whole process (catch_panics is
+            // off), and :9100 collides with node-exporter on monitored
+            // hosts.
+            let listener = match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    warn!(%addr, error = %e,
+                        "metrics_listen: bind failed — metrics endpoint disabled");
+                    return;
+                }
+            };
             let app = axum::Router::new().route(
                 "/metrics",
                 axum::routing::get({
@@ -427,9 +436,9 @@ async fn run_node(
                     }
                 }),
             );
-            axum::serve(listener, app)
-                .await
-                .expect("Could not serve metrics");
+            if let Err(e) = axum::serve(listener, app).await {
+                warn!(%addr, error = %e, "metrics_listen: server stopped");
+            }
         });
     }
 
@@ -1168,7 +1177,22 @@ async fn run_node(
     // churn earned fresh soft-fault blocks fleet-wide, mesh collapsed to 0/7
     // mid-wedge). p2p_block_secs keeps the block short enough to self-heal
     // while still punishing repeat offenders (every offense re-blocks).
-    p2p_cfg.block_duration = Duration::from_secs(config.p2p_block_secs);
+    // Clamp to a sane range: 0 would make every block inert within seconds
+    // (remote misbehavior becomes unblockable, silently), and a huge value
+    // overflows `SystemTime + Duration` inside the tracker — a panic there
+    // kills the node mid-run, triggered by any remote fault.
+    const P2P_BLOCK_SECS_MIN: u64 = 1;
+    const P2P_BLOCK_SECS_MAX: u64 = 31_536_000; // 1 year
+    if !(P2P_BLOCK_SECS_MIN..=P2P_BLOCK_SECS_MAX).contains(&config.p2p_block_secs) {
+        warn!(configured = config.p2p_block_secs,
+            min = P2P_BLOCK_SECS_MIN, max = P2P_BLOCK_SECS_MAX,
+            "p2p_block_secs out of range — clamping");
+    }
+    p2p_cfg.block_duration = Duration::from_secs(
+        config
+            .p2p_block_secs
+            .clamp(P2P_BLOCK_SECS_MIN, P2P_BLOCK_SECS_MAX),
+    );
 
     let p2p_ctx = context.with_label("p2p");
     let (mut network, mut oracle) = Network::new(p2p_ctx, p2p_cfg);

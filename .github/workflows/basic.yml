@@ -57,6 +57,11 @@ jobs:
           RUSTFLAGS: "-C link-arg=/tmp/shim.o"
           RUST_BACKTRACE: 1
 
+      # Vendored patched crates are workspace-excluded, so `cargo test -p`
+      # never reaches them — the roster-scoped block suite lives here.
+      - name: Test vendored commonware-p2p
+        run: cargo test --manifest-path lib/commonware-p2p/Cargo.toml --lib
+
   lints:
     name: Clippy
     runs-on: ubuntu-latest
