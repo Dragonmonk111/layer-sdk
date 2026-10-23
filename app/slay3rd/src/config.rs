@@ -81,6 +81,17 @@ pub struct NodeConfig {
     #[serde(default = "default_min_gas_price")]
     pub min_gas_price: String,
 
+    /// Seconds a misbehaving peer stays blocked before the p2p tracker
+    /// allows reconnection. Upstream `recommended` is 4h — on a small
+    /// validator set one churn event can isolate a seat for hours
+    /// (2026-10-23 G2: restart churn earned fresh soft-fault blocks
+    /// fleet-wide, mesh collapsed to 0/7 during the wedge). 600s still
+    /// punishes persistent offenders — every offense re-blocks, and dials
+    /// are rate-limited to 1/min/peer anyway — without taking a seat out
+    /// for hours. Keep identical across the network.
+    #[serde(default = "default_p2p_block_secs")]
+    pub p2p_block_secs: u64,
+
     /// Optional state-sync bootstrap. When set and no stored state exists,
     /// the node adopts a peer's snapshot instead of initializing from
     /// genesis (docs/STATE_SYNC.md). Failure is fatal — the node never
@@ -230,6 +241,10 @@ fn default_max_snapshot_bytes() -> u64 {
     4 << 30
 }
 
+fn default_p2p_block_secs() -> u64 {
+    600
+}
+
 fn default_min_gas_price() -> String {
     "0.001ujclaw".to_string()
 }
@@ -257,6 +272,7 @@ impl Default for NodeConfig {
             leader_timeout_ms: 3_000,
             certification_timeout_ms: 5_000,
             min_gas_price: default_min_gas_price(),
+            p2p_block_secs: default_p2p_block_secs(),
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,
@@ -384,6 +400,7 @@ mod tests {
             leader_timeout_ms: 1_000,
             certification_timeout_ms: 2_000,
             min_gas_price: default_min_gas_price(),
+            p2p_block_secs: default_p2p_block_secs(),
             state_sync: None,
             hybrid_consensus: false,
             fault_inject: None,

@@ -641,6 +641,21 @@ async fn run_node(
         }
     }
 
+    // Every seat needs donor peers for state/finality repair — a validator
+    // without [state_sync] cannot self-heal stale or divergent state and
+    // silently lags behind the executed tip (2026-10-22 G2 incident).
+    match &config.state_sync {
+        None => warn!(
+            "[state_sync] is not configured — no donor peers for state-sync or \
+             finality repair; if this seat's state diverges it cannot self-heal"
+        ),
+        Some(ss) if ss.peers.is_empty() => warn!(
+            "[state_sync] peers list is empty — no donors for state-sync or \
+             finality repair; if this seat's state diverges it cannot self-heal"
+        ),
+        _ => {}
+    }
+
     // Attempt to load state; if none exists, initialize from genesis.
     use layer_app::AppLoadError;
     match app.load_from_storage() {
@@ -1077,12 +1092,18 @@ async fn run_node(
     // livelocking. Upstream warns Config::local is for demos, and that this
     // config should be synchronized across the network — roll it out with
     // the rc13 binary on all seats.
-    let p2p_cfg = P2pConfig::recommended(
+    let mut p2p_cfg = P2pConfig::recommended(
         ed25519_private_key.clone(),
         b"slay3r-p2p-v1",
         p2p_listen,
         10 * 1024 * 1024,  // 10MB max message size (accommodates large store-code txs)
     );
+    // rc15: upstream `recommended` blocks peers for 4h — on a small validator
+    // set one churn event isolates a seat for hours (2026-10-23 G2: restart
+    // churn earned fresh soft-fault blocks fleet-wide, mesh collapsed to 0/7
+    // mid-wedge). p2p_block_secs keeps the block short enough to self-heal
+    // while still punishing repeat offenders (every offense re-blocks).
+    p2p_cfg.block_duration = Duration::from_secs(config.p2p_block_secs);
 
     let p2p_ctx = context.with_label("p2p");
     let (mut network, mut oracle) = Network::new(p2p_ctx, p2p_cfg);

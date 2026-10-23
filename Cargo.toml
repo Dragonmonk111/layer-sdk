@@ -117,6 +117,12 @@ cosmwasm-schema-derive = { path = "lib/cosmwasm/packages/schema-derive" }
 # a section already absent on disk is already pruned). Prevents the
 # voter/resolver panic that killed the home-vb seat on 2026-10-14.
 commonware-storage = { path = "lib/commonware-storage" }
+# Vendored 2026.3.0 with roster-scoped tracker blocks: block entries carry
+# the peer-set index they were earned under and go inert on set change
+# (backport of commonwarexyz/monorepo#5394). Also pairs with slay3rd's
+# p2p_block_secs — upstream's 4h block_duration isolated seats for hours
+# on routine restart churn (2026-10-23 G2 mesh collapse).
+commonware-p2p = { path = "lib/commonware-p2p" }
 # Vendored 0.0.4 with MAYO-C/.cmake march pinned to westmere+AES — upstream
 # defaults to -march=native, baking AVX/AVX-512 into keccak on AVX-512 build
 # hosts (SIGILL on non-AVX targets, e.g. VirtualBox under Hyper-V NEM).
