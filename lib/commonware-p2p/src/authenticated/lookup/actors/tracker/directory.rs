@@ -73,7 +73,7 @@ pub struct Directory<E: Rng + Clock + RuntimeMetrics, C: PublicKey> {
     rate_limiter: KeyedRateLimiter<C, E>,
 
     /// Tracks blocked peers, the unblock time, and the peer-set index the
-    /// block was earned under (`None` while no peer set has been tracked —
+    /// block was earned under (`None` while no peer set has been tracked;
     /// such a block applies to the first set, whatever its index). This is
     /// the source of truth for whether a peer is blocked, persisting even
     /// if the peer record is deleted.
@@ -81,7 +81,7 @@ pub struct Directory<E: Rng + Clock + RuntimeMetrics, C: PublicKey> {
     /// A block is scoped to the peer set under which the fault was observed:
     /// entries stamped with an earlier index are inert (a reshare or roster
     /// change must not punish a seat for evidence gathered under the old
-    /// roster — the same identity may carry a different signer index).
+    /// roster; the same identity may carry a different signer index).
     blocked: PrioritySet<C, (Option<u64>, SystemTime)>,
 
     // ---------- Message-Passing ----------
@@ -311,7 +311,7 @@ impl<E: Spawner + Rng + Clock + RuntimeMetrics, C: PublicKey> Directory<E, C> {
     /// Returns true if `peer` is currently blocked.
     ///
     /// A block only applies while it was stamped with the latest peer-set
-    /// index and has not expired — entries from earlier sets are inert.
+    /// index and has not expired; entries from earlier sets are inert.
     fn is_blocked(&self, peer: &C) -> bool {
         let latest = self.latest_set_index();
         match self.blocked.get(peer) {
