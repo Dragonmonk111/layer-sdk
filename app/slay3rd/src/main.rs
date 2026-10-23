@@ -670,13 +670,16 @@ async fn run_node(
     // node that booted once on a stale config holds genesis state
     // forever — load_from_storage() returns Ok and sync never runs).
     #[cfg(feature = "rocksdb")]
-    if config.state_sync.as_ref().is_some_and(|s| s.force)
-        && std::path::Path::new(&app_data_path).exists()
-    {
-        warn!(path = %app_data_path,
-            "state-sync force=true — removing stored app state before open");
-        std::fs::remove_dir_all(&app_data_path)
-            .expect("force_state_sync: failed to remove app data directory");
+    if config.state_sync.as_ref().is_some_and(|s| s.force) {
+        warn!("state-sync force=true — one-shot flag: stored app state is \
+               discarded on EVERY restart while set; remove it after a \
+               successful sync");
+        if std::path::Path::new(&app_data_path).exists() {
+            warn!(path = %app_data_path,
+                "state-sync force=true — removing stored app state before open");
+            std::fs::remove_dir_all(&app_data_path)
+                .expect("force_state_sync: failed to remove app data directory");
+        }
     }
 
     // Create data directories
