@@ -194,11 +194,210 @@ fn verify_mayo_half(
     Ok(envelope.signers.len())
 }
 
+/// Decode the signer index set out of a certificate's bytes.
+/// Hybrid envelopes carry the BitMap after `0x01 + 48B BLS`; classical
+/// certificates place it directly after the 48B signature. Returns
+/// (signer indices, participant count).
+fn cert_signers(bytes: &[u8]) -> Result<(Vec<usize>, usize), String> {
+    let off = if !bytes.is_empty() && bytes[0] == 0x01 { 1 } else { 0 };
+    if bytes.len() < off + 48 + 8 + 1 {
+        return Err(format!("cert too short: {} bytes", bytes.len()));
+    }
+    let participants =
+        u64::from_be_bytes(bytes[off + 48..off + 56].try_into().unwrap()) as usize;
+    if participants == 0 || participants > 4096 {
+        return Err(format!("implausible participant count: {participants}"));
+    }
+    let bm = off + 56;
+    let bm_len = participants.div_ceil(8);
+    if bytes.len() < bm + bm_len {
+        return Err("signer bitmap truncated".to_string());
+    }
+    let bitmap = &bytes[bm..bm + bm_len];
+    Ok((
+        (0..participants)
+            .filter(|i| (bitmap[i / 8] >> (i % 8)) & 1 == 1)
+            .collect(),
+        participants,
+    ))
+}
+
+/// Remove ANSI SGR/CSI escape sequences so `certificate=` values parse.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            match chars.next() {
+                Some('[') => {
+                    for c2 in chars.by_ref() {
+                        if c2.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+                _ => continue,
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Pull hex certificate strings out of a log line containing `certificate=`.
+fn extract_certs(line: &str) -> Vec<String> {
+    line.split("certificate=")
+        .skip(1)
+        .filter_map(|rest| {
+            let hex: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_hexdigit())
+                .collect();
+            (hex.len() >= 114).then_some(hex)
+        })
+        .collect()
+}
+
+/// `verify-cert certs`: tally signer bitmaps across finalization-certificate
+/// log lines. Method credit: 79anvi's bitmap reader (G2 runsheet v5).
+/// Input: --log FILE (repeatable, or stdin). --last N keeps the newest N
+/// certs per source; --json emits machine-readable output.
+fn run_certs(args: &[String]) {
+    let mut logs: Vec<String> = Vec::new();
+    let mut last_n: Option<usize> = None;
+    let mut json = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--log" => {
+                i += 1;
+                if i < args.len() {
+                    logs.push(args[i].clone());
+                }
+            }
+            "--last" => {
+                i += 1;
+                last_n = args.get(i).and_then(|s| s.parse().ok());
+            }
+            "--json" => json = true,
+            _ => {
+                eprintln!("Unknown certs argument: {}", args[i]);
+                process::exit(1);
+            }
+        }
+        i += 1;
+    }
+
+    let sources: Vec<(String, String)> = if logs.is_empty() {
+        use std::io::Read as _;
+        let mut buf = String::new();
+        if std::io::stdin().read_to_string(&mut buf).is_err() {
+            eprintln!("INVALID: provide --log <file> or pipe a log to stdin");
+            process::exit(1);
+        }
+        vec![("stdin".to_string(), buf)]
+    } else {
+        let mut v = Vec::new();
+        for p in &logs {
+            match std::fs::read_to_string(p) {
+                Ok(c) => v.push((p.clone(), c)),
+                Err(e) => {
+                    eprintln!("INVALID: cannot read log '{p}': {e}");
+                    process::exit(2);
+                }
+            }
+        }
+        v
+    };
+
+    let mut reports: Vec<serde_json::Value> = Vec::new();
+    for (name, text) in &sources {
+        let mut certs: Vec<Vec<usize>> = Vec::new();
+        let mut participants = 0usize;
+        let mut bad = 0usize;
+        for line in text.lines() {
+            for hex in extract_certs(&strip_ansi(line)) {
+                match hex::decode(&hex)
+                    .map_err(|e| e.to_string())
+                    .and_then(|b| cert_signers(&b))
+                {
+                    Ok((signers, nparts)) => {
+                        participants = nparts;
+                        certs.push(signers);
+                    }
+                    Err(_) => bad += 1,
+                }
+            }
+        }
+        if let Some(n) = last_n {
+            let skip = certs.len().saturating_sub(n);
+            certs.drain(..skip);
+        }
+        let n = certs.len();
+        let mut counts = vec![0usize; participants];
+        let mut masks: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for signers in &certs {
+            let mut mask = 0u64;
+            for &s in signers {
+                if s < participants {
+                    counts[s] += 1;
+                }
+                mask |= 1u64 << s.min(63);
+            }
+            *masks.entry(format!("{mask:#x}")).or_default() += 1;
+        }
+        if json {
+            reports.push(serde_json::json!({
+                "source": name,
+                "certs": n,
+                "participants": participants,
+                "per_index": counts,
+                "masks": masks,
+                "parse_failures": bad,
+            }));
+            continue;
+        }
+        println!("=== {name} ===");
+        if n == 0 {
+            println!("  no finalization certificates parsed ({bad} malformed lines skipped)");
+            continue;
+        }
+        println!("  {n} certificate(s), {participants} participants");
+        for (i, &c) in counts.iter().enumerate() {
+            println!(
+                "  index {i}: {c}/{n} ({:.0}%){}",
+                c as f64 * 100.0 / n as f64,
+                if c == 0 { "  NEVER SIGNS" } else { "" }
+            );
+        }
+        let mask_list: Vec<String> = masks
+            .iter()
+            .map(|(m, c)| format!("{m}×{c}"))
+            .collect();
+        println!("  masks: {}", mask_list.join(" "));
+        if bad > 0 {
+            println!("  {bad} malformed certificate line(s) skipped");
+        }
+        println!();
+    }
+    if json {
+        println!("{}", serde_json::to_string_pretty(&reports).unwrap());
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 || args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
         print_usage();
+        process::exit(0);
+    }
+
+    // Subcommand: `verify-cert certs --log <file> [--log <file>...]`
+    if args[1] == "certs" {
+        run_certs(&args[2..]);
         process::exit(0);
     }
 
@@ -517,6 +716,7 @@ fn print_usage() {
     println!("  verify-cert --cert <hex> --pubkey <hex> --message <hex> [--namespace <hex>]");
     println!("  verify-cert --cert <hex> --keys-file <path> --message <hex>");
     println!("  verify-cert --cert-file <path> --check-presence");
+    println!("  verify-cert certs [--log <file> ...] [--last N] [--json]");
     println!("");
     println!("OPTIONS:");
     println!("  --cert <hex>           Certificate bytes as hex (G1 signature, 48 bytes for MinSig)");
@@ -545,4 +745,9 @@ fn print_usage() {
     println!("");
     println!("  # Presence check only (verify Block.certificate is Some/non-empty):");
     println!("  verify-cert --cert-file /tmp/layer-testnet/latest_cert.hex --check-presence");
+    println!("");
+    println!("  # Signer-bitmap tally over finalization certs in a node log");
+    println!("  # (or pipe: journalctl -u junoclaw --since -3min -o cat | verify-cert certs):");
+    println!("  verify-cert certs --log /var/log/slay3rd.log --last 500");
+    println!("  verify-cert certs --log seat-a.log --log seat-b.log   # cross-seat");
 }
