@@ -51,6 +51,8 @@ struct Shared {
     started: u64,
     last_tip: Mutex<u64>,
     tip_seen_at: Mutex<u64>,
+    /// Latest finalized block height, as reported by the explorer probe.
+    height: Mutex<u64>,
     /// Webhook URL (JC_ALERT_WEBHOOK) that receives stall/recovery alerts.
     alert_webhook: Option<String>,
     /// Whether a stall alert has already fired for the current stall episode.
@@ -231,8 +233,30 @@ async fn check_stall(sh: &Shared) {
     }
 }
 
+/// Availability over the retained history window (at most 24 h):
+/// (window hours, % of rounds the consensus probe was up, % of rounds every probe was up).
+fn availability(hist: &VecDeque<Snapshot>) -> (f64, f64, f64) {
+    let total = hist.len();
+    if total == 0 {
+        return (0.0, 0.0, 0.0);
+    }
+    let chain_up = hist
+        .iter()
+        .filter(|s| s.probes.iter().any(|p| p.name.starts_with("Consensus") && p.ok))
+        .count();
+    let all_up = hist.iter().filter(|s| s.probes.iter().all(|p| p.ok)).count();
+    let pct = |n: usize| n as f64 * 100.0 / total as f64;
+    (
+        total as f64 * PROBE_INTERVAL.as_secs_f64() / 3600.0,
+        pct(chain_up),
+        pct(all_up),
+    )
+}
+
 fn render(sh: &Shared) -> String {
     let hist = sh.history.lock().unwrap();
+    let (window_h, chain_pct, all_pct) = availability(&hist);
+    let height = *sh.height.lock().unwrap();
     let latest = hist.back();
     let all_ok = latest.map(|s| s.probes.iter().all(|p| p.ok)).unwrap_or(false);
     let tip = *sh.last_tip.lock().unwrap();
@@ -291,7 +315,8 @@ table{{width:100%;border-collapse:collapse}} td,th{{padding:8px;border-bottom:1p
 </style></head><body>
 <h1>JunoClaw Network Status</h1>
 <div class='banner' style='background:{}22;color:{}'>{}</div>
-<div class='meta'>Chain tip: sequence {} &middot; last probe {} s ago &middot; monitored since {}</div>
+<div class='meta'>Finalized height {} &middot; state sequence {} &middot; chain last advanced {} s ago &middot; monitored since {}</div>
+<div class='meta'>Availability, last {:.1} h: chain {:.1}% &middot; all components {:.1}%</div>
 <div class='bars'>{}</div>
 <table><tr><th>Component</th><th>Status</th><th>Detail</th><th>Latency</th></tr>{}</table>
 <p class='meta'>Probes run every 30 s from the OVH edge host. Bars cover the last {} h.
@@ -302,9 +327,13 @@ Sources: <a href='https://explorer.junoclaw.xyz'>explorer</a> &middot;
         banner.1,
         banner.1,
         banner.0,
+        height,
         tip,
         tip_age,
         sh.started,
+        window_h,
+        chain_pct,
+        all_pct,
         bars,
         rows,
         HISTORY_LEN / 120
@@ -317,16 +346,22 @@ async fn page(State(sh): State<Arc<Shared>>) -> Html<String> {
 
 async fn api(State(sh): State<Arc<Shared>>) -> Json<serde_json::Value> {
     let hist = sh.history.lock().unwrap();
-    let total = hist.len();
-    let up = hist
-        .iter()
-        .filter(|s| s.probes.iter().all(|p| p.ok))
-        .count();
+    let (window_h, chain_pct, all_pct) = availability(&hist);
+    let seq = *sh.last_tip.lock().unwrap();
     Json(serde_json::json!({
         "latest": hist.back(),
-        "uptime_pct_since_start": if total>0 { up as f64 * 100.0 / total as f64 } else { 0.0 },
-        "probes": total,
-        "tip": *sh.last_tip.lock().unwrap(),
+        "height": *sh.height.lock().unwrap(),
+        "sequence": seq,
+        "tip_age_s": now().saturating_sub(*sh.tip_seen_at.lock().unwrap()),
+        "window_hours": window_h,
+        "chain_availability_pct": chain_pct,
+        "all_components_pct": all_pct,
+        "probes": hist.len(),
+        // Deprecated aliases kept for older clients: `tip` is the state
+        // sequence (not a block height); the uptime figure covers the rolling
+        // history window (<= 24 h), not the process lifetime.
+        "tip": seq,
+        "uptime_pct_since_start": all_pct,
     }))
 }
 
@@ -453,6 +488,7 @@ async fn main() {
         started: now(),
         last_tip: Mutex::new(0),
         tip_seen_at: Mutex::new(now()),
+        height: Mutex::new(0),
         alert_webhook: std::env::var("JC_ALERT_WEBHOOK").ok().filter(|s| !s.is_empty()),
         stall_alerted: Mutex::new(false),
         grpc: grpc.clone(),
@@ -478,6 +514,14 @@ async fn main() {
                     }
                     drop(tip_seen);
                     *sh.last_tip.lock().unwrap() = seq;
+                }
+                if let Some(h) = probes
+                    .iter()
+                    .find(|p| p.name.starts_with("Explorer") && p.ok)
+                    .and_then(|p| serde_json::from_str::<serde_json::Value>(&p.detail).ok())
+                    .and_then(|v| v.get("tip").and_then(|t| t.as_u64()))
+                {
+                    *sh.height.lock().unwrap() = h;
                 }
                 check_stall(&sh).await;
                 {

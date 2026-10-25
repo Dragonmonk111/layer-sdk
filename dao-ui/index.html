@@ -51,8 +51,8 @@
     <section class="card">
       <h2>CHAIN</h2>
       <div class="kv"><span>status</span><span id="s-status" class="dim">—</span></div>
-      <div class="kv"><span>block tip</span><span id="s-tip" class="mono">—</span></div>
-      <div class="kv"><span>uptime (observed)</span><span id="s-up" class="mono">—</span></div>
+      <div class="kv"><span>finalized height</span><span id="s-tip" class="mono">—</span></div>
+      <div class="kv"><span>chain availability (24 h)</span><span id="s-up" class="mono">—</span></div>
       <div class="kv"><span>probe</span><span id="s-ago" class="mono">—</span></div>
     </section>
 
@@ -135,8 +135,8 @@ async function poll() {
     const ok = j.latest.probes.every(p => p.ok);
     $('s-status').textContent = ok ? 'OPERATIONAL' : 'DEGRADED';
     $('s-status').className = ok ? 'ok' : 'warn';
-    $('s-tip').textContent = (+j.tip).toLocaleString();
-    $('s-up').textContent = (+j.uptime_pct_since_start).toFixed(3) + '%';
+    $('s-tip').textContent = (+(j.height ?? j.tip)).toLocaleString();
+    $('s-up').textContent = (+(j.chain_availability_pct ?? j.uptime_pct_since_start)).toFixed(1) + '%';
     $('s-ago').textContent = Math.max(0, Date.now()/1000 - j.latest.ts | 0)
       + 's ago · ' + j.latest.probes.filter(p=>p.ok).length
       + '/' + j.latest.probes.length + ' up';
