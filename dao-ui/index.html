@@ -57,19 +57,19 @@
     </section>
 
     <section class="card">
-      <h2>DAO — INSTANTIATION PENDING</h2>
+      <h2>AGENTS DAO — LIVE</h2>
       <div class="kv"><span>membership</span><span>cw4_group · code 11</span></div>
       <div class="kv"><span>voting</span><span>dao_voting_cw4 · code 12</span></div>
       <div class="kv"><span>core + proposals</span><span>codes 5,6,7 + factory</span></div>
-      <div class="kv"><span>seats</span><span>5 operators → reshare cohort</span></div>
+      <div class="kv"><span>seats</span><span>5 operator members, weight 1</span></div>
+      <div class="kv"><span>quorum</span><span>60% · 7-day period · early-pass</span></div>
       <div class="kv"><span>token</span><span class="warn">none — by design</span></div>
+      <div class="kv"><span>first act</span><span class="ok">proposal #1 PASSED (rc12 ratification)</span></div>
     </section>
 
     <section class="card">
       <h2>PROPOSALS</h2>
-      <p class="dim" id="p-note">No DAO instantiated yet. First proposal:
-      operator set ratification — fires the moment governance addresses
-      land. Live proposals will appear here.</p>
+      <p class="dim" id="p-note">Loading…</p>
       <div id="proposals"></div>
     </section>
 
@@ -98,9 +98,15 @@
 <script>
 const $ = id => document.getElementById(id);
 
-// Filled in at Agents DAO instantiation (dao/agents-dao-instantiate.sh).
-// Empty strings => "instantiation pending" UI.
-const DAO = { core: "", voting: "", proposal: "", group: "" };
+// Agents DAO — live instance (corrected instantiation, 2026-10-20;
+// verified via dump_state. Supersedes the 10-19 dead instance whose
+// member addrs were wrongly derived). Empty strings => pending UI.
+const DAO = {
+  core:     "juno122s3kcms43lgqu6p3h4tezcnwmpj5kslleku5jnz2a2jvat8mh0qkrqv3u",
+  voting:   "juno1qevagefp6dlxrl8agkas3thtzxdctw7w6grgqkuv6yvnepls9hhsg74d3l",
+  proposal: "juno1pt8gwn9ax4pvvlwm0s6nmxpgfvclfr9fmzr54620mqyclqa8k68q45x5wv",
+  group:    "juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj",
+};
 
 const b64 = o => btoa(JSON.stringify(o));
 async function smart(contract, q) {
