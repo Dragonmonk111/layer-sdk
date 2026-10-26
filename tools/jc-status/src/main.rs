@@ -7,6 +7,11 @@
 //!
 //! Usage: jc-status --listen 127.0.0.1:8082 --grpc 127.0.0.1:9090
 //!                  --public-grpc api.junoclaw.xyz:443 --explorer http://127.0.0.1:8081
+//!                  [--seat-names anatoly,utsa,...]   (validator-index order)
+//!
+//! Alerts (stall on finalized height, per-seat certificate absence) go to
+//! every configured sink: JC_ALERT_WEBHOOK (+ JC_ALERT_CHAT_ID for the
+//! Telegram Bot API) and/or JC_ALERT_CMD (alert text on stdin).
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -31,6 +36,20 @@ const HISTORY_LEN: usize = 2880; // 24 h of 30 s probes
 const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 /// Tip older than this means the chain is not finalizing — alert.
 const STALL_ALERT_SECS: u64 = 120;
+/// A seat absent from every observed certificate this long is alerted.
+/// Slow seats land in ~20% of certs, so they still appear within minutes.
+const SEAT_ALERT_SECS: u64 = 600;
+
+/// Per-seat certificate liveness, keyed by validator index.
+#[derive(Clone, Serialize)]
+struct Seat {
+    index: usize,
+    name: String,
+    last_height: u64,
+    last_seen: u64,
+    #[serde(skip)]
+    alerted: bool,
+}
 
 #[derive(Clone, Serialize)]
 struct Probe {
@@ -53,10 +72,22 @@ struct Shared {
     tip_seen_at: Mutex<u64>,
     /// Latest finalized block height, as reported by the explorer probe.
     height: Mutex<u64>,
+    /// When the finalized height last advanced.
+    height_seen_at: Mutex<u64>,
     /// Webhook URL (JC_ALERT_WEBHOOK) that receives stall/recovery alerts.
     alert_webhook: Option<String>,
+    /// Telegram chat id (JC_ALERT_CHAT_ID), sent as `chat_id` with the webhook body.
+    alert_chat_id: Option<String>,
+    /// Command (JC_ALERT_CMD) run via `sh -c` with the alert text on stdin.
+    alert_cmd: Option<String>,
     /// Whether a stall alert has already fired for the current stall episode.
     stall_alerted: Mutex<bool>,
+    /// Seat display names in validator-index order (--seat-names).
+    seat_names: Vec<String>,
+    /// Per-seat liveness from observed certificates.
+    seats: Mutex<Vec<Seat>>,
+    /// Local explorer address, for the certificate signer feed.
+    explorer: String,
     /// Local consensus gRPC for the wasm smart-query passthrough.
     grpc: String,
 }
@@ -179,10 +210,55 @@ async fn probe_all(grpc: String, public: String, explorer: String) -> Vec<Probe>
     out
 }
 
+/// Deliver an alert to every configured sink. With no sink configured the
+/// alert is still logged, so the journal keeps the record.
+async fn dispatch(sh: &Shared, text: &str) {
+    eprintln!("[jc-status] ALERT {text}");
+    if let Some(webhook) = &sh.alert_webhook {
+        send_alert(webhook, sh.alert_chat_id.as_deref(), text).await;
+    }
+    if let Some(cmd) = &sh.alert_cmd {
+        run_alert_cmd(cmd, text).await;
+    }
+}
+
+/// Run `sh -c <cmd>` with the alert text on stdin (e.g. a Buzz poster).
+async fn run_alert_cmd(cmd: &str, text: &str) {
+    use tokio::io::AsyncWriteExt;
+    let child = tokio::process::Command::new("sh")
+        .args(["-c", cmd])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => return eprintln!("[jc-status] alert cmd spawn failed: {e}"),
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(text.as_bytes()).await;
+    }
+    match tokio::time::timeout(Duration::from_secs(30), child.wait_with_output()).await {
+        Ok(Ok(o)) if o.status.success() => {}
+        Ok(Ok(o)) => eprintln!(
+            "[jc-status] alert cmd failed: status={} stderr={}",
+            o.status,
+            String::from_utf8_lossy(&o.stderr)
+        ),
+        Ok(Err(e)) => eprintln!("[jc-status] alert cmd error: {e}"),
+        Err(_) => eprintln!("[jc-status] alert cmd timed out"),
+    }
+}
+
 /// POST a JSON alert to the configured webhook via curl (handles HTTPS
 /// endpoints like Telegram/Discord without adding a client dependency).
-async fn send_alert(webhook: &str, text: &str) {
-    let body = serde_json::json!({"text": text}).to_string();
+/// With a chat id the body matches the Telegram Bot API `sendMessage`.
+async fn send_alert(webhook: &str, chat_id: Option<&str>, text: &str) {
+    let body = match chat_id {
+        Some(id) => serde_json::json!({"chat_id": id, "text": text}),
+        None => serde_json::json!({"text": text}),
+    }
+    .to_string();
     let out = tokio::process::Command::new("curl")
         .args([
             "-sS",
@@ -199,7 +275,7 @@ async fn send_alert(webhook: &str, text: &str) {
         .output()
         .await;
     match out {
-        Ok(o) if o.status.success() => eprintln!("[jc-status] alert sent: {text}"),
+        Ok(o) if o.status.success() => {}
         Ok(o) => eprintln!(
             "[jc-status] alert POST failed: status={} stderr={}",
             o.status,
@@ -209,27 +285,126 @@ async fn send_alert(webhook: &str, text: &str) {
     }
 }
 
-/// Check tip age and fire/recover stall alerts. Called each probe round.
+/// Fire/recover stall alerts. The chain counts as stalled only when neither
+/// the finalized height nor the local state sequence has advanced, so a
+/// frozen explorer or a wedged local node alone does not page as a stall.
 async fn check_stall(sh: &Shared) {
-    let Some(webhook) = sh.alert_webhook.clone() else {
-        return;
-    };
-    let age = now().saturating_sub(*sh.tip_seen_at.lock().unwrap());
-    let tip = *sh.last_tip.lock().unwrap();
+    let t = now();
+    let height_age = t.saturating_sub(*sh.height_seen_at.lock().unwrap());
+    let seq_age = t.saturating_sub(*sh.tip_seen_at.lock().unwrap());
+    let age = height_age.min(seq_age);
+    let height = *sh.height.lock().unwrap();
     let msg = {
         let mut alerted = sh.stall_alerted.lock().unwrap();
         if age > STALL_ALERT_SECS && !*alerted {
             *alerted = true;
-            Some(format!("JunoClaw STALL: chain tip {tip} has not advanced for {age}s"))
+            Some(format!(
+                "JunoClaw STALL: finalized height {height} has not advanced for {height_age}s (state sequence idle {seq_age}s)"
+            ))
         } else if age <= STALL_ALERT_SECS && *alerted {
             *alerted = false;
-            Some(format!("JunoClaw RECOVERED: chain finalizing again at tip {tip}"))
+            // Seats could not sign while the chain was stalled; restart their clocks.
+            for s in sh.seats.lock().unwrap().iter_mut() {
+                s.last_seen = t;
+            }
+            Some(format!("JunoClaw RECOVERED: finalizing again at height {height}"))
         } else {
             None
         }
     };
     if let Some(text) = msg {
-        send_alert(&webhook, &text).await;
+        dispatch(sh, &text).await;
+    }
+}
+
+fn seat_label(s: &Seat) -> String {
+    if s.name.is_empty() {
+        format!("idx{}", s.index)
+    } else {
+        format!("idx{} ({})", s.index, s.name)
+    }
+}
+
+/// Record which seats signed the recently finalized certificates.
+fn update_seats(sh: &Shared, blocks: &[serde_json::Value]) {
+    let t = now();
+    let mut seats = sh.seats.lock().unwrap();
+    for b in blocks {
+        let Some(signers) = b.get("signers").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        let height = b.get("height").and_then(|v| v.as_u64()).unwrap_or(0);
+        let participants = b.get("participants").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        while seats.len() < participants {
+            let index = seats.len();
+            seats.push(Seat {
+                index,
+                name: sh.seat_names.get(index).cloned().unwrap_or_default(),
+                last_height: 0,
+                last_seen: t,
+                alerted: false,
+            });
+        }
+        for idx in signers.iter().filter_map(|v| v.as_u64()) {
+            if let Some(s) = seats.get_mut(idx as usize) {
+                if height > s.last_height {
+                    s.last_height = height;
+                    s.last_seen = t;
+                }
+            }
+        }
+    }
+}
+
+/// Fire/recover per-seat absence alerts. Suppressed during a chain stall,
+/// when no seat can sign.
+async fn check_seats(sh: &Shared) {
+    if *sh.stall_alerted.lock().unwrap() {
+        return;
+    }
+    let t = now();
+    let msgs: Vec<String> = {
+        let mut seats = sh.seats.lock().unwrap();
+        seats
+            .iter_mut()
+            .filter_map(|s| {
+                let absent = t.saturating_sub(s.last_seen);
+                if absent > SEAT_ALERT_SECS && !s.alerted {
+                    s.alerted = true;
+                    Some(format!(
+                        "JunoClaw SEAT ABSENT: {} has signed no certificate for {}m (last at height {})",
+                        seat_label(s),
+                        absent / 60,
+                        s.last_height
+                    ))
+                } else if absent <= SEAT_ALERT_SECS && s.alerted {
+                    s.alerted = false;
+                    Some(format!(
+                        "JunoClaw SEAT BACK: {} signing again at height {}",
+                        seat_label(s),
+                        s.last_height
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
+    for m in msgs {
+        dispatch(sh, &m).await;
+    }
+}
+
+/// Pull the explorer's recent finalized blocks and update seat liveness.
+async fn poll_signers(sh: &Shared) {
+    let Ok(resp) = http_probe(&sh.explorer, "/api/blocks").await else {
+        return;
+    };
+    let Some(body) = resp.split("\r\n\r\n").nth(1) else {
+        return;
+    };
+    if let Ok(serde_json::Value::Array(blocks)) = serde_json::from_str(body.trim()) {
+        update_seats(sh, &blocks);
     }
 }
 
@@ -302,6 +477,26 @@ fn render(sh: &Shared) -> String {
         })
         .unwrap_or_default();
 
+    let t = now();
+    let seat_rows: String = sh
+        .seats
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|s| {
+            let absent = t.saturating_sub(s.last_seen);
+            let ok = absent <= SEAT_ALERT_SECS;
+            format!(
+                "<tr><td>{}</td><td class='{}'>{}</td><td>{}</td><td>{} s ago</td></tr>",
+                seat_label(s).replace('<', "&lt;"),
+                if ok { "ok" } else { "bad" },
+                if ok { "SIGNING" } else { "ABSENT" },
+                s.last_height,
+                absent
+            )
+        })
+        .collect();
+
     format!(
         "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <meta http-equiv='refresh' content='30'><title>JunoClaw Status</title><style>
@@ -319,6 +514,10 @@ table{{width:100%;border-collapse:collapse}} td,th{{padding:8px;border-bottom:1p
 <div class='meta'>Availability, last {:.1} h: chain {:.1}% &middot; all components {:.1}%</div>
 <div class='bars'>{}</div>
 <table><tr><th>Component</th><th>Status</th><th>Detail</th><th>Latency</th></tr>{}</table>
+<h2 style='font-size:16px;margin-top:28px'>Validator seats</h2>
+<table><tr><th>Seat</th><th>Status</th><th>Last signed height</th><th>Last seen</th></tr>{}</table>
+<p class='meta'>Each certificate carries a quorum of signatures, so a live seat is not in every
+certificate; a seat is ABSENT after {} min without appearing in any observed certificate.</p>
 <p class='meta'>Probes run every 30 s from the OVH edge host. Bars cover the last {} h.
 Sources: <a href='https://explorer.junoclaw.xyz'>explorer</a> &middot;
 <a href='https://api.junoclaw.xyz'>api</a> &middot;
@@ -336,6 +535,8 @@ Sources: <a href='https://explorer.junoclaw.xyz'>explorer</a> &middot;
         all_pct,
         bars,
         rows,
+        seat_rows,
+        SEAT_ALERT_SECS / 60,
         HISTORY_LEN / 120
     )
 }
@@ -357,6 +558,8 @@ async fn api(State(sh): State<Arc<Shared>>) -> Json<serde_json::Value> {
         "chain_availability_pct": chain_pct,
         "all_components_pct": all_pct,
         "probes": hist.len(),
+        "height_age_s": now().saturating_sub(*sh.height_seen_at.lock().unwrap()),
+        "seats": *sh.seats.lock().unwrap(),
         // Deprecated aliases kept for older clients: `tip` is the state
         // sequence (not a block height); the uptime figure covers the rolling
         // history window (<= 24 h), not the process lifetime.
@@ -482,6 +685,12 @@ async fn main() {
     let grpc = arg("--grpc", "127.0.0.1:9090");
     let public = arg("--public-grpc", "api.junoclaw.xyz:443");
     let explorer = arg("--explorer", "127.0.0.1:8081");
+    let seat_names: Vec<String> = arg("--seat-names", "")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let env = |k: &str| std::env::var(k).ok().filter(|s| !s.is_empty());
 
     let sh = Arc::new(Shared {
         history: Mutex::new(VecDeque::with_capacity(HISTORY_LEN)),
@@ -489,8 +698,14 @@ async fn main() {
         last_tip: Mutex::new(0),
         tip_seen_at: Mutex::new(now()),
         height: Mutex::new(0),
-        alert_webhook: std::env::var("JC_ALERT_WEBHOOK").ok().filter(|s| !s.is_empty()),
+        height_seen_at: Mutex::new(now()),
+        alert_webhook: env("JC_ALERT_WEBHOOK"),
+        alert_chat_id: env("JC_ALERT_CHAT_ID"),
+        alert_cmd: env("JC_ALERT_CMD"),
         stall_alerted: Mutex::new(false),
+        seat_names,
+        seats: Mutex::new(Vec::new()),
+        explorer: explorer.clone(),
         grpc: grpc.clone(),
     });
 
@@ -521,9 +736,15 @@ async fn main() {
                     .and_then(|p| serde_json::from_str::<serde_json::Value>(&p.detail).ok())
                     .and_then(|v| v.get("tip").and_then(|t| t.as_u64()))
                 {
-                    *sh.height.lock().unwrap() = h;
+                    let mut height = sh.height.lock().unwrap();
+                    if h > *height {
+                        *sh.height_seen_at.lock().unwrap() = now();
+                    }
+                    *height = h;
                 }
+                poll_signers(&sh).await;
                 check_stall(&sh).await;
+                check_seats(&sh).await;
                 {
                     let mut h = sh.history.lock().unwrap();
                     if h.len() >= HISTORY_LEN {
@@ -544,4 +765,92 @@ async fn main() {
     eprintln!("[jc-status] listening on {listen}");
     let l = tokio::net::TcpListener::bind(&listen).await.unwrap();
     axum::serve(l, app).await.unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shared(names: &[&str]) -> Shared {
+        Shared {
+            history: Mutex::new(VecDeque::new()),
+            started: now(),
+            last_tip: Mutex::new(0),
+            tip_seen_at: Mutex::new(now()),
+            height: Mutex::new(0),
+            height_seen_at: Mutex::new(now()),
+            alert_webhook: None,
+            alert_chat_id: None,
+            alert_cmd: None,
+            stall_alerted: Mutex::new(false),
+            seat_names: names.iter().map(|s| s.to_string()).collect(),
+            seats: Mutex::new(Vec::new()),
+            explorer: String::new(),
+            grpc: String::new(),
+        }
+    }
+
+    fn block(height: u64, signers: &[u64]) -> serde_json::Value {
+        serde_json::json!({"height": height, "participants": 3, "signers": signers})
+    }
+
+    #[test]
+    fn seats_track_last_signed_height() {
+        let sh = shared(&["a", "b", "c"]);
+        update_seats(&sh, &[block(10, &[0, 1]), block(9, &[0, 2])]);
+        let seats = sh.seats.lock().unwrap();
+        assert_eq!(seats.len(), 3);
+        assert_eq!(seats[0].last_height, 10);
+        assert_eq!(seats[1].last_height, 10);
+        assert_eq!(seats[2].last_height, 9);
+        assert_eq!(seat_label(&seats[2]), "idx2 (c)");
+    }
+
+    #[test]
+    fn uncertified_blocks_are_ignored() {
+        let sh = shared(&[]);
+        update_seats(&sh, &[serde_json::json!({"height": 5, "participants": 0, "signers": []})]);
+        assert!(sh.seats.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn absent_seat_alerts_once_then_recovers() {
+        let sh = shared(&["a", "b", "c"]);
+        update_seats(&sh, &[block(10, &[0, 1, 2])]);
+        sh.seats.lock().unwrap()[2].last_seen = now() - SEAT_ALERT_SECS - 1;
+
+        check_seats(&sh).await;
+        assert!(sh.seats.lock().unwrap()[2].alerted);
+        assert!(!sh.seats.lock().unwrap()[0].alerted);
+
+        // Still absent: no second alert, state unchanged.
+        check_seats(&sh).await;
+        assert!(sh.seats.lock().unwrap()[2].alerted);
+
+        update_seats(&sh, &[block(11, &[0, 2])]);
+        check_seats(&sh).await;
+        assert!(!sh.seats.lock().unwrap()[2].alerted);
+        assert_eq!(sh.seats.lock().unwrap()[2].last_height, 11);
+    }
+
+    #[tokio::test]
+    async fn stall_suppresses_seat_alerts_and_recovery_resets_clocks() {
+        let sh = shared(&["a"]);
+        update_seats(&sh, &[serde_json::json!({"height": 1, "participants": 1, "signers": [0]})]);
+        let old = now() - SEAT_ALERT_SECS - 1;
+        sh.seats.lock().unwrap()[0].last_seen = old;
+        *sh.height_seen_at.lock().unwrap() = now() - STALL_ALERT_SECS - 1;
+        *sh.tip_seen_at.lock().unwrap() = now() - STALL_ALERT_SECS - 1;
+
+        check_stall(&sh).await;
+        assert!(*sh.stall_alerted.lock().unwrap());
+        check_seats(&sh).await;
+        assert!(!sh.seats.lock().unwrap()[0].alerted);
+
+        // Finalized height advances again: the stall clears and seat clocks restart.
+        *sh.height_seen_at.lock().unwrap() = now();
+        check_stall(&sh).await;
+        assert!(!*sh.stall_alerted.lock().unwrap());
+        assert!(sh.seats.lock().unwrap()[0].last_seen > old);
+    }
 }

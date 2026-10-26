@@ -1,0 +1,35 @@
+name: Build ops tools
+
+# Manual build of the edge-host ops binaries (jc-status, jc-explorer) on
+# Ubuntu 22.04 to match the OVH host's glibc (2.35). Artifact carries a
+# sha256 so the deployed binary can be checked against this run.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Cargo package to build"
+        required: true
+        default: jc-status
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --release -p "${{ inputs.package }}"
+      - name: Build
+        run: cargo build --release -p "${{ inputs.package }}"
+      - name: Checksum
+        run: |
+          cd target/release
+          sha256sum "${{ inputs.package }}" | tee "${{ inputs.package }}.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package }}-${{ github.sha }}
+          path: |
+            target/release/${{ inputs.package }}
+            target/release/${{ inputs.package }}.sha256

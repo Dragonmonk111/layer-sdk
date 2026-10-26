@@ -12,6 +12,7 @@ here, deploy there**, never the reverse. They were host-only until
 | `cw4-relay-watch.sh` | */5 min | syncs relay `pubkey_allowlist` to the cw4 member list (DAO membership = channel access; `dao-member`-tagged rows only) |
 | `status-bot.sh` + `status-format.py` | */30 min | jc-status → `[OK]/[DEGRADED]` heartbeat + state-change alerts into `#agents` |
 | `infra-monitor.sh` | */15 min | disk/mem/container/node checks → `#agents` on state change + daily summary |
+| `jc-alert-post.sh` | event (jc-status) | `JC_ALERT_CMD` sink — jc-status pipes each alert (finalized-height stall, seat absent >10 min, recovery) to `#validator-ops` |
 | `backup.sh` | daily 03:30 | pg_dump + garage volume + configs → `/opt/buzz/backups/` (14-day) |
 | `allowlist-add.sh` | manual | idempotent npub→allowlist upsert |
 | `CRONTAB.txt` | — | snapshot of the ubuntu crontab that runs the above |
