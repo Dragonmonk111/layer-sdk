@@ -36,7 +36,28 @@ and a removal (5→4, with the retired seat confirmed isolated). The
 procedure and results are in `docs/R9_SET_CHANGE_RUNBOOK.md` —
 ask us for the log.
 
-## 2. What we require (the seat bar — we check all of it)
+## 2. The path in — observer first
+
+Seats are earned on verifiable work, and everyone takes the same
+path: observer first, seat at the next reshare window.
+
+1. **Run an observer node.** Non-signing, no keys — it state-syncs
+   from donor seats and tracks the executed tip. You get the
+   observer packet (`junoclaw-observer-packet-v1`: binaries,
+   `genesis.json`, `node-observer.toml`, README, `MANIFEST.sha256`)
+   and a place in the observer channel.
+2. **Show the work — ~7 days.** Stable uptime and daily reads:
+   every finalized block's certificate is public, and you verify
+   signer bitmaps yourself with `tools/verify-cert`. We watch the
+   same surface — what we measure is uptime, read quality, and
+   how fast you ACK.
+3. **Qualifying observers join the next reshare ceremony.** Seat
+   additions ride a DKG reshare that preserves the group key —
+   the same R9-rehearsed procedure described in §1. There is no
+   fast lane: services proposals, prior validator pedigree, and
+   relationships do not shorten the observer phase.
+
+## 3. What we require (the seat bar — we check all of it)
 
 1. **Hardware envelope (minimum):** dedicated LXC/VM — 2 vCPU,
    4 GiB RAM, 20 GiB SSD. Measured reality on a live proposer:
@@ -57,7 +78,7 @@ ask us for the log.
    the config bundle; peer lists are literal IPs today and every
    entry must match the agreed set.
 
-## 3. Keys — what you hold, what we never hold
+## 4. Keys — what you hold, what we never hold
 
 Each validator has ONE `keys.json` with:
 - **Ed25519 identity key** — your authenticated P2P identity
@@ -74,7 +95,7 @@ before mainnet (it is on the public roadmap).
 Never share `keys.json`. Losing it means losing your share — back it
 up once, offline.
 
-## 4. Install — one command
+## 5. Install — one command
 
 The G2 binary is tag `v0.6.0-rc10` (includes the `restart_anchor`
 consensus mechanism that makes coordinated set changes safe, plus the
@@ -95,7 +116,7 @@ cc -c -o /tmp/shim.o docker/shim.c
 RUSTFLAGS="-C link-arg=/tmp/shim.o" cargo build --release -p slay3rd --features rocksdb
 ```
 
-## 5. Configure — the config bundle
+## 6. Configure — the config bundle
 
 You receive: `node-<i>.toml` (your index, your peers), `keys.json`
 (your share), `genesis.json` + `shared.json` (public — share freely),
@@ -122,7 +143,7 @@ Rules: `chain_id` must match the set exactly; `validator_index` must
 match your key share; peers must be the literal IPs from the bundle
 (no DNS until the resolver work lands).
 
-## 6. Join — you sync, not replay
+## 7. Join — you sync, not replay
 
 You are joining a RUNNING chain. Your node catches up via payload
 backfill over authenticated P2P (`ensure_executed` walks parent links
@@ -138,7 +159,7 @@ in the bundle) so every validator proposes from the same parent.
 We run this exact path in rehearsal before any external seat joins —
 it is our gate, not yours; ask us for the runbook.
 
-## 7. Run + verify
+## 8. Run + verify
 
 ```bash
 slay3rd /path/to/node-<i>.toml     # or the systemd unit from the bundle
@@ -150,7 +171,7 @@ signatures appearing in aggregated certificates. If you are up but
 not signing, check in order: `validator_index` matches, peers
 reachable on 7001, `chain_id` matches, clock under 2 s.
 
-## 8. Operations
+## 9. Operations
 
 - **Alarms:** we monitor your seat's gRPC + log signature; when it
   alarms, we page your registered ops contact. Same in reverse — your
@@ -175,13 +196,13 @@ reachable on 7001, `chain_id` matches, clock under 2 s.
   one live signer, always.
 - **Backups:** `keys.json` (offline, once). `data_dir` is rebuildable.
 
-## 9. What we check on our side (the seat audit)
+## 10. What we check on our side (the seat audit)
 
 Before your seat goes live: clock audit (chronyc/timedatectl output),
 resource headroom (nproc/free/df), single-tenant confirmation, ops
 contact reachable test-page. Periodically after: the same.
 
-## 10. FAQ
+## 11. FAQ
 
 - **Mainnet date?** No date until the gates hold (sustained finality
   under churn, cross-chain light-client demos, PQ hardening). The
@@ -196,7 +217,7 @@ contact reachable test-page. Periodically after: the same.
   the certificate (you can verify every block yourself with
   tools/verify-cert), tx service, Cosmos-standard queries.
 
-## 11. Pack contents checklist (what we send)
+## 12. Pack contents checklist (what we send)
 
 - [ ] This document
 - [ ] `node-<i>.toml` bundle + `genesis.json` + `shared.json` +
