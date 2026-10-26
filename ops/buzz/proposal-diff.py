@@ -24,11 +24,20 @@ for p in proposals:
     exp = pr.get('expiration', {}).get('at_time')
     exp_s = time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(int(exp[:10]))) if exp else '?'
     quorum = pr['threshold']['threshold_quorum']['quorum']['percent']
-    post = (f"[dao:proposal] #{pid} {status.upper()} — \"{pr['title']}\"\n"
-            f"quorum {quorum} · majority · expires {exp_s}\n"
-            f"votes: yes {v['yes']} · no {v['no']} · abstain {v['abstain']} (total power {pr['total_power']})\n"
-            f"To vote: reply !vote yes|no|abstain {pid} signed by your member npub — your seat's daemon casts it on-chain.\n"
-            f"{pr.get('description','')[:400]}")
+    tally = f"votes: yes {v['yes']} · no {v['no']} · abstain {v['abstain']} (total power {pr['total_power']})"
+    if status in ('executed', 'execution_failed'):
+        # Execution receipt: read from committed proposal state, not a broadcast.
+        outcome = 'EXECUTED' if status == 'executed' else 'EXECUTION FAILED'
+        post = (f"[dao:exec] #{pid} {outcome} — \"{pr['title']}\"\n"
+                f"{len(pr.get('msgs', []))} message(s) · final {tally}\n"
+                f"source: committed proposal-module state · verify at https://dao.junoclaw.xyz")
+    else:
+        post = (f"[dao:proposal] #{pid} {status.upper()} — \"{pr['title']}\"\n"
+                f"quorum {quorum} · majority · expires {exp_s}\n"
+                f"{tally}\n"
+                + (f"To vote: reply !vote yes|no|abstain {pid} signed by your member npub — your seat's daemon casts it on-chain.\n"
+                   if status == 'open' else '')
+                + f"{pr.get('description','')[:400]}")
     print(post.replace('\\', '\\\\').replace('\n', '\\n'))
 seen.update(now)
 json.dump(seen, open(seen_path, 'w'))
