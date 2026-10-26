@@ -55,7 +55,7 @@ plus inbound interest — target 6–7 seats.
 |---|------|---------------|
 | G1 | jc-explorer deploy (built, committed) | Public explorer serving tx/address queries at tip |
 | G2 | Ops channel decision (buzz re-face vs Telegram) | Decision + migration done |
-| G3 | Monitoring hardening — jc-status webhook live, alerting wired | Alerts fire to ops channel on stall |
+| G3 | Monitoring hardening — jc-status webhook live, alerting wired | **DONE 2026-10-26** — stall (finalized height) + per-seat absence alerts post to `#validator-ops`; Telegram = add creds only |
 | G4 | IBC hardening impl (`docs/IBC-HARDENING.md`) | Tendermint-side verifier + client group-key rotation landed |
 | G5 | Airdrop/genesis allocation design for mainnet | Documented, reviewable |
 | G6 | In-protocol validator rotation — the endgame: DAO-ratified set changes at epoch boundaries | Design doc; no more manual ceremonies |

@@ -63,3 +63,18 @@
     equal.** Two payloads at the same height with identical app_hash
     but different bytes are DIFFERENT blocks. Compare digests, not
     just heights/state roots, when auditing seats.
+
+## Ops tools build + deploy (jc-status, jc-explorer)
+
+13. **Build on GitHub Actions, not locally.** `gh workflow run
+    build-ops-tools.yml --ref commonware -f package=jc-status` builds +
+    tests on Ubuntu 22.04 (matches OVH glibc 2.35) and uploads the
+    binary with a sha256. Download with `gh run download <id>`.
+14. **Deploy order on OVH:** verify sha256 on host → smoke-run on a side
+    port (e.g. 127.0.0.1:18090) → back up `/usr/local/bin/<tool>.bak-<date>`
+    → install → restart → check `/api/status`. jc-status flags/env live in
+    `/etc/systemd/system/jc-status.service.d/alerts.conf`
+    (`JC_ALERT_CMD=/opt/buzz/jc-alert-post.sh`, `--seat-names` in
+    validator-index order — update it at every reshare).
+15. **Telegram alerts = config only:** add `JC_ALERT_WEBHOOK=https://api.telegram.org/bot<token>/sendMessage`
+    + `JC_ALERT_CHAT_ID=<id>` to that drop-in. Token never in the repo.
