@@ -152,7 +152,54 @@ message LoadSnapshotChunkResponse { bytes chunk = 1; bytes32 checksum = 2; }
 - Total: **~3 days to a working flag-gated implementation**, dominated by
   the joiner's staging-store plumbing.
 
-## 8. Interaction with Phase 2 (`PQ_PROTOCOL_AUTH.md`)
+## 8. Operator recovery procedure (production-reviewed 2026-10-27)
+
+The `NoStoredState` entry path can be reached two ways; they are NOT
+equivalent:
+
+- **`force = true` under `[state_sync]`** — startup runs
+  `remove_dir_all({data}/app)` BEFORE `adopt_snapshot` validates
+  anything. Blast radius is app state only (`{data}/consensus`
+  journal and `keys.json` are untouched), but the flag is a loaded
+  footgun: left set, every restart — including a crash AFTER a
+  successful sync under `Restart=on-failure` — re-wipes app state.
+  Known one-shot hazard; do not use it when a backup matters.
+- **Move-aside (reviewed, preferred)** — reaches the identical
+  `NoStoredState` path with zero deletes:
+
+  ```
+  systemctl stop junoclaw        # manual stop: on-failure restart does NOT fire
+  mv {data}/app {data}/app.bak-YYYYMMDD   # the move IS the backup
+  # {data}/consensus (vote journal — anti-double-sign history) and
+  # keys.json stay in place. node.toml: [state_sync] present, NO force.
+  systemctl start junoclaw
+  ```
+
+  If the sync attempt fails (`exit(2)` → supervisor restart): a
+  partially-imported `app/` can wedge `load_from_storage` — stop,
+  `rm -rf {data}/app` (partial only; the `.bak` is intact), start,
+  retry. Full rollback: stop, `rm -rf {data}/app`,
+  `mv {data}/app.bak-YYYYMMDD {data}/app`, start — restores the
+  exact prior state. Delete `.bak` only after the seat's bit is
+  back in certificates.
+
+Validation ordering (why the window before `snapshot_import` is
+safe): `adopt_snapshot` performs ALL authentication first —
+snapshot fetch, H+1 certified-payload quorum + `state_root` match,
+H tip-payload agreement — and writes nothing until
+`snapshot_import`. A validation failure exits before any app
+mutation; only the import itself can leave partial state.
+
+**Margin gate, reframed** (from the idx2 recovery review): "N-1
+signers in certs before stopping" is unsatisfiable when the
+recovering seat IS one of the absent bits — its resync can't be
+preconditioned on its own return. The satisfiable gate: all other
+seats process-alive + mesh-connected (cert bitmaps over recent
+views + donor liveness), no concurrent maintenance fleet-wide, and
+chain at/above quorum. A resync attempt cannot reduce margin below
+the state where the seat is already absent.
+
+## 9. Interaction with Phase 2 (`PQ_PROTOCOL_AUTH.md`)
 
 When hybrid certificates land, the anchor becomes `HybridCertificate`
 (BLS-threshold AND k-of-n MAYO). Nothing else in this design changes —

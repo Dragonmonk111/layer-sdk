@@ -15,6 +15,13 @@ Measured: 0.22 CPU core used, ~39% iowait, ~5.4k major faults/s —
 1. **Instrument first** — split `exec_ms` into `root_scan_ms` vs
    `apply_commit_ms` per finalized block and log it. Confirms the
    attribution before the bigger change lands.
+   - **Vote-emission logging** — log every emitted partial
+     (notarize/nullify/finalize) with view + payload digest. Today a
+     signer's bit can land in a finalize cert with no local journal
+     evidence of the emission (idx2 at 3,207,254 — confirmed
+     "certified but unexecuted" locally, bit set on the cert, no
+     emission line in the bounded journal). Without this the
+     FINALIZE-path hypothesis stays a hypothesis.
 2. **Incremental state-root tracker** — today `finalize_block` ends
    with `store_state_root()` → `compute_state_root()` → iterates
    EVERY consensus KV entry (O(state) per block, even 0-tx blocks;
@@ -57,6 +64,17 @@ from the reference model, not a library defect. The fixes are ours:
   gauge exists, monitor the symptom: TCP-connectable + no
   authenticated session + signer bit absent (what the zombie did
   to home-vb).
+- **State-sync wipe ordering** (CryptoQ gate review,
+  INC-exec-lag-idx2) — `state_sync.force=true` runs
+  `remove_dir_all({data}/app)` at startup, BEFORE `adopt_snapshot`
+  validates donors; left set, every `Restart=on-failure` re-wipes —
+  including a good synced state after a later crash. Fix in code:
+  move the discard to immediately before `snapshot_import` (after
+  donor-quorum + H+1-cert + root-match validation), or auto-clear
+  `force` on successful adopt. Until then the reviewed operator
+  path is move-aside (see STATE_SYNC.md §9): `mv app app.bak`
+  enters the same `NoStoredState` path with a byte-identical
+  rollback and nothing deleted.
 - **Slashing-evidence design pass** — the BLS aggregate proves
   quorum, not WHICH partials contributed; the hybrid bitmap
   records participation but isn't cryptographic proof. Needed
@@ -77,6 +95,15 @@ from the reference model, not a library defect. The fixes are ours:
   blocker API we consume).
 - Read-only observer peer class (mesh blocks non-roster keys
   today; observers follow via public endpoints).
+- **Archive-tier retention** — all 8 seats run
+  `pruning = "validator"` (540k heights); the R2 boundary records
+  (2,631,739/2,631,740) are pruned fleet-wide and unrecoverable —
+  confirmed when an external verifier got `NOT_FOUND` on both.
+  Flag one seat `pruning = "archive"` at the next node.toml
+  window (disk-sizing note required — retention grows unbounded)
+  + an external archive (ANODE explorer retains cert records from
+  2026-10-27 forward). Forward-only; nothing recovers the already-
+  pruned window.
 - Upstream watch: #5444 (metrics, open), #5394 (idle PR —
   Discussions note ~2 Nov if untouched).
 

@@ -118,3 +118,30 @@ the reference environment.
   blocks behind signed the finalize cert at 3,207,254. The bitmap
   records signature presence, not execution — notarize vs finalize
   signers must be distinguished in any evidence semantics.
+
+## 7. Independent verification log
+
+External verifications of the hybrid format against live certs:
+
+- **2026-10-27 20:12 UTC — AlxVoy/ANODE** (first external
+  end-to-end): block 3,207,254 via donor `51.195.201.74:9090`.
+  BLS recovered-sig verify, all 6 MAYO2 sigs via the public Rust
+  verifier, quorum, payload-digest and height binding passed;
+  corrupted cases rejected. Cert 1174 B, sha256
+  `8da94b5f5d368c3671f2b6ab8810e4d211e5a93ed04aa0a24d9d7edb02c3e81a`,
+  bitmap `0xb7` = {0,1,2,4,5,7}, proposal 39 B varint-encoded
+  (epoch 0, view 520161, parent 520160).
+- **2026-10-27 — CryptoQ**: pulled the same height from BOTH donors
+  independently; byte-identical proposal/payload/cert records.
+- **Doc errata found externally** (both verifiers, within hours):
+  v1 excerpt's bitmap literal (`0xd7`→`0xb7`), proposal encoding
+  (varint `UInt<u64>`, not BE8), BitMap chunk rule
+  (`ceil(len/8)` for `BitMap<1>`). Merged into
+  `JUNOCLAW-VERIFY-EXCERPTS-v3.md` (sha256
+  `9dd504a3d8c51356415f2c4429b5d3d292f6aef4cb1c3a83de26a3fe96b9081d`).
+- **Known evidence boundary**: no archive-tier node exists; cert
+  records older than ~540k heights (pre ~2,683,700) are pruned
+  fleet-wide. R2 boundary heights 2,631,739/2,631,740 are not
+  retrievable as records — 2,631,739 was also a `halted_chain_anchor`
+  restart anchor (policy input, digest `4c03cc6b…612a`), which may
+  never have had a standard finality cert.
