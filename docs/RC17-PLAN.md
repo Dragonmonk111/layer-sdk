@@ -61,6 +61,13 @@ from the reference model, not a library defect. The fixes are ours:
   quorum, not WHICH partials contributed; the hybrid bitmap
   records participation but isn't cryptographic proof. Needed
   before on-chain equivocation attribution (deferred design work).
+  **Vote-path caveat (INC-exec-lag-idx2, 2026-10-27):** a finalize
+  partial is emitted on observing notarization — no `verify()`, no
+  executed state. idx2's bit is set in the finalize cert at
+  3,207,254 while its journal showed the payload "certified but
+  unexecuted" ~4,600 blocks behind. The bitmap records signature
+  presence, not execution — evidence semantics must distinguish
+  notarize vs finalize signers.
 
 ## P2 — carried items
 

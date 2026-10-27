@@ -2,10 +2,13 @@
 //!
 //! Implements `commonware_cryptography::certificate::Scheme` by wrapping the
 //! existing BLS12-381 threshold scheme and attaching a MAYO2 signature to
-//! every attestation. Both halves sign the exact same bytes the classical
-//! half signs (`namespace || message`), so a valid classical vote is
-//! meaningless without its MAYO counterpart — classical and PQ security are
-//! AND'd together (docs/PQ_PROTOCOL_AUTH.md §3-§4).
+//! every attestation. Both halves sign the same subject under the same
+//! derived namespace, though the hashed inputs differ slightly: the BLS path
+//! applies `union_unique` (varint namespace-length prefix) inside
+//! `ops::sign_message`, while MAYO signs the raw `namespace || message`
+//! concatenation — so a valid classical vote is meaningless without its
+//! MAYO counterpart and classical and PQ security are AND'd together
+//! (docs/PQ_PROTOCOL_AUTH.md §3-§4).
 //!
 //! Wire formats:
 //!
@@ -65,10 +68,13 @@ type ClassicalSignature = <InnerScheme as CertificateScheme>::Signature;
 /// Classical certificate type (threshold-recovered group signature).
 type ClassicalCertificate = <InnerScheme as CertificateScheme>::Certificate;
 
-/// Builds the bytes both halves sign: `subject.namespace(derived) || subject.message()`.
+/// Builds the bytes the MAYO half signs: `subject.namespace(derived) || subject.message()`.
 ///
-/// This must match what the inner BLS scheme signs — the classical threshold
-/// scheme calls `ops::sign_message`/`verify_message` over exactly these bytes.
+/// The inner BLS scheme is invoked with the same `(namespace, message)` pair
+/// but `ops::sign_message`/`verify_message` additionally apply
+/// `union_unique` (varint namespace-length prefix) before hashing — the two
+/// halves are bound to the same subject but sign slightly different byte
+/// strings.
 fn namespaced_message<D: Digest>(namespace: &SchemeNamespace, subject: &SimplexSubject<'_, D>) -> Vec<u8> {
     let ns: &[u8] = subject.namespace(namespace);
     let msg = subject.message();

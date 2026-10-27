@@ -113,3 +113,8 @@ the reference environment.
 - **Attribution caveat** — the bitmap records participation; it is
   not cryptographic proof of which partials formed the threshold
   sig. Slashing-evidence design is a separate pass (deferred).
+- **Vote-path caveat (INC-exec-lag-idx2)** — a finalize partial
+  follows observed notarization, not local execution; a seat ~4,600
+  blocks behind signed the finalize cert at 3,207,254. The bitmap
+  records signature presence, not execution — notarize vs finalize
+  signers must be distinguished in any evidence semantics.

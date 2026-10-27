@@ -68,6 +68,16 @@ itself (Commonware, externally reviewed), MAYO primitive internals
   signed. A slashing-evidence design pass is needed before on-chain
   equivocation attribution (see `BLS_LIGHT_CLIENT_SPEC.md` §on
   equivocation mapping).
+- **Vote-path caveat (INC-exec-lag-idx2-2026-10-27)** — a *finalize*
+  partial is emitted on observing a notarization cert; it does not
+  re-run app `verify()` and does not require executed state. A seat
+  ~4,600 blocks behind contributed its partial to the finalize cert
+  at 3,207,254 (bitmap bit set) while its journal showed the payload
+  "certified but unexecuted" and `verify` rejecting for an
+  unavailable parent. The bitmap in a finalize cert therefore records
+  *signature presence*, not *execution* — slashing evidence and any
+  "signer saw the state" reasoning must treat notarize and finalize
+  votes differently.
 
 ## Scope the auditor gets
 
