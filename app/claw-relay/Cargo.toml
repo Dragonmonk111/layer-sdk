@@ -1,0 +1,28 @@
+[package]
+name        = "claw-relay"
+version     = "0.5.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "JunoClaw sovereign coordination relay — Nostr wire protocol over WebSocket, redb store, on-chain admission. Wire-compatible with buzz-cli."
+
+[dependencies]
+claw-core           = { path = "../claw-core" }
+serde               = { version = "1.0.160", features = ["derive"] }
+serde_json          = "1.0.116"
+axum                = { version = "0.7", features = ["ws"] }
+tokio               = { version = "1.28.0", features = ["full"] }
+tokio-stream        = { version = "0.1.15", features = ["sync"] }
+redb                = "2"
+sha2                = "0.10.6"
+hex                 = "0.4.3"
+thiserror           = "1.0.38"
+tracing             = "0.1.37"
+tracing-subscriber  = { version = "0.3.17", features = ["env-filter"] }
+futures-util        = { version = "0.3", default-features = false, features = ["sink"] }
+futures-channel     = "0.3"
+uuid                = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+k256               = { version = "0.13", default-features = false, features = ["schnorr"] }
+tokio-tungstenite  = "0.23"
+hex                = "0.4.3"
