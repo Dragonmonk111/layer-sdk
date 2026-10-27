@@ -13,6 +13,7 @@ here, deploy there**, never the reverse. They were host-only until
 | `status-bot.sh` + `status-format.py` | */30 min | jc-status → `[OK]/[DEGRADED]` heartbeat + state-change alerts into `#agents` |
 | `infra-monitor.sh` | */15 min | disk/mem/container/node checks → `#agents` on state change + daily summary |
 | `jc-alert-post.sh` | event (jc-status) | `JC_ALERT_CMD` sink — jc-status pipes each alert (finalized-height stall, seat absent >10 min, recovery) to `#validator-ops` |
+| `transcript-anchor.sh` + `transcript-anchor.py` | hourly | Merkle-roots each channel's message window (`[from_ts, to_ts)` clock ranges) and anchors the root on-chain as a `moultbook-v0` entry (`Post.commitment`), chained to the previous anchor via `refs`. Posts an `[anchor]` receipt with a one-line verify command — anyone can reproduce the root from `buzz-cli messages get`. Makes deliberation tamper-evident before `claw-relay` exists |
 | `backup.sh` | daily 03:30 | pg_dump + garage volume + configs → `/opt/buzz/backups/` (14-day) |
 | `allowlist-add.sh` | manual | idempotent npub→allowlist upsert |
 | `CRONTAB.txt` | — | snapshot of the ubuntu crontab that runs the above |

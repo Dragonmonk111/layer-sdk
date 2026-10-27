@@ -4,5 +4,6 @@
 */15 * * * * /opt/buzz/infra-monitor.sh >> /opt/buzz/state/infra-monitor.log 2>&1
 */30 * * * * /opt/buzz/status-bot.sh >> /opt/buzz/state/status-bot.log 2>&1
 */5 * * * * /opt/buzz/cw4-relay-watch.sh
+17 * * * * /opt/buzz/transcript-anchor.sh
 0 4 * * 0 docker image prune -f >> /opt/buzz/state/image-prune.log 2>&1
 30 3 * * * /opt/buzz/backup.sh >> /opt/buzz/backups/backup.log 2>&1
