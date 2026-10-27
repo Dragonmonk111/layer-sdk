@@ -28,15 +28,19 @@ The hybrid certificate path in `app/slay3rd/src/hybrid_scheme.rs`:
   (b) cache eviction can't produce a second byte-distinct signature
   for an already-seen message, (c) two different signers can't
   collide in the cache key space.
-- **PQ verify cost vs block production rate (production-found,
-  INC-exec-lag-idx2-2026-10-27)** — every executed block verifies
-  hybrid cert components; on slower CPUs sustained execution
-  throughput < ~1 blk/s production → the seat's executed tip lags,
-  `verify()` rejects proposals (executed-parent gate), signer bit
-  drops out of certs. Live fleet instance documented 2026-10-27.
-  Auditor should assess per-block MAYO verify cost, batch/parallel
-  verify options, and whether verify work can be deferred off the
-  execution hot path.
+- **Execution throughput vs block production rate (production-found,
+  INC-exec-lag-idx2-2026-10-27)** — a fully-meshed seat fell ~10k+
+  blocks behind in execution → `verify()` rejects proposals
+  (executed-parent gate) → signer bit drops out of certs. Root cause
+  is NOT the MAYO path: measured 0.22 CPU core used vs 39% iowait —
+  the dominant per-block cost is `store_state_root()`'s O(state)
+  full-KV iteration (called at the end of every `finalize_block`),
+  which page-cache hides on large-RAM seats and thrashes on small
+  ones (3.7 GiB seat: ~10s exec/block at ~0 tx/block). Fix is
+  app-side (incremental state-root tracker, RC17) — listed here
+  because it sits on the same execution hot path the auditor will
+  read, and the per-block cost model (scan + MAYO verify + commit)
+  is what the auditor should decompose.
 - Failure modes: missing sig for a set bit, extra sigs, dup indices,
   oversized bitmap, sig cache overflow eviction during replay
 

@@ -102,11 +102,14 @@ the reference environment.
   SPHINCS+) MUST memoize per message (`sig_cache`) or an honest
   retransmit reads as conflicting evidence. Verified in production
   (#5378 discussion).
-- **Cost side-channel** — per-block MAYO verify work is part of
-  execution throughput; seats below the verify-cost floor lag and
-  drop out of certs (INC-exec-lag-idx2-2026-10-27). Not a safety
-  issue — a liveness/min-spec consideration the auditor should
-  weigh on the DoS axis.
+- **Cost side-channel** — execution throughput is the binding
+  liveness constraint (INC-exec-lag-idx2-2026-10-27). Measured
+  cause is `store_state_root()`'s O(state) scan per finalized
+  block, NOT MAYO verify (0.22 core used, storage-bound). MAYO
+  verify still sits on the same per-block cost line and should be
+  included in the auditor's cost decomposition — but the incident
+  shows the state-root scan dominates first. Liveness/min-spec
+  axis, not a safety issue.
 - **Attribution caveat** — the bitmap records participation; it is
   not cryptographic proof of which partials formed the threshold
   sig. Slashing-evidence design is a separate pass (deferred).
