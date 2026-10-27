@@ -38,7 +38,11 @@ host with cmake (see §5).
 In order of review priority:
 
 1. `app/slay3rd/src/hybrid_scheme.rs` — `HybridCertificate` encode/
-   decode, bitmap↔index mapping, MAYO sign/verify calls.
+   decode, bitmap↔index mapping, MAYO sign/verify calls, **`sig_cache`
+   memoization** (signer determinism — production-found requirement,
+   see PLAN §scope: replay/retransmit of an identical message MUST
+   return the identical signature bytes or simplex reads it as
+   equivocation).
 2. Call sites: `app/slay3rd/src/node.rs` (cert assembly, vote/nullify
    paths, signer bitmap), `app/slay3rd/src/main.rs` (key load).
 3. `packages/junoclaw-mayo-verify/src/lib.rs` — verification path used
@@ -54,9 +58,10 @@ Spec: `docs/PQ_PROTOCOL_AUTH.md` §4 is the intended wire format.
 We carry `lib/commonware-storage` as a path dep. The only semantic
 diff vs upstream `2026.3.0` is in `src/journal/segmented/manager.rs`
 (`prune`): `Error::BlobMissing` from `context.remove()` is treated as
-already-pruned (idempotent) instead of propagating fatally. Rationale
-+ upstream report: filed as a bug report against commonware monorepo;
-production incident documented in the repo history.
+already-pruned (idempotent) instead of propagating fatally. Filed
+upstream as #5266 — closed not-planned (shared-data-dir contract
+violation on our side; the patch remains correct for our usage and
+is retained deliberately).
 
 Auditor attention: confirm no caller *relies* on prune failing when a
 blob is absent, and that the in-memory `blobs` map stays consistent
@@ -92,3 +97,16 @@ the reference environment.
   consensus-sufficient if MAYO verification were disabled; failure
   modes (missing/extra/dup sigs, oversized bitmap) are enumerated in
   `hybrid_scheme.rs` decode.
+- **Determinism contract** — simplex equivocation detection compares
+  signature bytes; randomized-signature schemes (MAYO, ML-DSA,
+  SPHINCS+) MUST memoize per message (`sig_cache`) or an honest
+  retransmit reads as conflicting evidence. Verified in production
+  (#5378 discussion).
+- **Cost side-channel** — per-block MAYO verify work is part of
+  execution throughput; seats below the verify-cost floor lag and
+  drop out of certs (INC-exec-lag-idx2-2026-10-27). Not a safety
+  issue — a liveness/min-spec consideration the auditor should
+  weigh on the DoS axis.
+- **Attribution caveat** — the bitmap records participation; it is
+  not cryptographic proof of which partials formed the threshold
+  sig. Slashing-evidence design is a separate pass (deferred).
