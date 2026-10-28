@@ -13,10 +13,15 @@
 //!   ops `transcript-anchor.py` daemon implements today; the relay uses it
 //!   for signed checkpoints, verifiers (and browsers) reproduce it
 //!   independently.
+//! - [`envelope`]: versioned signature envelope for relay frames — the
+//!   crypto-agility slot. Schnorr verifies today; MAYO parses today and
+//!   verifies when the suite lands, without a wire break.
 
 pub mod anchor;
+pub mod envelope;
 pub mod event;
 pub mod filter;
 
+pub use envelope::{EnvelopeError, FrameSig, SignedFrame};
 pub use event::{Event, EventError};
 pub use filter::Filter;

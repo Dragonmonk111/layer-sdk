@@ -22,9 +22,17 @@
 //!     --channels <uuid1,uuid2,...> --allowlist /etc/claw/allowlist.txt \
 //!     --cw4-group juno1... --chain-api http://127.0.0.1:8082 \
 //!     --member-bindings /etc/claw/member-bindings.json \
-//!     --cw4-refresh-secs 60
+//!     --cw4-refresh-secs 60 \
+//!     --peer ws://relay-b.example:7070 [--peer ws://relay-c.example:7070]
+//!
+//! Federation (v1, pull-only): each `--peer <ws-url>` spawns a task
+//! that opens a WebSocket to the peer and REQs every configured
+//! channel. Remote events pass the same signature + admission checks
+//! as client writes before hitting the store — dedupe by id at each
+//! hop is the loop-safety mechanism; relays never push.
 
 mod admission;
+mod gossip;
 mod store;
 
 use axum::{
@@ -86,6 +94,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.split(',').map(|c| c.trim().to_string()).collect())
         .unwrap_or_default();
     let allowlist_path = opt("--allowlist").map(PathBuf::from);
+    // repeatable: --peer ws://host:port --peer ws://other:port
+    let peers: Vec<String> = args
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.as_str() == "--peer")
+        .filter_map(|(i, _)| args.get(i + 1).cloned())
+        .collect();
     // static break-glass npubs — also the initial effective set, so a
     // fresh relay denies everyone except operator entries until the
     // first successful cw4 refresh.
@@ -122,6 +137,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         tokio::spawn(admission::poll_loop(cfg, app.allowlist.clone()));
         tracing::info!(%group_addr, %chain_api, cw4_refresh_secs, "cw4 admission poller started");
+    }
+
+    // federation: one pull-only gossip task per --peer. Peers REQ on
+    // the configured channels, so --channels must be non-empty.
+    if !peers.is_empty() {
+        if app.channels.is_empty() {
+            tracing::warn!(
+                peers = peers.len(),
+                "--peer set without --channels: gossip skipped (no channels to subscribe)"
+            );
+        } else {
+            for peer in peers {
+                tracing::info!(%peer, "gossip peer configured");
+                tokio::spawn(gossip::run_peer(app.clone(), peer));
+            }
+        }
     }
 
     let router = Router::new()
@@ -219,23 +250,8 @@ async fn handle_frame(
             let id = ev.id.clone();
             let reply = |ok: bool, msg: &str| send(serde_json::json!(["OK", id, ok, msg]));
 
-            if let Err(e) = ev.verify() {
-                return reply(false, &format!("invalid: {e}"));
-            }
-            if !ALLOWED_KINDS.contains(&ev.kind) {
-                return reply(false, "restricted: kind not allowed");
-            }
-            let Some(chan) = ev.tag_value("h").map(str::to_string) else {
-                return reply(false, "restricted: missing channel h tag");
-            };
-            if !app.channels.is_empty() && !app.channels.contains(&chan) {
-                return reply(false, "restricted: unknown channel");
-            }
-            // Fail CLOSED: an empty effective allowlist denies every
-            // write (never-populated cw4 feed, empty file). Anything
-            // not explicitly in the set is rejected.
-            if !app.allowlist.read().await.contains(&ev.pubkey) {
-                return reply(false, "restricted: pubkey not allowlisted");
+            if let Err(msg) = admit_event(app, &ev).await {
+                return reply(false, &msg);
             }
             match app.store.put(&ev) {
                 Ok(true) => {
@@ -285,19 +301,57 @@ async fn handle_frame(
     }
 }
 
+/// Shared write-admission gate — used by both client `EVENT` frames
+/// and gossip ingress so a peer can't inject traffic a client couldn't
+/// write directly. Order: signature, kind allowlist, h-tag channel
+/// membership, pubkey allowlist.
+///
+/// Fail CLOSED: an empty effective allowlist denies every write
+/// (never-populated cw4 feed, empty file). Anything not explicitly in
+/// the set is rejected. Store dedupe happens at the caller.
+async fn admit_event(app: &App, ev: &Event) -> Result<(), String> {
+    ev.verify().map_err(|e| format!("invalid: {e}"))?;
+    if !ALLOWED_KINDS.contains(&ev.kind) {
+        return Err("restricted: kind not allowed".into());
+    }
+    let Some(chan) = ev.tag_value("h") else {
+        return Err("restricted: missing channel h tag".into());
+    };
+    if !app.channels.is_empty() && !app.channels.contains(chan) {
+        return Err("restricted: unknown channel".into());
+    }
+    if !app.allowlist.read().await.contains(&ev.pubkey) {
+        return Err("restricted: pubkey not allowlisted".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use k256::schnorr::SigningKey;
 
     fn signed_event(content: &str, chan: &str, ts: u64) -> Event {
-        let sk = SigningKey::from_bytes(&[3u8; 32]).unwrap();
+        signed_event_ex(content, Some(chan), ts, 9, &[3u8; 32])
+    }
+
+    fn signed_event_ex(
+        content: &str,
+        chan: Option<&str>,
+        ts: u64,
+        kind: u64,
+        key: &[u8; 32],
+    ) -> Event {
+        let sk = SigningKey::from_bytes(key).unwrap();
+        let tags = chan
+            .map(|c| vec![vec!["h".into(), c.into()]])
+            .unwrap_or_default();
         let mut e = Event {
             id: String::new(),
             pubkey: hex::encode(sk.verifying_key().to_bytes()),
             created_at: ts,
-            kind: 9,
-            tags: vec![vec!["h".into(), chan.into()]],
+            kind,
+            tags,
             content: content.into(),
             sig: String::new(),
         };
@@ -384,6 +438,75 @@ mod tests {
         let v = next_json(&mut out_rx).await;
         assert_eq!(v[0], "OK");
         assert_eq!(v[2], true);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The shared admission gate used by both client EVENT frames and
+    /// gossip ingress: every reject path plus the accept path.
+    #[tokio::test]
+    async fn admit_event_accepts_and_rejects() {
+        let dir =
+            std::env::temp_dir().join(format!("claw-test-admit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let app = Arc::new(App {
+            store: Store::open(&dir.join("t.redb")).unwrap(),
+            channels: ["chan-a".to_string()].into_iter().collect(),
+            allowlist: Arc::new(RwLock::new(HashSet::new())),
+            tx: broadcast::channel(16).0,
+        });
+
+        let key = [7u8; 32];
+        let good = signed_event_ex("hi", Some("chan-a"), 1, 9, &key);
+
+        // empty allowlist -> fail closed
+        assert!(admit_event(&app, &good).await.is_err());
+        app.allowlist.write().await.insert(good.pubkey.clone());
+        assert!(admit_event(&app, &good).await.is_ok());
+
+        // bad signature -> invalid
+        let mut bad_sig = signed_event_ex("x", Some("chan-a"), 2, 9, &key);
+        bad_sig.sig = "00".repeat(64);
+        let e = admit_event(&app, &bad_sig).await.unwrap_err();
+        assert!(e.starts_with("invalid:"), "got: {e}");
+
+        // kind outside ALLOWED_KINDS -> restricted (properly signed)
+        let bad_kind = signed_event_ex("x", Some("chan-a"), 3, 1, &key);
+        assert_eq!(
+            admit_event(&app, &bad_kind).await.unwrap_err(),
+            "restricted: kind not allowed"
+        );
+
+        // missing h tag -> restricted
+        let no_h = signed_event_ex("x", None, 4, 9, &key);
+        assert_eq!(
+            admit_event(&app, &no_h).await.unwrap_err(),
+            "restricted: missing channel h tag"
+        );
+
+        // h tag naming an unconfigured channel -> restricted
+        let wrong_chan = signed_event_ex("x", Some("chan-b"), 5, 9, &key);
+        assert_eq!(
+            admit_event(&app, &wrong_chan).await.unwrap_err(),
+            "restricted: unknown channel"
+        );
+
+        // unknown channel check skipped when --channels is empty
+        let app_open = Arc::new(App {
+            store: Store::open(&dir.join("t2.redb")).unwrap(),
+            channels: HashSet::new(),
+            allowlist: app.allowlist.clone(),
+            tx: broadcast::channel(16).0,
+        });
+        let any_chan = signed_event_ex("x", Some("chan-b"), 6, 9, &key);
+        assert!(admit_event(&app_open, &any_chan).await.is_ok());
+
+        // valid sig, right channel, pubkey not allowlisted -> restricted
+        let outsider = signed_event_ex("x", Some("chan-a"), 7, 9, &[9u8; 32]);
+        assert_eq!(
+            admit_event(&app, &outsider).await.unwrap_err(),
+            "restricted: pubkey not allowlisted"
+        );
+
         std::fs::remove_dir_all(&dir).ok();
     }
 }
