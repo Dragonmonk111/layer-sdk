@@ -1,0 +1,40 @@
+[package]
+name = "junoclaw-seat-attestation"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cosmwasm-schema = { workspace = true }
+cosmwasm-std = { workspace = true }
+# `iterator` is off in the workspace declaration (default-features = false);
+# this contract calls Map::range()/prefix() in ListActiveSeats/GetKeyHistory/
+# ListEvidence, so it is enabled explicitly here (also pulls cosmwasm-std/iterator).
+cw-storage-plus = { workspace = true, features = ["iterator"] }
+cw-utils = { workspace = true }
+cw2 = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+cw-multi-test = { workspace = true }
+
+# Used ONLY in unit tests to generate real MinSig partial signatures +
+# share pubkeys so the on-chain BLS verification path is exercised.
+# unix-only: commonware-cryptography pulls aws-lc-sys, which needs NASM on
+# Windows MSVC — the real-BLS test is cfg(unix)-gated to match.
+[target.'cfg(unix)'.dev-dependencies]
+commonware-cryptography = { workspace = true }
+commonware-codec = { workspace = true }
+commonware-utils = { workspace = true }
+rand = "0.8"

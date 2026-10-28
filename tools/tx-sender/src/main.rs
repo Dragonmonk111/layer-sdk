@@ -118,6 +118,7 @@ fn print_usage() {
     eprintln!("  --code-id <N>        Code ID to instantiate (required)");
     eprintln!("  --label <str>        Contract label (default: test-contract)");
     eprintln!("  --msg <json>         JSON instantiate message (default: auto gov_address)");
+    eprintln!("  --admin <addr>       Contract admin (default: deployer; \"none\" = immutable)");
     eprintln!("  --sequence <N>       Account sequence (default: auto-queried)");
     eprintln!();
     eprintln!("execute flags:");
@@ -192,6 +193,7 @@ struct Args {
     code_id: Option<u64>,
     label: String,
     msg: String,
+    admin: Option<String>,
     contract: Option<String>,
     address: Option<String>,
     to: Option<String>,
@@ -222,6 +224,7 @@ fn parse_args() -> Result<Args, String> {
     let mut code_id: Option<u64> = None;
     let mut label = "test-contract".to_string();
     let mut msg = String::new();
+    let mut admin: Option<String> = None;
     let mut contract: Option<String> = None;
     let mut address: Option<String> = None;
     let mut to: Option<String> = None;
@@ -272,6 +275,10 @@ fn parse_args() -> Result<Args, String> {
                     .map_err(|e| format!("failed to read --msg-file {}: {}", path, e))?
                     .trim()
                     .to_string();
+            }
+            "--admin" => {
+                i += 1;
+                admin = Some(args.get(i).ok_or("--admin requires a value")?.clone());
             }
             "--contract" => {
                 i += 1;
@@ -353,6 +360,7 @@ fn parse_args() -> Result<Args, String> {
         code_id,
         label,
         msg,
+        admin,
         contract,
         address,
         to,
@@ -648,6 +656,7 @@ async fn cmd_instantiate(
     code_id: u64,
     label: &str,
     msg_json: &str,
+    admin: Option<String>,
     explicit_sequence: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sender = deployer_address().to_string();
@@ -662,9 +671,17 @@ async fn cmd_instantiate(
     };
     println!("Account sequence: {}", sequence);
 
+    // --admin <addr> sets a custom admin (e.g. the DAO core for
+    // DAO-governed contracts); "none"/"" leaves the contract immutable;
+    // absent defaults to the deployer (previous behaviour).
+    let admin = match admin.as_deref() {
+        Some("none") | Some("") => String::new(),
+        Some(a) => a.to_string(),
+        None => sender.clone(),
+    };
     let msg = MsgInstantiateContract {
         sender: sender.clone(),
-        admin: sender.clone(),
+        admin,
         code_id,
         label: label.to_string(),
         msg: msg_json.as_bytes().to_vec(),
@@ -1453,7 +1470,7 @@ async fn main() {
             } else {
                 args.msg
             };
-            cmd_instantiate(&args.grpc, code_id, &args.label, &msg_resolved, args.sequence).await
+            cmd_instantiate(&args.grpc, code_id, &args.label, &msg_resolved, args.admin, args.sequence).await
         }
         "execute" => {
             let contract = args.contract.unwrap_or_else(|| {

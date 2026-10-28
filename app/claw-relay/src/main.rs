@@ -5,15 +5,26 @@
 //!   relay  -> ["OK",id,accepted,"msg"] | ["EVENT","subid",{event}]
 //!             | ["EOSE","subid"] | ["NOTICE","msg"]
 //!
-//! Admission (MVP): writes require the event's pubkey in the allowlist
-//! file AND an `h` tag naming a configured channel. Reads are open —
-//! transcripts are meant to be verifiable by anyone. On-chain cw4
-//! admission replaces the file in the next phase.
+//! Admission: writes require the event's pubkey in the active
+//! allowlist AND an `h` tag naming a configured channel. Reads are
+//! open — transcripts are meant to be verifiable by anyone.
+//!
+//! The allowlist is derived on-chain when `--cw4-group` is set: a
+//! background task polls the cw4 contract's `list_members` smart query
+//! and maps members to npubs via `--member-bindings`. The gate fails
+//! CLOSED — an empty effective set denies all writes — and keeps the
+//! last-good set on refresh failures. `--allowlist` entries are
+//! additive break-glass npubs (e.g. the relay operator), merged into
+//! every refresh.
 //!
 //! Usage:
 //!   claw-relay --listen 127.0.0.1:7070 --db /var/lib/claw/relay.redb \
-//!     --channels <uuid1,uuid2,...> --allowlist /etc/claw/allowlist.txt
+//!     --channels <uuid1,uuid2,...> --allowlist /etc/claw/allowlist.txt \
+//!     --cw4-group juno1... --chain-api http://127.0.0.1:8082 \
+//!     --member-bindings /etc/claw/member-bindings.json \
+//!     --cw4-refresh-secs 60
 
+mod admission;
 mod store;
 
 use axum::{
@@ -33,6 +44,7 @@ use std::{
     net::SocketAddr,
     path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 use store::Store;
 use tokio::sync::{broadcast, RwLock};
@@ -44,7 +56,10 @@ const ALLOWED_KINDS: &[u64] = &[9, 40002, 40008, 45001, 45003];
 struct App {
     store: Store,
     channels: HashSet<String>,
-    allowlist: RwLock<HashSet<String>>,
+    /// Effective write-admission set (last-good cw4 npubs ∪ break-glass
+    /// file entries). Arc'd so the cw4 poller task can share it.
+    /// Empty = deny ALL writes (fail-closed).
+    allowlist: Arc<RwLock<HashSet<String>>>,
     tx: broadcast::Sender<Arc<Event>>,
 }
 
@@ -71,14 +86,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.split(',').map(|c| c.trim().to_string()).collect())
         .unwrap_or_default();
     let allowlist_path = opt("--allowlist").map(PathBuf::from);
-    let allowlist = load_allowlist(allowlist_path.as_deref());
+    // static break-glass npubs — also the initial effective set, so a
+    // fresh relay denies everyone except operator entries until the
+    // first successful cw4 refresh.
+    let breakglass = load_allowlist(allowlist_path.as_deref());
+
+    // on-chain admission flags
+    let cw4_group = opt("--cw4-group");
+    let chain_api = opt("--chain-api").unwrap_or_else(|| "http://127.0.0.1:8082".into());
+    let bindings_path = opt("--member-bindings").map(PathBuf::from);
+    let cw4_refresh_secs: u64 = opt("--cw4-refresh-secs")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60)
+        .max(5);
 
     let app = Arc::new(App {
         store: Store::open(&db)?,
         channels,
-        allowlist: RwLock::new(allowlist),
+        allowlist: Arc::new(RwLock::new(breakglass.clone())),
         tx: broadcast::channel(4096).0,
     });
+
+    if let Some(group_addr) = cw4_group {
+        if bindings_path.is_none() {
+            tracing::warn!(
+                "--cw4-group set without --member-bindings: no member can map to an npub; writes stay closed"
+            );
+        }
+        let cfg = admission::Cw4Config {
+            api_base: chain_api.clone(),
+            group_addr: group_addr.clone(),
+            bindings_path,
+            refresh: Duration::from_secs(cw4_refresh_secs),
+            breakglass,
+        };
+        tokio::spawn(admission::poll_loop(cfg, app.allowlist.clone()));
+        tracing::info!(%group_addr, %chain_api, cw4_refresh_secs, "cw4 admission poller started");
+    }
 
     let router = Router::new()
         .route("/", get(ws_handler))
@@ -187,9 +231,10 @@ async fn handle_frame(
             if !app.channels.is_empty() && !app.channels.contains(&chan) {
                 return reply(false, "restricted: unknown channel");
             }
-            if !app.allowlist.read().await.is_empty()
-                && !app.allowlist.read().await.contains(&ev.pubkey)
-            {
+            // Fail CLOSED: an empty effective allowlist denies every
+            // write (never-populated cw4 feed, empty file). Anything
+            // not explicitly in the set is rejected.
+            if !app.allowlist.read().await.contains(&ev.pubkey) {
                 return reply(false, "restricted: pubkey not allowlisted");
             }
             match app.store.put(&ev) {
@@ -293,6 +338,52 @@ mod tests {
             win.iter().map(|e| e.created_at).collect::<Vec<_>>(),
             vec![101, 102, 103]
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Fail-CLOSED admission: an empty effective allowlist must deny
+    /// every EVENT write (the old gate failed open on an empty set).
+    #[tokio::test]
+    async fn allowlist_fails_closed() {
+        let dir = std::env::temp_dir().join(format!("claw-test-gate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let app = Arc::new(App {
+            store: Store::open(&dir.join("t.redb")).unwrap(),
+            channels: ["chan-a".to_string()].into_iter().collect(),
+            allowlist: Arc::new(RwLock::new(HashSet::new())),
+            tx: broadcast::channel(16).0,
+        });
+        let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let (out_tx, mut out_rx) = mpsc::unbounded::<Message>();
+        async fn next_json(rx: &mut mpsc::UnboundedReceiver<Message>) -> serde_json::Value {
+            match rx.next().await.expect("reply") {
+                Message::Text(t) => serde_json::from_str::<serde_json::Value>(&t).unwrap(),
+                _ => panic!("non-text reply"),
+            }
+        }
+
+        // 1. empty allowlist -> denied (never-populated cw4 feed)
+        let ev = signed_event("hi", "chan-a", 1);
+        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev])).await;
+        let v = next_json(&mut out_rx).await;
+        assert_eq!(v[0], "OK");
+        assert_eq!(v[2], false);
+        assert!(v[3].as_str().unwrap().starts_with("restricted:"));
+
+        // 2. populated set, pubkey not in it -> still denied
+        app.allowlist.write().await.insert("f".repeat(64));
+        let ev2 = signed_event("hi2", "chan-a", 2);
+        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2.clone()])).await;
+        let v = next_json(&mut out_rx).await;
+        assert_eq!(v[2], false);
+
+        // 3. allowlisted pubkey -> admitted
+        app.allowlist.write().await.insert(ev2.pubkey.clone());
+        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2])).await;
+        let v = next_json(&mut out_rx).await;
+        assert_eq!(v[0], "OK");
+        assert_eq!(v[2], true);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

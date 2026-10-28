@@ -1,0 +1,21 @@
+[package]
+name        = "claw-checkpoint"
+version     = "0.5.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "JunoClaw checkpoint daemon — Merkle-roots each claw-relay channel's event window (JC-TRANSCRIPT-ANCHOR-v1) and anchors the root on-chain via moultbook. Sovereign replacement for ops/buzz/transcript-anchor.sh."
+
+[dependencies]
+claw-core           = { path = "../claw-core" }
+tokio               = { version = "1.28.0", features = ["full"] }
+tokio-tungstenite   = "0.23"
+serde               = { version = "1.0.160", features = ["derive"] }
+serde_json          = "1.0.116"
+sha2                = "0.10.6"
+hex                 = "0.4.3"
+base64              = "0.22"
+thiserror           = "1.0.38"
+tracing             = "0.1.37"
+tracing-subscriber  = { version = "0.3.17", features = ["env-filter"] }
+k256                = { version = "0.13", default-features = false, features = ["schnorr"] }
+futures-util        = "0.3"
