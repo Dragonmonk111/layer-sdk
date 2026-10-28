@@ -34,7 +34,7 @@ use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::num::{NonZeroU16, NonZeroU32, NonZeroUsize};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 
 use commonware_codec::extensions::DecodeExt;
 use commonware_codec::Read;
@@ -141,6 +141,362 @@ impl KeyMaterial {
         let contents = std::fs::read_to_string(path)?;
         let km: KeyMaterial = serde_json::from_str(&contents)?;
         Ok(km)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RC17 boot guards: single-instance lock, duplicate-identity checks,
+// operator min-spec (docs/RC17-PLAN.md §P0.4 + §P1)
+// ---------------------------------------------------------------------------
+
+/// Minimum host spec for a validator seat (enforcement-lite — WARN only,
+/// never refuse). The exec-lag incident ran storage-bound on a seat
+/// nobody knew was undersized.
+const MIN_CPU_CORES: usize = 4;
+const MIN_RAM_GIB: f64 = 8.0;
+const MIN_DISK_FREE_GIB: f64 = 50.0;
+
+/// Log the machine spec at every boot and WARN below the floor so an
+/// undersized seat is loud in the log instead of being discovered weeks
+/// later from absent signer bits (INC-exec-lag-idx2).
+fn log_machine_spec(data_dir: &str) {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(0);
+    let mem_gib = total_memory_gib();
+    let disk_gib = disk_free_gib(data_dir);
+    let fmt_gib = |g: Option<f64>| {
+        g.map(|v| format!("{v:.1}"))
+            .unwrap_or_else(|| "unknown".to_string())
+    };
+    info!(
+        cpus,
+        mem_gib = %fmt_gib(mem_gib),
+        disk_free_gib = %fmt_gib(disk_gib),
+        data_dir,
+        "host spec"
+    );
+    if cpus < MIN_CPU_CORES {
+        warn!(cpus, min = MIN_CPU_CORES, "host below min spec — CPU cores");
+    }
+    if let Some(g) = mem_gib {
+        if g < MIN_RAM_GIB {
+            warn!(mem_gib = g, min = MIN_RAM_GIB, "host below min spec — total RAM");
+        }
+    }
+    if let Some(g) = disk_gib {
+        if g < MIN_DISK_FREE_GIB {
+            warn!(disk_free_gib = g, min = MIN_DISK_FREE_GIB, data_dir,
+                "host below min spec — free disk on data_dir");
+        }
+    }
+}
+
+/// Total RAM in GiB from /proc/meminfo. None where /proc is absent
+/// (macOS/Windows dev hosts) — the spec log prints "unknown".
+fn total_memory_gib() -> Option<f64> {
+    let meminfo = std::fs::read_to_string("/proc/meminfo").ok()?;
+    let kb: u64 = meminfo
+        .lines()
+        .find_map(|l| l.strip_prefix("MemTotal:"))?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()?;
+    Some(kb as f64 / (1024.0 * 1024.0))
+}
+
+/// Free space in GiB on the filesystem holding `path` (statvfs,
+/// unprivileged-user blocks via f_bavail).
+#[cfg(unix)]
+fn disk_free_gib(path: &str) -> Option<f64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c_path =
+        std::ffi::CString::new(std::path::Path::new(path).as_os_str().as_bytes()).ok()?;
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) } != 0 {
+        return None;
+    }
+    Some(stat.f_bavail as f64 * stat.f_frsize as f64 / (1u64 << 30) as f64)
+}
+
+#[cfg(not(unix))]
+fn disk_free_gib(_path: &str) -> Option<f64> {
+    None
+}
+
+/// True when `pid` belongs to a live slay3rd process. Checks
+/// /proc/<pid>/comm so a recycled pid held by an unrelated process does
+/// not produce a false positive.
+#[cfg(unix)]
+fn slay3rd_process_alive(pid: u32) -> bool {
+    match std::fs::read_to_string(format!("/proc/{pid}/comm")) {
+        Ok(comm) => comm.trim().contains("slay3rd"),
+        // comm unreadable but the pid exists — assume alive, refuse the
+        // boot, and let the operator arbitrate.
+        Err(_) => std::path::Path::new(&format!("/proc/{pid}")).exists(),
+    }
+}
+
+/// No /proc on non-unix dev hosts — treat every recorded pid as dead so
+/// the lock always reclaims (RocksDB still hard-locks the app dir).
+#[cfg(not(unix))]
+fn slay3rd_process_alive(_pid: u32) -> bool {
+    false
+}
+
+/// RC17 single-instance guard (docs/RC17-PLAN.md §P1 "duplicate-identity
+/// boot guard"): one identity = one process. Two slay3rd processes on
+/// the same data dir wedge on the RocksDB lock; two on the same IDENTITY
+/// (the retired-G1 zombie sharing home-vb's ed25519) equivocate on the
+/// wire. This lock catches the local half of that class — a live second
+/// process is FATAL; a stale lock from a dead pid is reclaimed.
+fn enforce_single_instance(data_dir: &str) {
+    let lock_path = format!("{data_dir}/node.lock");
+    if let Ok(prev) = std::fs::read_to_string(&lock_path) {
+        let prev_pid = prev
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<u32>().ok());
+        if let Some(pid) = prev_pid {
+            if pid != std::process::id() && slay3rd_process_alive(pid) {
+                eprintln!(
+                    "FATAL: data dir '{data_dir}' is already held by live slay3rd \
+                     pid {pid} ({lock_path}). One identity = one process — kill \
+                     the other instance; refusing to start."
+                );
+                std::process::exit(3);
+            }
+        }
+        warn!(path = %lock_path, "stale node.lock reclaimed (previous holder exited)");
+    }
+    if let Err(e) = std::fs::write(&lock_path, format!("{}\n", std::process::id())) {
+        warn!(error = %e, path = %lock_path,
+            "could not write node.lock — single-instance guard inactive");
+    }
+}
+
+/// RC17 duplicate-identity boot guard (docs/RC17-PLAN.md §P1): refuse to
+/// start when the config and key file disagree about which seat this is,
+/// or when one ed25519 identity is claimed twice in the configuration —
+/// the signatures of a copied keys.json or a peer list that claims our
+/// own key (the zombie-seat hazard that produced the first `block!`).
+/// Every failure is FATAL with a non-zero exit: a supervisor must not
+/// restart into the same misconfiguration silently.
+fn check_duplicate_identity(config: &NodeConfig, km: &KeyMaterial) {
+    // keys.json and node.toml disagree about which seat this is — the
+    // classic copied-keys.json misconfiguration.
+    if km.validator_index != config.validator_index {
+        eprintln!(
+            "FATAL: validator_index mismatch — node.toml says {} but {} says \
+             {}. Wrong keys.json for this seat (duplicate-identity hazard).",
+            config.validator_index, config.bls_key_path, km.validator_index
+        );
+        std::process::exit(3);
+    }
+
+    let our_key = km.ed25519_public_hex.trim().to_lowercase();
+    let our_prefix: String = our_key.chars().take(8).collect();
+
+    // Our identity appears in OUR OWN peer list — either the list was
+    // generated including self, or another endpoint claims our key.
+    // Peers must be other validators; as configured this identity is not
+    // uniquely ours.
+    for peer in &config.peers {
+        if peer.public_key.trim().to_lowercase() == our_key {
+            eprintln!(
+                "FATAL: duplicate identity — this seat's ed25519 key \
+                 ({our_prefix}…) appears in [[peers]] at {}. A peer entry must \
+                 be another validator; a second endpoint claiming this key is \
+                 duplicate identity.",
+                peer.address
+            );
+            std::process::exit(3);
+        }
+    }
+
+    // Two peer entries sharing one ed25519 key.
+    let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for peer in &config.peers {
+        let k = peer.public_key.trim().to_lowercase();
+        if let Some(first) = seen.insert(k.clone(), peer.address.clone()) {
+            eprintln!(
+                "FATAL: duplicate peer identity — ed25519 key {}… is listed \
+                 twice in [[peers]] ({} and {}). Two seats cannot share one \
+                 identity.",
+                k.chars().take(8).collect::<String>(),
+                first,
+                peer.address
+            );
+            std::process::exit(3);
+        }
+    }
+
+    // The roster itself must not repeat a key — two seats, one identity.
+    // (ordered::Set::try_from also rejects this later; catch it here with
+    // a message that names the duplicated key and its indices.)
+    let mut roster: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (i, k) in km.validator_public_keys.iter().enumerate() {
+        let k = k.trim().to_lowercase();
+        if let Some(&j) = roster.get(&k) {
+            eprintln!(
+                "FATAL: duplicate validator identity — ed25519 key {}… appears \
+                 at validator_public_keys indices {} and {} in {}",
+                k.chars().take(8).collect::<String>(),
+                j,
+                i,
+                config.bls_key_path
+            );
+            std::process::exit(3);
+        }
+        roster.insert(k, i);
+    }
+}
+
+/// Rate-limited WARN accumulator for hot peer-drop paths. The first hit
+/// per key emits immediately; hits inside `interval` are folded into a
+/// `suppressed=` count on the next emit, so a peer flood produces one
+/// line per interval per reason, not one per message.
+struct DropThrottle {
+    interval: Duration,
+    state: std::collections::HashMap<&'static str, (Instant, u64)>,
+}
+
+impl DropThrottle {
+    fn new(interval: Duration) -> Self {
+        Self {
+            interval,
+            state: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Some(suppressed_since_last_emit) when a log line should emit.
+    fn should_log(&mut self, key: &'static str) -> Option<u64> {
+        let now = Instant::now();
+        match self.state.get_mut(key) {
+            Some((t, n)) if now.duration_since(*t) < self.interval => {
+                *n += 1;
+                None
+            }
+            Some((t, n)) => {
+                let suppressed = *n;
+                *t = now;
+                *n = 0;
+                Some(suppressed)
+            }
+            None => {
+                self.state.insert(key, (now, 0));
+                Some(0)
+            }
+        }
+    }
+}
+
+/// RC17 blocked-peer observability (docs/RC17-PLAN.md §P1): the upstream
+/// `block!` macro logs the reason at WARN ("conflicting nullify",
+/// "invalid signature", "epoch mismatch", …) but prints only the raw
+/// public key. This wrapper adds the roster seat index so a block line
+/// answers WHICH seat got blocked without an offline key lookup — the
+/// symptom RC17 monitors (TCP-connectable + no authenticated session +
+/// signer bit absent is what the zombie seat did to home-vb).
+#[derive(Clone)]
+struct LoggingBlocker<B> {
+    inner: B,
+    /// ed25519 hex (PublicKey::to_string(), lowercased) -> roster index.
+    seat_of: Arc<std::collections::HashMap<String, usize>>,
+}
+
+impl<B> commonware_p2p::Blocker for LoggingBlocker<B>
+where
+    B: commonware_p2p::Blocker<PublicKey = ed25519::PublicKey>,
+{
+    type PublicKey = ed25519::PublicKey;
+
+    async fn block(&mut self, peer: Self::PublicKey) {
+        let pk = peer.to_string();
+        warn!(
+            peer = %pk.chars().take(8).collect::<String>(),
+            seat_index = self
+                .seat_of
+                .get(&pk.to_lowercase())
+                .map(|i| *i as i64)
+                .unwrap_or(-1),
+            "p2p: consensus blocked a peer (reason in the upstream block! WARN above)"
+        );
+        self.inner.block(peer).await;
+    }
+}
+
+/// Observer-mode vote gate for consensus channel 0 (docs/RC17-PLAN.md
+/// §P2 "read-only observer peer class"). With `[observer] enabled =
+/// true` every outbound vote — notarize/nullify/finalize partial — is
+/// dropped at `check`, so no partial signature ever leaves the process.
+/// Inbound votes, certificates, resolver fetches, payload relay,
+/// backfill, state-sync, gRPC and finality reporting are untouched: the
+/// observer still verifies and reports every finalization. No
+/// wire-format change; to peers the seat is indistinguishable from an
+/// unresponsive voter. Pass-through when disabled.
+#[derive(Clone)]
+struct VoteGate<S> {
+    inner: S,
+    muted: bool,
+    suppressed: Arc<std::sync::atomic::AtomicU64>,
+}
+
+enum VoteGateChecked<C> {
+    Live(C),
+    Muted(Arc<std::sync::atomic::AtomicU64>),
+}
+
+impl<C> commonware_p2p::CheckedSender for VoteGateChecked<C>
+where
+    C: commonware_p2p::CheckedSender<PublicKey = ed25519::PublicKey>,
+{
+    type PublicKey = ed25519::PublicKey;
+    type Error = C::Error;
+
+    async fn send(
+        self,
+        message: impl Into<commonware_runtime::IoBufs> + Send,
+        priority: bool,
+    ) -> Result<Vec<Self::PublicKey>, Self::Error> {
+        match self {
+            Self::Live(inner) => inner.send(message, priority).await,
+            Self::Muted(suppressed) => {
+                let n = suppressed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if n == 1 || n % 128 == 0 {
+                    tracing::info!(
+                        suppressed = n,
+                        "observer: outbound consensus vote suppressed"
+                    );
+                }
+                Ok(Vec::new())
+            }
+        }
+    }
+}
+
+impl<S> commonware_p2p::LimitedSender for VoteGate<S>
+where
+    S: commonware_p2p::LimitedSender<PublicKey = ed25519::PublicKey>,
+{
+    type PublicKey = ed25519::PublicKey;
+    type Checked<'a>
+        = VoteGateChecked<S::Checked<'a>>
+    where
+        Self: 'a;
+
+    async fn check(
+        &mut self,
+        recipients: Recipients<Self::PublicKey>,
+    ) -> Result<Self::Checked<'_>, SystemTime> {
+        if self.muted {
+            Ok(VoteGateChecked::Muted(self.suppressed.clone()))
+        } else {
+            Ok(VoteGateChecked::Live(
+                self.inner.check(recipients).await?,
+            ))
+        }
     }
 }
 
@@ -325,6 +681,18 @@ fn main() {
         "slay3rd: starting Layer Commonware consensus node"
     );
 
+    // RC17 single-instance guard: one identity = one process. A second
+    // slay3rd on this data dir wedges on the RocksDB lock at best; a
+    // same-identity process elsewhere equivocates on the wire (the
+    // retired-G1 zombie that stole home-vb's ed25519).
+    std::fs::create_dir_all(&config.data_dir).expect("Failed to create data directory");
+    enforce_single_instance(&config.data_dir);
+
+    // RC17 operator min-spec (enforcement-lite): log the host spec and
+    // WARN below the floor — an undersized seat should be loud at boot,
+    // not discovered later from absent signer bits.
+    log_machine_spec(&config.data_dir);
+
     // Load BLS key material. If missing, exit with a clear error.
     // INVARIANT: Consensus MUST NOT start until DKG key material is validated.
     let km = match KeyMaterial::load(&config.bls_key_path) {
@@ -346,6 +714,11 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // RC17 duplicate-identity boot guard: the key file and node.toml must
+    // agree on which seat this is, and no ed25519 identity may be claimed
+    // twice in the configuration. FATAL + non-zero exit on any hit.
+    check_duplicate_identity(&config, &km);
 
     // Use commonware_runtime::tokio::Runner to provide the Context needed by Engine::new().
     // Runner::start() blocks until the future completes.
@@ -484,6 +857,18 @@ async fn run_node(
         validator_index = km.validator_index,
         our_sorted_position = our_sorted_position,
         "Ed25519 sorted position determined for BLS share selection"
+    );
+
+    // Roster lookup for peer-facing logs: ed25519 hex (lowercased, as
+    // PublicKey::to_string() renders and config files store it) ->
+    // validator index. Lets block/mesh logs name the seat, not just the
+    // key prefix.
+    let seat_of: Arc<std::collections::HashMap<String, usize>> = Arc::new(
+        km.validator_public_keys
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (k.trim().to_lowercase(), i))
+            .collect(),
     );
 
     let participants = match commonware_utils::ordered::Set::try_from(participant_keys.as_slice()) {
@@ -1097,6 +1482,24 @@ async fn run_node(
     // Channel 4: tx gossip (raw tx bytes, forwarded from BroadcastTx)
     let (tx_p2p_sender, mut tx_p2p_receiver) = network.register(4, quota, 128);
 
+    // RC17 observer mode ([observer] enabled = true): silence outbound
+    // consensus votes at the channel-0 gate. Inbound votes/certs, the
+    // resolver, payload relay, backfill, state-sync, gRPC and finality
+    // reporting all stay live — the seat verifies and reports every
+    // finalization but never signs on the wire. Pass-through when off.
+    let observer = config.observer.as_ref().is_some_and(|o| o.enabled);
+    if observer {
+        warn!(
+            "OBSERVER MODE — read-only seat: verifies and reports finality \
+             but never broadcasts votes (RC17 §P2)"
+        );
+    }
+    let vote_sender = VoteGate {
+        inner: vote_sender,
+        muted: observer,
+        suppressed: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+    };
+
     // Build peer map: all validators including self
     // Address implements From<SocketAddr>; Map is built via try_into() from array/slice.
     // We need to add entries dynamically so we collect into a Vec then try_into.
@@ -1135,6 +1538,16 @@ async fn run_node(
     let peer_map = Map::try_from(peer_entries.as_slice())
         .expect("Failed to build peer map — keys may be unordered or duplicate");
     oracle.track(0, peer_map).await;
+
+    // RC17 blocked-peer observability: wrap the oracle so every consensus
+    // block decision also logs the roster seat index. The upstream block!
+    // macro already WARNs the reason; this adds WHO got blocked — the
+    // "TCP up, no session, signer bit absent" symptom from the zombie
+    // incident.
+    let blocker = LoggingBlocker {
+        inner: oracle,
+        seat_of: seat_of.clone(),
+    };
 
     // Start AFTER register() calls
     network.start();
@@ -1202,6 +1615,7 @@ async fn run_node(
     // (by public-key prefix) when the mesh is thin.
     {
         let mesh_reached = mesh_reached.clone();
+        let seat_of = seat_of.clone();
         let peer_keys: Vec<String> =
             config.peers.iter().map(|p| p.public_key.clone()).collect();
         let quorum = km.threshold_required as usize;
@@ -1216,10 +1630,19 @@ async fn run_node(
                     tracing::info!(connected, configured = mesh_peer_total, quorum,
                         "peer mesh: reached {connected}/{mesh_peer_total} peers in last 2m");
                 } else {
+                    // Name the missing seats (key prefix + roster index) —
+                    // a thin mesh is the observable half of a blocked or
+                    // dead peer (RC17 blocked-peer observability).
                     let missing: Vec<String> = peer_keys
                         .iter()
                         .filter(|k| !m.contains_key(k.as_str()))
-                        .map(|k| k.chars().take(8).collect())
+                        .map(|k| {
+                            let prefix: String = k.chars().take(8).collect();
+                            match seat_of.get(&k.to_lowercase()) {
+                                Some(i) => format!("{prefix}#idx{i}"),
+                                None => prefix,
+                            }
+                        })
                         .collect();
                     tracing::warn!(connected, configured = mesh_peer_total, quorum,
                         missing = ?missing,
@@ -1265,12 +1688,25 @@ async fn run_node(
         let mempool = mempool.clone();
         let chain_id = config.chain_id.clone();
         tokio::spawn(async move {
+            // RC17 blocked-peer observability: name the peer on every
+            // drop, throttled so a spamming peer produces one line per
+            // 10s per reason instead of per-message spam.
+            let mut drops = DropThrottle::new(Duration::from_secs(10));
             loop {
                 match tx_p2p_receiver.recv().await {
-                    Ok((_peer, message)) => {
+                    Ok((peer, message)) => {
+                        let peer_prefix: String =
+                            peer.to_string().chars().take(8).collect();
                         let raw: bytes::Bytes = message.into();
                         let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id)
                         else {
+                            if let Some(suppressed) = drops.should_log("tx-gossip-undecodable") {
+                                tracing::warn!(
+                                    peer = %peer_prefix,
+                                    suppressed,
+                                    "Tx gossip: dropped undecodable tx bytes from peer"
+                                );
+                            }
                             continue;
                         };
                         // Admission metadata — captured before check_tx
@@ -1293,6 +1729,13 @@ async fn run_node(
                             app.info().is_some() && app.check_tx(tx).result.is_ok()
                         };
                         if !ok {
+                            if let Some(suppressed) = drops.should_log("tx-gossip-checktx") {
+                                tracing::warn!(
+                                    peer = %peer_prefix,
+                                    suppressed,
+                                    "Tx gossip: dropped peer tx failing check_tx"
+                                );
+                            }
                             continue;
                         }
                         let _ = mempool
@@ -1367,9 +1810,16 @@ async fn run_node(
         let mut reply_sender = payload_p2p_sender.clone();
         let mesh_reached = mesh_reached.clone();
         tokio::spawn(async move {
+            // RC17 blocked-peer observability: name the peer on every
+            // drop/reject, throttled — far-tip push floods reject once per
+            // message (rc11 wedge signature), so fold repeats into a
+            // suppressed= count per reason.
+            let mut drops = DropThrottle::new(Duration::from_secs(10));
             loop {
                 match payload_p2p_receiver.recv().await {
                     Ok((sender_pk, message)) => {
+                        let peer_prefix: String =
+                            sender_pk.to_string().chars().take(8).collect();
                         // Any authenticated inbound message proves the link —
                         // the strongest mesh signal, and the only one a
                         // non-proposing seat produces (rc11 soak: the
@@ -1386,7 +1836,7 @@ async fn run_node(
                         };
                         if tag == PAYLOAD_MSG_REQUEST {
                             let Ok(digest) = <[u8; 32]>::try_from(payload_bytes) else {
-                                tracing::warn!("Payload fetch: malformed request");
+                                tracing::warn!(peer = %peer_prefix, "Payload fetch: malformed request");
                                 continue;
                             };
                             if let Some(p) = node.lookup_payload(&digest).await {
@@ -1408,7 +1858,7 @@ async fn run_node(
                             // height we hold as a separate PUSH frame, capped
                             // at BACKFILL_BATCH_SIZE to bound reply fan-out.
                             if payload_bytes.len() != 10 {
-                                tracing::warn!("Payload fetch: malformed range request");
+                                tracing::warn!(peer = %peer_prefix, "Payload fetch: malformed range request");
                                 continue;
                             }
                             let start = u64::from_be_bytes(payload_bytes[..8].try_into().unwrap());
@@ -1440,7 +1890,7 @@ async fn run_node(
                             continue;
                         }
                         if tag != PAYLOAD_MSG_PUSH {
-                            tracing::warn!(tag, "Payload relay: unknown message tag");
+                            tracing::warn!(peer = %peer_prefix, tag, "Payload relay: unknown message tag");
                             continue;
                         }
                         let psize = payload_bytes.len();
@@ -1476,16 +1926,25 @@ async fn run_node(
                                         }
                                     }
                                     (Ok(false), _) => {}
-                                    (Err(reason), _) => tracing::debug!(
-                                        height,
-                                        digest = %hex::encode(digest),
-                                        reason,
-                                        "Payload relay: peer payload rejected"
-                                    ),
+                                    (Err(reason), _) => {
+                                        // Hot path — a far-tip flood rejects
+                                        // once per push (rc11 wedge signature);
+                                        // name the peer, fold repeats.
+                                        if let Some(suppressed) = drops.should_log(reason) {
+                                            tracing::warn!(
+                                                peer = %peer_prefix,
+                                                height,
+                                                digest = %hex::encode(digest),
+                                                reason,
+                                                suppressed,
+                                                "Payload relay: peer payload rejected"
+                                            );
+                                        }
+                                    }
                                 }
                             }
                             Err(e) => {
-                                tracing::warn!(error = %e, payload_bytes = psize, "Payload relay: received malformed payload bytes");
+                                tracing::warn!(peer = %peer_prefix, error = %e, payload_bytes = psize, "Payload relay: received malformed payload bytes");
                             }
                         }
                     }
@@ -1595,7 +2054,7 @@ async fn run_node(
         let consensus_cfg = SimplexConfig {
             scheme,
             elector: RoundRobin::<commonware_cryptography::Sha256>::default(),
-            blocker: oracle,
+            blocker: blocker.clone(),
             automaton: layer_node,
             relay,
             reporter,
@@ -1635,7 +2094,7 @@ async fn run_node(
         let consensus_cfg = SimplexConfig {
             scheme: bls_scheme,
             elector: RoundRobin::<commonware_cryptography::Sha256>::default(),
-            blocker: oracle,
+            blocker,
             automaton: layer_node,
             relay,
             reporter,

@@ -63,6 +63,9 @@ aws-lc-rs = { version = "1", features = ["prebuilt-nasm"] }
 # scheme as verifier-only nodes.
 [target.'cfg(unix)'.dependencies]
 sriracha-mayo = "0.0.4"
+# statvfs for the RC17 min-spec disk-free check — already in the dep tree
+# transitively (rocksdb/aws-lc-rs), so this adds no new compile cost.
+libc = "0.2"
 
 [dev-dependencies]
 cosmwasm-std = { workspace = true }

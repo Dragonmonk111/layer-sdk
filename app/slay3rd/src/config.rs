@@ -152,6 +152,28 @@ pub struct NodeConfig {
     /// `dry_run = true` scans and logs candidate repairs without writing.
     #[serde(default)]
     pub finality_backfill: Option<FinalityBackfillConfig>,
+
+    /// Read-only observer seat (docs/RC17-PLAN.md §P2 "read-only observer
+    /// peer class"). With `[observer] enabled = true` the node runs the
+    /// full data plane — payload relay, backfill, state-sync, gRPC and
+    /// finality reporting — but never emits a consensus vote: every
+    /// outbound notarize/nullify/finalize partial is dropped at the
+    /// channel-0 gate (main.rs `VoteGate`). No wire-format change: to
+    /// peers the seat looks like an unresponsive voter that still serves
+    /// payloads. The seat keeps its roster slot and still proposes
+    /// payloads when elected, so this is an operator choice, not a new
+    /// consensus role — do NOT enable on a seat whose votes the quorum
+    /// margin depends on.
+    #[serde(default)]
+    pub observer: Option<ObserverConfig>,
+}
+
+/// Read-only observer parameters. See `NodeConfig::observer`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObserverConfig {
+    /// Master switch. Default false — a roster seat votes.
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// Finality-record backfill parameters (repair of payload-only heights).
@@ -265,6 +287,7 @@ impl Default for NodeConfig {
             pruning_keep_heights: None,
             restart_anchor: None,
             finality_backfill: None,
+            observer: None,
         }
     }
 }
@@ -392,6 +415,7 @@ mod tests {
             pruning_keep_heights: None,
             restart_anchor: None,
             finality_backfill: None,
+            observer: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
         let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");
