@@ -42,6 +42,13 @@ COPY lib/sriracha-mayo /myapp/lib/sriracha-mayo
 # Workspace member Cargo.tomls with dummy source for dependency caching
 COPY app/slay3rd/Cargo.toml /myapp/app/slay3rd/Cargo.toml
 COPY dummy.rs /myapp/app/slay3rd/src/main.rs
+COPY app/claw-core/Cargo.toml /myapp/app/claw-core/Cargo.toml
+COPY dummy.rs /myapp/app/claw-core/src/lib.rs
+COPY app/claw-relay/Cargo.toml /myapp/app/claw-relay/Cargo.toml
+COPY dummy.rs /myapp/app/claw-relay/src/main.rs
+COPY app/claw-checkpoint/Cargo.toml /myapp/app/claw-checkpoint/Cargo.toml
+COPY dummy.rs /myapp/app/claw-checkpoint/src/lib.rs
+COPY dummy.rs /myapp/app/claw-checkpoint/src/main.rs
 COPY contracts/caller/Cargo.toml /myapp/contracts/caller/Cargo.toml
 COPY dummy.rs /myapp/contracts/caller/src/lib.rs
 COPY contracts/echo/Cargo.toml /myapp/contracts/echo/Cargo.toml
@@ -50,6 +57,8 @@ COPY contracts/root/Cargo.toml /myapp/contracts/root/Cargo.toml
 COPY dummy.rs /myapp/contracts/root/src/lib.rs
 COPY contracts/light-client/Cargo.toml /myapp/contracts/light-client/Cargo.toml
 COPY dummy.rs /myapp/contracts/light-client/src/lib.rs
+COPY contracts/seat-attestation/Cargo.toml /myapp/contracts/seat-attestation/Cargo.toml
+COPY dummy.rs /myapp/contracts/seat-attestation/src/lib.rs
 COPY packages/app/Cargo.toml /myapp/packages/app/Cargo.toml
 COPY dummy.rs /myapp/packages/app/src/lib.rs
 COPY packages/cosmos/Cargo.toml /myapp/packages/cosmos/Cargo.toml
