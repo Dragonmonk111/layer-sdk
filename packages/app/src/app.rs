@@ -277,6 +277,8 @@ impl<T: PersistentStorage + 'static> App<T> {
     /// If this fails with AppLoadError::NoStoredState, then we wait for init to be called.
     /// Otherwise we fail on loading.
     pub fn load_from_storage(&mut self) -> Result<(), AppLoadError> {
+        // Any (re)load supersedes whatever the index was tracking.
+        self.root_index = None;
         let meter = GasMeter::infinite();
         let (state, block) = {
             let reader = self.storage.reader();
@@ -643,12 +645,6 @@ impl<T: PersistentStorage + 'static> App<T> {
         )
         .entered();
 
-        // RC17 incremental root: the leaf index must reflect committed
-        // (pre-block) state — ensure it before opening the block writer.
-        self.ensure_root_index()?;
-
-        let mut writer = TrackingWriter::new(self.storage.writer());
-
         let data = self.data.as_ref().unwrap();
 
         // assert we are exactly one block ahead of last known state
@@ -670,6 +666,13 @@ impl<T: PersistentStorage + 'static> App<T> {
                 previous: block.time.nanos(),
             });
         }
+
+        // RC17 incremental root: the leaf index must reflect committed
+        // (pre-block) state — ensure it before opening the block writer,
+        // but only once the block has passed validity checks.
+        let root_rebuild_ms = self.ensure_root_index()?;
+
+        let mut writer = TrackingWriter::new(self.storage.writer());
 
         // Run begin block logic (not included in block gas)
         let begin_meter = GasMeter::new(MAX_BEGIN_BLOCK_GAS);
@@ -721,6 +724,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         tracing::info!(
             height = full_block.height,
             root_scan_ms = root_start.elapsed().as_millis() as u64,
+            root_rebuild_ms,
             "state root computed"
         );
         STATE_ROOT.save(&mut writer, &meter, &root)?;
@@ -1083,18 +1087,22 @@ impl<T: PersistentStorage + 'static> App<T> {
         Ok(())
     }
 
-    fn ensure_root_index(&mut self) -> PulsarResult<()> {
+    /// Returns the wall-clock ms spent rebuilding the index (0 when it
+    /// was already warm) so callers can attribute the cold-path cost.
+    fn ensure_root_index(&mut self) -> PulsarResult<u64> {
         if self.root_index.is_none() {
+            let start = std::time::Instant::now();
             self.rebuild_root_index()?;
+            return Ok(start.elapsed().as_millis() as u64);
         }
-        Ok(())
+        Ok(0)
     }
 
     /// Recompute the state root over committed state and persist it to the
     /// `_state_root` sidecar item. Called at the end of `finalize_block`
     /// (post-commit) and at `init` (post-genesis).
     fn store_state_root(&mut self) -> PulsarResult<()> {
-        self.ensure_root_index()?;
+        let _ = self.ensure_root_index()?;
         let root = root_with_pending(
             self.root_index.as_ref().unwrap(),
             &std::collections::BTreeMap::new(),
@@ -1412,17 +1420,19 @@ impl<W: Transaction> ReadonlyStorage for TrackingWriter<W> {
 
 impl<W: Transaction> Storage for TrackingWriter<W> {
     fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> layer_std::GasResult<()> {
+        self.inner.set(meter, key, value)?;
         if key.first() != Some(&b'_') {
             self.dirty.insert(key.to_vec(), Some(value.to_vec()));
         }
-        self.inner.set(meter, key, value)
+        Ok(())
     }
 
     fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> layer_std::GasResult<()> {
+        self.inner.remove(meter, key)?;
         if key.first() != Some(&b'_') {
             self.dirty.insert(key.to_vec(), None);
         }
-        self.inner.remove(meter, key)
+        Ok(())
     }
 
     fn as_ref(&self) -> &dyn ReadonlyStorage {
