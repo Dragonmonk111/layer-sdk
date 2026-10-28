@@ -1,5 +1,12 @@
 # seat-attestation — deploy runbook
 
+**DEPLOYED 2026-10-28** (chain `junoclaw-g1`):
+- **code_id 21** — tx `D631201D12B6B88BF38D831E595E3FB2EB295DA0A311F61F5846D8D48B7569E0` (h3,407,549)
+- **contract `juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm`** — tx `4CB4DD597B08607ED7ABAC8F45D8F3283ED96785C163CD89E53CF35112CDFCBF`
+- admin = dao_core `juno122s3kcms43lgqu6p3h4tezcnwmpj5kslleku5jnz2a2jvat8mh0qkrqv3u` · cw4_group = `juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj`
+- verified: `get_config` + `list_active_seats` (empty, expected) on committed state
+- NOTE: `TX_SENDER_CHAIN_ID=junoclaw-g1` required — default `junoclaw-1` → InvalidSignature at check_tx.
+
 **Artifact:** `dist/junoclaw-seat-attestation-v0.1.0.wasm`
 **sha256:** `6244e778f8dc10a3420f92cc678b8e325015ce59def6e328599ab73c5d00cd29`
 (321,732 bytes — rebuild: `cargo +1.86.0 build --profile wasm --lib

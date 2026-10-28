@@ -103,6 +103,9 @@ async fn gossip_replicates_signed_event() {
     let (mut wa, _) = connect_async(format!("ws://127.0.0.1:{port_a}/"))
         .await
         .expect("ws connect A");
+    // NIP-42: consume the connect-time AUTH challenge (not answered —
+    // gossip/clients may ignore it; EVENT admission is per-signature).
+    let _ = wa.next().await;
     let ev = sign("federated hello", chan, 1_700_000_000, &key);
     let want_id = ev.id.clone();
     wa.send(Message::Text(
@@ -121,6 +124,7 @@ async fn gossip_replicates_signed_event() {
     let (mut wb, _) = connect_async(format!("ws://127.0.0.1:{port_b}/"))
         .await
         .expect("ws connect B");
+    let _ = wb.next().await; // consume AUTH challenge
     let mut found = false;
     'poll: for attempt in 0..40 {
         let sub = format!("probe-{attempt}");

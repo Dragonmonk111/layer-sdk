@@ -95,8 +95,11 @@ if python3 -c "import websocket" 2>/dev/null; then
   PY="$B/ws-probe.py"
   [ -f "$PY" ] || { say "NOTE: ws-probe.py missing — N-probes skipped"; exit 0; }
   for probe in forged outsider badchan badkind eose; do
-    b=$(python3 "$PY" --url "$BUZZ_URL" --channel "$CHAN" --probe "$probe" ${KEYFILE:+--key-file "$KEYFILE"} 2>/dev/null || echo "ERR")
-    c=$(python3 "$PY" --url "$CLAW_URL" --channel "$CHAN" --probe "$probe" ${KEYFILE:+--key-file "$KEYFILE"} 2>/dev/null || echo "ERR")
+    # outsider must NOT get --key-file — it probes with the fixed
+    # non-member key by definition.
+    KF=""; [ "$probe" != "outsider" ] && KF="${KEYFILE:+--key-file $KEYFILE}"
+    b=$(python3 "$PY" --url "$BUZZ_URL" --channel "$CHAN" --probe "$probe" $KF 2>/dev/null || echo "ERR")
+    c=$(python3 "$PY" --url "$CLAW_URL" --channel "$CHAN" --probe "$probe" $KF 2>/dev/null || echo "ERR")
     rep "N $probe" "$b" "$c" "$([ "$b" = "$c" ] && echo MATCH || echo DIFF)"
   done
 else

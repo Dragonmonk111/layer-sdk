@@ -1051,6 +1051,7 @@ name = "claw-relay"
 version = "0.5.0"
 dependencies = [
  "axum 0.7.6",
+ "base64 0.22.1",
  "claw-core",
  "futures-channel",
  "futures-util",

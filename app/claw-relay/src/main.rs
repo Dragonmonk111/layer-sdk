@@ -157,6 +157,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let router = Router::new()
         .route("/", get(ws_handler))
+        .route("/events", axum::routing::post(http_events))
+        .route("/query", axum::routing::post(http_query))
+        .route("/count", axum::routing::post(http_count))
         .route("/healthz", get(|| async { "ok" }))
         .with_state(app);
 
@@ -193,6 +196,19 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
         }
     });
 
+    // NIP-42: challenge on connect. buzz-cli requires an ["AUTH",challenge]
+    // before it will send any verb (RelayError::NoAuthChallenge otherwise).
+    // Admission stays event-level — the auth handshake is for client
+    // compatibility, not a trust gate.
+    let challenge = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let _ = out_tx.unbounded_send(Message::Text(
+        serde_json::json!(["AUTH", challenge]).to_string().into(),
+    ));
+
     // subscription registry: sub_id -> filters
     let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> = Arc::new(RwLock::new(HashMap::new()));
     let mut live = app.tx.subscribe();
@@ -221,7 +237,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
             ));
             continue;
         };
-        handle_frame(&app, &subs, &out_tx2, &v).await;
+        handle_frame(&app, &subs, &out_tx2, &v, &challenge).await;
     }
     drop(out_tx);
     let _ = writer.await;
@@ -232,6 +248,7 @@ async fn handle_frame(
     subs: &Arc<RwLock<HashMap<String, Vec<Filter>>>>,
     out: &mpsc::UnboundedSender<Message>,
     v: &serde_json::Value,
+    challenge: &str,
 ) {
     let send = |v: serde_json::Value| {
         let _ = out.unbounded_send(Message::Text(v.to_string().into()));
@@ -297,8 +314,194 @@ async fn handle_frame(
                 subs.write().await.remove(sub);
             }
         }
+        "AUTH" => {
+            // NIP-42 response: signed kind-22242 event carrying the issued
+            // challenge. Verified for correctness (forged auth responses get
+            // OK false) but not required for admission — every EVENT is
+            // checked independently at admit_event.
+            let Some(ev) = v
+                .get(1)
+                .and_then(|e| serde_json::from_value::<Event>(e.clone()).ok())
+            else {
+                return send(serde_json::json!(["NOTICE", "error: malformed auth event"]));
+            };
+            let id = ev.id.clone();
+            let ok = ev.kind == 22242
+                && ev.tag_value("challenge") == Some(challenge)
+                && ev.verify().is_ok();
+            send(serde_json::json!([
+                "OK", id, ok,
+                if ok { "" } else { "error: bad auth" }
+            ]));
+        }
         _ => send(serde_json::json!(["NOTICE", format!("error: unsupported {kind}")])),
     }
+}
+
+// ─── HTTP bridge (Buzz parity surface) ─────────────────────────────────────
+// buzz-cli's durable write/read path is NOT the websocket: it POSTs to
+//   /events (submit signed event)  /query (filters -> events)  /count
+// each carrying NIP-98 auth: `Authorization: Nostr <base64(kind-27235 event)>`.
+// The bridge and the websocket share the SAME admission gate — an event that
+// would be rejected over WS is rejected here identically.
+//
+// Where we go past parity: writes return a structured verdict (the admit
+// reason on rejection is a chain-state fact, not an opaque policy string),
+// and reads may be cross-checked against moultbook checkpoint anchors.
+
+/// NIP-98 verify: `Authorization: Nostr <b64(event)>` — kind 27235, valid
+/// signature, `method`=POST, `u` tag's path matches, created_at within ±1h.
+/// Returns the verified auth event; transport auth only — per-event
+/// signature + allowlist admission still applies to the payload.
+fn verify_nip98(
+    headers: &axum::http::HeaderMap,
+    method: &str,
+    path: &str,
+) -> Result<Event, (axum::http::StatusCode, String)> {
+    use axum::http::StatusCode;
+    let unauthorized = |m: &str| (StatusCode::UNAUTHORIZED, m.to_string());
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| unauthorized("missing Authorization"))?;
+    let b64 = auth
+        .strip_prefix("Nostr ")
+        .ok_or_else(|| unauthorized("expected 'Nostr <base64-event>'"))?;
+    use base64::Engine;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|_| unauthorized("bad base64"))?;
+    let ev: Event = serde_json::from_slice(&raw)
+        .map_err(|_| unauthorized("auth event not valid event json"))?;
+    if ev.kind != 27235 {
+        return Err(unauthorized("auth event kind != 27235"));
+    }
+    ev.verify()
+        .map_err(|_| unauthorized("bad auth event signature"))?;
+    if ev.tag_value("method") != Some(method) {
+        return Err(unauthorized("auth method tag mismatch"));
+    }
+    // u tag: compare the path portion only — clients sign ws://, http:// or
+    // wss:// variants of the same endpoint.
+    let u = ev.tag_value("u").unwrap_or_default();
+    if !u.rsplit('/').next().map_or(false, |seg| format!("/{seg}") == path) {
+        return Err(unauthorized("auth u tag mismatch"));
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if ev.created_at.abs_diff(now) > 3600 {
+        return Err(unauthorized("auth event stale"));
+    }
+    Ok(ev)
+}
+
+fn nip98_err((code, msg): (axum::http::StatusCode, String)) -> axum::response::Response {
+    (code, axum::Json(serde_json::json!({"error": msg}))).into_response()
+}
+
+/// POST /events — submit a signed event (body = raw event JSON).
+/// Same admit_event gate as the WS EVENT frame.
+async fn http_events(
+    State(app): State<Shared>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    if let Err(e) = verify_nip98(&headers, "POST", "/events") {
+        return nip98_err(e);
+    }
+    let Ok(ev) = serde_json::from_slice::<Event>(&body) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({"accepted": false, "error": "malformed event"})),
+        )
+            .into_response();
+    };
+    if let Err(msg) = admit_event(&app, &ev).await {
+        return (
+            StatusCode::FORBIDDEN,
+            axum::Json(serde_json::json!({
+                "accepted": false, "event_id": ev.id, "error": msg,
+            })),
+        )
+            .into_response();
+    }
+    match app.store.put(&ev) {
+        Ok(_) => {
+            let _ = app.tx.send(std::sync::Arc::new(ev.clone()));
+            axum::Json(serde_json::json!({"accepted": true, "event_id": ev.id}))
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            axum::Json(serde_json::json!({"accepted": false, "event_id": ev.id, "error": format!("{e}")})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /query — body = JSON array of nostr filters -> JSON array of events.
+async fn http_query(
+    State(app): State<Shared>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    if let Err(e) = verify_nip98(&headers, "POST", "/query") {
+        return nip98_err(e);
+    }
+    let Ok(filters) = serde_json::from_slice::<Vec<Filter>>(&body) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({"error": "filters must be a JSON array"})),
+        )
+            .into_response();
+    };
+    let mut seen = HashSet::new();
+    let mut out: Vec<Event> = Vec::new();
+    for f in &filters {
+        if let Ok(events) = app.store.query(f) {
+            for ev in events {
+                if seen.insert(ev.id.clone()) {
+                    out.push(ev);
+                }
+            }
+        }
+    }
+    axum::Json(serde_json::json!(out)).into_response()
+}
+
+/// POST /count — body = JSON array of filters -> {"count": n}.
+async fn http_count(
+    State(app): State<Shared>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    if let Err(e) = verify_nip98(&headers, "POST", "/count") {
+        return nip98_err(e);
+    }
+    let Ok(filters) = serde_json::from_slice::<Vec<Filter>>(&body) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({"error": "filters must be a JSON array"})),
+        )
+            .into_response();
+    };
+    let mut seen = HashSet::new();
+    let mut n = 0usize;
+    for f in &filters {
+        if let Ok(events) = app.store.query(f) {
+            for ev in events {
+                if seen.insert(ev.id.clone()) {
+                    n += 1;
+                }
+            }
+        }
+    }
+    axum::Json(serde_json::json!({"count": n})).into_response()
 }
 
 /// Shared write-admission gate — used by both client `EVENT` frames
@@ -419,7 +622,7 @@ mod tests {
 
         // 1. empty allowlist -> denied (never-populated cw4 feed)
         let ev = signed_event("hi", "chan-a", 1);
-        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev])).await;
+        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev]), "t").await;
         let v = next_json(&mut out_rx).await;
         assert_eq!(v[0], "OK");
         assert_eq!(v[2], false);
@@ -428,13 +631,13 @@ mod tests {
         // 2. populated set, pubkey not in it -> still denied
         app.allowlist.write().await.insert("f".repeat(64));
         let ev2 = signed_event("hi2", "chan-a", 2);
-        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2.clone()])).await;
+        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2.clone()]), "t").await;
         let v = next_json(&mut out_rx).await;
         assert_eq!(v[2], false);
 
         // 3. allowlisted pubkey -> admitted
         app.allowlist.write().await.insert(ev2.pubkey.clone());
-        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2])).await;
+        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2]), "t").await;
         let v = next_json(&mut out_rx).await;
         assert_eq!(v[0], "OK");
         assert_eq!(v[2], true);

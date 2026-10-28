@@ -73,6 +73,39 @@ async fn event_req_eose_roundtrip() {
     let url = format!("ws://127.0.0.1:{port}/");
     let (mut ws, _) = connect_async(&url).await.expect("ws connect");
 
+    // 0. NIP-42: server challenges on connect — answer it (buzz-cli path).
+    let m = ws.next().await.unwrap().unwrap().into_text().unwrap();
+    let v: serde_json::Value = serde_json::from_str(&m).unwrap();
+    assert_eq!(v[0], "AUTH");
+    let challenge = v[1].as_str().unwrap().to_string();
+    let sk = SigningKey::from_bytes(&key).unwrap();
+    let mut auth = Event {
+        id: String::new(),
+        pubkey: pubkey_hex.clone(),
+        created_at: 1_700_000_000,
+        kind: 22242,
+        tags: vec![
+            vec!["relay".into(), url.clone()],
+            vec!["challenge".into(), challenge],
+        ],
+        content: String::new(),
+        sig: String::new(),
+    };
+    let aid = auth.compute_id();
+    auth.id = hex::encode(aid);
+    auth.sig = hex::encode(sk.sign_raw(&aid, &[0u8; 32]).unwrap().to_bytes());
+    let auth_id = auth.id.clone();
+    ws.send(Message::Text(
+        serde_json::json!(["AUTH", auth]).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let reply = ws.next().await.unwrap().unwrap().into_text().unwrap();
+    let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
+    assert_eq!(reply[0], "OK");
+    assert_eq!(reply[1], auth_id);
+    assert_eq!(reply[2], true);
+
     // 1. signed EVENT -> OK true
     let ev = sign("hello sovereign relay", chan, 1_700_000_000, &key);
     let want_id = ev.id.clone();

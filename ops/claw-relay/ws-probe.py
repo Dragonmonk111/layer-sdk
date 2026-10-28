@@ -96,6 +96,44 @@ def make_event(sk, pub: str, sign, content: str, chan: str, kind: int = 9) -> di
     return ev
 
 
+def maybe_answer_auth(ws, url: str, pub: str, sign):
+    """NIP-42: answer an AUTH challenge if the server sends one.
+
+    Buzz relays challenge on connect (["AUTH", <hex>]); claw-relay does not —
+    its admission is the in-band event signature + cw4 allowlist. Peek briefly
+    so either dialect works.
+    """
+    ws.settimeout(2)
+    try:
+        first = ws.recv()
+    except Exception:
+        first = None
+    ws.settimeout(10)
+    if not first:
+        return
+    try:
+        m = json.loads(first)
+    except Exception:
+        return
+    if not (isinstance(m, list) and m and m[0] == "AUTH"):
+        return
+    ev = {"pubkey": pub, "created_at": int(time.time()), "kind": 22242,
+          "tags": [["relay", url], ["challenge", m[1]]], "content": ""}
+    ser = json.dumps([0, ev["pubkey"], ev["created_at"], ev["kind"], ev["tags"], ev["content"]],
+                     separators=(",", ":"), ensure_ascii=False)
+    ev["id"] = hashlib.sha256(ser.encode()).hexdigest()
+    ev["sig"] = sign(bytes.fromhex(ev["id"])).hex()
+    ws.send(json.dumps(["AUTH", ev]))
+    end = time.time() + 8
+    while time.time() < end:        # consume the auth OK so probes see a clean stream
+        try:
+            r = json.loads(ws.recv())
+        except Exception:
+            return
+        if r[0] == "OK":
+            return
+
+
 def recv_until(ws, want: str, timeout=8):
     end = time.time() + timeout
     while time.time() < end:
@@ -126,6 +164,7 @@ def main():
     _, pub, sign = schnorr_keypair(key_hex)
 
     ws = websocket.create_connection(a.url, timeout=10)
+    maybe_answer_auth(ws, a.url, pub, sign)
 
     if a.probe == "eose":
         ws.send(json.dumps(["REQ", "p1", {"#h": [a.channel]}]))
