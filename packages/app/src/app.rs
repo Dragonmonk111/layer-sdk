@@ -696,7 +696,15 @@ impl<T: PersistentStorage + 'static> App<T> {
         // carries this root (app-hash semantics), which is what binds IBC
         // membership proofs to the signed certificate chain. Sidecar write —
         // excluded from app_hash and from the root itself.
+        // RC17 instrumentation: time the O(state) scan so exec_ms can be
+        // decomposed as root_scan_ms vs apply_commit_ms on every seat.
+        let root_start = std::time::Instant::now();
         let root = state_root_over(&writer)?;
+        tracing::info!(
+            height = full_block.height,
+            root_scan_ms = root_start.elapsed().as_millis() as u64,
+            "state root computed"
+        );
         STATE_ROOT.save(&mut writer, &meter, &root)?;
         writer.commit(&meter)?;
 

@@ -1443,13 +1443,23 @@ where
                 }
                 tokio::time::sleep(POLL_INTERVAL).await;
             };
-            if let Err(reason) = verdict {
-                tracing::info!(
+            // RC17 vote-emission logging: record every verify() resolution —
+            // verdict, elapsed, view — so an absent signer bit can be
+            // attributed to late local resolution vs late network delivery.
+            match &verdict {
+                Ok(()) => tracing::info!(
                     digest = %hex::encode(digest_bytes),
                     view = view_num,
-                    reason,
-                    "verify: rejecting proposal"
-                );
+                    elapsed_ms = start.elapsed().as_millis() as u64,
+                    "verify: resolved allow"
+                ),
+                Err(reason) => tracing::info!(
+                    digest = %hex::encode(digest_bytes),
+                    view = view_num,
+                    elapsed_ms = start.elapsed().as_millis() as u64,
+                    reason = %reason,
+                    "verify: resolved reject"
+                ),
             }
             tx.send(verdict.is_ok()).ok();
         });
@@ -1465,10 +1475,11 @@ where
 {
     async fn certify(
         &mut self,
-        _round: Round,
+        round: Round,
         payload: Self::Digest,
     ) -> oneshot::Receiver<bool> {
         let (tx, rx) = oneshot::channel();
+        let view_num = round.view().get();
 
         // certify() does NOT execute: a notarized block can still be skipped
         // by consensus. Certifying means "I hold these bytes durably and can
@@ -1511,6 +1522,7 @@ where
                 if start.elapsed() >= CERTIFY_WAIT_MAX {
                     tracing::info!(
                         digest = %hex::encode(digest_bytes),
+                        view = view_num,
                         "certify: payload unavailable within wait window"
                     );
                     break false;
@@ -1521,6 +1533,16 @@ where
                 }
                 tokio::time::sleep(POLL_INTERVAL).await;
             };
+            // RC17 vote-emission logging: every certify() resolution — this
+            // is where our finalize-vote originates. Bitmap presence with no
+            // local emission line was the unresolved idx2 case.
+            tracing::info!(
+                digest = %hex::encode(digest_bytes),
+                view = view_num,
+                elapsed_ms = start.elapsed().as_millis() as u64,
+                verdict = ok,
+                "certify: resolved"
+            );
             tx.send(ok).ok();
         });
         rx
