@@ -138,6 +138,13 @@ pub struct App<T: PersistentStorage> {
     /// only). `None` disables the floor. Not part of consensus state.
     min_gas_price: Option<MinGasPrice>,
 
+    /// In-memory leaf index over all non-`'_` consensus keys — the same set
+    /// `state_root_over` scans. `None` until first use (lazy one-time
+    /// O(state) build) and invalidated on bulk imports. Incremental
+    /// per-commit updates keep it identical to committed state; roots
+    /// computed from it are byte-identical to the full scan (KAT-tested).
+    root_index: Option<std::collections::BTreeMap<Vec<u8>, [u8; 32]>>,
+
     data: Option<InnerData>,
 }
 
@@ -252,6 +259,7 @@ impl<T: PersistentStorage + 'static> App<T> {
             storage,
             logic,
             min_gas_price: None,
+            root_index: None,
             data: None,
         }
     }
@@ -343,6 +351,7 @@ impl<T: PersistentStorage + 'static> App<T> {
 
         // Genesis state root — the first block's payload carries this so
         // membership proofs work from height 1 onward.
+        self.root_index = None; // genesis writes bypassed the tracker
         self.store_state_root()?;
 
         Ok(InitChainResponse {
@@ -634,7 +643,11 @@ impl<T: PersistentStorage + 'static> App<T> {
         )
         .entered();
 
-        let mut writer = self.storage.writer();
+        // RC17 incremental root: the leaf index must reflect committed
+        // (pre-block) state — ensure it before opening the block writer.
+        self.ensure_root_index()?;
+
+        let mut writer = TrackingWriter::new(self.storage.writer());
 
         let data = self.data.as_ref().unwrap();
 
@@ -696,17 +709,37 @@ impl<T: PersistentStorage + 'static> App<T> {
         // carries this root (app-hash semantics), which is what binds IBC
         // membership proofs to the signed certificate chain. Sidecar write —
         // excluded from app_hash and from the root itself.
-        // RC17 instrumentation: time the O(state) scan so exec_ms can be
-        // decomposed as root_scan_ms vs apply_commit_ms on every seat.
+        // RC17: incremental root — merge the block's dirty set into the
+        // committed leaf index instead of re-scanning all of state.
+        // Byte-identical to `state_root_over` on the post-write state
+        // (KAT: incremental_root_matches_full_scan).
         let root_start = std::time::Instant::now();
-        let root = state_root_over(&writer)?;
+        let root = root_with_pending(
+            self.root_index.as_ref().expect("root index ensured above"),
+            &writer.dirty,
+        );
         tracing::info!(
             height = full_block.height,
             root_scan_ms = root_start.elapsed().as_millis() as u64,
             "state root computed"
         );
         STATE_ROOT.save(&mut writer, &meter, &root)?;
+        let dirty = std::mem::take(&mut writer.dirty);
         writer.commit(&meter)?;
+
+        // Fold the same ops into the index — now matching committed state.
+        if let Some(index) = self.root_index.as_mut() {
+            for (key, op) in &dirty {
+                match op {
+                    Some(v) => {
+                        index.insert(key.clone(), leaf_hash(key, v));
+                    }
+                    None => {
+                        index.remove(key);
+                    }
+                }
+            }
+        }
 
         // update block in cache
         self.data.as_mut().unwrap().block = block;
@@ -1033,11 +1066,39 @@ impl<T: PersistentStorage + 'static> App<T> {
         root
     }
 
+    /// Rebuild the in-memory leaf index from committed state — the one
+    /// O(state) scan, amortized to startup and snapshot import instead of
+    /// every block (INC-exec-lag-idx2: the per-block scan was the wedge).
+    fn rebuild_root_index(&mut self) -> PulsarResult<()> {
+        let reader = self.storage.reader();
+        let meter = GasMeter::infinite();
+        let iter = consensus_entries(&reader, &meter)?;
+        let mut index = std::collections::BTreeMap::new();
+        for entry in iter {
+            let (key, value) = entry?;
+            index.insert(key.clone(), leaf_hash(&key, &value));
+        }
+        reader.abort();
+        self.root_index = Some(index);
+        Ok(())
+    }
+
+    fn ensure_root_index(&mut self) -> PulsarResult<()> {
+        if self.root_index.is_none() {
+            self.rebuild_root_index()?;
+        }
+        Ok(())
+    }
+
     /// Recompute the state root over committed state and persist it to the
     /// `_state_root` sidecar item. Called at the end of `finalize_block`
     /// (post-commit) and at `init` (post-genesis).
     fn store_state_root(&mut self) -> PulsarResult<()> {
-        let root = self.compute_state_root()?;
+        self.ensure_root_index()?;
+        let root = root_with_pending(
+            self.root_index.as_ref().unwrap(),
+            &std::collections::BTreeMap::new(),
+        );
         let meter = GasMeter::infinite();
         let mut writer = self.storage.writer();
         STATE_ROOT.save(&mut writer, &meter, &root)?;
@@ -1219,6 +1280,7 @@ impl<T: PersistentStorage + 'static> App<T> {
         self.load_from_storage().map_err(|e| {
             StdError::generic_err(format!("snapshot import: state load failed: {e}"))
         })?;
+        self.root_index = None; // imported writes bypassed the tracker
         self.store_state_root()?;
         Ok(())
     }
@@ -1241,6 +1303,16 @@ fn consensus_entries<'a>(
     Ok(below.chain(above))
 }
 
+/// Leaf hash of one consensus KV entry — `sha256(0x00 || key || value)`.
+/// Single definition shared by the full scan and the incremental index.
+fn leaf_hash(key: &[u8], value: &[u8]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update([0x00u8]);
+    h.update(key);
+    h.update(value);
+    h.finalize().into()
+}
+
 /// State root over every non-sidecar (`'_'`-prefixed keys excluded) entry of
 /// `store`, in ascending key order. Works over a reader (committed state) or
 /// a writer (state including its uncommitted writes).
@@ -1253,13 +1325,119 @@ fn state_root_over(store: &dyn ReadonlyStorage) -> PulsarResult<[u8; 32]> {
         if key.first() == Some(&b'_') {
             continue; // sidecar keys are not consensus state
         }
-        let mut h = Sha256::new();
-        h.update([0x00u8]);
-        h.update(&key);
-        h.update(&value);
-        leaves.push(h.finalize().into());
+        leaves.push(leaf_hash(&key, &value));
     }
     Ok(merkle_root(&leaves))
+}
+
+/// State root over `index ⊕ pending` — byte-identical to `state_root_over`
+/// on the post-write state. Both maps are key-ascending, so the merge
+/// yields exactly the sorted leaf list the scan builds. `pending` holds the
+/// block's final op per key: `Some(value)` = write, `None` = delete.
+fn root_with_pending(
+    index: &std::collections::BTreeMap<Vec<u8>, [u8; 32]>,
+    pending: &std::collections::BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+) -> [u8; 32] {
+    let mut leaves: Vec<[u8; 32]> = Vec::with_capacity(index.len() + pending.len());
+    let mut pending_iter = pending.iter().peekable();
+    for (key, leaf) in index {
+        while let Some((pk, op)) = pending_iter.peek() {
+            if **pk < *key {
+                if let Some(v) = op {
+                    leaves.push(leaf_hash(pk, v));
+                }
+                pending_iter.next();
+            } else {
+                break;
+            }
+        }
+        match pending_iter.peek() {
+            Some((pk, op)) if **pk == *key => {
+                if let Some(v) = op {
+                    leaves.push(leaf_hash(pk, v));
+                }
+                pending_iter.next();
+            }
+            _ => leaves.push(*leaf),
+        }
+    }
+    for (pk, op) in pending_iter {
+        if let Some(v) = op {
+            leaves.push(leaf_hash(pk, v));
+        }
+    }
+    merkle_root(&leaves)
+}
+
+/// Per-block write tracker: wraps the block transaction and records the
+/// final op (set/remove) for every non-sidecar key, so the incremental
+/// root index can apply the block's mutations without re-reading
+/// committed state. Reads delegate to the inner writer — tracked writes
+/// stay visible to callers exactly as before. `as_ref`/`as_mut` return
+/// `self` (not the inner writer) so nothing bypasses tracking.
+struct TrackingWriter<W: Transaction> {
+    inner: W,
+    dirty: std::collections::BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+}
+
+impl<W: Transaction> TrackingWriter<W> {
+    fn new(inner: W) -> Self {
+        Self {
+            inner,
+            dirty: std::collections::BTreeMap::new(),
+        }
+    }
+}
+
+impl<W: Transaction> ReadonlyStorage for TrackingWriter<W> {
+    fn abort(self) {
+        self.inner.abort()
+    }
+
+    fn get(&self, meter: &GasMeter, key: &[u8]) -> layer_std::GasResult<Option<Vec<u8>>> {
+        self.inner.get(meter, key)
+    }
+
+    fn range<'a>(
+        &'a self,
+        meter: &'a GasMeter,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+        order: cosmwasm_std::Order,
+    ) -> layer_std::GasResult<Box<dyn Iterator<Item = layer_std::GasResult<cosmwasm_std::Record>> + 'a>>
+    {
+        self.inner.range(meter, start, end, order)
+    }
+}
+
+impl<W: Transaction> Storage for TrackingWriter<W> {
+    fn set(&mut self, meter: &GasMeter, key: &[u8], value: &[u8]) -> layer_std::GasResult<()> {
+        if key.first() != Some(&b'_') {
+            self.dirty.insert(key.to_vec(), Some(value.to_vec()));
+        }
+        self.inner.set(meter, key, value)
+    }
+
+    fn remove(&mut self, meter: &GasMeter, key: &[u8]) -> layer_std::GasResult<()> {
+        if key.first() != Some(&b'_') {
+            self.dirty.insert(key.to_vec(), None);
+        }
+        self.inner.remove(meter, key)
+    }
+
+    fn as_ref(&self) -> &dyn ReadonlyStorage {
+        self
+    }
+}
+
+impl<W: Transaction> Transaction for TrackingWriter<W> {
+    fn commit(self, meter: &GasMeter) -> layer_std::GasResult<()> {
+        self.inner.commit(meter)
+    }
+
+    fn as_mut(&mut self) -> &mut dyn Storage {
+        self
+    }
 }
 
 /// Snapshot wire format — bump if the record/chunk layout changes.
@@ -1419,6 +1597,68 @@ pub(crate) fn merkle_path(leaves: &[[u8; 32]], index: usize) -> Vec<Option<[u8; 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// RC17 equivalence KAT: the incremental index + dirty-merge root must
+    /// be byte-identical to the full `state_root_over` scan over the same
+    /// post-write state — across inserts, updates, deletes, repeated
+    /// writes to one key, deletes of absent keys, and sidecar keys.
+    #[test]
+    fn incremental_root_matches_full_scan() {
+        use layer_storage::MemoryStore;
+        let store = MemoryStore::default();
+        let meter = GasMeter::infinite();
+        {
+            let mut w = store.writer();
+            for i in 0u32..200 {
+                let key = format!("key/{:04}", i).into_bytes();
+                w.set(&meter, &key, format!("v{i}").as_bytes()).unwrap();
+            }
+            w.set(&meter, b"_sidecar/x", b"excluded").unwrap();
+            w.commit(&meter).unwrap();
+        }
+        // committed-state index — mirrors rebuild_root_index
+        let mut index = std::collections::BTreeMap::new();
+        {
+            let reader = store.reader();
+            for e in consensus_entries(&reader, &meter).unwrap() {
+                let (k, v) = e.unwrap();
+                index.insert(k.clone(), leaf_hash(&k, &v));
+            }
+            reader.abort();
+        }
+        // mixed write batch through TrackingWriter
+        let mut tw = TrackingWriter::new(store.writer());
+        tw.set(&meter, b"key/0003", b"updated").unwrap();
+        tw.set(&meter, b"key/0500", b"new").unwrap();
+        tw.remove(&meter, b"key/0007").unwrap();
+        tw.set(&meter, b"key/0003", b"updated2").unwrap();
+        tw.remove(&meter, b"key/9999").unwrap();
+        tw.set(&meter, b"_sidecar/new", b"tracked-out").unwrap();
+        let incremental = root_with_pending(&index, &tw.dirty);
+        let scanned = state_root_over(&tw).unwrap();
+        assert_eq!(incremental, scanned);
+        // after commit + index merge, index root equals a fresh scan
+        let dirty = std::mem::take(&mut tw.dirty);
+        tw.commit(&meter).unwrap();
+        for (k, op) in &dirty {
+            match op {
+                Some(v) => {
+                    index.insert(k.clone(), leaf_hash(k, v));
+                }
+                None => {
+                    index.remove(k);
+                }
+            }
+        }
+        let post = merkle_root(&index.values().copied().collect::<Vec<_>>());
+        let rescanned = {
+            let reader = store.reader();
+            let r = state_root_over(&reader).unwrap();
+            reader.abort();
+            r
+        };
+        assert_eq!(post, rescanned);
+    }
 
     use bytes::Bytes;
     use cosmwasm_std::{coin, coins, to_json_binary, Binary, Timestamp};
