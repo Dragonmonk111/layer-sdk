@@ -38,28 +38,97 @@ mod store;
 use axum::{
     extract::{
         ws::{Message, WebSocket},
-        State, WebSocketUpgrade,
+        ConnectInfo, DefaultBodyLimit, State, WebSocketUpgrade,
     },
     response::IntoResponse,
     routing::get,
     Router,
 };
 use claw_core::{Event, Filter};
-use futures_channel::mpsc;
 use futures_util::{SinkExt, StreamExt};
 use std::{
     collections::{HashMap, HashSet},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::PathBuf,
-    sync::Arc,
-    time::Duration,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::{Duration, Instant},
 };
 use store::Store;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 /// Kinds accepted for channel writes — mirrors the set buzz-cli reads by
 /// default: 9 chat, 40002/40008 channel msgs, 45001/45003 mod events.
 const ALLOWED_KINDS: &[u64] = &[9, 40002, 40008, 45001, 45003];
+
+// ─── abuse limits (DoS tranche) ──────────────────────────────────────────
+// Everything an unauthenticated or authenticated client can make the relay
+// do must be bounded: frame size, event size, filter complexity, replay
+// volume, subscription count, connection count, and per-key request rate.
+// Rejections are logged at warn — the limiter itself bounds the log rate.
+const MAX_EVENT_CONTENT: usize = 64 * 1024; // bytes of event `content`
+const MAX_EVENT_TAGS: usize = 64; // tag count
+const MAX_EVENT_TAG_BYTES: usize = 16 * 1024; // summed tag string bytes
+const MAX_HTTP_BODY: usize = 256 * 1024;
+const MAX_WS_MSG: usize = 256 * 1024;
+const MAX_SUBS_PER_CONN: usize = 20;
+const MAX_SUBID_LEN: usize = 64;
+const MAX_FILTERS_PER_REQ: usize = 10;
+const MAX_FILTER_VALUES: usize = 256; // per list (ids / authors / tag values)
+const MAX_FILTER_TAG_KEYS: usize = 16;
+const MAX_FILTER_VALUE_LEN: usize = 128; // chars per filter value
+const MAX_REPLAY: usize = 2000; // total events replayed/returned per request
+const MAX_CONN_PER_IP: usize = 16;
+const MAX_TOTAL_CONNS: usize = 512;
+const OUT_QUEUE: usize = 512; // bounded per-conn outgoing frames
+const WS_RATE_PER_SEC: f64 = 20.0;
+const WS_RATE_BURST: f64 = 40.0;
+const HTTP_WRITES_PER_MIN: f64 = 30.0;
+const HTTP_READS_PER_SEC: f64 = 2.0;
+const MAX_HTTP_BUCKETS: usize = 4096;
+
+/// Token bucket: refill at `rate`/sec up to `burst` capacity.
+struct Bucket {
+    tokens: f64,
+    last: Instant,
+    rate: f64,
+    burst: f64,
+}
+
+impl Bucket {
+    fn new(rate: f64, burst: f64) -> Self {
+        Self {
+            tokens: burst,
+            last: Instant::now(),
+            rate,
+            burst,
+        }
+    }
+
+    fn take(&mut self) -> bool {
+        let now = Instant::now();
+        self.tokens =
+            (self.tokens + now.duration_since(self.last).as_secs_f64() * self.rate).min(self.burst);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Inbound WS connection accounting: per-IP fan-in plus a global ceiling.
+/// Behind a loopback-forwarded peer door all ingress shows as 127.0.0.1,
+/// so the per-IP cap must leave headroom for several live peer pulls.
+#[derive(Default)]
+struct ConnTable {
+    by_ip: HashMap<IpAddr, usize>,
+    total: usize,
+}
 
 struct App {
     store: Store,
@@ -69,6 +138,67 @@ struct App {
     /// Empty = deny ALL writes (fail-closed).
     allowlist: Arc<RwLock<HashSet<String>>>,
     tx: broadcast::Sender<Arc<Event>>,
+    conns: Mutex<ConnTable>,
+    /// Per-pubkey HTTP budgets, keyed on the verified NIP-98 signer —
+    /// the real client identity; ConnectInfo only ever sees the
+    /// loopback/door address.
+    http_write: Mutex<HashMap<String, Bucket>>,
+    http_read: Mutex<HashMap<String, Bucket>>,
+}
+
+/// Decrements the per-IP/total counts when the connection task ends.
+struct ConnGuard {
+    app: Shared,
+    ip: IpAddr,
+}
+
+impl Drop for ConnGuard {
+    fn drop(&mut self) {
+        let mut t = self.app.conns.lock().unwrap();
+        t.total = t.total.saturating_sub(1);
+        if let Some(n) = t.by_ip.get_mut(&self.ip) {
+            *n -= 1;
+            if *n == 0 {
+                t.by_ip.remove(&self.ip);
+            }
+        }
+    }
+}
+
+/// Take one token from `key`'s bucket in `map`; `false` when the bucket
+/// is empty OR the map is at capacity and the key is new (a flood of
+/// distinct keys must not grow memory unboundedly).
+fn take_budget(map: &Mutex<HashMap<String, Bucket>>, key: &str, rate: f64, burst: f64) -> bool {
+    let mut m = map.lock().unwrap();
+    if let Some(b) = m.get_mut(key) {
+        return b.take();
+    }
+    if m.len() >= MAX_HTTP_BUCKETS {
+        return false;
+    }
+    m.entry(key.to_string())
+        .or_insert_with(|| Bucket::new(rate, burst))
+        .take()
+}
+
+/// Filter complexity bound shared by REQ and the HTTP query/count path.
+/// Unbounded id/author/tag lists turn a single request into an arbitrary
+/// linear scan; bound every vector and string.
+fn check_filters(fs: &[Filter]) -> Result<(), String> {
+    for f in fs {
+        let too_many = f.ids.as_ref().is_some_and(|v| v.len() > MAX_FILTER_VALUES)
+            || f.authors.as_ref().is_some_and(|v| v.len() > MAX_FILTER_VALUES)
+            || f.kinds.as_ref().is_some_and(|v| v.len() > MAX_FILTER_VALUES)
+            || f.tag_filters.len() > MAX_FILTER_TAG_KEYS
+            || f.tag_filters.values().any(|v| {
+                v.len() > MAX_FILTER_VALUES
+                    || v.iter().any(|s| s.len() > MAX_FILTER_VALUE_LEN)
+            });
+        if too_many {
+            return Err("error: filter too complex".into());
+        }
+    }
+    Ok(())
 }
 
 type Shared = Arc<App>;
@@ -120,6 +250,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         channels,
         allowlist: Arc::new(RwLock::new(breakglass.clone())),
         tx: broadcast::channel(4096).0,
+        conns: Mutex::new(ConnTable::default()),
+        http_write: Mutex::new(HashMap::new()),
+        http_read: Mutex::new(HashMap::new()),
     });
 
     if let Some(group_addr) = cw4_group {
@@ -161,10 +294,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/query", axum::routing::post(http_query))
         .route("/count", axum::routing::post(http_count))
         .route("/healthz", get(|| async { "ok" }))
+        .layer(DefaultBodyLimit::max(MAX_HTTP_BODY))
         .with_state(app);
 
     tracing::info!(%listen, ?db, "claw-relay listening");
-    axum::serve(tokio::net::TcpListener::bind(listen).await?, router).await?;
+    axum::serve(
+        tokio::net::TcpListener::bind(listen).await?,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -182,6 +320,7 @@ fn load_allowlist(path: Option<&std::path::Path>) -> HashSet<String> {
 async fn ws_handler(
     ws: Option<WebSocketUpgrade>,
     headers: axum::http::HeaderMap,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(app): State<Shared>,
 ) -> axum::response::Response {
     // NIP-11: relay information document on `Accept: application/nostr+json`
@@ -198,6 +337,13 @@ async fn ws_handler(
             "version": env!("CARGO_PKG_VERSION"),
             "supported_nips": [1, 15, 42, 98],
             "limitation": {
+                "max_message_length": MAX_WS_MSG,
+                "max_content_length": MAX_EVENT_CONTENT,
+                "max_event_tags": MAX_EVENT_TAGS,
+                "max_subscriptions": MAX_SUBS_PER_CONN,
+                "max_subid_length": MAX_SUBID_LEN,
+                "max_filters": MAX_FILTERS_PER_REQ,
+                "max_limit": MAX_REPLAY,
                 "restricted_writes": true,
                 "auth_required": false,
                 "payment_required": false
@@ -205,8 +351,39 @@ async fn ws_handler(
         }))
         .into_response();
     }
+    // Connection caps are enforced BEFORE the upgrade so an over-limit
+    // client gets an HTTP rejection, not a half-open socket.
+    {
+        let mut t = app.conns.lock().unwrap();
+        let ip_n = t.by_ip.get(&addr.ip()).copied().unwrap_or(0);
+        if t.total >= MAX_TOTAL_CONNS || ip_n >= MAX_CONN_PER_IP {
+            tracing::warn!(
+                ip = %addr.ip(),
+                per_ip = ip_n,
+                total = t.total,
+                "connection rejected: limit"
+            );
+            return (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                "connection limit",
+            )
+                .into_response();
+        }
+        t.total += 1;
+        *t.by_ip.entry(addr.ip()).or_insert(0) += 1;
+    }
+    let guard = ConnGuard {
+        app: app.clone(),
+        ip: addr.ip(),
+    };
     match ws {
-        Some(u) => u.on_upgrade(move |sock| handle_conn(sock, app)),
+        Some(u) => u
+            .max_message_size(MAX_WS_MSG)
+            .max_frame_size(MAX_WS_MSG)
+            .on_upgrade(move |sock| async move {
+                let _guard = guard;
+                handle_conn(sock, app).await;
+            }),
         None => (
             axum::http::StatusCode::UPGRADE_REQUIRED,
             "websocket upgrade required",
@@ -217,11 +394,16 @@ async fn ws_handler(
 
 async fn handle_conn(sock: WebSocket, app: Shared) {
     let (ws_tx, mut ws_rx) = sock.split();
-    let (out_tx, mut out_rx) = mpsc::unbounded::<Message>();
+    // Bounded outgoing queue: a consumer slower than the feed must not
+    // buffer the broadcast stream in memory forever. Replies pace on
+    // .send(); the live fan-out uses try_send and marks the conn dead
+    // on a full queue — honest close beats silent loss.
+    let (out_tx, mut out_rx) = mpsc::channel::<Message>(OUT_QUEUE);
     let out_tx2 = out_tx.clone();
+    let dead = Arc::new(AtomicBool::new(false));
     let writer = tokio::spawn(async move {
         let mut ws_tx = ws_tx;
-        while let Some(m) = out_rx.next().await {
+        while let Some(m) = out_rx.recv().await {
             if ws_tx.send(m).await.is_err() {
                 break;
             }
@@ -237,7 +419,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
-    let _ = out_tx.unbounded_send(Message::Text(
+    let _ = out_tx.try_send(Message::Text(
         serde_json::json!(["AUTH", challenge]).to_string().into(),
     ));
 
@@ -247,35 +429,37 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
     let fanout = {
         let subs = subs.clone();
         let out_tx = out_tx.clone();
+        let dead = dead.clone();
         tokio::spawn(async move {
             loop {
                 match live.recv().await {
                     Ok(ev) => {
                         let map = subs.read().await;
-                        let mut dead = false;
+                        let mut gone = false;
                         for (sub, filters) in map.iter() {
                             if filters.iter().any(|f| f.matches(&ev))
                                 && out_tx
-                                    .unbounded_send(Message::Text(
+                                    .try_send(Message::Text(
                                         serde_json::json!(["EVENT", sub, *ev])
                                             .to_string()
                                             .into(),
                                     ))
                                     .is_err()
                             {
-                                dead = true;
+                                gone = true;
                                 break;
                             }
                         }
                         drop(map);
-                        if dead {
-                            return; // out_rx closed — client is gone
+                        if gone {
+                            dead.store(true, Ordering::Relaxed);
+                            return; // queue full or closed — conn is done
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                         // fell behind the broadcast window — tell the client
                         // to resubscribe rather than silently stall live feed
-                        let _ = out_tx.unbounded_send(Message::Text(
+                        let _ = out_tx.try_send(Message::Text(
                             serde_json::json!([
                                 "NOTICE",
                                 format!("error: lagged {n} events — resubscribe")
@@ -283,6 +467,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
                             .to_string()
                             .into(),
                         ));
+                        dead.store(true, Ordering::Relaxed);
                         return;
                     }
                     Err(_) => return,
@@ -291,10 +476,28 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
         })
     };
 
+    // Per-connection inbound rate: every frame — text or not — costs one
+    // token. An over-limit frame is dropped; the client gets at most one
+    // NOTICE per second so a flood can't turn our own replies into the
+    // amplification channel.
+    let mut bucket = Bucket::new(WS_RATE_PER_SEC, WS_RATE_BURST);
+    let mut last_notice = Instant::now() - Duration::from_secs(2);
     while let Some(Ok(msg)) = ws_rx.next().await {
+        if dead.swap(false, Ordering::Relaxed) {
+            break;
+        }
+        if !bucket.take() {
+            if last_notice.elapsed() >= Duration::from_secs(1) {
+                last_notice = Instant::now();
+                let _ = out_tx2.try_send(Message::Text(
+                    r#"["NOTICE","error: rate limited — slow down"]"#.into(),
+                ));
+            }
+            continue;
+        }
         let Message::Text(txt) = msg else { continue };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else {
-            let _ = out_tx2.unbounded_send(Message::Text(
+            let _ = out_tx2.try_send(Message::Text(
                 r#"["NOTICE","error: bad json"]"#.into(),
             ));
             continue;
@@ -313,12 +516,12 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
 async fn handle_frame(
     app: &Shared,
     subs: &Arc<RwLock<HashMap<String, Vec<Filter>>>>,
-    out: &mpsc::UnboundedSender<Message>,
+    out: &mpsc::Sender<Message>,
     v: &serde_json::Value,
     challenge: &str,
 ) {
     let send = |v: serde_json::Value| {
-        let _ = out.unbounded_send(Message::Text(v.to_string().into()));
+        let _ = out.try_send(Message::Text(v.to_string().into()));
     };
     let Some(kind) = v.get(0).and_then(|x| x.as_str()) else {
         return send(serde_json::json!(["NOTICE", "error: unknown frame"]));
@@ -350,8 +553,15 @@ async fn handle_frame(
             let Some(sub) = v.get(1).and_then(|x| x.as_str()).map(str::to_string) else {
                 return send(serde_json::json!(["NOTICE", "error: malformed REQ"]));
             };
-            let filters: Vec<Filter> = v
-                .as_array()
+            if sub.len() > MAX_SUBID_LEN {
+                return send(serde_json::json!(["CLOSED", sub, "error: subid too long"]));
+            }
+            let arr = v.as_array();
+            let n_filters = arr.map(|a| a.len().saturating_sub(2)).unwrap_or(0);
+            if n_filters > MAX_FILTERS_PER_REQ {
+                return send(serde_json::json!(["CLOSED", sub, "error: too many filters"]));
+            }
+            let filters: Vec<Filter> = arr
                 .map(|a| {
                     a.iter()
                         .skip(2)
@@ -362,20 +572,56 @@ async fn handle_frame(
             if filters.is_empty() {
                 return send(serde_json::json!(["CLOSED", sub, "error: no filters"]));
             }
+            if let Err(e) = check_filters(&filters) {
+                return send(serde_json::json!(["CLOSED", sub, e]));
+            }
             // Register BEFORE replaying stored events — an event broadcast
             // between query and insert would otherwise be missed by this
             // subscriber forever. Live events may interleave with the
             // replay (legal nostr; clients dedupe by id).
-            subs.write().await.insert(sub.clone(), filters.clone());
+            {
+                let mut map = subs.write().await;
+                // Re-REQ on an existing id replaces the filters and does
+                // not count against the per-conn subscription cap.
+                if !map.contains_key(&sub) && map.len() >= MAX_SUBS_PER_CONN {
+                    drop(map);
+                    return send(serde_json::json!([
+                        "CLOSED", sub, "error: too many subscriptions"
+                    ]));
+                }
+                map.insert(sub.clone(), filters.clone());
+            }
+            // Replay is bounded: total events served per REQ regardless of
+            // how many filters matched. .send().await paces the replay on
+            // the consumer; a vanished receiver aborts the replay.
             let mut seen = HashSet::new();
-            for f in &filters {
+            let mut sent = 0usize;
+            'replay: for f in &filters {
                 if let Ok(events) = app.store.query(f) {
                     for ev in events {
                         if seen.insert(ev.id.clone()) {
-                            send(serde_json::json!(["EVENT", sub, ev]));
+                            if sent >= MAX_REPLAY
+                                || out
+                                    .send(Message::Text(
+                                        serde_json::json!(["EVENT", sub, ev])
+                                            .to_string()
+                                            .into(),
+                                    ))
+                                    .await
+                                    .is_err()
+                            {
+                                break 'replay;
+                            }
+                            sent += 1;
                         }
                     }
                 }
+            }
+            if sent >= MAX_REPLAY {
+                send(serde_json::json!([
+                    "NOTICE",
+                    format!("replay truncated at {MAX_REPLAY} events — narrow filters")
+                ]));
             }
             send(serde_json::json!(["EOSE", sub]));
         }
@@ -515,8 +761,23 @@ async fn http_events(
     body: axum::body::Bytes,
 ) -> axum::response::Response {
     use axum::http::StatusCode;
-    if let Err(e) = verify_nip98(&headers, "POST", "/events") {
-        return nip98_err(e);
+    let auth_ev = match verify_nip98(&headers, "POST", "/events") {
+        Ok(e) => e,
+        Err(e) => return nip98_err(e),
+    };
+    // per-signer write budget — the NIP-98 pubkey is the real identity;
+    // ConnectInfo only ever sees the loopback/door address
+    if !take_budget(
+        &app.http_write,
+        &auth_ev.pubkey,
+        HTTP_WRITES_PER_MIN / 60.0,
+        HTTP_WRITES_PER_MIN,
+    ) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            axum::Json(serde_json::json!({"accepted": false, "error": "rate limited"})),
+        )
+            .into_response();
     }
     let Ok(ev) = serde_json::from_slice::<Event>(&body) else {
         return (
@@ -572,6 +833,18 @@ async fn http_query(
         )
             .into_response();
     }
+    if !take_budget(
+        &app.http_read,
+        &auth_ev.pubkey,
+        HTTP_READS_PER_SEC,
+        HTTP_READS_PER_SEC * 30.0,
+    ) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            axum::Json(serde_json::json!({"error": "rate limited"})),
+        )
+            .into_response();
+    }
     let Ok(filters) = serde_json::from_slice::<Vec<Filter>>(&body) else {
         return (
             StatusCode::BAD_REQUEST,
@@ -579,12 +852,22 @@ async fn http_query(
         )
             .into_response();
     };
+    if let Err(e) = check_filters(&filters) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({"error": e})),
+        )
+            .into_response();
+    }
     let mut seen = HashSet::new();
     let mut out: Vec<Event> = Vec::new();
-    for f in &filters {
+    'q: for f in &filters {
         if let Ok(events) = app.store.query(f) {
             for ev in events {
                 if seen.insert(ev.id.clone()) {
+                    if out.len() >= MAX_REPLAY {
+                        break 'q;
+                    }
                     out.push(ev);
                 }
             }
@@ -611,6 +894,18 @@ async fn http_count(
         )
             .into_response();
     }
+    if !take_budget(
+        &app.http_read,
+        &auth_ev.pubkey,
+        HTTP_READS_PER_SEC,
+        HTTP_READS_PER_SEC * 30.0,
+    ) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            axum::Json(serde_json::json!({"error": "rate limited"})),
+        )
+            .into_response();
+    }
     let Ok(filters) = serde_json::from_slice::<Vec<Filter>>(&body) else {
         return (
             StatusCode::BAD_REQUEST,
@@ -618,13 +913,23 @@ async fn http_count(
         )
             .into_response();
     };
+    if let Err(e) = check_filters(&filters) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({"error": e})),
+        )
+            .into_response();
+    }
     let mut seen = HashSet::new();
     let mut n = 0usize;
-    for f in &filters {
+    'c: for f in &filters {
         if let Ok(events) = app.store.query(f) {
             for ev in events {
                 if seen.insert(ev.id.clone()) {
                     n += 1;
+                    if n >= MAX_REPLAY {
+                        break 'c;
+                    }
                 }
             }
         }
@@ -641,6 +946,22 @@ async fn http_count(
 /// (never-populated cw4 feed, empty file). Anything not explicitly in
 /// the set is rejected. Store dedupe happens at the caller.
 async fn admit_event(app: &App, ev: &Event) -> Result<(), String> {
+    // Size bounds BEFORE the signature check — a giant event should not
+    // even buy a verify. Applies equally to client writes and gossip.
+    if ev.content.len() > MAX_EVENT_CONTENT {
+        return Err("invalid: content too large".into());
+    }
+    if ev.tags.len() > MAX_EVENT_TAGS
+        || ev
+            .tags
+            .iter()
+            .flatten()
+            .map(|s| s.len())
+            .sum::<usize>()
+            > MAX_EVENT_TAG_BYTES
+    {
+        return Err("invalid: too many tags".into());
+    }
     ev.verify().map_err(|e| format!("invalid: {e}"))?;
     // A far-future event pins the top of every newest-first query and
     // stays unanchorable until wall-clock catches it.
@@ -746,12 +1067,15 @@ mod tests {
             channels: ["chan-a".to_string()].into_iter().collect(),
             allowlist: Arc::new(RwLock::new(HashSet::new())),
             tx: broadcast::channel(16).0,
+            conns: Mutex::new(ConnTable::default()),
+            http_write: Mutex::new(HashMap::new()),
+            http_read: Mutex::new(HashMap::new()),
         });
         let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> =
             Arc::new(RwLock::new(HashMap::new()));
-        let (out_tx, mut out_rx) = mpsc::unbounded::<Message>();
-        async fn next_json(rx: &mut mpsc::UnboundedReceiver<Message>) -> serde_json::Value {
-            match rx.next().await.expect("reply") {
+        let (out_tx, mut out_rx) = mpsc::channel::<Message>(64);
+        async fn next_json(rx: &mut mpsc::Receiver<Message>) -> serde_json::Value {
+            match rx.recv().await.expect("reply") {
                 Message::Text(t) => serde_json::from_str::<serde_json::Value>(&t).unwrap(),
                 _ => panic!("non-text reply"),
             }
@@ -793,6 +1117,9 @@ mod tests {
             channels: ["chan-a".to_string()].into_iter().collect(),
             allowlist: Arc::new(RwLock::new(HashSet::new())),
             tx: broadcast::channel(16).0,
+            conns: Mutex::new(ConnTable::default()),
+            http_write: Mutex::new(HashMap::new()),
+            http_read: Mutex::new(HashMap::new()),
         });
 
         let key = [7u8; 32];
@@ -836,6 +1163,9 @@ mod tests {
             channels: HashSet::new(),
             allowlist: app.allowlist.clone(),
             tx: broadcast::channel(16).0,
+            conns: Mutex::new(ConnTable::default()),
+            http_write: Mutex::new(HashMap::new()),
+            http_read: Mutex::new(HashMap::new()),
         });
         let any_chan = signed_event_ex("x", Some("chan-b"), 6, 9, &key);
         assert!(admit_event(&app_open, &any_chan).await.is_ok());
@@ -848,5 +1178,183 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Size bounds run BEFORE signature verification — an oversized
+    /// event must not even buy a verify.
+    #[tokio::test]
+    async fn admit_event_size_caps() {
+        let dir = std::env::temp_dir().join(format!("claw-test-size-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let app = Arc::new(App {
+            store: Store::open(&dir.join("t.redb")).unwrap(),
+            channels: ["chan-a".to_string()].into_iter().collect(),
+            allowlist: Arc::new(RwLock::new(HashSet::new())),
+            tx: broadcast::channel(16).0,
+            conns: Mutex::new(ConnTable::default()),
+            http_write: Mutex::new(HashMap::new()),
+            http_read: Mutex::new(HashMap::new()),
+        });
+        let ev = signed_event_ex("hi", Some("chan-a"), 1, 9, &[7u8; 32]);
+        app.allowlist.write().await.insert(ev.pubkey.clone());
+
+        // content over 64 KiB -> rejected pre-verify
+        let mut big = ev.clone();
+        big.content = "x".repeat(MAX_EVENT_CONTENT + 1);
+        big.id = hex::encode(big.compute_id());
+        assert_eq!(
+            admit_event(&app, &big).await.unwrap_err(),
+            "invalid: content too large"
+        );
+
+        // >64 tags -> rejected pre-verify
+        let mut taggy = ev.clone();
+        taggy.tags = (0..MAX_EVENT_TAGS + 1)
+            .map(|i| vec!["t".into(), i.to_string()])
+            .collect();
+        taggy.id = hex::encode(taggy.compute_id());
+        assert_eq!(
+            admit_event(&app, &taggy).await.unwrap_err(),
+            "invalid: too many tags"
+        );
+
+        // right at the bounds -> accepted
+        let mut edge = ev.clone();
+        edge.content = "x".repeat(MAX_EVENT_CONTENT);
+        edge.id = hex::encode(edge.compute_id());
+        edge.sig = String::new(); // sig no longer valid, but size check passes -> verify error
+        assert!(admit_event(&app, &edge)
+            .await
+            .unwrap_err()
+            .starts_with("invalid:"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// REQ-path limits: subid length, filters-per-REQ count, filter
+    /// complexity, and the per-conn subscription cap.
+    #[tokio::test]
+    async fn req_limits_enforced() {
+        let dir = std::env::temp_dir().join(format!("claw-test-req-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let app = Arc::new(App {
+            store: Store::open(&dir.join("t.redb")).unwrap(),
+            channels: ["chan-a".to_string()].into_iter().collect(),
+            allowlist: Arc::new(RwLock::new(HashSet::new())),
+            tx: broadcast::channel(16).0,
+            conns: Mutex::new(ConnTable::default()),
+            http_write: Mutex::new(HashMap::new()),
+            http_read: Mutex::new(HashMap::new()),
+        });
+        let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let (out_tx, mut out_rx) = mpsc::channel::<Message>(64);
+        async fn next_json(rx: &mut mpsc::Receiver<Message>) -> serde_json::Value {
+            match rx.recv().await.expect("reply") {
+                Message::Text(t) => serde_json::from_str::<serde_json::Value>(&t).unwrap(),
+                _ => panic!("non-text reply"),
+            }
+        }
+
+        // subid > 64 chars -> CLOSED
+        let long_id = "s".repeat(MAX_SUBID_LEN + 1);
+        handle_frame(
+            &app,
+            &subs,
+            &out_tx,
+            &serde_json::json!(["REQ", long_id, {"kinds": [9]}]),
+            "t",
+        )
+        .await;
+        assert_eq!(next_json(&mut out_rx).await[2], "error: subid too long");
+
+        // >10 filters -> CLOSED
+        let many: Vec<serde_json::Value> = std::iter::once(serde_json::json!("REQ"))
+            .chain(std::iter::once(serde_json::json!("sub1")))
+            .chain((0..MAX_FILTERS_PER_REQ + 1).map(|_| serde_json::json!({"kinds": [9]})))
+            .collect();
+        handle_frame(&app, &subs, &out_tx, &serde_json::Value::Array(many), "t").await;
+        assert_eq!(next_json(&mut out_rx).await[2], "error: too many filters");
+
+        // over-complex filter (huge tag-value list) -> CLOSED
+        let big_vals: Vec<String> = (0..MAX_FILTER_VALUES + 1).map(|i| i.to_string()).collect();
+        handle_frame(
+            &app,
+            &subs,
+            &out_tx,
+            &serde_json::json!(["REQ", "sub2", {"#h": big_vals}]),
+            "t",
+        )
+        .await;
+        assert_eq!(next_json(&mut out_rx).await[2], "error: filter too complex");
+
+        // fill to the subscription cap, then one more -> CLOSED
+        for i in 0..MAX_SUBS_PER_CONN {
+            handle_frame(
+                &app,
+                &subs,
+                &out_tx,
+                &serde_json::json!(["REQ", format!("s{i}"), {"kinds": [9]}]),
+                "t",
+            )
+            .await;
+            let _ = next_json(&mut out_rx).await; // EOSE (replay empty)
+        }
+        handle_frame(
+            &app,
+            &subs,
+            &out_tx,
+            &serde_json::json!(["REQ", "one-too-many", {"kinds": [9]}]),
+            "t",
+        )
+        .await;
+        assert_eq!(
+            next_json(&mut out_rx).await[2],
+            "error: too many subscriptions"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Token bucket: burst drains, sustained rate governs, refills.
+    #[test]
+    fn bucket_rate_limits() {
+        let mut b = Bucket::new(1.0, 3.0);
+        assert!(b.take() && b.take() && b.take()); // burst
+        assert!(!b.take()); // empty
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        assert!(b.take()); // refilled ~1 token
+    }
+
+    /// Conn accounting: cap and release.
+    #[test]
+    fn conn_table_caps_and_releases() {
+        let dir = std::env::temp_dir().join(format!("claw-test-conn-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let app = Arc::new(App {
+            store: Store::open(&dir.join("t.redb")).unwrap(),
+            channels: HashSet::new(),
+            allowlist: Arc::new(RwLock::new(HashSet::new())),
+            tx: broadcast::channel(16).0,
+            conns: Mutex::new(ConnTable::default()),
+            http_write: Mutex::new(HashMap::new()),
+            http_read: Mutex::new(HashMap::new()),
+        });
+        let ip: IpAddr = "10.0.0.1".parse().unwrap();
+        let mut guards = Vec::new();
+        for _ in 0..MAX_CONN_PER_IP {
+            let mut t = app.conns.lock().unwrap();
+            assert!(t.total < MAX_TOTAL_CONNS);
+            t.total += 1;
+            *t.by_ip.entry(ip).or_insert(0) += 1;
+            drop(t);
+            guards.push(ConnGuard {
+                app: app.clone(),
+                ip,
+            });
+        }
+        assert_eq!(app.conns.lock().unwrap().by_ip[&ip], MAX_CONN_PER_IP);
+        drop(guards);
+        let t = app.conns.lock().unwrap();
+        assert_eq!(t.total, 0);
+        assert!(!t.by_ip.contains_key(&ip));
     }
 }

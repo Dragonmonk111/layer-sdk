@@ -21,7 +21,7 @@
 //! backs off starting at 5s, doubling to a 60s cap; a successful
 //! connect resets the backoff.
 
-use crate::{admit_event, Shared, ALLOWED_KINDS};
+use crate::{admit_event, Bucket, Shared, ALLOWED_KINDS};
 use claw_core::Event;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
@@ -81,6 +81,11 @@ async fn peer_session(
             .map_err(|e| format!("send REQ for {chan}: {e}"))?;
     }
 
+    // Ingress budget: every EVENT costs a signature verify + store txn.
+    // A replay burst is legitimate (thousands of stored events), a
+    // sustained flood is not — trip on sustained rate, drop the session
+    // and let the normal reconnect/backoff cycle handle re-mating.
+    let mut bucket = Bucket::new(200.0, 2000.0);
     while let Some(msg) = ws.next().await {
         let msg = msg.map_err(|e| format!("ws recv: {e}"))?;
         let Message::Text(txt) = msg else { continue };
@@ -91,7 +96,12 @@ async fn peer_session(
             continue;
         };
         match kind {
-            "EVENT" => handle_remote_frame(app, peer, &v, first_event_logged).await,
+            "EVENT" => {
+                if !bucket.take() {
+                    return Err("peer EVENT flood — closing session".into());
+                }
+                handle_remote_frame(app, peer, &v, first_event_logged).await
+            }
             // EOSE only ends the stored replay — the peer keeps the sub
             // registered and streams live events; keep listening.
             "EOSE" => tracing::debug!(%peer, "gossip EOSE, sub stays live"),

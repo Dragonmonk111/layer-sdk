@@ -86,9 +86,18 @@ impl Event {
         )
         .map_err(|_| EventError::BadPubkey)?;
         let sig_bytes = hex::decode(&self.sig).map_err(|_| EventError::BadHex("sig"))?;
+        // k256's Signature::try_from PANICS on a wrong-length slice —
+        // reject anything != 64 bytes first so a malformed event can't
+        // take down the caller's task.
+        if sig_bytes.len() != 64 {
+            return Err(EventError::BadSignature);
+        }
         let sig = Signature::try_from(sig_bytes.as_slice())
             .map_err(|_| EventError::BadSignature)?;
         let id = hex::decode(&self.id).map_err(|_| EventError::BadHex("id"))?;
+        if id.len() != 32 {
+            return Err(EventError::BadHex("id"));
+        }
         vk.verify_raw(&id, &sig)
             .map_err(|_| EventError::SigVerifyFailed)
     }
