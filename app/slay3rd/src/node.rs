@@ -287,10 +287,17 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     requested_heights: Arc<std::sync::Mutex<BTreeMap<u64, Instant>>>,
     /// Finalized-but-unexecuted payload digests (see `CertifiedDigests`).
     certified_digests: Arc<std::sync::Mutex<CertifiedDigests>>,
-    /// rc6: last time ensure_executed spawned a finalize walk per digest.
-    /// Bounds the exec_lock task queue across thousands of nullified views
-    /// while a certified-but-unexecuted parent blocks progress.
-    ensure_exec: Arc<std::sync::Mutex<HashMap<[u8; 32], Instant>>>,
+    /// rc6: last time ensure_executed spawned a finalize walk per digest,
+    /// plus how many throttle windows that digest has fired in. Bounds the
+    /// exec_lock task queue across thousands of nullified views while a
+    /// certified-but-unexecuted parent blocks progress; the count feeds
+    /// same-digest log dedup (first sighting + every 50th repeat).
+    ensure_exec: Arc<std::sync::Mutex<HashMap<[u8; 32], (Instant, u32)>>>,
+    /// Per-digest count of certify() wait-window timeouts. One-shot misses
+    /// are normal catch-up churn and stay at INFO; the same digest timing
+    /// out repeatedly across views is the #5378-class stall signature and
+    /// is promoted to WARN (idx6 SOC: 13k INFO lines hid the real signal).
+    certify_timeouts: Arc<std::sync::Mutex<HashMap<[u8; 32], u32>>>,
     /// Highest payload height ever observed (admitted or rejected pushes,
     /// payloads traversed in finalize). Fetch-target hint for backfill —
     /// never used to advance execution.
@@ -329,6 +336,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             requested_heights: self.requested_heights.clone(),
             certified_digests: self.certified_digests.clone(),
             ensure_exec: self.ensure_exec.clone(),
+            certify_timeouts: self.certify_timeouts.clone(),
             max_seen_height: self.max_seen_height.clone(),
             tx_index: self.tx_index.clone(),
             fault_inject: self.fault_inject.clone(),
@@ -380,6 +388,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             requested_heights: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
             certified_digests: Arc::new(std::sync::Mutex::new(CertifiedDigests::default())),
             ensure_exec: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            certify_timeouts: Arc::new(std::sync::Mutex::new(HashMap::new())),
             max_seen_height: Arc::new(std::sync::atomic::AtomicU64::new(initial_height)),
             tx_index: Arc::new(TxIndex::new(DEFAULT_TX_INDEX_CAPACITY)),
             fault_inject: None,
@@ -489,10 +498,18 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             g.clear();
         }
         let now = Instant::now();
-        if g.get(&parent).map_or(false, |t| now.duration_since(*t) < THROTTLE) {
-            return;
-        }
-        g.insert(parent, now);
+        let occurrences = match g.get_mut(&parent) {
+            Some((t, _)) if now.duration_since(*t) < THROTTLE => return,
+            Some((t, n)) => {
+                *t = now;
+                *n += 1;
+                *n
+            }
+            None => {
+                g.insert(parent, (now, 1));
+                1
+            }
+        };
         drop(g);
         let node = self.clone();
         tokio::spawn(async move {
@@ -503,10 +520,18 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             if node.lookup_payload(&parent).await.is_none() {
                 node.request_payload(parent);
             }
-            tracing::warn!(
-                parent = %hex::encode(parent),
-                "consensus parent certified but not executed — awaiting its finalization; never executing a merely-notarized ancestor"
-            );
+            // Same-digest dedup (RC17 SOC): the first sighting of a stuck
+            // digest is the actionable WARN; every 50th throttle hit
+            // (≈5min at the 6s pace) re-emits carrying the running count
+            // so a monitor reads stall progression from a handful of lines
+            // instead of a 27k-line firehose on idx6.
+            if occurrences == 1 || occurrences % 50 == 0 {
+                tracing::warn!(
+                    parent = %hex::encode(parent),
+                    occurrences,
+                    "consensus parent certified but not executed — awaiting its finalization; never executing a merely-notarized ancestor"
+                );
+            }
         });
     }
 
@@ -1520,11 +1545,37 @@ where
                     }
                 }
                 if start.elapsed() >= CERTIFY_WAIT_MAX {
-                    tracing::info!(
-                        digest = %hex::encode(digest_bytes),
-                        view = view_num,
-                        "certify: payload unavailable within wait window"
-                    );
+                    // Escalate-on-repeat (RC17 SOC): a one-shot miss during
+                    // catch-up churn is INFO noise (~7k/37h on idx6); the
+                    // SAME digest timing out again in later views means the
+                    // payload is genuinely unavailable — the liveness-stall
+                    // signature — so promote from the 3rd repeat on.
+                    let misses = {
+                        let mut m = node
+                            .certify_timeouts
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
+                        if m.len() >= 4_096 {
+                            m.clear();
+                        }
+                        let n = m.entry(digest_bytes).or_insert(0);
+                        *n += 1;
+                        *n
+                    };
+                    if misses >= 3 {
+                        tracing::warn!(
+                            digest = %hex::encode(digest_bytes),
+                            view = view_num,
+                            occurrences = misses,
+                            "certify: payload repeatedly unavailable across views — stall signature"
+                        );
+                    } else {
+                        tracing::info!(
+                            digest = %hex::encode(digest_bytes),
+                            view = view_num,
+                            "certify: payload unavailable within wait window"
+                        );
+                    }
                     break false;
                 }
                 if last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY) {

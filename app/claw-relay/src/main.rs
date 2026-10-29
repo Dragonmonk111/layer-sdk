@@ -192,7 +192,7 @@ async fn ws_handler(
     {
         return axum::Json(serde_json::json!({
             "name": "J-Claw Relay",
-            "description": "JunoClaw sovereign coordination relay — write admission is a live view of the DAO's cw4 membership contract.",
+            "description": "JunoClaw sovereign coordination relay — write admission is a live view of the DAO's cw4 membership contract. HTTP endpoints require a NIP-98-signed request (kind-27235); reads additionally require an allowlisted signer.",
             "contact": "https://junoclaw.xyz",
             "software": "https://github.com/Dragonmonk111/layer-sdk/tree/commonware/app/claw-relay",
             "version": env!("CARGO_PKG_VERSION"),
@@ -475,7 +475,19 @@ fn verify_nip98(
                 }
                 _ => (host, None),
             };
-            uh == hh && hp.map_or(true, |p| Some(p) == up)
+            // "localhost" only ever resolves to loopback — treat it as
+            // interchangeable with 127.0.0.1 so a reflex-typed URL works.
+            let nuh = if uh.eq_ignore_ascii_case("localhost") {
+                "127.0.0.1"
+            } else {
+                uh
+            };
+            let nhh = if hh.eq_ignore_ascii_case("localhost") {
+                "127.0.0.1"
+            } else {
+                hh
+            };
+            nuh.eq_ignore_ascii_case(nhh) && hp.map_or(true, |p| Some(p) == up)
         })
         .unwrap_or(false);
     if !u_ok {
