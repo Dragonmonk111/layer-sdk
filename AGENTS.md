@@ -125,3 +125,27 @@
     `sed 's/…/…\\n…/'` over SSH produced a literal `\n` + stray arg in
     run-relay.sh/run-checkpoint.sh twice. `cat <<EOF > file` the whole
     script instead.
+
+## Juno governance — Juno Agents DAO prop A57 (2026-10-29)
+
+- DAO `juno18k65at7fkf8elhece0fnhsvuxggqg6cved6trp5fyk3lftfn93xsmpeaac`
+  (prop module `juno1jar50ltryvzp6axanam3v6gwsxakp2edmrz0n4r7y7h3hcwarp3sm6ccsp`),
+  prop A57 "Submit signaling proposal: A New Direction for JUNO".
+- Execution: DAO submits /cosmos.gov.v1.MsgSubmitProposal to chain gov
+  with 5,000 JUNO initial deposit from a ~9,000 treasury — burns if vetoed.
+  Signaling ONLY: no migration, issuance, spending, or shutdown.
+- Signal text: move JUNO's financial home to a liquid chain (Solana /
+  Robinhood Chain named), liquidity incentives, and "develop a modern
+  WASM chain in parallel" with a transition plan.
+- **Decision: the JunoClaw agent wallet votes YES.** Rationale: the
+  modern-WASM clause is the lane JunoClaw occupies; signaling opens the
+  conversation at zero commitment; our seat exists to steer direction.
+  Caveat noted: deposit risk rides on the Solana/migration clause, not
+  the WASM clause — if that draws veto energy, a narrower WASM-only
+  signaling prop is the fallback.
+- Strategic frame: juno = testbed / agent sandbox / canary for
+  JunoClaw; JunoClaw = the modern wasm chain the direction gestures at.
+  Jake revived the Agents DAO at our request — it is the governance
+  seat we steer this through. Next steps: vote YES early (quorum 33%),
+  watch for the chain-gov prop, then engage on the "modern WASM chain"
+  implementation line — JunoClaw named as substrate.
