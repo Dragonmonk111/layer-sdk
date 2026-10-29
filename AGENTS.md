@@ -182,3 +182,45 @@
      validators and independent observers."
 - Do NOT: claim endorsement, overclaim latency numbers, or pitch them
   unsolicited — public visible work only.
+
+## Ops rule — no builds on live validators + release infrastructure (2026-10-29)
+
+- **Ravi's call, ratified as policy:** building a release binary on a
+  live-validator host is exactly the heavy activity the change-control
+  rules forbid. All seats take PREBUILT artifacts only.
+- **Release path (now standing):** `.github/workflows/release-slay3rd.yml`
+  — tag any commit `slay3rd-<name>` and CI builds the canonical
+  `docker/Dockerfile.slay3rd` image, extracts the binary + sha256 into a
+  GitHub prerelease, and pushes `ghcr.io/dragonmonk111/slay3rd:<tag>`.
+  Operator verify = `sha256sum` vs the attached `.sha256` before deploy.
+- First artifacts: release `slay3rd-rc17-soc` (asset
+  `slay3rd-rc17-soc-782f791`, sha256 `1d24dde3…e679f4`) and image
+  `ghcr.io/dragonmonk111/slay3rd:rc17-soc-782f791`.
+- **Builds are reproducible:** our docker build at 782f791 produced the
+  identical sha256 to idx3's deployed canary — same Dockerfile + commit
+  → byte-exact artifact.
+- ghcr packages default private even on public repos — flip package
+  visibility in GitHub UI if external pulls are needed.
+
+## idx6 flap evidence — RC17 SOC deployment (2026-10-29)
+
+- Vahana recreated container with: RC17 SOC 782f791 (sha-verified vs
+  release asset) + log retention 100m×3 → 200m×12 + prior forensic
+  `docker inspect` snapshot (ExitCode=0, OOMKilled=false; RestartCount
+  caveat: manual restarts had reset the counter to 0).
+- Rollback reference: previous build sha `3f31f245…`.
+- Post-flap signature: `certify: payload unavailable` 21→0/5min,
+  `verify: rejecting proposal` 26→0/5min, lag 9–16 → 0–1 blocks level
+  with donor tip. New observability firing: `verify: resolved allow`,
+  `certify: resolved`, peer-named `Payload relay` reason lines, mesh
+  line naming reached peers.
+- **Voting NOT yet resumed at flap+immediate:** two bitmaps (views
+  893285/893293) = `11101101` (seats 0,1,2,4,5,7) — idx6 and idx3 both
+  absent. If bit appears, wedge was fetch-path end-to-end; if absent
+  with lag 0 + verify allow, suspicion moves to vote-signing/delivery
+  path (same per-peer mailbox class as #5292).
+- `42031ea0` verified live: home-vb canary PID 11751 healthy at tip;
+  WSL retired node has no process and guard cron still commented — no
+  duplicate identity. A `peer mesh: only 1/7 reached [42031ea0]` line
+  means the mesh metric tracked ONE reached peer (idx3), not that idx3
+  is missing — mesh rebuilds slowly post-restart.
