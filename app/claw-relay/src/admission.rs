@@ -16,16 +16,15 @@
 //!   * `--allowlist` entries are additive break-glass, merged into the
 //!     active set on every refresh — never subtractive.
 //!
-//! The HTTP client is a minimal HTTP/1.1 GET over a raw TcpStream —
-//! the API is localhost/plain-http and we deliberately do not pull a
-//! full HTTP stack into the relay for one localhost query.
+//! The chain API may be a loopback plain-http endpoint or a public
+//! https endpoint — operators point `--chain-api` wherever they can
+//! reach committed state; TLS is provided by reqwest/rustls.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use reqwest::Client;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -38,7 +37,7 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Static configuration for the admission poller.
 pub struct Cw4Config {
-    /// e.g. "http://127.0.0.1:8082" — plain http only.
+    /// e.g. "http://127.0.0.1:8082" or "https://status.junoclaw.xyz".
     pub api_base: String,
     /// bech32 address of the cw4-group contract.
     pub group_addr: String,
@@ -159,104 +158,41 @@ fn parse_list_members(body: &str) -> Result<Vec<String>, String> {
 }
 
 /// `GET <api>/api/wasm/smart/<contract>?query=<b64url-nopad(json)>`.
+/// Both http:// (loopback) and https:// (public endpoints) are valid.
 async fn smart_query(api_base: &str, contract: &str, query_json: &str) -> Result<String, String> {
-    let (authority, prefix) = split_http_base(api_base)?;
-    let path = format!(
-        "{}/api/wasm/smart/{}?query={}",
-        prefix,
-        contract,
-        b64url_nopad(query_json.as_bytes())
-    );
-    let body = http_get(&authority, &path).await?;
-    String::from_utf8(body).map_err(|e| format!("non-utf8 response body: {e}"))
+    let url = smart_url(api_base, contract, query_json)?;
+    let client = Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .map_err(|e| format!("http client build: {e}"))?;
+    client
+        .get(&url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("get {url}: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("http status: {e}"))?
+        .text()
+        .await
+        .map_err(|e| format!("read body: {e}"))
 }
 
-/// "http://127.0.0.1:8082[/prefix]" → ("127.0.0.1:8082", "/prefix").
-/// Plain http only — the chain API is loopback.
-fn split_http_base(url: &str) -> Result<(String, String), String> {
-    let rest = url
-        .strip_prefix("http://")
-        .ok_or_else(|| format!("--chain-api must be plain http:// (got {url})"))?;
-    let (auth, prefix) = match rest.find('/') {
-        Some(i) => (&rest[..i], rest[i..].trim_end_matches('/')),
-        None => (rest, ""),
-    };
-    if auth.is_empty() {
+/// "http[s]://host[:port][/prefix]" + the smart-query path.
+fn smart_url(api_base: &str, contract: &str, query_json: &str) -> Result<String, String> {
+    let base = api_base.trim_end_matches('/');
+    if !(base.starts_with("http://") || base.starts_with("https://")) {
+        return Err(format!(
+            "--chain-api must be http:// or https:// (got {api_base})"
+        ));
+    }
+    if base.len() == "http://".len() || base.len() == "https://".len() {
         return Err("empty authority in --chain-api".to_string());
     }
-    Ok((auth.to_string(), prefix.to_string()))
-}
-
-async fn http_get(authority: &str, path: &str) -> Result<Vec<u8>, String> {
-    tokio::time::timeout(HTTP_TIMEOUT, http_get_inner(authority, path))
-        .await
-        .map_err(|_| format!("http timeout after {HTTP_TIMEOUT:?}"))?
-}
-
-async fn http_get_inner(authority: &str, path: &str) -> Result<Vec<u8>, String> {
-    let mut s = TcpStream::connect(authority)
-        .await
-        .map_err(|e| format!("connect {authority}: {e}"))?;
-    let req = format!(
-        "GET {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
-    );
-    s.write_all(req.as_bytes())
-        .await
-        .map_err(|e| format!("write: {e}"))?;
-    let mut buf = Vec::new();
-    s.read_to_end(&mut buf)
-        .await
-        .map_err(|e| format!("read: {e}"))?;
-    parse_http_response(&buf)
-}
-
-/// Status line + headers, return the decoded body. Handles
-/// Content-Length/close-delimited bodies and chunked encoding.
-fn parse_http_response(buf: &[u8]) -> Result<Vec<u8>, String> {
-    let head_end = find_subslice(buf, b"\r\n\r\n").ok_or("incomplete http response")?;
-    let head = std::str::from_utf8(&buf[..head_end]).map_err(|_| "non-utf8 headers")?;
-    let status = head.lines().next().unwrap_or("");
-    let code = status
-        .split_whitespace()
-        .nth(1)
-        .and_then(|c| c.parse::<u16>().ok())
-        .unwrap_or(0);
-    if code != 200 {
-        return Err(format!("http status: {status}"));
-    }
-    let body = &buf[head_end + 4..];
-    let chunked = head.lines().skip(1).any(|l| {
-        let l = l.to_ascii_lowercase();
-        l.starts_with("transfer-encoding:") && l.contains("chunked")
-    });
-    if chunked {
-        dechunk(body)
-    } else {
-        Ok(body.to_vec())
-    }
-}
-
-fn dechunk(mut b: &[u8]) -> Result<Vec<u8>, String> {
-    let mut out = Vec::new();
-    loop {
-        let eol = find_subslice(b, b"\r\n").ok_or("chunked: missing size line")?;
-        let size_str = std::str::from_utf8(&b[..eol]).map_err(|_| "chunked: bad size")?;
-        let size_str = size_str.split(';').next().unwrap_or("").trim();
-        let size = usize::from_str_radix(size_str, 16).map_err(|_| "chunked: bad size")?;
-        b = &b[eol + 2..];
-        if size == 0 {
-            return Ok(out);
-        }
-        if b.len() < size + 2 {
-            return Err("chunked: truncated chunk".to_string());
-        }
-        out.extend_from_slice(&b[..size]);
-        b = &b[size + 2..]; // skip chunk + trailing CRLF
-    }
-}
-
-fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    hay.windows(needle.len()).position(|w| w == needle)
+    Ok(format!(
+        "{base}/api/wasm/smart/{contract}?query={}",
+        b64url_nopad(query_json.as_bytes())
+    ))
 }
 
 /// RFC 4648 base64url, no padding — what `/api/wasm/smart` expects in
@@ -283,6 +219,7 @@ fn b64url_nopad(data: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn b64url_vectors() {
@@ -358,28 +295,23 @@ mod tests {
     }
 
     #[test]
-    fn http_response_parsing() {
-        let ok = b"HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\n{\"data\":{\"\"}}";
-        assert!(parse_http_response(ok).is_ok());
-        let err = b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-        assert!(parse_http_response(err).unwrap_err().contains("500"));
-        let chunked = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nwiki\r\n5\r\npedia\r\n0\r\n\r\n";
-        assert_eq!(parse_http_response(chunked).unwrap(), b"wikipedia");
-        assert!(parse_http_response(b"HTTP/1.1 200 OK\r\n").is_err());
-    }
-
-    #[test]
-    fn split_base() {
+    fn smart_url_joining() {
         assert_eq!(
-            split_http_base("http://127.0.0.1:8082").unwrap(),
-            ("127.0.0.1:8082".to_string(), String::new())
+            smart_url("http://127.0.0.1:8082", "juno1c", "{}").unwrap(),
+            "http://127.0.0.1:8082/api/wasm/smart/juno1c?query=e30"
         );
+        // https endpoints are valid for external operators
         assert_eq!(
-            split_http_base("http://127.0.0.1:8082/").unwrap(),
-            ("127.0.0.1:8082".to_string(), String::new())
+            smart_url("https://status.junoclaw.xyz/", "juno1c", "{}").unwrap(),
+            "https://status.junoclaw.xyz/api/wasm/smart/juno1c?query=e30"
         );
-        assert!(split_http_base("https://x").is_err());
-        assert!(split_http_base("http://").is_err());
+        // prefix paths survive the join
+        assert_eq!(
+            smart_url("http://h:1/prefix", "juno1c", "{}").unwrap(),
+            "http://h:1/prefix/api/wasm/smart/juno1c?query=e30"
+        );
+        assert!(smart_url("status.junoclaw.xyz", "c", "{}").is_err());
+        assert!(smart_url("http://", "c", "{}").is_err());
     }
 
     /// Serve canned HTTP responses from a local listener; each accept
