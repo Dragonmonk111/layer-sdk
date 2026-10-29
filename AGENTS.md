@@ -78,3 +78,50 @@
     validator-index order — update it at every reshare).
 15. **Telegram alerts = config only:** add `JC_ALERT_WEBHOOK=https://api.telegram.org/bot<token>/sendMessage`
     + `JC_ALERT_CHAT_ID=<id>` to that drop-in. Token never in the repo.
+
+## J-Claw Relay ops (learned 2026-10-29)
+
+16. **Operator packet v5 is deferred — bundle it with the rate-limit/DoS
+    tranche.** v4 (`ad14287e` binary) is the current sendable artifact;
+    OVH runs `ffb751f0` ahead of it by two cosmetic nits (localhost
+    u-tag normalization, NIP-11 description). Do NOT invite further
+    operators (Anatoly, PostHuman, …) until v5 ships WITH the DoS
+    tranche: message-size caps, per-connection subscription/rate
+    limits, AUTH-before-write policy decision, WS-REQ read policy
+    (gossip peers are currently ungated by design — IP restriction is
+    the gate). No public exposure before that tranche lands.
+
+17. **Gossip peering topology:** `--peer` is pull-only ws:// and serving
+    is ungated — NEVER bind the relay listener publicly. Pattern that
+    works: relay stays `--listen 127.0.0.1:7070`; a socat door
+    (`systemd claw-peer-door.service`, `WAN_IP:7071 -> 127.0.0.1:7070`)
+    + ufw source-restrict to the peer's IP. OVH peers at
+    `ws://57.129.103.229:7071` (vahana).
+
+18. **claw-checkpoint signs via bls-relayer — the signer MUST match
+    `--author`.** Without `--jc-key-file`, jc-execute falls back to the
+    embedded deployer key (juno1dz875zg…): txs commit fine but
+    list_by_author(--author) never matches → FAILED commit loop +
+    duplicate orphan entries every retry. Key flows via
+    JUNOCLAW_KEY_HEX env injected from a root-600 hex file
+    (`/opt/claw/state/dao-key.hex`, derived from /opt/dao-keys/dao-key.pem)
+    — never argv. Also: `list_by_author` returns entries in ASCENDING
+    ID-HASH order, not chronological — any single-page verify can miss;
+    paginate via start_after.
+
+19. **Moultbook orphan entries (2026-10-28/29):** ~20 under the deployer
+    key (claw-checkpoint wrong-author posts) + ~19 identical-commitment
+    reposts under juno134zsp2 (buzz transcript-anchor.sh state-write
+    perm bug — fixed via chown). Decision: LEAVE them — visible
+    evidence trail; Redact cleanup is available later if wanted.
+
+20. **Build claw-* linux binaries on bullseye, not bookworm.** OVH is
+    Ubuntu 22.04 (glibc 2.35); rust:1.98 (bookworm, glibc 2.36+)
+    binaries can fail `GLIBC_2.39 not found`. Use
+    `rust:1.98-bullseye` + CARGO_TARGET_DIR=target-linux-bullseye.
+    (Longer-term: wire claw-* into build-ops-tools.yml CI like rule 13.)
+
+21. **Run-script edits: write the file, never sed multi-line inserts.**
+    `sed 's/…/…\\n…/'` over SSH produced a literal `\n` + stray arg in
+    run-relay.sh/run-checkpoint.sh twice. `cat <<EOF > file` the whole
+    script instead.
