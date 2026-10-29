@@ -1,0 +1,58 @@
+name: Release slay3rd binary + image
+
+# Tag a commit 'slay3rd-<name>' to produce:
+#   - a GitHub release with the canonical binary + sha256
+#   - a ghcr.io image push under this repo's owner
+# Builds inside docker/Dockerfile.slay3rd so the artifact carries the
+# canonical target-cpu + vendored MAYO-C flags — never build natively.
+on:
+  push:
+    tags:
+      - 'slay3rd-*'
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/slay3rd
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build canonical image
+        run: |
+          TAG="${{ github.ref_name }}"
+          [ "$TAG" = "" ] && TAG="manual-${{ github.sha }}"
+          echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
+          docker build -f docker/Dockerfile.slay3rd -t slay3rd:$TAG .
+
+      - name: Extract binary and checksum
+        run: |
+          cid=$(docker create slay3rd:$IMAGE_TAG)
+          docker cp "$cid:/usr/local/bin/slay3rd" "slay3rd-$IMAGE_TAG"
+          docker rm "$cid"
+          sha256sum "slay3rd-$IMAGE_TAG" > "slay3rd-$IMAGE_TAG.sha256"
+          cat "slay3rd-$IMAGE_TAG.sha256"
+
+      - name: Push image to ghcr
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker tag slay3rd:$IMAGE_TAG "$IMAGE:$IMAGE_TAG"
+          docker push "$IMAGE:$IMAGE_TAG"
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: slay3rd-${{ env.IMAGE_TAG }}*
+          prerelease: true
+          body: |
+            Canonical build via docker/Dockerfile.slay3rd (bookworm, target-cpu=x86-64-v2, vendored MAYO-C patch).
+            Image: `docker pull ${{ env.IMAGE }}:${{ env.IMAGE_TAG }}`
+            Verify sha256 against the attached .sha256 before deploying to any seat.
