@@ -24,6 +24,11 @@ claw-checkpoint — anchor relay channel transcript windows on-chain
   --moultbook <addr>           moultbook contract address            (required)
   --author <juno1 addr>        author the DAO key posts as — needed for
                                committed-state verification (list_by_author) (required)
+  --jc-key-file <path>         64-hex privkey file — contents forwarded to
+                               bls-relayer as JUNOCLAW_KEY_HEX env (never argv).
+                               Its juno1 address MUST equal --author or the anchor
+                               lands under the wrong author and list_by_author
+                               can never verify it
   --api <url>                  chain REST API            (default http://127.0.0.1:8082)
   --bls-relayer <path>         bls-relayer binary        (default: bls-relayer on PATH)
   --state-dir <dir>            per-channel anchor-*.json (default ./checkpoint-state)
@@ -51,6 +56,7 @@ struct Args {
     interval_secs: Option<u64>,
     receipt_key_file: Option<PathBuf>,
     checkpoint_key_file: Option<PathBuf>,
+    jc_key_file: Option<PathBuf>,
     grpc: Option<String>,
 }
 
@@ -134,6 +140,7 @@ fn parse_args() -> Result<Args, String> {
         interval_secs,
         receipt_key_file: opt(&args, "--receipt-key-file").map(PathBuf::from),
         checkpoint_key_file: opt(&args, "--checkpoint-key-file").map(PathBuf::from),
+        jc_key_file: opt(&args, "--jc-key-file").map(PathBuf::from),
         grpc: opt(&args, "--grpc").map(str::to_string),
     })
 }
@@ -154,6 +161,7 @@ fn bls_execute(
     relayer: &str,
     contract: &str,
     msg: &str,
+    jc_key_file: Option<&std::path::Path>,
     grpc: Option<&str>,
 ) -> Result<(String, bool), Error> {
     let mut cmd = std::process::Command::new(relayer);
@@ -162,6 +170,22 @@ fn bls_execute(
         .arg(contract)
         .arg("--msg")
         .arg(msg);
+    // Signer key via env, never argv — `--jc-key-hex` would expose the
+    // scalar in `ps`. We read the file and inject JUNOCLAW_KEY_HEX (the
+    // deployed bls-relayer's env). Without it bls-relayer falls back to
+    // its embedded deployer key and the anchor lands under
+    // juno1dz875zg… — invisible to list_by_author(--author) forever.
+    if let Some(kf) = jc_key_file {
+        let hex = std::fs::read_to_string(kf)
+            .map_err(|e| Error::Config(format!("cannot read --jc-key-file {kf:?}: {e}")))?;
+        let hex = hex.trim();
+        if hex.len() != 64 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(Error::Config(format!(
+                "--jc-key-file {kf:?} must contain exactly 64 hex chars"
+            )));
+        }
+        cmd.env("JUNOCLAW_KEY_HEX", hex);
+    }
     if let Some(g) = grpc {
         cmd.arg("--layer-grpc").arg(g);
     }
@@ -221,23 +245,28 @@ async fn run_channel(
     }})
     .to_string();
 
-    let (out, _ok) = bls_execute(&a.bls_relayer, &a.moultbook, &msg, a.grpc.as_deref())?;
+    let (out, ok) = bls_execute(
+        &a.bls_relayer,
+        &a.moultbook,
+        &msg,
+        a.jc_key_file.as_deref(),
+        a.grpc.as_deref(),
+    )?;
     let txh = extract_txhash(&out);
 
     // Committed-state verification: find OUR entry by commitment via
     // list_by_author — an anchor is only real once it reads back from
-    // state. 6 attempts × 5s, same as the script.
-    let url = smart_query_url(
-        &a.api,
-        &a.moultbook,
-        &serde_json::json!({"list_by_author": {"author": a.author, "limit": 20}}),
-    );
+    // state. list_by_author returns entries in ascending HASH order
+    // ("moult:<sha256hex>" ids, not chronological), so a single page can
+    // silently exclude the fresh entry once the author has more posts
+    // than the page limit — paginate via start_after until exhausted.
+    // 6 attempts × 5s, same as the script.
     let mut entry = None;
     for _ in 0..6 {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        match http_get(&url).await {
-            Ok(body) => {
-                entry = find_entry_by_commitment(&body, &pkg.root_b64);
+        match find_entry_paginated(&a.api, &a.moultbook, &a.author, &pkg.root_b64).await {
+            Ok(e) => {
+                entry = e;
                 if entry.is_some() {
                     break;
                 }
@@ -251,6 +280,7 @@ async fn run_channel(
             from,
             to = pkg.to_ts,
             tx = ?txh,
+            relayer_ok = ok,
             tail = %out.lines().last().unwrap_or("").chars().take(160).collect::<String>(),
             "FAILED commit — cursor not advanced, next pass retries"
         );

@@ -251,6 +251,59 @@ pub fn smart_query_url(api: &str, contract: &str, query: &serde_json::Value) -> 
     )
 }
 
+/// Paginated `list_by_author` search for OUR commitment. The contract
+/// returns entries in ascending id order — "moult:<sha256hex>", i.e.
+/// HASH order, not chronological — so a single `limit` page silently
+/// excludes the fresh entry once the author has more posts than the
+/// page size. Page through via `start_after` (last id of the previous
+/// page) until the match or the list is exhausted.
+pub async fn find_entry_paginated(
+    api: &str,
+    contract: &str,
+    author: &str,
+    commitment_b64: &str,
+) -> Result<Option<String>, Error> {
+    let mut start_after: Option<String> = None;
+    loop {
+        let mut q = serde_json::json!({"author": author, "limit": 100});
+        if let Some(s) = &start_after {
+            q["start_after"] = serde_json::Value::String(s.clone());
+        }
+        let url = smart_query_url(api, contract, &serde_json::json!({"list_by_author": q}));
+        let body = http_get(&url).await?;
+        let (found, last_id) = scan_author_page(&body, commitment_b64);
+        if found.is_some() {
+            return Ok(found);
+        }
+        // Exhausted when the page is empty or doesn't advance.
+        match last_id {
+            Some(id) if start_after.as_ref() != Some(&id) => start_after = Some(id),
+            _ => return Ok(None),
+        }
+    }
+}
+
+/// One list_by_author page: (matching entry id, id of the page's last
+/// entry for start_after continuation).
+fn scan_author_page(body: &str, commitment_b64: &str) -> (Option<String>, Option<String>) {
+    let id_of = |e: &serde_json::Value| {
+        e.get("id").map(|id| match id {
+            serde_json::Value::String(s) => s.clone(),
+            other => other.to_string(),
+        })
+    };
+    let entries = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("data")?.get("entries")?.as_array().cloned())
+        .unwrap_or_default();
+    let found = entries
+        .iter()
+        .find(|e| e.get("commitment").and_then(|c| c.as_str()) == Some(commitment_b64))
+        .and_then(id_of);
+    let last = entries.last().and_then(id_of);
+    (found, last)
+}
+
 /// Find OUR entry in a moultbook `list_by_author` response by commitment
 /// — the committed-state check: an anchor is only real once it reads back
 /// from contract state. Returns the entry id (string or number coerced).

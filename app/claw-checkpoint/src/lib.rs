@@ -19,7 +19,8 @@ pub mod state;
 pub mod window;
 
 pub use net::{
-    extract_txhash, find_entry_by_commitment, http_get, smart_query_url, RelayClient,
+    extract_txhash, find_entry_by_commitment, find_entry_paginated, http_get,
+    smart_query_url, RelayClient,
 };
 pub use package::{
     anchor_package, canonical_checkpoint_json, AnchorPackage, PackageError,
