@@ -224,3 +224,17 @@
   duplicate identity. A `peer mesh: only 1/7 reached [42031ea0]` line
   means the mesh metric tracked ONE reached peer (idx3), not that idx3
   is missing — mesh rebuilds slowly post-restart.
+
+## Juno governance — A58 supersedes A57 (2026-10-29)
+
+- A57 PASSED the DAO vote but execution FAILED: the text-only chain
+  proposal carried empty `metadata` — chain gov requires nonempty.
+- **A58 = corrected resubmission, same intent:** identical signaling
+  text/deposit/proposer/zero executable msgs; `metadata` now links to
+  A57's DAODAO page. Validated by read-only mainnet simulation
+  (original reproduced the error; corrected produces proposal-create +
+  deposit + voting-period-start events).
+- **Vote: YES (same decision as A57).** Description is more rigorous —
+  veto-burn risk, treasury math, refund policy, "cannot be undone" all
+  explicitly disclosed. If A58 also passes, chain-gov submission lands
+  a Juno-wide signaling vote: the modern-WASM-chain lane opens publicly.
