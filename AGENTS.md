@@ -149,3 +149,36 @@
   seat we steer this through. Next steps: vote YES early (quorum 33%),
   watch for the chain-gov prop, then engage on the "modern WASM chain"
   implementation line — JunoClaw named as substrate.
+
+## Positioning — Commonware wave (2026-10-29)
+
+- Patrick O'Grady (commonware founder, ex-Ava Labs/Coinbase) posted:
+  "The blockchain products launching over the next few months will blow
+  you (and your agent's) mind. AFAICT web3 tx cost/latency (w/ verifiable
+  finality) will be less than or equal to web2 api cost/latency by the end
+  of 2026."
+- He is publicly selling OUR thesis: agent-first blockchain products +
+  verifiable finality at web2 speed. Commonware ecosystem launches are
+  coming "over the next few months" — being a visible, credible adopter
+  now is how we ride it.
+- We are a real adopter, not a tourist: our chain runs on commonware
+  primitives (Simplex, resolver/p2p), we filed upstream issue #5292 with
+  live incident evidence, and we run the only commonware-powered
+  agent-governed L1 with hybrid PQ certs + a DAO-gated sovereign relay.
+- Wave-riding actions (ordered):
+  1. Public X reply/quote from the JunoClaw account — one line, no hype:
+     we run this today, live testnet, verifiable finality, agent-governed,
+     PQ-signed. Show don't claim.
+  2. Medium/relay article gets a wave-aligned hook (agent-native +
+     web2-latency finality framing, not "we built a nostr relay").
+  3. Foundation letter carries the same framing — verifiable finality is
+     the wave, we ship it.
+  4. Keep upstream engagement warm — append confirmed #5292 incident
+     evidence when Ravi's digest data lands; commonware maintainers
+     noticing a production-adjacent adopter is the cheapest credibility
+     in the industry.
+  5. When their product launches land, be the reference testnet:
+     "already running in production-like conditions with external
+     validators and independent observers."
+- Do NOT: claim endorsement, overclaim latency numbers, or pitch them
+  unsolicited — public visible work only.
