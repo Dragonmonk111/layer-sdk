@@ -103,16 +103,46 @@ fn merge(mapped: &HashSet<String>, breakglass: &HashSet<String>) -> Option<HashS
     Some(set)
 }
 
-/// One full refresh: query the chain, parse members, re-read the
-/// bindings file from disk, map member addrs -> npubs.
+/// One full refresh: page through cw4 members, re-read the bindings
+/// file from disk, map member addrs -> npubs.
 async fn refresh_once(cfg: &Cw4Config) -> Result<HashSet<String>, String> {
-    let body = smart_query(&cfg.api_base, &cfg.group_addr, LIST_MEMBERS_QUERY).await?;
-    let members = parse_list_members(&body)?;
+    // list_members is paginated — unpaginated queries only return the
+    // first page, silently locking out members beyond it as the DAO grows
+    let mut members: Vec<String> = Vec::new();
+    let mut start_after: Option<String> = None;
+    loop {
+        let query = match &start_after {
+            Some(a) => format!(r#"{{"list_members":{{"start_after":"{a}","limit":30}}}}"#),
+            None => LIST_MEMBERS_QUERY.to_string(),
+        };
+        let body = smart_query(&cfg.api_base, &cfg.group_addr, &query).await?;
+        let page = parse_list_members(&body)?;
+        let (raw_len, cursor) = page_cursor(&body);
+        members.extend(page);
+        if raw_len < 30 || cursor.is_none() {
+            break;
+        }
+        start_after = cursor;
+    }
     let bindings = load_bindings(cfg.bindings_path.as_deref())?;
     Ok(members
         .iter()
         .filter_map(|addr| bindings.get(addr).cloned())
         .collect())
+}
+
+/// (raw page length, last raw `addr`) — the pagination cursor reads the
+/// RAW page, not the weight-filtered view: a zero-weight member at a
+/// page boundary would otherwise skip the rest of the members.
+fn page_cursor(body: &str) -> (usize, Option<String>) {
+    let arr = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("data")?.get("members")?.as_array().cloned())
+        .unwrap_or_default();
+    let last = arr
+        .last()
+        .and_then(|m| m.get("addr")?.as_str().map(str::to_string));
+    (arr.len(), last)
 }
 
 /// `{"addr": "<64-hex-npub>", ...}` — invalid npubs are dropped, a

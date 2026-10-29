@@ -131,10 +131,9 @@ def main():
         ev = signed_event(pub, sign, a.kind, [["h", a.channel]],
                           a.content if a.content is not None else f"nip98-write {int(time.time())}")
         body = json.dumps(ev).encode()
-    elif a.probe == "query":
-        body = json.dumps({"filters": [{"#h": [a.channel]}]}).encode()
     else:
-        body = json.dumps({"filters": [{"#h": [a.channel]}]}).encode()
+        # /query and /count take a bare JSON array of filters
+        body = json.dumps([{"#h": [a.channel]}]).encode()
 
     code, resp = post(a.relay, path, body, auth)
     print(f"HTTP {code} {resp}")

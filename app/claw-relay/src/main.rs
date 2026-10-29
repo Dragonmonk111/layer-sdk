@@ -179,8 +179,40 @@ fn load_allowlist(path: Option<&std::path::Path>) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(app): State<Shared>) -> impl IntoResponse {
-    ws.on_upgrade(move |sock| handle_conn(sock, app))
+async fn ws_handler(
+    ws: Option<WebSocketUpgrade>,
+    headers: axum::http::HeaderMap,
+    State(app): State<Shared>,
+) -> axum::response::Response {
+    // NIP-11: relay information document on `Accept: application/nostr+json`
+    if headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|a| a.contains("application/nostr+json"))
+    {
+        return axum::Json(serde_json::json!({
+            "name": "J-Claw Relay",
+            "description": "JunoClaw sovereign coordination relay — write admission is a live view of the DAO's cw4 membership contract.",
+            "contact": "https://junoclaw.xyz",
+            "software": "https://github.com/Dragonmonk111/layer-sdk/tree/commonware/app/claw-relay",
+            "version": env!("CARGO_PKG_VERSION"),
+            "supported_nips": [1, 15, 42, 98],
+            "limitation": {
+                "restricted_writes": true,
+                "auth_required": false,
+                "payment_required": false
+            }
+        }))
+        .into_response();
+    }
+    match ws {
+        Some(u) => u.on_upgrade(move |sock| handle_conn(sock, app)),
+        None => (
+            axum::http::StatusCode::UPGRADE_REQUIRED,
+            "websocket upgrade required",
+        )
+            .into_response(),
+    }
 }
 
 async fn handle_conn(sock: WebSocket, app: Shared) {
@@ -212,22 +244,52 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
     // subscription registry: sub_id -> filters
     let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> = Arc::new(RwLock::new(HashMap::new()));
     let mut live = app.tx.subscribe();
-    {
+    let fanout = {
         let subs = subs.clone();
         let out_tx = out_tx.clone();
         tokio::spawn(async move {
-            while let Ok(ev) = live.recv().await {
-                let map = subs.read().await;
-                for (sub, filters) in map.iter() {
-                    if filters.iter().any(|f| f.matches(&ev)) {
-                        let _ = out_tx.unbounded_send(Message::Text(
-                            serde_json::json!(["EVENT", sub, *ev]).to_string().into(),
-                        ));
+            loop {
+                match live.recv().await {
+                    Ok(ev) => {
+                        let map = subs.read().await;
+                        let mut dead = false;
+                        for (sub, filters) in map.iter() {
+                            if filters.iter().any(|f| f.matches(&ev))
+                                && out_tx
+                                    .unbounded_send(Message::Text(
+                                        serde_json::json!(["EVENT", sub, *ev])
+                                            .to_string()
+                                            .into(),
+                                    ))
+                                    .is_err()
+                            {
+                                dead = true;
+                                break;
+                            }
+                        }
+                        drop(map);
+                        if dead {
+                            return; // out_rx closed — client is gone
+                        }
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        // fell behind the broadcast window — tell the client
+                        // to resubscribe rather than silently stall live feed
+                        let _ = out_tx.unbounded_send(Message::Text(
+                            serde_json::json!([
+                                "NOTICE",
+                                format!("error: lagged {n} events — resubscribe")
+                            ])
+                            .to_string()
+                            .into(),
+                        ));
+                        return;
+                    }
+                    Err(_) => return,
                 }
             }
-        });
-    }
+        })
+    };
 
     while let Some(Ok(msg)) = ws_rx.next().await {
         let Message::Text(txt) = msg else { continue };
@@ -239,7 +301,12 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
         };
         handle_frame(&app, &subs, &out_tx2, &v, &challenge).await;
     }
+    // conn closed: abort the fan-out (it would otherwise leak on the
+    // broadcast receiver forever), drop BOTH senders so out_rx closes
+    // and the writer task can actually finish.
+    fanout.abort();
     drop(out_tx);
+    drop(out_tx2);
     let _ = writer.await;
 }
 
@@ -295,7 +362,11 @@ async fn handle_frame(
             if filters.is_empty() {
                 return send(serde_json::json!(["CLOSED", sub, "error: no filters"]));
             }
-            // serve stored events
+            // Register BEFORE replaying stored events — an event broadcast
+            // between query and insert would otherwise be missed by this
+            // subscriber forever. Live events may interleave with the
+            // replay (legal nostr; clients dedupe by id).
+            subs.write().await.insert(sub.clone(), filters.clone());
             let mut seen = HashSet::new();
             for f in &filters {
                 if let Ok(events) = app.store.query(f) {
@@ -307,7 +378,6 @@ async fn handle_frame(
                 }
             }
             send(serde_json::json!(["EOSE", sub]));
-            subs.write().await.insert(sub, filters);
         }
         "CLOSE" => {
             if let Some(sub) = v.get(1).and_then(|x| x.as_str()) {
@@ -381,17 +451,41 @@ fn verify_nip98(
     if ev.tag_value("method") != Some(method) {
         return Err(unauthorized("auth method tag mismatch"));
     }
-    // u tag: compare the path portion only — clients sign ws://, http:// or
-    // wss:// variants of the same endpoint.
+    // u tag: authority AND path must match this request — a NIP-98
+    // event is a bearer credential, so path-only compare lets an
+    // event minted for any relay replay against every other relay
+    // serving the same path (cross-relay replay). Bind it to the
+    // authority the request actually arrived at (Host header).
     let u = ev.tag_value("u").unwrap_or_default();
-    if !u.rsplit('/').next().map_or(false, |seg| format!("/{seg}") == path) {
+    let host = headers
+        .get(axum::http::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let u_ok = reqwest::Url::parse(u)
+        .ok()
+        .filter(|url| url.path() == path)
+        .filter(|url| ["http", "https", "ws", "wss"].contains(&url.scheme()))
+        .map(|url| {
+            let uh = url.host_str().unwrap_or("");
+            let up = url.port_or_known_default();
+            // Host header is "host" or "host:port"
+            let (hh, hp) = match host.rsplit_once(':') {
+                Some((h, p)) if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) => {
+                    (h, p.parse::<u16>().ok())
+                }
+                _ => (host, None),
+            };
+            uh == hh && hp.map_or(true, |p| Some(p) == up)
+        })
+        .unwrap_or(false);
+    if !u_ok {
         return Err(unauthorized("auth u tag mismatch"));
     }
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    if ev.created_at.abs_diff(now) > 3600 {
+    if ev.created_at.abs_diff(now) > 60 {
         return Err(unauthorized("auth event stale"));
     }
     Ok(ev)
@@ -429,8 +523,12 @@ async fn http_events(
             .into_response();
     }
     match app.store.put(&ev) {
-        Ok(_) => {
-            let _ = app.tx.send(std::sync::Arc::new(ev.clone()));
+        Ok(fresh) => {
+            // broadcast only on first sight — a reposted event must not
+            // re-flood every live subscription
+            if fresh {
+                let _ = app.tx.send(std::sync::Arc::new(ev.clone()));
+            }
             axum::Json(serde_json::json!({"accepted": true, "event_id": ev.id}))
                 .into_response()
         }
@@ -449,8 +547,18 @@ async fn http_query(
     body: axum::body::Bytes,
 ) -> axum::response::Response {
     use axum::http::StatusCode;
-    if let Err(e) = verify_nip98(&headers, "POST", "/query") {
-        return nip98_err(e);
+    let auth_ev = match verify_nip98(&headers, "POST", "/query") {
+        Ok(e) => e,
+        Err(e) => return nip98_err(e),
+    };
+    // reads are member-gated too — "prove any key" is not enough on a
+    // channel whose contents are private to the DAO
+    if !app.allowlist.read().await.contains(&auth_ev.pubkey) {
+        return (
+            StatusCode::FORBIDDEN,
+            axum::Json(serde_json::json!({"error": "restricted: pubkey not allowlisted"})),
+        )
+            .into_response();
     }
     let Ok(filters) = serde_json::from_slice::<Vec<Filter>>(&body) else {
         return (
@@ -480,8 +588,16 @@ async fn http_count(
     body: axum::body::Bytes,
 ) -> axum::response::Response {
     use axum::http::StatusCode;
-    if let Err(e) = verify_nip98(&headers, "POST", "/count") {
-        return nip98_err(e);
+    let auth_ev = match verify_nip98(&headers, "POST", "/count") {
+        Ok(e) => e,
+        Err(e) => return nip98_err(e),
+    };
+    if !app.allowlist.read().await.contains(&auth_ev.pubkey) {
+        return (
+            StatusCode::FORBIDDEN,
+            axum::Json(serde_json::json!({"error": "restricted: pubkey not allowlisted"})),
+        )
+            .into_response();
     }
     let Ok(filters) = serde_json::from_slice::<Vec<Filter>>(&body) else {
         return (
@@ -514,6 +630,15 @@ async fn http_count(
 /// the set is rejected. Store dedupe happens at the caller.
 async fn admit_event(app: &App, ev: &Event) -> Result<(), String> {
     ev.verify().map_err(|e| format!("invalid: {e}"))?;
+    // A far-future event pins the top of every newest-first query and
+    // stays unanchorable until wall-clock catches it.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if ev.created_at > now + 900 {
+        return Err("invalid: created_at too far in the future".into());
+    }
     if !ALLOWED_KINDS.contains(&ev.kind) {
         return Err("restricted: kind not allowed".into());
     }
