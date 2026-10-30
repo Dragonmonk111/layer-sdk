@@ -307,7 +307,7 @@
   to Juno deployments, so course can start on uni-7/juno-1 MCP and
   graduate to sovereign chain when the adapter lands.
 
-## junoclaw-1 verified contract registry (2026-10-31, via sovereign MCP gRPC probe)
+## junoclaw-g1 verified contract registry (2026-10-31, via sovereign MCP gRPC probe)
 
 Discovered + smart-query-verified over `51.195.201.74:9090` gRPC
 (/cosmwasm.wasm.v1.Query/{Codes,ContractsByCode,ContractInfo,SmartContractState}
