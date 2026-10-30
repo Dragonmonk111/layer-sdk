@@ -288,3 +288,21 @@
   pending alxvoy enabling collection (his connect = the test).
 - Donor redundancy achieved: OVH (donor-1) + anatoly (donor-2), both
   source-locked. R3 joiners still need their own IPs added.
+
+## Tooling ledger — junoclaw/mcp (Cosmos MCP server)
+
+- `junoclaw/mcp/` in the windsurf-project workspace: TypeScript MCP server,
+  npm `@junoclaw/cosmos-mcp`, 28 tools, SKILL.md published on-chain via
+  `skill-registry` (agents self-discover manuals on-chain — flagship
+  differentiator).
+- Transport = CosmJS SigningStargateClient → CometBFT RPC. Chains today:
+  uni-7, juno-1, osmosis, stargaze, neutron, celestia, akash.
+- **Gap: no JunoClaw transport** — Simplex chain has custom REST
+  (:8082-class) + gRPC (:9090), no CometBFT RPC. Adapter = real work:
+  REST/gRPC query path + tx path via tx-sender signing format. chains.ts
+  is the extension point; transport is the build.
+- Vladi course outcome proposed: students graduate with a live agent that
+  completed a paid task through marketplace→escrow→truth-market —
+  "a public work history as a resume." Contract stack is code-identical
+  to Juno deployments, so course can start on uni-7/juno-1 MCP and
+  graduate to sovereign chain when the adapter lands.
