@@ -238,3 +238,24 @@
   veto-burn risk, treasury math, refund policy, "cannot be undone" all
   explicitly disclosed. If A58 also passes, chain-gov submission lands
   a Juno-wide signaling vote: the modern-WASM-chain lane opens publicly.
+
+## Bitmap semantics — first-quorum-wins, NOT a vote record (2026-10-30)
+
+- Certificate signer bitmaps reflect the first quorum of partial sigs to
+  reach the assembling node — a LATENCY RANKING, not a vote roster.
+  A seat can vote every round and appear in zero bitmaps.
+- Evidence (idx6 flap + idx3): vahana post-flap verify-allows 45k,
+  certify-resolves 51k, yet bit6 in only 3/30 samples; home-vb verifies
+  + certifies every view at 0ms, broadcasts payloads 7,674x, mesh 7/7 —
+  bit3 absent in all 30 samples. Bitmaps always 6/8: fast five
+  {idx0,1,2,5,7} never contested; idx4/idx6 trade the sixth slot; idx3
+  never wins it.
+- Consequences:
+  1. "Bit absent" ≠ "not voting" — verify on-node logs, not bitmaps.
+  2. Participation metrics are speed metrics; any future
+     reward-by-bitmap design must account for residential-RTT seats
+     being structurally disadvantaged.
+  3. True liveness margin is wider than bitmap counts suggest — the
+     marginal seats still VOTE; they just lose the assembly race.
+- Roster order confirmed canonical: node.toml peer list = roster order
+  minus self. bit3=idx3=42031ea0 home-vb; bit6=idx6=c9873958 vahana.
