@@ -306,3 +306,33 @@
   "a public work history as a resume." Contract stack is code-identical
   to Juno deployments, so course can start on uni-7/juno-1 MCP and
   graduate to sovereign chain when the adapter lands.
+
+## junoclaw-1 verified contract registry (2026-10-31, via sovereign MCP gRPC probe)
+
+Discovered + smart-query-verified over `51.195.201.74:9090` gRPC
+(/cosmwasm.wasm.v1.Query/{Codes,ContractsByCode,ContractInfo,SmartContractState}
+all live). Admin/deployer for most: juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992
+(balance ~75.4 JCLAW, seq 180 — operator-funded account).
+
+| contract | address |
+|---|---|
+| agent-registry | juno1n7fx4duuy59dvscmwrvhqss74heaectwjyac8gn5w2w637l2dxmqy9jgwl |
+| task-ledger | juno1ah3hkymcsr7nzm2sjpapl0r3yd72r9pekg723tdvr0lxe4vzacmqrm778u |
+| escrow | juno15xg0w67jehudu4cmrsslm6cxkfyemwjf99728334jwj9nk3thaksr8gprp |
+| truth-market | juno1y4zmmggk6awzrnyfpjyvcm8ggygc6scewuy9efp3fd76cxfhz6wsvg4nd8 |
+| skill-registry | juno1mu0rqss5gffycc7ju25xdk90zawav60hgmtah9n9gvnahutglw0qmj6ek0 |
+| marketplace | juno1t08z3ta2tq7fz73rlxw4y6mxualjqdvh6rw7zpvguunmd7ly45as8ay25e |
+| agent_company | juno1rpnnp8u95jpvf538duwq5n4y2tr974npfqrtp7r0cld3ut02vu4qhqfy4j |
+| moultbook_v0 | juno1xh8rfpsnh4ylkpr6yanpy2y9903yq2ugr7ycry59p84r5c5pethqua7wum |
+| seat-attestation | juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm |
+| dao-core (seat-attestation admin) | juno122s3kcms43lgqu6p3h4tezcnwmpj5kslleku5jnz2a2jvat8mh0qkrqv3u |
+
+Key params (from get_config): agent-registry reg fee 1,000,000 ujclaw;
+truth-market min_stake 1,000,000 ujclaw, slash 10%, reward 5%, min_operators 3;
+seat-attestation wired to cw4_group juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj + dao-core.
+
+gRPC surface gaps (unimplemented as of h~3.70M): GetTxsByEvent, GetBlockWithTxs,
+GetLatestBlock, GetNodeInfo, AllContractState, ContractHistory, PinnedCodes,
+wasm Params. Tx discovery requires a known hash (BroadcastTx response) — no
+tx-search endpoint. Quirk: every account reports accountNumber=17 (simplified
+auth impl; sequences are per-account and correct).
