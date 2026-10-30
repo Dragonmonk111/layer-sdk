@@ -279,3 +279,12 @@
   observer-first validator gate, DAO-gated relay); event timing after
   foundation + A58 chain-gov outcome; consider student-ready testnet
   materials (observer packet as the "hello world").
+
+## Donor-2 live (2026-10-30)
+
+- Anatoly enabled state-sync donor on `5.75.244.250:9090`, allowlisted to
+  ANODE collector `65.109.93.152` in BOTH UFW and Hetzner Cloud Firewall.
+  Verified from outside: filtered to non-collector IPs; gRPC function
+  pending alxvoy enabling collection (his connect = the test).
+- Donor redundancy achieved: OVH (donor-1) + anatoly (donor-2), both
+  source-locked. R3 joiners still need their own IPs added.
