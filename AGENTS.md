@@ -259,3 +259,23 @@
      marginal seats still VOTE; they just lose the assembly race.
 - Roster order confirmed canonical: node.toml peer list = roster order
   minus self. bit3=idx3=42031ea0 home-vb; bit6=idx6=c9873958 vahana.
+
+## Ecosystem — POSTHUMAN / Noviciado Tech Hub, Madrid (2026-10-30)
+
+- Vladi (POSTHUMAN, idx2 validator + JunoClaw DAO member): pledged
+  POSTHUMAN as "loyal contributors of JunoClaw, as we were for Juno."
+- **Noviciado Tech Hub**: his new 400 m2 venue in central Madrid —
+  ai.noviciado.com — already runs events/courses for Solana, NEAR,
+  Zcash, Logos. Two concrete offers:
+  1. Host a JunoClaw event at the hub.
+  2. Build a dedicated JunoClaw AI-course (existing templates:
+     github.com/NovicIAdo/Solana-AI-course, /NEAR-AI-course,
+     /General-AI-course — he rebuilds the General one for us).
+- Asked whether we have people in Madrid/Barcelona — none currently.
+  Committed (DragonMonk): Ravi to join for a Madrid event once the
+  foundation is sorted.
+- Follow-ups owed: course outline tailored to our differentiators
+  (agent registry/marketplace/escrow wages, verify-don't-trust receipts,
+  observer-first validator gate, DAO-gated relay); event timing after
+  foundation + A58 chain-gov outcome; consider student-ready testnet
+  materials (observer packet as the "hello world").
