@@ -89,6 +89,38 @@ tx-sender broadcast --grpc <donor>:9090 --tx-file signed-N.hex
    on next refresh tick; a member npub writes through NIP-42 and is
    accepted; an unlisted npub is rejected.
 
+## ⚠ Coverage gap — decide BEFORE the window (verified in contract source 2026-11-01)
+
+`UpdateAttestation` binds `seat_index` to `info.sender` and requires
+sender cw4 weight > 0 (`execute_update_attestation` → `NotMember`).
+There is **no admin override path** — dao-core can only Revoke/Prune/
+UpdateConfig, never attest on a member's behalf.
+
+The cw4 group currently has **5 members** (operators with governance
+weight). utsa, 79anvi, blockpro are **consensus-only — no cw4 weight by
+design** (validator registration ≠ voting power). They cannot submit
+`UpdateAttestation`, so `ListActiveSeats` caps at 5 records and the
+runbook's "expect 8" is unreachable as written.
+
+Options, in order of fidelity to the design:
+
+1. **DAO proposal adding the three seats to cw4** (`UpdateMembers` on
+   cw4-group) — grants them attestation rights BUT also governance
+   weight: this is a policy decision, not an ops workaround. If ratified,
+   it happens as a DAO vote before or inside the window.
+2. **Attest the 5 member seats; consensus-only seats join relay via the
+   local `--allowlist`** — works for the single-relay cutover; break-glass
+   entries never federate, so vahana's relay would not admit them either
+   until its operator lists them too.
+3. **Contract upgrade adding a delegated-attestation path** (dao-core
+   attests for a non-member seat, or cw4 gains a zero-weight
+   consensus-role flag) — the principled fix; a contract change is its
+   own RC, not a Tuesday add-on.
+
+Default for the window is option 2 unless the DAO has already ratified
+option 1 — flag this in the ceremony invite so no operator arrives
+expecting a tx they can't sign.
+
 ## Rollback / failure
 
 - Wrong key bound: UpdateAttestation again with the correct key (own-seat
