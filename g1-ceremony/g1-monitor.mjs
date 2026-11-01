@@ -67,16 +67,21 @@ function queryLatestHeight(target, timeoutMs = 4000) {
   return new Promise((resolve) => {
     const started = Date.now();
     let settled = false;
+    const client = http2.connect(`http://${target}`);
+    let req = null;
+    // NOTE: client.close() is graceful — it waits for open streams, so a hung
+    // request leaks the socket forever (one ESTABLISHED per timed-out poll).
+    // destroy() tears down immediately; every settle path must destroy both.
     const done = (r) => {
       if (settled) return;
       settled = true;
-      try { client.close(); } catch { /* ignore */ }
+      try { if (req) req.destroy(); } catch { /* ignore */ }
+      try { client.destroy(); } catch { /* ignore */ }
       resolve({ ...r, rttMs: Date.now() - started });
     };
-    const client = http2.connect(`http://${target}`);
     const timer = setTimeout(() => done({ ok: false, error: 'timeout' }), timeoutMs);
     client.on('error', (e) => { clearTimeout(timer); done({ ok: false, error: e.code || e.message }); });
-    const req = client.request({
+    req = client.request({
       ':method': 'POST',
       ':path': '/layer.lightclient.v1.Query/LatestHeight',
       'content-type': 'application/grpc',
