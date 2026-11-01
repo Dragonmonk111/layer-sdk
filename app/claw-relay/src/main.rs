@@ -9,9 +9,11 @@
 //! allowlist AND an `h` tag naming a configured channel. Reads are
 //! open — transcripts are meant to be verifiable by anyone.
 //!
-//! The allowlist is derived on-chain when `--cw4-group` is set: a
-//! background task polls the cw4 contract's `list_members` smart query
-//! and maps members to npubs via `--member-bindings`. The gate fails
+//! The allowlist is derived on-chain: either `--attestation-contract`
+//! (ListActiveSeats on the seat-attestation contract — npubs bound
+//! on-chain, cw4 weight enforced server-side) or `--cw4-group` +
+//! `--member-bindings` (poll list_members, map addrs to npubs via a
+//! local file). The gate fails
 //! CLOSED — an empty effective set denies all writes — and keeps the
 //! last-good set on refresh failures. `--allowlist` entries are
 //! additive break-glass npubs (e.g. the relay operator), merged into
@@ -238,6 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // on-chain admission flags
     let cw4_group = opt("--cw4-group");
+    let attestation_contract = opt("--attestation-contract");
     let chain_api = opt("--chain-api").unwrap_or_else(|| "http://127.0.0.1:8082".into());
     let bindings_path = opt("--member-bindings").map(PathBuf::from);
     let cw4_refresh_secs: u64 = opt("--cw4-refresh-secs")
@@ -255,21 +258,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         http_read: Mutex::new(HashMap::new()),
     });
 
-    if let Some(group_addr) = cw4_group {
-        if bindings_path.is_none() {
+    // Admission source precedence: --attestation-contract is the
+    // post-ceremony path (npubs bound on-chain, cw4 weight enforced
+    // server-side). --cw4-group + --member-bindings remains the
+    // pre-attestation fallback. Both configured → attestation wins.
+    if cw4_group.is_some() || attestation_contract.is_some() {
+        if attestation_contract.is_none() && bindings_path.is_none() {
             tracing::warn!(
                 "--cw4-group set without --member-bindings: no member can map to an npub; writes stay closed"
             );
         }
+        match &attestation_contract {
+            Some(c) => tracing::info!(contract = %c, %chain_api, cw4_refresh_secs, "attestation admission poller started"),
+            None => tracing::info!(group_addr = %cw4_group.as_deref().unwrap_or_default(), %chain_api, cw4_refresh_secs, "cw4 admission poller started"),
+        }
         let cfg = admission::Cw4Config {
             api_base: chain_api.clone(),
-            group_addr: group_addr.clone(),
+            group_addr: cw4_group.unwrap_or_default(),
             bindings_path,
+            attestation_addr: attestation_contract,
             refresh: Duration::from_secs(cw4_refresh_secs),
             breakglass,
         };
         tokio::spawn(admission::poll_loop(cfg, app.allowlist.clone()));
-        tracing::info!(%group_addr, %chain_api, cw4_refresh_secs, "cw4 admission poller started");
     }
 
     // federation: one pull-only gossip task per --peer. Peers REQ on

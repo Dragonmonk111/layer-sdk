@@ -42,7 +42,16 @@ pub struct Cw4Config {
     /// bech32 address of the cw4-group contract.
     pub group_addr: String,
     /// `{"juno1...": "<64-hex-npub>", ...}` — re-read every refresh.
+    /// Ignored when `attestation_addr` is set: the seat-attestation
+    /// contract binds npubs on-chain and joins cw4 membership
+    /// server-side, so no local mapping file is needed.
     pub bindings_path: Option<PathBuf>,
+    /// `--attestation-contract` — when set, admission derives from
+    /// `ListActiveSeats` on this contract instead of cw4 list_members +
+    /// bindings. Preferred path: the contract itself enforces "member
+    /// still holds cw4 weight", so the query errors (keep-last-good)
+    /// rather than admitting stale records.
+    pub attestation_addr: Option<String>,
     /// Poll interval (`--cw4-refresh-secs`, default 60).
     pub refresh: Duration,
     /// `--allowlist` file entries — merged in on every refresh.
@@ -103,9 +112,13 @@ fn merge(mapped: &HashSet<String>, breakglass: &HashSet<String>) -> Option<HashS
     Some(set)
 }
 
-/// One full refresh: page through cw4 members, re-read the bindings
-/// file from disk, map member addrs -> npubs.
+/// One full refresh: attestation-contract path when configured (npubs
+/// straight from on-chain seat records), else page cw4 members and map
+/// them through the local bindings file.
 async fn refresh_once(cfg: &Cw4Config) -> Result<HashSet<String>, String> {
+    if let Some(contract) = &cfg.attestation_addr {
+        return refresh_once_attestation(cfg, contract).await;
+    }
     // list_members is paginated — unpaginated queries only return the
     // first page, silently locking out members beyond it as the DAO grows
     let mut members: Vec<String> = Vec::new();
@@ -129,6 +142,67 @@ async fn refresh_once(cfg: &Cw4Config) -> Result<HashSet<String>, String> {
         .iter()
         .filter_map(|addr| bindings.get(addr).cloned())
         .collect())
+}
+
+/// `ListActiveSeats` on the seat-attestation contract: paginated by
+/// seat_index (u8), each record carries the member's bound relay npub
+/// as a base64 `Binary`. The contract already filters to members still
+/// holding cw4 weight — the relay only decodes.
+async fn refresh_once_attestation(
+    cfg: &Cw4Config,
+    contract: &str,
+) -> Result<HashSet<String>, String> {
+    let mut npubs: HashSet<String> = HashSet::new();
+    let mut start_after: Option<u8> = None;
+    loop {
+        let query = match start_after {
+            Some(s) => format!(r#"{{"list_active_seats":{{"start_after":{s},"limit":30}}}}"#),
+            None => r#"{"list_active_seats":{"limit":30}}"#.to_string(),
+        };
+        let body = smart_query(&cfg.api_base, contract, &query).await?;
+        let (page_npubs, last_seat, raw_len) = parse_list_active_seats(&body)?;
+        npubs.extend(page_npubs);
+        if raw_len < 30 {
+            break;
+        }
+        start_after = Some(last_seat.ok_or_else(|| {
+            "attestation page full but last seat_index missing".to_string()
+        })?);
+    }
+    Ok(npubs)
+}
+
+/// `{"data":{"seats":[{"seat_index":N,"npub":"<base64-32B>",...}]}}` →
+/// (lowercase 64-hex npubs, last seat_index, raw seat count). Seats
+/// whose npub is not exactly 32 bytes are skipped — the contract does
+/// not constrain Binary length and a malformed attestation must not
+/// wedge the refresh.
+fn parse_list_active_seats(body: &str) -> Result<(HashSet<String>, Option<u8>, usize), String> {
+    let v: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| format!("smart query json: {e}"))?;
+    let seats = v
+        .get("data")
+        .and_then(|d| d.get("seats"))
+        .and_then(|s| s.as_array())
+        .ok_or_else(|| "response missing data.seats".to_string())?;
+    let mut npubs = HashSet::new();
+    let mut last_seat: Option<u8> = None;
+    for seat in seats {
+        if let Some(idx) = seat.get("seat_index").and_then(|i| i.as_u64()) {
+            last_seat = Some(idx as u8);
+        }
+        let Some(b64) = seat.get("npub").and_then(|n| n.as_str()) else {
+            continue;
+        };
+        use base64::Engine;
+        let Ok(raw) = base64::engine::general_purpose::STANDARD.decode(b64) else {
+            continue;
+        };
+        if raw.len() == 32 {
+            npubs.insert(hex::encode(raw));
+        }
+    }
+    Ok((npubs, last_seat, seats.len()))
 }
 
 /// (raw page length, last raw `addr`) — the pagination cursor reads the
@@ -377,6 +451,7 @@ mod tests {
             api_base: api,
             group_addr: "juno1contract".into(),
             bindings_path: Some(bindings),
+            attestation_addr: None,
             refresh: Duration::from_secs(60),
             breakglass: HashSet::new(),
         };
@@ -395,6 +470,80 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    fn seat_json(seat_index: u8, npub_bytes: &[u8]) -> String {
+        use base64::Engine;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(npub_bytes);
+        format!(
+            r#"{{"seat_index":{seat_index},"member_addr":"juno1m{seat_index}","hot_ed25519":"AA==","bls_share_pubkey":"AA==","mayo_pubkey":null,"npub":"{b64}","attested_at":1}}"#
+        )
+    }
+
+    #[test]
+    fn parse_active_seats_extracts_hex_npubs() {
+        let npub_a = [0xaa; 32];
+        let npub_b = [0xbb; 32];
+        let body = format!(
+            r#"{{"data":{{"seats":[{},{}]}}}}"#,
+            seat_json(0, &npub_a),
+            seat_json(1, &npub_b)
+        );
+        let (npubs, last, len) = parse_list_active_seats(&body).unwrap();
+        assert_eq!(len, 2);
+        assert_eq!(last, Some(1));
+        assert!(npubs.contains(&hex::encode(npub_a)));
+        assert!(npubs.contains(&hex::encode(npub_b)));
+    }
+
+    #[test]
+    fn parse_active_seats_drops_malformed_npub() {
+        // 16-byte npub: malformed attestation must not wedge the refresh
+        let body = format!(
+            r#"{{"data":{{"seats":[{},{{"seat_index":3,"npub":"!!!"}}]}}}}"#,
+            seat_json(2, &[0xaa; 16])
+        );
+        let (npubs, last, len) = parse_list_active_seats(&body).unwrap();
+        assert_eq!(len, 2);
+        assert_eq!(last, Some(3));
+        assert!(npubs.is_empty());
+        assert!(parse_list_active_seats(r#"{"data":{}}"#).is_err());
+    }
+
+    #[tokio::test]
+    async fn attestation_refresh_paginates_and_needs_no_bindings() {
+        // two pages: first returns a full 30 seats, second the remainder
+        let mut seats_p1 = String::new();
+        for i in 0..30u8 {
+            if i > 0 {
+                seats_p1.push(',');
+            }
+            seats_p1.push_str(&seat_json(i, &[i; 32]));
+        }
+        let page1 = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{{\"data\":{{\"seats\":[{}]}}}}",
+            format!(r#"{{"data":{{"seats":[{}]}}}}"#, seats_p1).len(),
+            seats_p1
+        );
+        let seats_p2 = seat_json(30, &[30u8; 32]);
+        let page2 = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{{\"data\":{{\"seats\":[{}]}}}}",
+            format!(r#"{{"data":{{"seats":[{}]}}}}"#, seats_p2).len(),
+            seats_p2
+        );
+        let api = canned_server(vec![page1.leak(), page2.leak()]).await;
+
+        let cfg = Cw4Config {
+            api_base: api,
+            group_addr: String::new(),
+            bindings_path: None, // no bindings file at all — that is the point
+            attestation_addr: Some("juno1attest".into()),
+            refresh: Duration::from_secs(60),
+            breakglass: HashSet::new(),
+        };
+        let npubs = refresh_once(&cfg).await.unwrap();
+        assert_eq!(npubs.len(), 31);
+        assert!(npubs.contains(&hex::encode([30u8; 32])));
+    }
+
     #[tokio::test]
     async fn refresh_zero_mapped_keeps_closed() {
         let dir = std::env::temp_dir().join(format!("claw-adm0-{}", std::process::id()));
@@ -409,6 +558,7 @@ mod tests {
             api_base: api,
             group_addr: "juno1contract".into(),
             bindings_path: Some(bindings),
+            attestation_addr: None,
             refresh: Duration::from_secs(60),
             breakglass: HashSet::new(),
         };

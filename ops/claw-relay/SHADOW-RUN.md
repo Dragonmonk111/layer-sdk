@@ -90,8 +90,11 @@ must MATCH from day 1: write-accept/deny behavior on identical inputs
 ## Cutover checklist (when the week is clean)
 
 - [ ] 7 consecutive conformance reports, W/N probes all-MATCH
-- [ ] `ListActiveSeats` (attestation contract) replaces member-bindings
+- [x] `ListActiveSeats` (attestation contract) replaces member-bindings
       file — relay flag flips to `--attestation-contract <addr>`
+      **[implemented: `--attestation-contract juno1rhlaj…` — npubs decode
+      straight from seat records, cw4 weight enforced server-side, no
+      bindings file; precedence over the cw4+bindings path]**
 - [ ] claw-checkpoint anchors verified on-chain for 7 days (entry refs
       chain unbroken)
 - [ ] Point BUZZ_RELAY_URL daemons at claw-relay on a staging host first;
