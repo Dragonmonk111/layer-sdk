@@ -383,3 +383,47 @@ margin (idx2 stale ~3.4h, idx4 lagging), the chain dropped below 6/8.
    `socket: No buffer space available` even to loopback — route via
    `wsl -d Ubuntu-24.04` (its network stack survives), reach the
    Windows host at the WSL gateway IP, VBox port-forwards still work.
+
+## RC18 — protocol-level wedge fixes (spec, from 2026-11-01 incident)
+
+RC17v2 ships the *operational* self-recovery (auto-archive+restart on
+the livelock signature). RC18 carries the *protocol* fixes — none of
+these ship without a deterministic repro harness first:
+
+1. **In-protocol recovery for certified-but-unfinalized parents.**
+   Today's wedge: parent certified (notarized), never finalized →
+   leaders skip proposing forever (parent not executed in time). The
+   fix direction: after a bounded wait, the leader proposes a
+   COMPETING SIBLING on the last finalized tip instead of skipping —
+   the certified dead variant becomes an orphan kept as evidence.
+   HARD SAFETY CONSTRAINT (node.rs rc14 doc block): a merely-
+   notarized parent CAN legitimately have a conflicting finalized
+   sibling — the 2026-10-21 fork (4c03cc6b vs 2039d342 at 2631739)
+   came from eager execution of a dead variant. The RC18 fix must
+   never regress to executing a merely-notarized parent — sibling
+   proposals are still only executed via Finalization, and the design
+   must cover "certified parent finalizes LATE on some seats" so we
+   cannot produce digest-level divergence with identical app state.
+   Prereq: local two-node devnet repro that forces the wedge
+   deterministically (withhold finalize votes), proves sibling-
+   proposal heals it and produces no equivocation/fork.
+2. **Authenticated-session deadlock (Reserved ping-pong).** Post-
+   incident mesh stayed TCP-ESTAB-everywhere while authenticated peers
+   were 0-2/7 for ~30min — both ends held mid-dial reservations and
+   kept rejecting each other's handshakes (rule 19 pattern,
+   bidirectional). RC18: detect TCP-ESTAB-but-unauthenticated peers
+   over N windows and drop the TCP conn to force tracker release —
+   AND review upstream commonware fixes (#4956, #5325, #5282) before
+   touching the dialer.
+3. **Quorum-margin alert as a first-class signal.** idx2 ran
+   execution-stale ~3.4h before the wedge — effective margin was ONE
+   and nobody noticed. jc-status rule: any seat's finalized-height lag
+   or stale-execution >1h = page. This is cheap and would have
+   softened today before the trigger ever landed.
+4. **`ops/recover-wedge.sh`** — the manual backstop (stop → mv
+   data/consensus → start → verify digest parity) committed as a
+   runnable artifact, kept even after RC18 protocol recovery lands.
+
+Non-goals deliberately deferred: consensus-semantics changes without
+the repro harness; any change to "never execute a merely-notarized
+ancestor" (that invariant is what saved the chain on Oct-21).
