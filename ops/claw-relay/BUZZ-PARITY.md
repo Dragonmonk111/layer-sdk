@@ -63,16 +63,18 @@ Welcome channel (1 event) — not migrated.
 
 ## Live verification order (chain resumes → run these)
 
-1. **Wire smoke (real buzz-cli, not the python probe):**
-   `BUZZ_PRIVATE_KEY=<seat-nsec> BUZZ_RELAY_URL=ws://127.0.0.1:7070
-   buzz-cli messages send --channel 7b4f3765-… --content "parity probe"`
-   then `messages get --channel … --limit 5` — proves binary-compat,
-   AUTH handshake, replay path.
+1. **Wire smoke (real buzz-cli, not the python probe): DONE 2026-11-01.**
+   `buzz-cli messages send` → `accepted:true` (event `cd7341b9…`);
+   `messages get` round-trips; `/count`+`/query` with NIP-98 → 200;
+   unauthed reads → `missing Authorization`; random npub write →
+   `403 restricted: pubkey not allowlisted`. Wire-compat confirmed on
+   the member-bindings shadow (binary `edf8be0f…`).
 2. **Attestation refresh:** relay logs `admission: refreshed N seats`
    from the real `ListActiveSeats`; a non-member probe gets
    `restricted: pubkey not allowlisted`.
-3. **vote-daemon dry read** (no intents posted): `messages get` returns
-   governance history — proves the REQ path daemons actually use.
+3. **vote-daemon dry read: DONE 2026-11-01.** `messages get
+   --channel 2a6c9ad2-…` returns history incl. a live transcript-anchor
+   receipt — the REQ path daemons actually use works.
 4. **transcript-anchor.py against claw:** one manual run posts an
    `[anchor]` receipt — proves read-window + verify-command flow.
 5. **Staging divergence:** OVH `claw-relay` + Ravi's vahana peer,
