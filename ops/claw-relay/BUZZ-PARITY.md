@@ -41,6 +41,13 @@ touches daemon code except where noted.
 - agents `7b4f3765-8494-4de8-bf7a-b2595da827e0`
 - validator-ops `810d3c45-acb5-44f8-9155-8bc94b3a12b3`
 
+**Census finding (measured 2026-11-01):** kind-9 `h`-tag histogram on Buzz
+is `7b4f…` 383, `bf2d0485-…` 229, `810d…` 104, `2a6c…` 30, `f497…` 1.
+`bf2d0485-0e8e-4822-820f-f6cc11d9c408` is the **DM channel** — private
+direct messages, no daemon dependency. Policy decision before cutover:
+migrate it (add to `--channels`) or leave it Buzz-side. `f497…` is a
+Welcome channel (1 event) — not migrated.
+
 ## Deliberate differences (not bugs — flag in postmortem)
 
 - **Reads are signer-gated** (`/query`, REQ replay) — Buzz served
@@ -102,23 +109,29 @@ operator lists the bot npub locally**.
 - Also split the key: one bot identity per function (status/gov/alerts),
   so a compromised or rotated bot key has a bounded blast radius.
 
-## Census gates (run against Buzz BEFORE cutover — ground truth, not assumption)
+## Census gates — RESULTS (measured 2026-11-01, `buzz-postgres.events`)
 
 Buzz accepted kind=1 and non-member writes after NIP-42 auth (memory
-#99). Whatever is in its DB today defines what claw will reject:
+#99). Ground truth from the live DB:
 
-1. **Kind census:** `docker exec buzz-postgres psql -U buzz -d buzz -c
-   "SELECT kind, count(*) FROM events GROUP BY kind ORDER BY 2 DESC"`
-   (adjust the table name to the schema). Any kind outside
-   `[9, 40002, 40008, 45001, 45003]` with live writers → decide: allow
-   it, or tell that writer first.
-2. **Author census:** distinct authors over the last 14 days vs
-   (ListActiveSeats ∪ local allowlist). Every author not covered is a
-   writer that breaks at cutover; name each one.
-3. **Client census:** Caddy access log for `relay.junoclaw.xyz`,
-   distinct user-agents + paths over 7 days. Any human client (web or
-   desktop app) that isn't plain NIP-42/NIP-98 needs a named
-   replacement before DNS. Daemons alone are not the whole population.
+1. **Kind census — done.** 19 kinds present. Only **kind 9 (746 events)
+   is daemon-load-bearing** — it is in `ALLOWED_KINDS` ✓. Everything else
+   is Buzz's social/moderation surface with zero daemon dependency:
+   39000/39001/39002 (57, NIP-29 group metadata — relay-side, not ported),
+   30177/40099/44100 (81, Buzz platform customs), 0/1/7 (26, social),
+   9000/9005/9007/9021 (29, NIP-29 moderation), misc ~11.
+   **No writer breaks at cutover** — those kinds retire with the social
+   surface. Document as deliberate-deny, not a parity miss.
+2. **Author census — done.** Top writers: `a748d469` (499, kind 9 —
+   status-bot/infra key), `4a8189fc` (259, kind 9 + moderation — second
+   bot key), `d121b7da` (113, platform/group events — **Buzz system
+   identity, not a seat**), `c274b3eb` (47), `56e611d3` (15), tail ~6.
+   Confirms the bot-identity gap: the two heaviest authors are shared
+   non-seat keys → both go in the local `--allowlist` at cutover.
+3. **Client census — still open.** Caddy access log for
+   `relay.junoclaw.xyz`, distinct user-agents + paths over 7 days. Any
+   human client (web/desktop app) that isn't plain NIP-42/NIP-98 needs a
+   named replacement before DNS. Daemons alone are not the population.
 4. **Limits:** `MAX_REPLAY=2000` ≥ vote-daemon `--limit 50` ✓;
    `MAX_CONN_PER_IP=16`. Check that Caddy forwards the client IP, or
    every client behind Caddy counts as 127.0.0.1 and shares one 16-cap.
@@ -166,10 +179,12 @@ claw-relay runs on the same host and polls the chain API
 | socket-count check | safety gate | one-shot commands, never a loop |
 | Buzz containers | cold rollback | `docker compose down` +14 days after DNS; volumes kept until archive of record verified |
 
-## To write before Stage 6
+## Stage-6 ops artifacts — written (commit 27c7849)
 
-- `claw-relay.service` systemd unit (Restart=always, `/opt/claw/data.redb`)
-- `ops/claw-relay/backup.sh` — redb snapshot + config tarball, 14-day ret
-- `infra-monitor.sh` variant checking `systemctl is-active claw-relay`
-  instead of `docker ps … buzz-`
-- `allowlist-add` doc note: file append + SIGHUP/restart semantics on claw
+- `claw-relay.service` — systemd unit, attestation admission, resource
+  caps (MemoryMax=512M, CPUQuota=50%, Nice=10), binds 127.0.0.1:7070.
+- `backup.sh` — redb snapshot + config tarball, 14-day retention.
+- `infra-monitor-claw.sh` — `systemctl is-active claw-relay`/`junoclaw-g1`
+  checks replace the `docker ps … buzz-` container checks.
+- `allowlist-add-claw.sh` — bech32-verified append; allowlist loads once
+  at start so every add needs `systemctl restart claw-relay`.
