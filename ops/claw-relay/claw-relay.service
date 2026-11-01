@@ -9,19 +9,22 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=ubuntu
-# Attestation admission is the authoritative path (post-R3-ceremony):
-# npubs derive from ListActiveSeats — the contract joins cw4 weight
-# server-side. --allowlist holds ONLY operator break-glass npubs
-# (loaded once at start — edits need `systemctl restart`; they never
-# federate to peer relays).
+# TRANSITIONAL (pre-R3): member-bindings admission — same as the running
+# shadow. POST-R3 FLIP: replace --cw4-group + --member-bindings with
+#   --attestation-contract juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm
+# attestation makes npubs derive from ListActiveSeats (cw4 join
+# server-side) and retires member-bindings. --allowlist holds ONLY
+# operator break-glass npubs (loaded once at start — edits need
+# `systemctl restart`; they never federate to peer relays).
 ExecStart=/opt/claw/bin/claw-relay \
     --listen 127.0.0.1:7070 \
     --db /opt/claw/db/relay.redb \
     --channels 2a6c9ad2-9da8-406c-8aa3-cd2f1e33af38,7b4f3765-8494-4de8-bf7a-b2595da827e0,810d3c45-acb5-44f8-9155-8bc94b3a12b3 \
-    --attestation-contract juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm \
+    --cw4-group juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj \
     --chain-api http://127.0.0.1:8082 \
-    --cw4-refresh-secs 60 \
-    --allowlist /opt/claw/state/allowlist.txt
+    --member-bindings /opt/claw/state/member-bindings.json \
+    --allowlist /opt/claw/state/allowlist.txt \
+    --peer ws://57.129.103.229:7071
 Restart=always
 RestartSec=3
 

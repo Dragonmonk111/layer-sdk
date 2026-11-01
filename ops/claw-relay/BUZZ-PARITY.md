@@ -80,9 +80,39 @@ Welcome channel (1 event) — not migrated.
 5. **Staging divergence:** OVH `claw-relay` + Ravi's vahana peer,
    `divergence-test.md` matrix (local matrix already 9/9 — this proves
    it over real gossip).
-6. **24h daemon soak:** point `status-bot` + `infra-monitor` at claw
-   (`BUZZ_RELAY_URL=ws://127.0.0.1:7070`), verify posts land and REQ
-   reads return; then vote-daemon + proposal-watch.
+6. **24h daemon soak: RUNNING — started 2026-11-01 ~16:45 UTC.**
+   Decision: **Option A (all six daemons swapped to claw)** — the
+   highway approach, exercises real daemon traffic end-to-end.
+   Mechanism: daemons hardcode `BUZZ_RELAY_URL=wss://relay.junoclaw.xyz`
+   inline — the swap is a single-token `sed` on:
+   `status-bot.sh`, `proposal-watch.sh`, `buzz-vote-daemon.sh`,
+   `infra-monitor.sh`, `jc-alert-post.sh`, `transcript-anchor.sh`.
+   **Revert = sed back** (`ws://127.0.0.1:7070` → `wss://relay.junoclaw.xyz`);
+   next cron tick reverts each daemon, no restart needed.
+
+   Option C safety ported in: (a) relay moved off raw
+   `run-relay.sh`/`pkill` into `claw-relay.service` (memory #65)
+   **before** the swap — `MemoryMax=512M`, `CPUQuotaPerSec=500ms`,
+   `TasksMax=256`, `LimitNOFILE=4096`, `Nice=10` verified via
+   `systemctl show`; transitional member-bindings flags until
+   Tuesday's attestation txs. (b) `soak-watchdog.sh` on root cron
+   every 5 min — posts claw-relay/validator failures to **Buzz**
+   (the path operators still watch during the soak), deduped by
+   marker file. (c) Buzz containers untouched — rollback surface
+   preserved. Deployment wrinkle found: `/opt/claw` was root-owned
+   from the raw-process era; `chown -R ubuntu` applied (unit runs
+   `User=ubuntu`, least privilege).
+
+   First 45 min verified: status-bot 17:00 tick landed on claw
+   (`#agents`, a748d469, ts 1793552402), vote-daemon `synced.json`
+   refreshed 17:30, transcript-anchor ran against claw 17:17.
+   **Anchor chain commits are failing `InsufficientFunds` on the
+   anchor wallet (`juno134zsp2…nraz`) — pre-existing since the halt,
+   NOT a soak regression; wallet needs a top-up.**
+
+   Exit criteria: 24h clean, or any claw-side write/read failure →
+   revert sed + note the cause. Socket-baseline gate (#141): count
+   `:8082`/`:9090` conns at soak start and +1h — flat required.
 7. **Checkpoint anchors:** `claw-checkpoint` hourly for 7 days —
    verify `refs` chaining on moultbook.
 8. **DNS cutover:** Caddy backend swap only; Buzz binaries stay
@@ -177,6 +207,7 @@ claw-relay runs on the same host and polls the chain API
 | claw-relay v5 (systemd) | authoritative relay | permanent after cutover |
 | claw-checkpoint cron | hourly anchors | permanent after cutover |
 | `BUZZ_RELAY_URL` overrides on soak daemons | Stage 6 soak | made permanent or reverted at DNS cutover, same day |
+| `soak-watchdog.sh` (root cron */5) | alerts claw failures to Buzz | removed when soak ends (revert or cutover) |
 | transcript-anchor.sh (Buzz) | parallel anchors during soak | removed after 7 clean claw anchor days |
 | socket-count check | safety gate | one-shot commands, never a loop |
 | Buzz containers | cold rollback | `docker compose down` +14 days after DNS; volumes kept until archive of record verified |
@@ -190,3 +221,7 @@ claw-relay runs on the same host and polls the chain API
   checks replace the `docker ps … buzz-` container checks.
 - `allowlist-add-claw.sh` — bech32-verified append; allowlist loads once
   at start so every add needs `systemctl restart claw-relay`.
+- `soak-watchdog.sh` — 5-min cron during the soak: posts claw-relay
+  inactive / validator inactive / stale claw health to **Buzz** (the
+  operator-visible channel while daemons point at claw). Marker-file
+  dedupe; expires with the soak.
