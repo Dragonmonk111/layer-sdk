@@ -336,3 +336,50 @@ GetLatestBlock, GetNodeInfo, AllContractState, ContractHistory, PinnedCodes,
 wasm Params. Tx discovery requires a known hash (BroadcastTx response) — no
 tx-search endpoint. Quirk: every account reports accountNumber=17 (simplified
 auth impl; sequences are per-account and correct).
+
+## 2026-11-01 g1 wedge — monitor socket-flood → certified-parent livelock (postmortem)
+
+**What happened:** g1 wedged at h3938615 ~07:16 UTC. Block `6faf9ba7`
+certified but never finalized — finalize quorum died mid-view. Every
+seat then refused to execute a merely-notarized parent (correct) and
+the build has **no in-protocol recovery**: leaders skip proposing
+forever (`LIVELOCK SIGNATURE` logged by the node itself at 50 probes).
+
+**Trigger (ours, owned):** `g1-ceremony/g1-monitor.mjs` — the soak
+poller — opens a NEW `http2.connect()` to `127.0.0.1:9090` (SSH
+forward → OVH :9090 gRPC inside the slay3rd process) every 30s and
+NEVER calls `session.close()`. ~2,047 leaked ESTABLISHED sessions =
+~2k connections into OVH's gRPC listener inside the consensus process.
+Session health degraded mid-finalize; combined with a full-CPU docker
+build run on the home-vb HOST at the same moment and an already-thin
+margin (idx2 stale ~3.4h, idx4 lagging), the chain dropped below 6/8.
+
+**Rules learned — deterministic:**
+
+1. **Every long-running poller gets an fd/socket audit before soak
+   use.** No client is "read-only harmless" — a leaky client is a load
+   generator aimed at a validator process. Required pattern: reuse the
+   session, or `session.close()` every poll, plus a connection cap +
+   leak check (`ss -tn | wc -l` trend over 10 min) before leaving it
+   running. g1-monitor stays DEAD until patched.
+2. **No heavy compute on a seat's HOST — not just the node process.**
+   The no-builds-on-validators rule extends to the whole host: home-vb
+   is a VirtualBox guest ON this Windows PC — docker compiles here
+   contend with its NAT'd P2P. Check `pgrep -af slay3rd`-equivalent +
+   running VMs before any heavy job on any workstation that hosts a seat.
+3. **A loopback SSH-forward poll IS load on the donor's process.**
+   `127.0.0.1:9090` forwarded connections land inside slay3rd on OVH —
+   monitor floods are node floods. Bound them.
+4. **Certified-but-unfinalized wedge = coordinated restart, always.**
+   Node log says the procedure: all seats stop → `mv data/consensus
+   data/consensus.wedge-bak` → restart → resume from finalized tip.
+   Async per-seat is fine — chain resumes when 6 healthy seats return.
+   Archive preserves wedge state; nothing is deleted.
+5. **Quorum margin is the ambient risk, watch it like height.** idx2
+   ran execution-stale for hours before the wedge — at effective 6/8
+   live seats the margin was ONE. Any seat stale >1h = treat as
+   quorum-margin-2 and ping the operator, don't let it ride.
+6. **SSH access during Windows socket exhaustion:** `ssh` fails with
+   `socket: No buffer space available` even to loopback — route via
+   `wsl -d Ubuntu-24.04` (its network stack survives), reach the
+   Windows host at the WSL gateway IP, VBox port-forwards still work.
