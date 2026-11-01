@@ -1,0 +1,118 @@
+{
+  "chain_id": "junoclaw-g1",
+  "attestation_contract": "juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm",
+  "seats": [
+    {
+      "seat_index": 0,
+      "name": "anatoly",
+      "p2p": "5.75.244.250:7001",
+      "hot_ed25519_hex": "0239b935d36c8e623b528824e0e479c9ea635a804e3cf17d556f50af9b447f1b",
+      "hot_ed25519_b64": "Ajm5NdNsjmI7Uogk4OR5yepjWoBOPPF9VW9Qr5tEfxs=",
+      "update_attestation": {
+        "seat_index": 0,
+        "hot_ed25519": "Ajm5NdNsjmI7Uogk4OR5yepjWoBOPPF9VW9Qr5tEfxs=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 1,
+      "name": "utsa",
+      "p2p": "146.19.24.32:7001",
+      "hot_ed25519_hex": "0d6280ddbb368af803b2acdfa0e99f1ad0f47c53a15eaf0b4973d12b829b9a08",
+      "hot_ed25519_b64": "DWKA3bs2ivgDsqzfoOmfGtD0fFOhXq8LSXPRK4Kbmgg=",
+      "update_attestation": {
+        "seat_index": 1,
+        "hot_ed25519": "DWKA3bs2ivgDsqzfoOmfGtD0fFOhXq8LSXPRK4Kbmgg=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 2,
+      "name": "posthuman",
+      "p2p": "2.31.3.204:7001",
+      "hot_ed25519_hex": "0daf8a702150c5a365f8f69282ea2ae9836369f4e53a9f6e9f15f36a8da52bd8",
+      "hot_ed25519_b64": "Da+KcCFQxaNl+PaSguoq6YNjafTlOp9unxXzao2lK9g=",
+      "update_attestation": {
+        "seat_index": 2,
+        "hot_ed25519": "Da+KcCFQxaNl+PaSguoq6YNjafTlOp9unxXzao2lK9g=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 3,
+      "name": "home-vb",
+      "p2p": "84.9.189.220:7001",
+      "hot_ed25519_hex": "42031ea06ec88d09e1eafc10a866a5741659235d2a701f2183bbc7ff01b4fc27",
+      "hot_ed25519_b64": "QgMeoG7IjQnh6vwQqGaldBZZI10qcB8hg7vH/wG0/Cc=",
+      "update_attestation": {
+        "seat_index": 3,
+        "hot_ed25519": "QgMeoG7IjQnh6vwQqGaldBZZI10qcB8hg7vH/wG0/Cc=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 4,
+      "name": "79anvi",
+      "p2p": "65.21.27.246:7001",
+      "hot_ed25519_hex": "53e66767418ae10c4af3aa5bc0e759b08992454036fb7e1ec0d26f6028324519",
+      "hot_ed25519_b64": "U+ZnZ0GK4QxK86pbwOdZsImSRUA2+34ewNJvYCgyRRk=",
+      "update_attestation": {
+        "seat_index": 4,
+        "hot_ed25519": "U+ZnZ0GK4QxK86pbwOdZsImSRUA2+34ewNJvYCgyRRk=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 5,
+      "name": "ovh-uk1",
+      "p2p": "51.195.201.74:7001",
+      "hot_ed25519_hex": "62e51f5e242b142ae706ee7cecc406be0da66b025b8bb6f4512a0028440de2bc",
+      "hot_ed25519_b64": "YuUfXiQrFCrnBu587MQGvg2mawJbi7b0USoAKEQN4rw=",
+      "update_attestation": {
+        "seat_index": 5,
+        "hot_ed25519": "YuUfXiQrFCrnBu587MQGvg2mawJbi7b0USoAKEQN4rw=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 6,
+      "name": "vahana",
+      "p2p": "57.129.103.229:7001",
+      "hot_ed25519_hex": "c98739580820987b7d52e6b0a995e9ac9ad1cf9dec03457d2cab41f68d98846f",
+      "hot_ed25519_b64": "yYc5WAggmHt9UuawqZXprJrRz53sA0V9LKtB9o2YhG8=",
+      "update_attestation": {
+        "seat_index": 6,
+        "hot_ed25519": "yYc5WAggmHt9UuawqZXprJrRz53sA0V9LKtB9o2YhG8=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    },
+    {
+      "seat_index": 7,
+      "name": "blockpro",
+      "p2p": "65.109.92.148:7001",
+      "hot_ed25519_hex": "dbcf99a27d9e8a3c84dcebab96e1bb4e49bd2790e7e7daf882b99800561e536a",
+      "hot_ed25519_b64": "28+Zon2eijyE3OurluG7Tkm9J5Dn59r4grmYAFYeU2o=",
+      "update_attestation": {
+        "seat_index": 7,
+        "hot_ed25519": "28+Zon2eijyE3OurluG7Tkm9J5Dn59r4grmYAFYeU2o=",
+        "bls_share_pubkey": "<base64-96B-from pubkeys-only.json>",
+        "mayo_pubkey": "<base64-from pubkeys-only.json, omit if none>",
+        "npub": "<base64-32B fresh nostr key>"
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+[Unit]
+Description=JunoClaw sovereign coordination relay (claw-relay)
+# Start after the chain node so the chain API (127.0.0.1:8082) is serving
+# before the first admission refresh — the relay fails closed otherwise
+# (empty allowlist = deny all writes until first successful refresh).
+After=network-online.target junoclaw-g1.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+# Attestation admission is the authoritative path (post-R3-ceremony):
+# npubs derive from ListActiveSeats — the contract joins cw4 weight
+# server-side. --allowlist holds ONLY operator break-glass npubs
+# (loaded once at start — edits need `systemctl restart`; they never
+# federate to peer relays).
+ExecStart=/opt/claw/bin/claw-relay \
+    --listen 127.0.0.1:7070 \
+    --db /opt/claw/db/relay.redb \
+    --channels 2a6c9ad2-9da8-406c-8aa3-cd2f1e33af38,7b4f3765-8494-4de8-bf7a-b2595da827e0,810d3c45-acb5-44f8-9155-8bc94b3a12b3 \
+    --attestation-contract juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm \
+    --chain-api http://127.0.0.1:8082 \
+    --cw4-refresh-secs 60 \
+    --allowlist /opt/claw/state/allowlist.txt
+Restart=always
+RestartSec=3
+
+# This host also runs the idx5 validator — the relay is a supporting
+# service and must never be able to starve consensus (2026-11-01 wedge
+# lesson: an unbounded client on a validator host is a load generator).
+Nice=10
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=256
+LimitNOFILE=4096
+
+# Hardening: the relay only needs its own dir; nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/claw
+PrivateTmp=true
+
+StandardOutput=append:/opt/claw/state/relay.log
+StandardError=append:/opt/claw/state/relay.log
+
+[Install]
+WantedBy=multi-user.target
