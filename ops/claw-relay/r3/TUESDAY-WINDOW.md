@@ -39,6 +39,9 @@ incidents start. Chain still finalizing, no wedge markers.
 Each continuing seat, on their own GO: `keys.json` → `keys.json.g1.bak`,
 `keys.json.g2` → in; binary → `.bak`, rc17v2 → in; **one restart**
 applies both. Joiners start fresh with state_sync.
+- **Expect a brief finalization pause at cutover** — old-share partials
+  and new-share partials can't combine; the chain finalizes again once
+  ≥7 new-share seats are live. That pause IS the cutover, not a fault.
 - Joiners: `snapshot adopted` → `consensus initialized` → `Block finalized`
 - Verify: mesh 10/10, signers bitmap shows 10 bits, digest parity on a
   finalized height. New threshold **7/10** active from here.
