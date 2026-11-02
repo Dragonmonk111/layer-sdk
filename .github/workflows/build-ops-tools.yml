@@ -1,15 +1,27 @@
 name: Build ops tools
 
-# Manual build of the edge-host ops binaries (jc-status, jc-explorer) on
-# Ubuntu 22.04 to match the OVH host's glibc (2.35). Artifact carries a
-# sha256 so the deployed binary can be checked against this run.
+# Manual build of the edge-host ops binaries (jc-status, jc-explorer,
+# generate-testnet-keys, ...) on Ubuntu 22.04 to match the OVH host's
+# glibc (2.35). Artifact carries a sha256 so the deployed binary can be
+# checked against this run.
+#
+# `package`    — workspace member, built with `cargo -p` (target lands
+#                in the workspace target/release/)
+# `manifest`   — standalone crate manifest path, e.g.
+#                tools/generate-testnet-keys/Cargo.toml — for crates
+#                with their own [workspace] table where `-p` can't
+#                reach them (target lands in <crate>/target/release/)
 on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Cargo package to build"
-        required: true
-        default: jc-status
+        description: "Cargo package to build (workspace member)"
+        required: false
+        default: ""
+      manifest:
+        description: "Standalone manifest path (e.g. tools/generate-testnet-keys/Cargo.toml)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -21,17 +33,36 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Resolve build target
+        id: cfg
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.manifest }}" ]; then
+            M="${{ inputs.manifest }}"
+            NAME=$(basename "$(dirname "$M")")
+            TARGET_DIR="$(dirname "$M")/target/release"
+            echo "cargo_flag=--manifest-path $M" >> "$GITHUB_OUTPUT"
+            echo "name=$NAME" >> "$GITHUB_OUTPUT"
+            echo "target_dir=$TARGET_DIR" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.package }}" ]; then
+            echo "cargo_flag=-p ${{ inputs.package }}" >> "$GITHUB_OUTPUT"
+            echo "name=${{ inputs.package }}" >> "$GITHUB_OUTPUT"
+            echo "target_dir=target/release" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::set either 'package' or 'manifest'"
+            exit 1
+          fi
       - name: Test
-        run: cargo test --release -p "${{ inputs.package }}"
+        run: cargo test --release ${{ steps.cfg.outputs.cargo_flag }}
       - name: Build
-        run: cargo build --release -p "${{ inputs.package }}"
+        run: cargo build --release ${{ steps.cfg.outputs.cargo_flag }}
       - name: Checksum
         run: |
-          cd target/release
-          sha256sum "${{ inputs.package }}" | tee "${{ inputs.package }}.sha256"
+          cd "${{ steps.cfg.outputs.target_dir }}"
+          sha256sum "${{ steps.cfg.outputs.name }}" | tee "${{ steps.cfg.outputs.name }}.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.package }}-${{ github.sha }}
+          name: ${{ steps.cfg.outputs.name }}-${{ github.sha }}
           path: |
-            target/release/${{ inputs.package }}
-            target/release/${{ inputs.package }}.sha256
+            ${{ steps.cfg.outputs.target_dir }}/${{ steps.cfg.outputs.name }}
+            ${{ steps.cfg.outputs.target_dir }}/${{ steps.cfg.outputs.name }}.sha256
