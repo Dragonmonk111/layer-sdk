@@ -90,6 +90,8 @@ g2-window/dealers-r2/
 g2-window/ceremony-r2/
 g2-window/acks/
 g2-window/anchor.env
+g2-window/r3/ceremony/
+g2-window/r3/dealers/
 dist/rc12-portable/
 dao/.agents-dao-instantiate.generated.json
 target-linux/
