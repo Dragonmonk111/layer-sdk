@@ -44,9 +44,12 @@ touches daemon code except where noted.
 **Census finding (measured 2026-11-01):** kind-9 `h`-tag histogram on Buzz
 is `7b4f…` 383, `bf2d0485-…` 229, `810d…` 104, `2a6c…` 30, `f497…` 1.
 `bf2d0485-0e8e-4822-820f-f6cc11d9c408` is the **DM channel** — private
-direct messages, no daemon dependency. Policy decision before cutover:
-migrate it (add to `--channels`) or leave it Buzz-side. `f497…` is a
-Welcome channel (1 event) — not migrated.
+direct messages, no daemon dependency. **Decision: migrated** — added to
+`--channels` 2026-11-01. Rationale: leaving ops DMs Buzz-side would keep
+Buzz permanently alive; claw reads are signer-gated (stricter than
+Buzz's open reads — privacy improves, not regresses); DM participants
+are seat members already admitted. `f497…` is a Welcome channel (1
+event) — not migrated.
 
 ## Deliberate differences (not bugs — flag in postmortem)
 
@@ -138,8 +141,14 @@ operator lists the bot npub locally**.
   a DAO member are admitted federation-wide). This matches the
   architecture rule that agent-registry is the source of operational
   identity. Track it as an RC item; don't hand-maintain lists.
-- Also split the key: one bot identity per function (status/gov/alerts),
-  so a compromised or rotated bot key has a bounded blast radius.
+- **Key split executed 2026-11-01:** `status-bot.sec` → status-bot +
+  soak-watchdog only; `gov-bot.sec` (npub `7d9abdd4…`) → proposal-watch +
+  vote-daemon; `ops-bot.sec` (npub `641b6468…`) → jc-alert-post +
+  infra-monitor + transcript-anchor. Keys generated on-host via
+  `openssl rand -hex 32`, npubs derived by pure-python BIP-340 (verified
+  against the known status-bot pair), privkeys never left OVH. Both npubs
+  in claw `--allowlist` + Buzz `pubkey_allowlist` (8 rows). Blast radius
+  now bounded per function.
 
 ## Census gates — RESULTS (measured 2026-11-01, `buzz-postgres.events`)
 
@@ -160,10 +169,13 @@ Buzz accepted kind=1 and non-member writes after NIP-42 auth (memory
    identity, not a seat**), `c274b3eb` (47), `56e611d3` (15), tail ~6.
    Confirms the bot-identity gap: the two heaviest authors are shared
    non-seat keys → both go in the local `--allowlist` at cutover.
-3. **Client census — still open.** Caddy access log for
-   `relay.junoclaw.xyz`, distinct user-agents + paths over 7 days. Any
-   human client (web/desktop app) that isn't plain NIP-42/NIP-98 needs a
-   named replacement before DNS. Daemons alone are not the population.
+3. **Client census — done 2026-11-01.** No access logs exist (Caddy
+   writes none; buzz-relay logs no user-agents; all inbound via docker
+   bridge). Event-side census: exactly **one** `client` tag in the DB —
+   `buzz-welcome-kickoff` itself. Every event author is a daemon or
+   platform identity. **Buzz's client population is the daemons; no
+   human-client surface exists to migrate.** Any stray generic nostr
+   client is already fail-closed on claw.
 4. **Limits:** `MAX_REPLAY=2000` ≥ vote-daemon `--limit 50` ✓;
    `MAX_CONN_PER_IP=16`. Check that Caddy forwards the client IP, or
    every client behind Caddy counts as 127.0.0.1 and shares one 16-cap.
