@@ -11,9 +11,6 @@ on:
       - 'slay3rd-*'
   workflow_dispatch:
 
-env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/slay3rd
-
 jobs:
   release:
     runs-on: ubuntu-22.04
@@ -30,6 +27,9 @@ jobs:
           TAG="${{ github.ref_name }}"
           [ "$TAG" = "" ] && TAG="manual-${{ github.sha }}"
           echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
+          # GHCR requires lowercase repo paths; repository_owner keeps
+          # its original casing ("Dragonmonk111") and docker push fails.
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/slay3rd" >> "$GITHUB_ENV"
           docker build -f docker/Dockerfile.slay3rd -t slay3rd:$TAG .
 
       - name: Extract binary and checksum
