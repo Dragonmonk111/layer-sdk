@@ -39,5 +39,8 @@ aws-lc-rs = { version = "1", features = ["prebuilt-nasm"] }
 # MAYO2 keygen for hybrid validator identity (PQ_PROTOCOL_AUTH.md §3).
 # C-backed signer — Unix only; on other platforms keys.json omits the
 # mayo_* fields and hybrid_consensus nodes will refuse to boot.
+# Use the VENDORED crate: lib/sriracha-mayo carries the MAYO-C target.cmake
+# patch (-march=westmere -maes, no -march=native) — the crates.io release
+# compiles native and SIGILLs on hosts without AVX-512 (OVH hit this).
 [target.'cfg(unix)'.dependencies]
-sriracha-mayo = "0.0.4"
+sriracha-mayo = { path = "../../lib/sriracha-mayo" }

@@ -95,3 +95,7 @@ g2-window/r3/dealers/
 dist/rc12-portable/
 dao/.agents-dao-instantiate.generated.json
 target-linux/
+g2-window/r3/dealing-pubs/
+g2-window/r3/privs/
+g2-window/r3/acks/
+g2-window/r3/logs/
