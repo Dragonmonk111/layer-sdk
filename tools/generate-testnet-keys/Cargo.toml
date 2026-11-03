@@ -44,3 +44,9 @@ aws-lc-rs = { version = "1", features = ["prebuilt-nasm"] }
 # compiles native and SIGILLs on hosts without AVX-512 (OVH hit this).
 [target.'cfg(unix)'.dependencies]
 sriracha-mayo = { path = "../../lib/sriracha-mayo" }
+
+# blst (via commonware-cryptography) dispatches to ADX asm when it sees
+# AVX2+BMI2 — virtualized Haswell guests (OVH) expose those flags WITHOUT
+# adx → SIGILL in Dealer::start. `portable` forces the portable C path;
+# features unify across the dep graph so commonware's blst gets it too.
+blst = { version = "0.3.16", features = ["portable"] }
