@@ -1462,12 +1462,19 @@ async fn run_node(
     // livelocking. Upstream warns Config::local is for demos, and that this
     // config should be synchronized across the network — roll it out with
     // the rc13 binary on all seats.
-    let p2p_cfg = P2pConfig::recommended(
+    let mut p2p_cfg = P2pConfig::recommended(
         ed25519_private_key.clone(),
         b"slay3r-p2p-v1",
         p2p_listen,
         10 * 1024 * 1024,  // 10MB max message size (accommodates large store-code txs)
     );
+    // recommended filters non-global IPs from both dial candidates and inbound
+    // handshakes — correct for the live fleet, but it silently wedges any
+    // private-IP devnet (172.28.0.x compose, WSL, LAN). insecure_devnet already
+    // marks config as test-only, so allow private addressing there only.
+    if config.insecure_devnet {
+        p2p_cfg.allow_private_ips = true;
+    }
 
     let p2p_ctx = context.with_label("p2p");
     let (mut network, mut oracle) = Network::new(p2p_ctx, p2p_cfg);
