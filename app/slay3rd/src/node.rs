@@ -1254,6 +1254,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             }
             cache.insert(parent, staged);
         }
+        tracing::info!(
+            parent = %hex::encode(parent),
+            height = staged.height,
+            root = %hex::encode(&staged.root[..8]),
+            "staged_parent: simulated certified-but-unexecuted parent (dead-variant escape)"
+        );
         Some(staged)
     }
 
