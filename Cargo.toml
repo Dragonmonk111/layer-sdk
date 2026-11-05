@@ -117,6 +117,11 @@ cosmwasm-schema-derive = { path = "lib/cosmwasm/packages/schema-derive" }
 # a section already absent on disk is already pruned). Prevents the
 # voter/resolver panic that killed the home-vb seat on 2026-10-14.
 commonware-storage = { path = "lib/commonware-storage" }
+# Vendored 2026.3.0 with find_parent dead-variant skip — a certified-but-
+# nullified view can never finalize, so it is skipped during parent selection
+# instead of wedging every subsequent proposal (R3 cutover livelock,
+# 2026-11-04; regression gate: app/slay3rd/tests/dead_variant_wedge.rs).
+commonware-consensus = { path = "lib/commonware-consensus" }
 # Vendored 0.0.4 with MAYO-C/.cmake march pinned to westmere+AES — upstream
 # defaults to -march=native, baking AVX/AVX-512 into keccak on AVX-512 build
 # hosts (SIGILL on non-AVX targets, e.g. VirtualBox under Hyper-V NEM).

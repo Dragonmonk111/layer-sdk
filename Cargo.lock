@@ -1166,8 +1166,6 @@ dependencies = [
 [[package]]
 name = "commonware-consensus"
 version = "2026.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52bdbc3361f501adce253ff92e652a997758e57c1e6298a4bc06836952b66b0c"
 dependencies = [
  "bytes",
  "cfg-if",

@@ -636,6 +636,31 @@ impl<T: PersistentStorage + 'static> App<T> {
         full_block: Block,
         payload: Option<Vec<u8>>,
     ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
+        self.finalize_block_impl(full_block, payload, true)
+    }
+
+    /// Dry-run `finalize_block`: executes the block on a scratch writer and
+    /// returns the post-block state root WITHOUT committing — the scratch
+    /// transaction is dropped, not committed. Used by temporary-state
+    /// verification to compute the post-state of a certified-but-unexecuted
+    /// parent so a descendant built on it can be verified (dead-variant
+    /// wedge escape — regression gate: app/slay3rd/tests/
+    /// dead_variant_wedge.rs). Committed state, the root index and the
+    /// block cache are untouched. Refuses blocks that are not direct
+    /// children of the committed tip (same height check as finalize).
+    pub fn simulate_finalize_block(
+        &mut self,
+        full_block: Block,
+    ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
+        self.finalize_block_impl(full_block, None, false)
+    }
+
+    fn finalize_block_impl(
+        &mut self,
+        full_block: Block,
+        payload: Option<Vec<u8>>,
+        commit: bool,
+    ) -> PulsarResult<FinalizeBlockResponse<PulsarError>> {
         let _span = info_span!(
             "finalize_block",
             height = full_block.height,
@@ -728,25 +753,30 @@ impl<T: PersistentStorage + 'static> App<T> {
             "state root computed"
         );
         STATE_ROOT.save(&mut writer, &meter, &root)?;
-        let dirty = std::mem::take(&mut writer.dirty);
-        writer.commit(&meter)?;
+        if commit {
+            let dirty = std::mem::take(&mut writer.dirty);
+            writer.commit(&meter)?;
 
-        // Fold the same ops into the index — now matching committed state.
-        if let Some(index) = self.root_index.as_mut() {
-            for (key, op) in &dirty {
-                match op {
-                    Some(v) => {
-                        index.insert(key.clone(), leaf_hash(key, v));
-                    }
-                    None => {
-                        index.remove(key);
+            // Fold the same ops into the index — now matching committed state.
+            if let Some(index) = self.root_index.as_mut() {
+                for (key, op) in &dirty {
+                    match op {
+                        Some(v) => {
+                            index.insert(key.clone(), leaf_hash(key, v));
+                        }
+                        None => {
+                            index.remove(key);
+                        }
                     }
                 }
             }
-        }
 
-        // update block in cache
-        self.data.as_mut().unwrap().block = block;
+            // update block in cache
+            self.data.as_mut().unwrap().block = block;
+        }
+        // commit=false: `writer` drops here — the underlying transaction
+        // rolls back, so the simulated block's writes never persist. The
+        // response still carries the would-be post-block root.
 
         Ok(FinalizeBlockResponse {
             events,

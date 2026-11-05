@@ -250,6 +250,16 @@ impl CertifiedDigests {
     }
 }
 
+/// Post-state of a certified-but-unexecuted parent, simulated — never
+/// committed. `height`/`time_nanos` come from the parent's payload and
+/// feed the child's expected-height and timestamp checks.
+#[derive(Clone, Copy)]
+struct StagedParent {
+    root: [u8; 32],
+    time_nanos: u64,
+    height: u64,
+}
+
 /// LayerNode bridges Commonware consensus to the Layer state machine.
 ///
 /// Implements `CertifiableAutomaton` — the consensus engine calls `genesis()`,
@@ -298,6 +308,13 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     /// out repeatedly across views is the #5378-class stall signature and
     /// is promoted to WARN (idx6 SOC: 13k INFO lines hid the real signal).
     certify_timeouts: Arc<std::sync::Mutex<HashMap<[u8; 32], u32>>>,
+    /// Temporary-state verification cache: post-state of a
+    /// certified-but-unexecuted parent, computed by speculatively executing
+    /// its payload on a droppable storage transaction (never committed).
+    /// Lets verify()/propose() accept a descendant of a dead variant — the
+    /// descendant's finalization pulls the variant into finality via
+    /// linear ancestry. See tests/dead_variant_wedge.rs.
+    staged_roots: Arc<std::sync::Mutex<HashMap<[u8; 32], StagedParent>>>,
     /// Highest payload height ever observed (admitted or rejected pushes,
     /// payloads traversed in finalize). Fetch-target hint for backfill —
     /// never used to advance execution.
@@ -337,6 +354,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
             certified_digests: self.certified_digests.clone(),
             ensure_exec: self.ensure_exec.clone(),
             certify_timeouts: self.certify_timeouts.clone(),
+            staged_roots: self.staged_roots.clone(),
             max_seen_height: self.max_seen_height.clone(),
             tx_index: self.tx_index.clone(),
             fault_inject: self.fault_inject.clone(),
@@ -387,6 +405,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             requested: Arc::new(std::sync::Mutex::new(HashSet::new())),
             requested_heights: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
             certified_digests: Arc::new(std::sync::Mutex::new(CertifiedDigests::default())),
+            staged_roots: Arc::new(std::sync::Mutex::new(HashMap::new())),
             ensure_exec: Arc::new(std::sync::Mutex::new(HashMap::new())),
             certify_timeouts: Arc::new(std::sync::Mutex::new(HashMap::new())),
             max_seen_height: Arc::new(std::sync::atomic::AtomicU64::new(initial_height)),
@@ -1124,21 +1143,15 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         }
     }
 
-    /// Apply one payload on top of the executed tip via App::finalize_block().
-    /// DETERMINISM CRITICAL. Holds current_height + last_digest for the whole
-    /// commit so readers never observe a new state root with an old tip.
-    async fn execute_payload(&self, digest: [u8; 32], payload: BlockPayload) -> Option<(u64, u64)> {
-        let mut h = self.current_height.lock().await;
-        let mut last = self.last_digest.lock().await;
-        let height = *h + 1;
-
-        // Convert BlockPayload to layer_std::api::Block.
-        // Block timestamp comes from payload.timestamp_nanos (from consensus context — DETERMINISTIC).
-        // NEVER use SystemTime::now() here.
-        //
-        // Deserialize transactions from BlockPayload raw bytes.
-        // Each entry in payload.txs is a raw Cosmos proto-encoded tx (cosmos.tx.v1beta1.TxRaw).
-        // parse_cosmos_tx() handles the full proto decode + signature extraction.
+    /// Convert a BlockPayload to layer_std::api::Block at the given height.
+    /// Block timestamp comes from payload.timestamp_nanos (from consensus
+    /// context — DETERMINISTIC). NEVER use SystemTime::now() here.
+    /// Malformed txs are skipped (proposer's check_tx already validated).
+    async fn block_from_payload(
+        &self,
+        payload: &BlockPayload,
+        height: u64,
+    ) -> (Block, Vec<String>) {
         let chain_id = {
             let app = self.app.read().await;  // SHARED read lock — read-only
             app.info()
@@ -1160,26 +1173,106 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                         tx_len = raw.len(),
                         "Skipping malformed tx in block — proposer's check_tx should have caught this"
                     );
-                    // Skip malformed txs rather than rejecting the whole block.
-                    // The proposer's check_tx already validated these; errors here
-                    // mean the tx was corrupted in transit or the chain_id changed.
                 }
             }
         }
 
-        let block = Block {
-            txs,
-            height,
-            time: Timestamp::from_nanos(payload.timestamp_nanos),
-            proposer_address: payload.proposer.clone(),
-            last_votes: vec![],
-            // The BLS certificate is NOT available at certify() time — it is produced
-            // by the consensus engine after a quorum of validators certify. The
-            // LayerReporter receives the Finalization activity with cert_bytes and
-            // calls App::set_block_certificate(height, cert_bytes) to persist it.
-            // See main.rs LayerReporter::report() for the storage path.
-            certificate: None,
+        (
+            Block {
+                txs,
+                height,
+                time: Timestamp::from_nanos(payload.timestamp_nanos),
+                proposer_address: payload.proposer.clone(),
+                last_votes: vec![],
+                // The BLS certificate is NOT available at certify() time — it is produced
+                // by the consensus engine after a quorum of validators certify. The
+                // LayerReporter receives the Finalization activity with cert_bytes and
+                // calls App::set_block_certificate(height, cert_bytes) to persist it.
+                // See main.rs LayerReporter::report() for the storage path.
+                certificate: None,
+            },
+            tx_hashes,
+        )
+    }
+
+    /// Temporary-state verification: speculatively compute the post-state of
+    /// a certified-but-unexecuted `parent` payload by dry-running it on a
+    /// droppable storage transaction (`App::simulate_finalize_block` —
+    /// nothing is committed). Only a parent whose declared parent_digest is
+    /// our executed tip is stageable, so simulation always runs against
+    /// committed state (single-level staging; deeper wedges still wait).
+    /// Results are cached by digest — verification of several descendants
+    /// of one dead parent simulates it once.
+    ///
+    /// `tip` is the caller's already-read executed tip — callers hold the
+    /// `last_digest`/`current_height` guards across this await, so this
+    /// function must NOT lock them again (tokio::Mutex is not reentrant).
+    async fn staged_parent(&self, parent: [u8; 32], tip: [u8; 32]) -> Option<StagedParent> {
+        // Tip gate BEFORE the cache: a staged root computed while the parent
+        // extended the tip is invalid once a sibling/fork finalizes instead.
+        let pp = self.lookup_payload(&parent).await?;
+        if pp.parent_digest != tip {
+            // Parent's own parent is not our executed tip — cannot stage
+            // against committed state. (Dead variants deeper than one level
+            // still resolve: once this parent finalizes via a descendant,
+            // execution catches up and the next level stages normally.)
+            return None;
+        }
+        if let Some(s) = self
+            .staged_roots
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&parent)
+            .copied()
+        {
+            return Some(s);
+        }
+        let (block, _tx_hashes) = self.block_from_payload(&pp, pp.height).await;
+        let root: [u8; 32] = {
+            let mut app = self.app.write().await;
+            match app.simulate_finalize_block(block) {
+                Ok(resp) => resp.app_hash.try_into().ok()?,
+                Err(e) => {
+                    tracing::warn!(
+                        parent = %hex::encode(parent),
+                        error = ?e,
+                        "staged_parent: simulation of certified parent failed"
+                    );
+                    return None;
+                }
+            }
         };
+        let staged = StagedParent {
+            root,
+            time_nanos: pp.timestamp_nanos,
+            height: pp.height,
+        };
+        {
+            let mut cache = self.staged_roots.lock().unwrap_or_else(|e| e.into_inner());
+            if cache.len() >= 16 {
+                cache.clear();
+            }
+            cache.insert(parent, staged);
+        }
+        Some(staged)
+    }
+
+    /// Apply one payload on top of the executed tip via App::finalize_block().
+    /// DETERMINISM CRITICAL. Holds current_height + last_digest for the whole
+    /// commit so readers never observe a new state root with an old tip.
+    async fn execute_payload(&self, digest: [u8; 32], payload: BlockPayload) -> Option<(u64, u64)> {
+        let mut h = self.current_height.lock().await;
+        let mut last = self.last_digest.lock().await;
+        let height = *h + 1;
+
+        // Convert BlockPayload to layer_std::api::Block.
+        // Block timestamp comes from payload.timestamp_nanos (from consensus context — DETERMINISTIC).
+        // NEVER use SystemTime::now() here.
+        //
+        // Deserialize transactions from BlockPayload raw bytes.
+        // Each entry in payload.txs is a raw Cosmos proto-encoded tx (cosmos.tx.v1beta1.TxRaw).
+        // parse_cosmos_tx() handles the full proto decode + signature extraction.
+        let (block, tx_hashes) = self.block_from_payload(&payload, height).await;
 
         // The payload bytes are committed atomically with the block's state:
         // restart derives the executed tip digest from them, and membership
@@ -1340,6 +1433,15 @@ where
                         );
                     }
                 }
+                // Temporary-state path: a certified-but-unexecuted parent is
+                // speculatively executed (never committed) and the proposal
+                // is built on its simulated post-state. A finalized
+                // descendant then pulls the dead variant into finality.
+                // (The h/last guards dropped above, so re-locking is safe.)
+                let tip = *node.last_digest.lock().await;
+                if let Some(staged) = node.staged_parent(parent, tip).await {
+                    break (staged.height + 1, staged.root, staged.time_nanos);
+                }
                 if start.elapsed() >= PROPOSE_WAIT_MAX {
                     tracing::info!(
                         parent = %hex::encode(parent),
@@ -1455,6 +1557,21 @@ where
                             *h + 1,
                             &root,
                             parent_time,
+                            now_nanos(),
+                            &leader,
+                        );
+                    }
+                    // Temporary-state path: simulate the certified parent's
+                    // post-state (never committed) and validate the
+                    // descendant against it — the escape for a certified-
+                    // but-unfinalizable dead variant.
+                    if let Some(staged) = node.staged_parent(parent, *last).await {
+                        break validate_payload(
+                            &p,
+                            &parent,
+                            staged.height + 1,
+                            &staged.root,
+                            staged.time_nanos,
                             now_nanos(),
                             &leader,
                         );
@@ -1863,6 +1980,48 @@ mod tests {
         assert_eq!(
             initial_hash, after_hash,
             "verify should not mutate app state (app_hash should be unchanged)"
+        );
+    }
+
+    #[test]
+    fn test_staged_parent_simulates_without_committing() {
+        let node = make_layer_node();
+        let payload = make_payload_at_genesis_time(1, genesis_parent());
+        let digest = insert_payload_sync(&node, payload);
+
+        let staged = rt()
+            .block_on(node.staged_parent(digest, genesis_parent()))
+            .expect("staged_parent should simulate a held child-of-tip payload");
+        assert_eq!(staged.height, 1);
+        assert!(staged.time_nanos > 0);
+
+        // Simulation must not advance execution or mutate committed state.
+        let (h, last) = rt().block_on(node.executed_tip());
+        assert_eq!(h, 0, "staged simulation must not advance executed height");
+        assert_eq!(last, genesis_parent(), "executed tip digest must be untouched");
+
+        // Second call hits the cache with the identical root.
+        let staged2 = rt()
+            .block_on(node.staged_parent(digest, genesis_parent()))
+            .expect("cached staged parent must return");
+        assert_eq!(staged.root, staged2.root);
+    }
+
+    #[test]
+    fn test_staged_parent_rejects_unknown_and_non_tip_parents() {
+        let node = make_layer_node();
+        assert!(
+            rt().block_on(node.staged_parent([99u8; 32], genesis_parent())).is_none(),
+            "payload we do not hold cannot be staged"
+        );
+
+        // A payload whose declared parent is NOT the executed tip is not
+        // stageable (would need multi-level staging against committed state).
+        let orphan = make_payload_at_genesis_time(7, [7u8; 32]);
+        let orphan_digest = insert_payload_sync(&node, orphan);
+        assert!(
+            rt().block_on(node.staged_parent(orphan_digest, genesis_parent())).is_none(),
+            "payload whose parent is not the executed tip cannot be staged"
         );
     }
 

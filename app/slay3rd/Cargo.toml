@@ -70,6 +70,9 @@ libc = "0.2"
 [dev-dependencies]
 cosmwasm-std = { workspace = true }
 cosmrs = { workspace = true }
+# Enables simplex::mocks (fault-injection applications) for the dead-variant
+# wedge harness in tests/dead_variant_wedge.rs.
+commonware-consensus = { workspace = true, features = ["mocks"] }
 
 [features]
 rocksdb = ["layer-storage/rocksdb"]

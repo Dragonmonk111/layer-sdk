@@ -36,6 +36,11 @@ COPY lib/cosmwasm/packages /myapp/lib/cosmwasm/packages
 COPY lib/commonware-storage/Cargo.toml /myapp/lib/commonware-storage/Cargo.toml
 COPY lib/commonware-storage/src /myapp/lib/commonware-storage/src
 
+# commonware-consensus fork (patched via [patch.crates-io]) — find_parent
+# skips nullified views before certified ones (dead-variant edge, R3 cutover).
+COPY lib/commonware-consensus/Cargo.toml /myapp/lib/commonware-consensus/Cargo.toml
+COPY lib/commonware-consensus/src /myapp/lib/commonware-consensus/src
+
 # Vendored sriracha-mayo patch (march pinned — see Cargo.toml [patch.crates-io])
 COPY lib/sriracha-mayo /myapp/lib/sriracha-mayo
 
