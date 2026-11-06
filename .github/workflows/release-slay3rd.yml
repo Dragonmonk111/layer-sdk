@@ -1,10 +1,12 @@
-name: Release slay3rd binary + image
+name: Release slay3rd binary
 
 # Tag a commit 'slay3rd-<name>' to produce:
 #   - a GitHub release with the canonical binary + sha256
-#   - a ghcr.io image push under this repo's owner
 # Builds inside docker/Dockerfile.slay3rd so the artifact carries the
 # canonical target-cpu + vendored MAYO-C flags — never build natively.
+# Binary-only: the ghcr image push was dropped — validators run the bare
+# binary; a container deploy can re-enable a push step once the slay3rd
+# package grants this repo Actions write access.
 on:
   push:
     tags:
@@ -16,7 +18,6 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +28,6 @@ jobs:
           TAG="${{ github.ref_name }}"
           [ "$TAG" = "" ] && TAG="manual-${{ github.sha }}"
           echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
-          # GHCR requires lowercase repo paths; repository_owner keeps
-          # its original casing ("Dragonmonk111") and docker push fails.
-          echo "IMAGE=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/slay3rd" >> "$GITHUB_ENV"
           docker build -f docker/Dockerfile.slay3rd -t slay3rd:$TAG .
 
       - name: Extract binary and checksum
@@ -48,15 +46,4 @@ jobs:
           prerelease: true
           body: |
             Canonical build via docker/Dockerfile.slay3rd (bookworm, target-cpu=x86-64-v2, vendored MAYO-C patch).
-            Image: `docker pull ${{ env.IMAGE }}:${{ env.IMAGE_TAG }}`
             Verify sha256 against the attached .sha256 before deploying to any seat.
-
-      # Published AFTER the release so a ghcr permission failure can never
-      # block the deployable binary asset. Requires the slay3rd package to
-      # grant this repo Actions write access (package settings → Manage
-      # Actions access) — otherwise GITHUB_TOKEN gets write_package denied.
-      - name: Push image to ghcr
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker tag slay3rd:$IMAGE_TAG "$IMAGE:$IMAGE_TAG"
-          docker push "$IMAGE:$IMAGE_TAG"
