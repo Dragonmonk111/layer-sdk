@@ -2020,7 +2020,7 @@ mod tests {
     }
 
     #[test]
-    fn nullification_then_late_certification_allows_child_to_build_on_parent() {
+    fn nullification_then_late_certification_records_cert_but_skips_parent_selection() {
         let runtime = deterministic::Runner::default();
         runtime.start(|mut context| async move {
             let namespace = b"ns".to_vec();
@@ -2079,12 +2079,15 @@ mod tests {
             // Late certification after nullification is still recorded.
             assert!(state.certified(parent_view, true).is_some());
 
-            // Child proposal selection should build on the now-certified parent view.
-            let propose_context = state
-                .try_propose()
-                .expect("child view should be able to build on certified parent");
-            assert_eq!(propose_context.round.view(), child_view);
-            assert_eq!(propose_context.parent, (parent_view, payload));
+            // VENDORED DIVERGENCE: `find_parent` skips nullified views before
+            // checking certification, so the certified-but-nullified view 2 is
+            // not selectable as a parent. With view 1 carrying no certs at
+            // all there is no anchor to bridge, so no child can be proposed —
+            // under upstream ordering the child would instead anchor on the
+            // dead variant (which an execution-gated app cannot verify, the
+            // exact JunoClaw wedge). A lower certified ancestor would still be
+            // preferred and selected normally.
+            assert!(state.try_propose().is_none());
         });
     }
 

@@ -12,6 +12,12 @@ exclude = [
   # crates.io cosmwasm-vm/std (losing the bn254_* host functions and the
   # metered bulk-memory Gatekeeper).
   "lib/cosmwasm",
+  # lib/commonware-* are vendored crates pulled in via [patch.crates-io]
+  # path entries below — like lib/cosmwasm they are not workspace members
+  # and must be excluded so `cargo test` run inside them does not think
+  # they belong to this workspace.
+  "lib/commonware-consensus",
+  "lib/commonware-storage",
 ]
 resolver = "2"
 
