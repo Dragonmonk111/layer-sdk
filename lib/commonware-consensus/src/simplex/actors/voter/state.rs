@@ -684,25 +684,17 @@ impl<E: Clock + CryptoRngCore + Metrics, S: Scheme<D>, L: ElectorConfig<S>, D: D
         let mut cursor = view.previous().unwrap_or(GENESIS_VIEW);
 
         loop {
-            // Skip nullified views BEFORE checking certification. A view can be
-            // both certified (notarization + successful certify) AND nullified
-            // (quorum of nullifies); once nullified, its payload can never be
-            // finalized, so it must not be selected as a parent — otherwise
-            // every subsequent proposal anchors to a dead variant and liveness
-            // stalls (observed JunoClaw R3 cutover, 2026-11-04).
-            if self.is_nullified(cursor) {
-                cursor = cursor.previous().expect("cursor must not wrap");
-                continue;
-            }
-
             // Return the first certified (including finalized) parent.
             if let Some(parent) = self.is_certified(cursor) {
                 return Ok((cursor, *parent));
             }
 
-            // The view is neither certified nor nullified: there is a gap in
-            // certificates.
-            return Err(cursor);
+            // If the view is also not nullified, there is a gap in certificates.
+            if !self.is_nullified(cursor) {
+                return Err(cursor);
+            }
+
+            cursor = cursor.previous().expect("cursor must not wrap");
         }
     }
 
@@ -2020,7 +2012,7 @@ mod tests {
     }
 
     #[test]
-    fn nullification_then_late_certification_records_cert_but_skips_parent_selection() {
+    fn nullification_then_late_certification_allows_child_to_build_on_parent() {
         let runtime = deterministic::Runner::default();
         runtime.start(|mut context| async move {
             let namespace = b"ns".to_vec();
@@ -2079,15 +2071,12 @@ mod tests {
             // Late certification after nullification is still recorded.
             assert!(state.certified(parent_view, true).is_some());
 
-            // VENDORED DIVERGENCE: `find_parent` skips nullified views before
-            // checking certification, so the certified-but-nullified view 2 is
-            // not selectable as a parent. With view 1 carrying no certs at
-            // all there is no anchor to bridge, so no child can be proposed —
-            // under upstream ordering the child would instead anchor on the
-            // dead variant (which an execution-gated app cannot verify, the
-            // exact JunoClaw wedge). A lower certified ancestor would still be
-            // preferred and selected normally.
-            assert!(state.try_propose().is_none());
+            // Child proposal selection should build on the now-certified parent view.
+            let propose_context = state
+                .try_propose()
+                .expect("child view should be able to build on certified parent");
+            assert_eq!(propose_context.round.view(), child_view);
+            assert_eq!(propose_context.parent, (parent_view, payload));
         });
     }
 
