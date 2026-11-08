@@ -11,11 +11,11 @@
 #   START_CMD='systemctl start junoclaw-g1'      (required)
 #   LOG_CMD='journalctl -u junoclaw-g1 -n 400 --no-pager'   readiness log source
 #   SMOKE_CONFIG=/path/to/smoke.toml    optional side-port config for smoke-run
-#   EXPECT_SHA256=<hex>               override expected checksum (defaults to RC18)
+#   EXPECT_SHA256=<hex>               override expected checksum (defaults to RC18v2)
 set -euo pipefail
 
 TAG="slay3rd-rc18v2"
-EXPECT_SHA256="7e821f922b8812cea970923278899f710a70a9a419ba5cf3c7c790091bf482d2"
+EXPECT_SHA256="133234bfa370f6531682c5746f9a859c31b98392612bde321d2c75c07c361f64"
 RELEASE_URL="https://github.com/Dragonmonk111/layer-sdk/releases/download/${TAG}"
 WORK="$(mktemp -d /tmp/slay3rd-rollout.XXXXXX)"
 ASSUME_YES=0
