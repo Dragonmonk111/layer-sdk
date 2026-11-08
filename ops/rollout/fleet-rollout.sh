@@ -14,7 +14,7 @@
 #   EXPECT_SHA256=<hex>               override expected checksum (defaults to RC18)
 set -euo pipefail
 
-TAG="slay3rd-rc18"
+TAG="slay3rd-rc18v2"
 EXPECT_SHA256="7e821f922b8812cea970923278899f710a70a9a419ba5cf3c7c790091bf482d2"
 RELEASE_URL="https://github.com/Dragonmonk111/layer-sdk/releases/download/${TAG}"
 WORK="$(mktemp -d /tmp/slay3rd-rollout.XXXXXX)"

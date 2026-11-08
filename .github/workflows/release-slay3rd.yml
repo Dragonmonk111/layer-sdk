@@ -33,16 +33,18 @@ jobs:
       - name: Extract binary and checksum
         run: |
           cid=$(docker create slay3rd:$IMAGE_TAG)
-          docker cp "$cid:/usr/local/bin/slay3rd" "slay3rd-$IMAGE_TAG"
+          docker cp "$cid:/usr/local/bin/slay3rd" slay3rd
           docker rm "$cid"
-          sha256sum "slay3rd-$IMAGE_TAG" > "slay3rd-$IMAGE_TAG.sha256"
-          cat "slay3rd-$IMAGE_TAG.sha256"
+          sha256sum slay3rd > slay3rd.sha256
+          cat slay3rd.sha256
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: slay3rd-${{ env.IMAGE_TAG }}*
+          files: |
+            slay3rd
+            slay3rd.sha256
           prerelease: true
           body: |
             Canonical build via docker/Dockerfile.slay3rd (bookworm, target-cpu=x86-64-v2, vendored MAYO-C patch).
