@@ -14,6 +14,7 @@
 #   EXPECT_SHA256=<hex>               override expected checksum (defaults to RC18v2)
 set -euo pipefail
 
+ROLLOUT_SCRIPT_VERSION=2  # v2: config-free smoke probe (supersedes v1)
 TAG="slay3rd-rc18v2"
 EXPECT_SHA256="133234bfa370f6531682c5746f9a859c31b98392612bde321d2c75c07c361f64"
 RELEASE_URL="https://github.com/Dragonmonk111/layer-sdk/releases/download/${TAG}"
@@ -50,15 +51,22 @@ chmod +x "$WORK/slay3rd"
 
 # ---------- 2. smoke run ----------
 step "2/7 smoke-run new binary"
-"$WORK/slay3rd" --version >/dev/null 2>&1 || fail "binary does not execute (arch/glibc?)"
-"$WORK/slay3rd" --version | head -2 || true
+# slay3rd loads --config before flag handling, so --version/-help exit
+# nonzero with "failed to load config". Reaching that error still proves
+# the binary executes (right arch + glibc); a SIGILL/missing-lib run
+# never gets that far.
+"$WORK/slay3rd" --help >"$WORK/smoke.log" 2>&1 && rc=0 || rc=$?
+if [ "$rc" != 0 ] && ! grep -aq "failed to load config" "$WORK/smoke.log"; then
+    fail "binary does not execute (arch/glibc?) — rc=$rc: $(head -2 "$WORK/smoke.log")"
+fi
+step "   binary executes (rc=$rc)"
 if [ -n "${SMOKE_CONFIG:-}" ]; then
     timeout 15 "$WORK/slay3rd" "$SMOKE_CONFIG" >"$WORK/smoke.log" 2>&1 || true
     grep -aqE 'Consensus engine started|listening|INFO' "$WORK/smoke.log" || \
         fail "smoke-run produced no startup output — check $WORK/smoke.log"
     step "   side-port smoke ok"
 else
-    step "   --version ok (set SMOKE_CONFIG for a side-port boot test)"
+    step "   execution probe ok (set SMOKE_CONFIG for a side-port boot test)"
 fi
 
 # ---------- 3. backup ----------
