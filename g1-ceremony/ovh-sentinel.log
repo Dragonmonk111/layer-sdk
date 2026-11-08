@@ -137,3 +137,1154 @@
 2026-10-15T08:50:05Z OK SVC=active load=0.18 mem(t/u/a)=7747/729/6710 disk(u/pct/avail)=20G/26%/58G rssMB=448 hwmMB=1425 sync=1 err30m=0
 2026-10-15T09:20:05Z OK SVC=active load=0.38 mem(t/u/a)=7747/738/6701 disk(u/pct/avail)=21G/26%/58G rssMB=455 hwmMB=1425 sync=1 err30m=0
 2026-10-15T09:50:06Z OK SVC=active load=0.64 mem(t/u/a)=7747/732/6707 disk(u/pct/avail)=21G/27%/58G rssMB=459 hwmMB=1425 sync=1 err30m=0
+2026-10-15T10:20:05Z OK SVC=active load=0.56 mem(t/u/a)=7747/440/6999 disk(u/pct/avail)=21G/27%/58G rssMB=158 hwmMB=231 sync=1 err30m=0
+2026-10-15T10:50:05Z OK SVC=active load=0.68 mem(t/u/a)=7747/459/6980 disk(u/pct/avail)=21G/27%/58G rssMB=204 hwmMB=231 sync=1 err30m=0
+2026-10-15T11:20:06Z OK SVC=active load=0.55 mem(t/u/a)=7747/508/6931 disk(u/pct/avail)=21G/27%/58G rssMB=259 hwmMB=259 sync=1 err30m=0
+2026-10-15T11:50:06Z OK SVC=active load=0.78 mem(t/u/a)=7747/562/6877 disk(u/pct/avail)=21G/27%/57G rssMB=309 hwmMB=309 sync=1 err30m=0
+2026-10-15T12:20:06Z OK SVC=active load=0.90 mem(t/u/a)=7747/587/6852 disk(u/pct/avail)=21G/27%/57G rssMB=356 hwmMB=358 sync=1 err30m=0
+2026-10-15T12:50:06Z OK SVC=active load=0.52 mem(t/u/a)=7747/611/6828 disk(u/pct/avail)=21G/27%/57G rssMB=372 hwmMB=372 sync=1 err30m=0
+2026-10-15T13:20:06Z OK SVC=active load=0.35 mem(t/u/a)=7747/633/6806 disk(u/pct/avail)=21G/27%/57G rssMB=346 hwmMB=595 sync=1 err30m=0
+2026-10-15T13:50:05Z OK SVC=active load=1.01 mem(t/u/a)=7747/627/6812 disk(u/pct/avail)=21G/27%/57G rssMB=369 hwmMB=595 sync=1 err30m=0
+2026-10-15T14:20:06Z OK SVC=active load=0.57 mem(t/u/a)=7747/626/6813 disk(u/pct/avail)=21G/27%/57G rssMB=399 hwmMB=595 sync=1 err30m=0
+2026-10-15T14:50:05Z OK SVC=active load=0.73 mem(t/u/a)=7747/616/6822 disk(u/pct/avail)=21G/27%/57G rssMB=419 hwmMB=595 sync=1 err30m=0
+2026-10-15T15:20:06Z OK SVC=active load=0.54 mem(t/u/a)=7747/633/6805 disk(u/pct/avail)=21G/27%/57G rssMB=437 hwmMB=595 sync=1 err30m=0
+2026-10-15T15:50:06Z OK SVC=active load=0.82 mem(t/u/a)=7747/622/6817 disk(u/pct/avail)=21G/27%/57G rssMB=453 hwmMB=595 sync=1 err30m=0
+2026-10-15T16:20:06Z OK SVC=active load=0.44 mem(t/u/a)=7747/645/6794 disk(u/pct/avail)=21G/27%/57G rssMB=470 hwmMB=595 sync=1 err30m=0
+2026-10-15T16:50:06Z OK SVC=active load=0.66 mem(t/u/a)=7747/645/6794 disk(u/pct/avail)=21G/27%/57G rssMB=484 hwmMB=595 sync=1 err30m=0
+2026-10-15T17:20:05Z OK SVC=active load=1.09 mem(t/u/a)=7747/629/6810 disk(u/pct/avail)=21G/27%/57G rssMB=497 hwmMB=595 sync=1 err30m=0
+2026-10-15T17:50:05Z OK SVC=active load=0.72 mem(t/u/a)=7747/650/6789 disk(u/pct/avail)=21G/27%/57G rssMB=482 hwmMB=775 sync=1 err30m=0
+2026-10-15T18:20:05Z OK SVC=active load=0.57 mem(t/u/a)=7747/642/6797 disk(u/pct/avail)=21G/27%/57G rssMB=496 hwmMB=775 sync=1 err30m=0
+2026-10-15T18:50:05Z OK SVC=active load=0.54 mem(t/u/a)=7747/659/6780 disk(u/pct/avail)=21G/27%/57G rssMB=508 hwmMB=775 sync=1 err30m=0
+2026-10-15T19:20:05Z OK SVC=active load=0.68 mem(t/u/a)=7747/653/6786 disk(u/pct/avail)=21G/27%/57G rssMB=520 hwmMB=775 sync=1 err30m=0
+2026-10-15T19:50:05Z OK SVC=active load=0.91 mem(t/u/a)=7747/639/6800 disk(u/pct/avail)=21G/27%/57G rssMB=531 hwmMB=775 sync=1 err30m=0
+2026-10-15T20:20:05Z OK SVC=active load=0.64 mem(t/u/a)=7747/659/6780 disk(u/pct/avail)=21G/27%/57G rssMB=543 hwmMB=775 sync=1 err30m=0
+2026-10-15T20:50:05Z OK SVC=active load=0.71 mem(t/u/a)=7747/650/6789 disk(u/pct/avail)=21G/27%/57G rssMB=556 hwmMB=775 sync=1 err30m=0
+2026-10-15T21:20:04Z OK SVC=active load=0.84 mem(t/u/a)=7747/643/6796 disk(u/pct/avail)=21G/27%/57G rssMB=568 hwmMB=775 sync=1 err30m=0
+2026-10-15T21:50:05Z OK SVC=active load=0.67 mem(t/u/a)=7747/648/6791 disk(u/pct/avail)=21G/27%/57G rssMB=590 hwmMB=775 sync=1 err30m=0
+2026-10-15T22:20:05Z OK SVC=active load=0.71 mem(t/u/a)=7747/655/6784 disk(u/pct/avail)=21G/27%/57G rssMB=599 hwmMB=775 sync=1 err30m=0
+2026-10-15T22:50:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/643/6796 disk(u/pct/avail)=21G/28%/57G rssMB=609 hwmMB=775 sync=1 err30m=0
+2026-10-15T23:20:05Z OK SVC=active load=0.77 mem(t/u/a)=7747/665/6774 disk(u/pct/avail)=21G/27%/57G rssMB=622 hwmMB=775 sync=1 err30m=0
+2026-10-15T23:50:04Z OK SVC=active load=0.55 mem(t/u/a)=7747/660/6779 disk(u/pct/avail)=21G/28%/57G rssMB=632 hwmMB=775 sync=1 err30m=0
+2026-10-16T00:20:05Z OK SVC=active load=0.61 mem(t/u/a)=7747/661/6778 disk(u/pct/avail)=21G/28%/57G rssMB=642 hwmMB=775 sync=1 err30m=0
+2026-10-16T00:50:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/663/6776 disk(u/pct/avail)=21G/28%/57G rssMB=660 hwmMB=775 sync=1 err30m=0
+2026-10-16T01:20:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/667/6772 disk(u/pct/avail)=21G/28%/57G rssMB=633 hwmMB=834 sync=1 err30m=0
+2026-10-16T01:50:04Z OK SVC=active load=1.36 mem(t/u/a)=7747/687/6751 disk(u/pct/avail)=21G/28%/57G rssMB=642 hwmMB=834 sync=1 err30m=0
+2026-10-16T02:20:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/676/6763 disk(u/pct/avail)=21G/28%/57G rssMB=652 hwmMB=834 sync=1 err30m=0
+2026-10-16T02:50:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/662/6777 disk(u/pct/avail)=22G/28%/57G rssMB=669 hwmMB=834 sync=1 err30m=0
+2026-10-16T03:20:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/686/6753 disk(u/pct/avail)=22G/28%/57G rssMB=679 hwmMB=834 sync=1 err30m=0
+2026-10-16T03:50:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/667/6772 disk(u/pct/avail)=22G/28%/57G rssMB=689 hwmMB=834 sync=1 err30m=0
+2026-10-16T04:20:04Z OK SVC=active load=1.22 mem(t/u/a)=7747/694/6745 disk(u/pct/avail)=22G/28%/57G rssMB=705 hwmMB=834 sync=1 err30m=0
+2026-10-16T04:50:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/677/6762 disk(u/pct/avail)=22G/28%/57G rssMB=722 hwmMB=834 sync=1 err30m=0
+2026-10-16T05:20:04Z OK SVC=active load=0.44 mem(t/u/a)=7747/682/6757 disk(u/pct/avail)=22G/28%/57G rssMB=736 hwmMB=834 sync=1 err30m=0
+2026-10-16T05:50:04Z OK SVC=active load=0.56 mem(t/u/a)=7747/698/6741 disk(u/pct/avail)=22G/28%/57G rssMB=745 hwmMB=834 sync=1 err30m=0
+2026-10-16T06:20:05Z OK SVC=active load=0.81 mem(t/u/a)=7747/692/6747 disk(u/pct/avail)=22G/28%/57G rssMB=758 hwmMB=834 sync=1 err30m=0
+2026-10-16T06:50:04Z OK SVC=active load=1.13 mem(t/u/a)=7747/717/6722 disk(u/pct/avail)=22G/28%/57G rssMB=771 hwmMB=834 sync=1 err30m=0
+2026-10-16T07:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/716/6723 disk(u/pct/avail)=22G/28%/57G rssMB=787 hwmMB=834 sync=1 err30m=0
+2026-10-16T07:50:04Z OK SVC=active load=0.44 mem(t/u/a)=7747/668/6771 disk(u/pct/avail)=22G/28%/57G rssMB=734 hwmMB=834 sync=1 err30m=0
+2026-10-16T08:20:05Z OK SVC=active load=0.56 mem(t/u/a)=7747/655/6784 disk(u/pct/avail)=22G/28%/57G rssMB=741 hwmMB=834 sync=1 err30m=0
+2026-10-16T08:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/664/6775 disk(u/pct/avail)=22G/28%/57G rssMB=749 hwmMB=834 sync=1 err30m=0
+2026-10-16T09:20:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/665/6774 disk(u/pct/avail)=22G/28%/57G rssMB=756 hwmMB=834 sync=1 err30m=0
+2026-10-16T09:50:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/662/6777 disk(u/pct/avail)=22G/28%/57G rssMB=765 hwmMB=834 sync=1 err30m=0
+2026-10-16T10:20:05Z OK SVC=active load=0.83 mem(t/u/a)=7747/660/6779 disk(u/pct/avail)=22G/28%/57G rssMB=779 hwmMB=834 sync=1 err30m=0
+2026-10-16T10:50:04Z OK SVC=active load=0.36 mem(t/u/a)=7747/680/6759 disk(u/pct/avail)=22G/28%/56G rssMB=753 hwmMB=983 sync=1 err30m=0
+2026-10-16T11:20:05Z OK SVC=active load=0.83 mem(t/u/a)=7747/667/6772 disk(u/pct/avail)=22G/28%/57G rssMB=759 hwmMB=983 sync=1 err30m=0
+2026-10-16T11:50:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/674/6765 disk(u/pct/avail)=22G/28%/57G rssMB=766 hwmMB=983 sync=1 err30m=0
+2026-10-16T12:20:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/679/6760 disk(u/pct/avail)=22G/28%/57G rssMB=771 hwmMB=983 sync=1 err30m=0
+2026-10-16T12:50:04Z OK SVC=active load=0.65 mem(t/u/a)=7747/683/6756 disk(u/pct/avail)=22G/28%/56G rssMB=778 hwmMB=983 sync=1 err30m=0
+2026-10-16T13:20:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/682/6757 disk(u/pct/avail)=22G/28%/56G rssMB=789 hwmMB=983 sync=1 err30m=0
+2026-10-16T13:50:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/646/6793 disk(u/pct/avail)=22G/28%/56G rssMB=766 hwmMB=983 sync=1 err30m=0
+2026-10-16T14:20:05Z OK SVC=active load=0.91 mem(t/u/a)=7747/649/6790 disk(u/pct/avail)=22G/28%/56G rssMB=782 hwmMB=983 sync=1 err30m=0
+2026-10-16T14:50:05Z OK SVC=active load=0.80 mem(t/u/a)=7747/658/6781 disk(u/pct/avail)=22G/28%/56G rssMB=797 hwmMB=983 sync=1 err30m=0
+2026-10-16T15:20:05Z OK SVC=active load=0.70 mem(t/u/a)=7747/662/6777 disk(u/pct/avail)=22G/28%/56G rssMB=812 hwmMB=983 sync=1 err30m=0
+2026-10-16T15:50:07Z OK SVC=active load=0.68 mem(t/u/a)=7747/682/6757 disk(u/pct/avail)=22G/28%/56G rssMB=826 hwmMB=983 sync=1 err30m=0
+2026-10-16T16:20:13Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-16T16:50:04Z OK SVC=active load=0.44 mem(t/u/a)=7747/679/6760 disk(u/pct/avail)=22G/28%/56G rssMB=837 hwmMB=983 sync=1 err30m=0
+2026-10-16T17:20:13Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-16T17:50:12Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-16T18:20:04Z OK SVC=active load=0.91 mem(t/u/a)=7747/672/6767 disk(u/pct/avail)=22G/28%/56G rssMB=845 hwmMB=983 sync=1 err30m=0
+2026-10-16T18:50:05Z OK SVC=active load=0.01 mem(t/u/a)=7747/377/7062 disk(u/pct/avail)=22G/28%/57G rssMB=93 hwmMB=496 sync=1 err30m=0
+2026-10-16T19:20:05Z OK SVC=active load=0.00 mem(t/u/a)=7747/453/6986 disk(u/pct/avail)=22G/28%/57G rssMB=242 hwmMB=496 sync=1 err30m=0
+2026-10-16T19:50:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/457/6982 disk(u/pct/avail)=22G/28%/57G rssMB=251 hwmMB=496 sync=1 err30m=0
+2026-10-16T20:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/471/6968 disk(u/pct/avail)=22G/28%/57G rssMB=262 hwmMB=496 sync=1 err30m=0
+2026-10-16T20:50:05Z OK SVC=active load=0.57 mem(t/u/a)=7747/482/6957 disk(u/pct/avail)=22G/28%/57G rssMB=306 hwmMB=496 sync=1 err30m=0
+2026-10-16T21:20:07Z OK SVC=active load=0.38 mem(t/u/a)=7747/521/6918 disk(u/pct/avail)=22G/28%/57G rssMB=340 hwmMB=504 sync=1 err30m=0
+2026-10-16T21:50:07Z OK SVC=active load=0.56 mem(t/u/a)=7747/539/6900 disk(u/pct/avail)=22G/28%/57G rssMB=374 hwmMB=504 sync=1 err30m=0
+2026-10-16T22:20:05Z OK SVC=active load=0.61 mem(t/u/a)=7747/577/6862 disk(u/pct/avail)=22G/28%/56G rssMB=412 hwmMB=504 sync=1 err30m=0
+2026-10-16T22:50:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/604/6835 disk(u/pct/avail)=22G/28%/56G rssMB=450 hwmMB=504 sync=1 err30m=0
+2026-10-16T23:20:05Z OK SVC=active load=0.30 mem(t/u/a)=7747/605/6834 disk(u/pct/avail)=22G/28%/56G rssMB=481 hwmMB=504 sync=1 err30m=0
+2026-10-16T23:50:05Z OK SVC=active load=0.43 mem(t/u/a)=7747/629/6810 disk(u/pct/avail)=22G/28%/56G rssMB=510 hwmMB=510 sync=1 err30m=0
+2026-10-17T00:20:05Z OK SVC=active load=0.35 mem(t/u/a)=7747/625/6814 disk(u/pct/avail)=22G/28%/56G rssMB=522 hwmMB=522 sync=1 err30m=0
+2026-10-17T00:50:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/637/6802 disk(u/pct/avail)=22G/28%/56G rssMB=540 hwmMB=540 sync=1 err30m=0
+2026-10-17T01:20:05Z OK SVC=active load=0.62 mem(t/u/a)=7747/639/6800 disk(u/pct/avail)=22G/28%/56G rssMB=552 hwmMB=552 sync=1 err30m=0
+2026-10-17T01:50:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/627/6812 disk(u/pct/avail)=22G/28%/56G rssMB=561 hwmMB=561 sync=1 err30m=0
+2026-10-17T02:20:05Z OK SVC=active load=0.53 mem(t/u/a)=7747/621/6817 disk(u/pct/avail)=22G/29%/56G rssMB=571 hwmMB=571 sync=1 err30m=0
+2026-10-17T02:50:05Z OK SVC=active load=0.46 mem(t/u/a)=7747/625/6814 disk(u/pct/avail)=22G/29%/56G rssMB=545 hwmMB=804 sync=1 err30m=0
+2026-10-17T03:20:05Z OK SVC=active load=0.55 mem(t/u/a)=7747/643/6796 disk(u/pct/avail)=22G/29%/56G rssMB=555 hwmMB=804 sync=1 err30m=0
+2026-10-17T03:50:05Z OK SVC=active load=0.54 mem(t/u/a)=7747/629/6810 disk(u/pct/avail)=22G/29%/56G rssMB=564 hwmMB=804 sync=1 err30m=0
+2026-10-17T04:20:05Z OK SVC=active load=0.91 mem(t/u/a)=7747/626/6813 disk(u/pct/avail)=22G/29%/56G rssMB=577 hwmMB=804 sync=1 err30m=0
+2026-10-17T04:50:05Z OK SVC=active load=0.55 mem(t/u/a)=7747/615/6824 disk(u/pct/avail)=22G/29%/56G rssMB=586 hwmMB=804 sync=1 err30m=0
+2026-10-17T05:20:05Z OK SVC=active load=0.67 mem(t/u/a)=7747/614/6825 disk(u/pct/avail)=22G/29%/56G rssMB=593 hwmMB=804 sync=1 err30m=0
+2026-10-17T05:50:05Z OK SVC=active load=0.72 mem(t/u/a)=7747/650/6789 disk(u/pct/avail)=22G/29%/56G rssMB=619 hwmMB=804 sync=1 err30m=0
+2026-10-17T06:20:05Z OK SVC=active load=0.51 mem(t/u/a)=7747/642/6797 disk(u/pct/avail)=22G/29%/56G rssMB=626 hwmMB=804 sync=1 err30m=0
+2026-10-17T06:50:05Z OK SVC=active load=0.71 mem(t/u/a)=7747/634/6805 disk(u/pct/avail)=22G/29%/56G rssMB=635 hwmMB=804 sync=1 err30m=0
+2026-10-17T07:20:05Z OK SVC=active load=0.66 mem(t/u/a)=7747/655/6783 disk(u/pct/avail)=23G/29%/56G rssMB=643 hwmMB=804 sync=1 err30m=0
+2026-10-17T07:50:05Z OK SVC=active load=0.68 mem(t/u/a)=7747/660/6779 disk(u/pct/avail)=22G/29%/56G rssMB=653 hwmMB=804 sync=1 err30m=0
+2026-10-17T08:20:05Z OK SVC=active load=0.39 mem(t/u/a)=7747/634/6805 disk(u/pct/avail)=23G/29%/56G rssMB=662 hwmMB=804 sync=1 err30m=0
+2026-10-17T08:50:04Z OK SVC=active load=0.55 mem(t/u/a)=7747/649/6790 disk(u/pct/avail)=23G/29%/56G rssMB=670 hwmMB=804 sync=1 err30m=0
+2026-10-17T09:20:05Z OK SVC=active load=0.05 mem(t/u/a)=7747/657/6782 disk(u/pct/avail)=22G/29%/56G rssMB=365 hwmMB=873 sync=1 err30m=0
+2026-10-17T09:50:05Z OK SVC=active load=0.20 mem(t/u/a)=7747/658/6781 disk(u/pct/avail)=22G/29%/56G rssMB=379 hwmMB=873 sync=1 err30m=0
+2026-10-17T10:20:05Z OK SVC=active load=0.57 mem(t/u/a)=7747/668/6771 disk(u/pct/avail)=22G/29%/56G rssMB=393 hwmMB=873 sync=1 err30m=0
+2026-10-17T10:50:05Z OK SVC=active load=0.35 mem(t/u/a)=7747/659/6780 disk(u/pct/avail)=22G/29%/56G rssMB=406 hwmMB=873 sync=1 err30m=0
+2026-10-17T11:20:05Z OK SVC=active load=0.21 mem(t/u/a)=7747/668/6771 disk(u/pct/avail)=22G/29%/56G rssMB=418 hwmMB=873 sync=1 err30m=0
+2026-10-17T11:50:05Z OK SVC=active load=0.33 mem(t/u/a)=7747/672/6767 disk(u/pct/avail)=22G/29%/56G rssMB=428 hwmMB=873 sync=1 err30m=0
+2026-10-17T12:20:05Z OK SVC=active load=0.10 mem(t/u/a)=7747/661/6778 disk(u/pct/avail)=22G/29%/56G rssMB=448 hwmMB=873 sync=1 err30m=0
+2026-10-17T12:50:05Z OK SVC=active load=0.18 mem(t/u/a)=7747/661/6778 disk(u/pct/avail)=22G/29%/56G rssMB=450 hwmMB=873 sync=1 err30m=0
+2026-10-17T13:20:05Z OK SVC=active load=0.32 mem(t/u/a)=7747/670/6769 disk(u/pct/avail)=22G/29%/56G rssMB=452 hwmMB=873 sync=1 err30m=0
+2026-10-17T13:50:04Z OK SVC=active load=0.14 mem(t/u/a)=7747/667/6772 disk(u/pct/avail)=22G/29%/56G rssMB=459 hwmMB=873 sync=1 err30m=0
+2026-10-17T14:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/622/6817 disk(u/pct/avail)=23G/29%/56G rssMB=464 hwmMB=873 sync=1 err30m=0
+2026-10-17T14:50:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/639/6800 disk(u/pct/avail)=23G/29%/56G rssMB=466 hwmMB=873 sync=1 err30m=0
+2026-10-17T15:20:05Z OK SVC=active load=0.14 mem(t/u/a)=7747/642/6797 disk(u/pct/avail)=23G/29%/56G rssMB=467 hwmMB=873 sync=1 err30m=0
+2026-10-17T15:50:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/639/6800 disk(u/pct/avail)=23G/29%/56G rssMB=473 hwmMB=873 sync=1 err30m=0
+2026-10-17T16:20:06Z OK SVC=active load=0.19 mem(t/u/a)=7747/643/6796 disk(u/pct/avail)=23G/29%/56G rssMB=473 hwmMB=873 sync=1 err30m=0
+2026-10-17T16:50:04Z OK SVC=active load=0.17 mem(t/u/a)=7747/665/6774 disk(u/pct/avail)=23G/29%/56G rssMB=475 hwmMB=873 sync=1 err30m=0
+2026-10-17T17:20:07Z OK SVC=active load=0.41 mem(t/u/a)=7747/673/6766 disk(u/pct/avail)=23G/29%/56G rssMB=485 hwmMB=873 sync=1 err30m=0
+2026-10-17T17:50:05Z OK SVC=active load=0.47 mem(t/u/a)=7747/677/6762 disk(u/pct/avail)=23G/29%/56G rssMB=505 hwmMB=873 sync=1 err30m=0
+2026-10-17T18:20:05Z OK SVC=active load=0.64 mem(t/u/a)=7747/683/6756 disk(u/pct/avail)=23G/29%/56G rssMB=537 hwmMB=873 sync=1 err30m=0
+2026-10-17T18:51:02Z OK SVC=active load=0.79 mem(t/u/a)=7747/686/6753 disk(u/pct/avail)=23G/29%/56G rssMB=556 hwmMB=873 sync=1 err30m=0
+2026-10-17T19:20:05Z OK SVC=active load=0.65 mem(t/u/a)=7747/683/6756 disk(u/pct/avail)=23G/29%/56G rssMB=572 hwmMB=873 sync=1 err30m=0
+2026-10-17T19:50:05Z OK SVC=active load=0.48 mem(t/u/a)=7747/680/6759 disk(u/pct/avail)=23G/29%/55G rssMB=588 hwmMB=873 sync=1 err30m=0
+2026-10-17T20:20:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/739/6700 disk(u/pct/avail)=23G/30%/55G rssMB=664 hwmMB=873 sync=1 err30m=0
+2026-10-17T20:50:05Z OK SVC=active load=0.58 mem(t/u/a)=7747/799/6639 disk(u/pct/avail)=23G/29%/55G rssMB=673 hwmMB=943 sync=1 err30m=0
+2026-10-17T21:20:05Z OK SVC=active load=0.49 mem(t/u/a)=7747/788/6651 disk(u/pct/avail)=23G/30%/55G rssMB=686 hwmMB=943 sync=1 err30m=0
+2026-10-17T21:50:04Z OK SVC=active load=0.90 mem(t/u/a)=7747/790/6649 disk(u/pct/avail)=23G/30%/55G rssMB=695 hwmMB=943 sync=1 err30m=0
+2026-10-17T22:20:04Z OK SVC=active load=0.46 mem(t/u/a)=7747/798/6641 disk(u/pct/avail)=23G/30%/55G rssMB=708 hwmMB=943 sync=1 err30m=0
+2026-10-17T22:50:04Z OK SVC=active load=0.31 mem(t/u/a)=7747/775/6664 disk(u/pct/avail)=23G/30%/55G rssMB=713 hwmMB=943 sync=1 err30m=0
+2026-10-17T23:20:04Z OK SVC=active load=0.57 mem(t/u/a)=7747/797/6642 disk(u/pct/avail)=23G/30%/55G rssMB=778 hwmMB=943 sync=1 err30m=0
+2026-10-17T23:50:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/802/6637 disk(u/pct/avail)=23G/30%/55G rssMB=788 hwmMB=943 sync=1 err30m=0
+2026-10-18T00:20:04Z OK SVC=active load=0.49 mem(t/u/a)=7747/794/6645 disk(u/pct/avail)=22G/29%/56G rssMB=786 hwmMB=943 sync=1 err30m=0
+2026-10-18T00:50:04Z OK SVC=active load=0.69 mem(t/u/a)=7747/793/6646 disk(u/pct/avail)=22G/29%/56G rssMB=795 hwmMB=943 sync=1 err30m=0
+2026-10-18T01:20:03Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T01:50:03Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T02:20:03Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T02:50:03Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T03:20:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T03:50:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T04:20:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T04:50:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T05:20:02Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-18T05:50:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/825/6614 disk(u/pct/avail)=22G/29%/56G rssMB=605 hwmMB=1063 sync=1 err30m=0
+2026-10-18T06:20:04Z OK SVC=active load=0.48 mem(t/u/a)=7747/801/6638 disk(u/pct/avail)=22G/29%/56G rssMB=607 hwmMB=1063 sync=1 err30m=0
+2026-10-18T06:50:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/804/6635 disk(u/pct/avail)=22G/29%/56G rssMB=623 hwmMB=1063 sync=1 err30m=0
+2026-10-18T07:20:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/808/6631 disk(u/pct/avail)=23G/29%/56G rssMB=627 hwmMB=1063 sync=1 err30m=0
+2026-10-18T07:50:04Z OK SVC=active load=0.55 mem(t/u/a)=7747/805/6634 disk(u/pct/avail)=23G/29%/56G rssMB=635 hwmMB=1063 sync=1 err30m=0
+2026-10-18T08:29:06Z OK SVC=active load=0.36 mem(t/u/a)=7747/810/6629 disk(u/pct/avail)=23G/29%/56G rssMB=651 hwmMB=1063 sync=1 err30m=0
+2026-10-18T08:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/806/6633 disk(u/pct/avail)=23G/29%/56G rssMB=655 hwmMB=1063 sync=1 err30m=0
+2026-10-18T09:20:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/817/6622 disk(u/pct/avail)=23G/29%/56G rssMB=663 hwmMB=1063 sync=1 err30m=0
+2026-10-18T09:50:04Z OK SVC=active load=0.33 mem(t/u/a)=7747/817/6622 disk(u/pct/avail)=23G/29%/56G rssMB=672 hwmMB=1063 sync=1 err30m=0
+2026-10-18T10:20:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/829/6610 disk(u/pct/avail)=23G/29%/56G rssMB=680 hwmMB=1063 sync=1 err30m=0
+2026-10-18T10:50:04Z OK SVC=active load=0.48 mem(t/u/a)=7747/820/6619 disk(u/pct/avail)=23G/29%/56G rssMB=692 hwmMB=1063 sync=1 err30m=0
+2026-10-18T11:20:05Z OK SVC=active load=0.44 mem(t/u/a)=7747/432/7007 disk(u/pct/avail)=23G/29%/56G rssMB=247 hwmMB=388 sync=1 err30m=0
+2026-10-18T11:50:04Z ALERT SVC=active load=0.12 mem(t/u/a)=7747/588/6851 disk(u/pct/avail)=23G/29%/55G rssMB=310 hwmMB=310 sync=1 err30m=75 :: journalErrors=75
+2026-10-18T12:20:03Z ALERT SVC=active load=0.46 mem(t/u/a)=7747/448/6991 disk(u/pct/avail)=23G/29%/56G rssMB=271 hwmMB=271 sync=1 err30m=79 :: journalErrors=79
+2026-10-18T12:50:03Z OK SVC=active load=0.51 mem(t/u/a)=7747/434/7005 disk(u/pct/avail)=23G/29%/55G rssMB=263 hwmMB=263 sync=1 err30m=0
+2026-10-18T13:20:03Z OK SVC=active load=0.59 mem(t/u/a)=7747/460/6979 disk(u/pct/avail)=23G/30%/55G rssMB=294 hwmMB=294 sync=1 err30m=0
+2026-10-18T13:50:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/477/6962 disk(u/pct/avail)=23G/30%/55G rssMB=329 hwmMB=329 sync=1 err30m=0
+2026-10-18T14:20:04Z OK SVC=active load=0.52 mem(t/u/a)=7747/517/6922 disk(u/pct/avail)=23G/30%/55G rssMB=365 hwmMB=366 sync=1 err30m=0
+2026-10-18T14:50:08Z OK SVC=active load=0.43 mem(t/u/a)=7747/525/6914 disk(u/pct/avail)=23G/30%/55G rssMB=396 hwmMB=396 sync=1 err30m=0
+2026-10-18T15:20:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/547/6892 disk(u/pct/avail)=23G/30%/55G rssMB=431 hwmMB=431 sync=1 err30m=0
+2026-10-18T15:50:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/586/6853 disk(u/pct/avail)=23G/30%/55G rssMB=452 hwmMB=676 sync=1 err30m=0
+2026-10-18T16:20:47Z OK SVC=active load=0.73 mem(t/u/a)=7747/626/6813 disk(u/pct/avail)=23G/30%/55G rssMB=485 hwmMB=676 sync=1 err30m=0
+2026-10-18T16:50:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/710/6707 disk(u/pct/avail)=25G/32%/53G rssMB=510 hwmMB=676 sync=1 err30m=0
+2026-10-18T17:20:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/764/6652 disk(u/pct/avail)=25G/32%/53G rssMB=527 hwmMB=676 sync=1 err30m=0
+2026-10-18T17:50:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/753/6663 disk(u/pct/avail)=25G/32%/53G rssMB=535 hwmMB=676 sync=1 err30m=0
+2026-10-18T18:20:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/745/6671 disk(u/pct/avail)=25G/32%/53G rssMB=542 hwmMB=676 sync=1 err30m=0
+2026-10-18T18:50:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/758/6658 disk(u/pct/avail)=25G/32%/53G rssMB=553 hwmMB=676 sync=1 err30m=0
+2026-10-18T19:20:04Z OK SVC=active load=0.40 mem(t/u/a)=7747/757/6659 disk(u/pct/avail)=25G/32%/53G rssMB=559 hwmMB=676 sync=1 err30m=0
+2026-10-18T19:50:04Z OK SVC=active load=0.65 mem(t/u/a)=7747/774/6642 disk(u/pct/avail)=25G/32%/53G rssMB=588 hwmMB=676 sync=1 err30m=0
+2026-10-18T20:20:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/780/6636 disk(u/pct/avail)=25G/33%/53G rssMB=596 hwmMB=676 sync=1 err30m=0
+2026-10-18T20:50:04Z OK SVC=active load=0.52 mem(t/u/a)=7747/793/6622 disk(u/pct/avail)=25G/32%/53G rssMB=619 hwmMB=676 sync=1 err30m=0
+2026-10-18T21:55:31Z OK SVC=active load=0.48 mem(t/u/a)=7747/800/6615 disk(u/pct/avail)=25G/33%/53G rssMB=643 hwmMB=676 sync=1 err30m=0
+2026-10-18T22:20:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/809/6606 disk(u/pct/avail)=25G/33%/53G rssMB=657 hwmMB=676 sync=1 err30m=0
+2026-10-18T22:50:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/819/6596 disk(u/pct/avail)=25G/33%/53G rssMB=669 hwmMB=676 sync=1 err30m=0
+2026-10-18T23:20:03Z OK SVC=active load=0.05 mem(t/u/a)=7747/824/6590 disk(u/pct/avail)=25G/33%/53G rssMB=676 hwmMB=676 sync=1 err30m=0
+2026-10-18T23:50:03Z OK SVC=active load=0.00 mem(t/u/a)=7747/809/6605 disk(u/pct/avail)=25G/32%/53G rssMB=676 hwmMB=676 sync=1 err30m=0
+2026-10-19T00:20:03Z OK SVC=active load=0.00 mem(t/u/a)=7747/827/6588 disk(u/pct/avail)=25G/32%/53G rssMB=676 hwmMB=676 sync=1 err30m=0
+2026-10-19T00:50:03Z OK SVC=active load=0.00 mem(t/u/a)=7747/816/6598 disk(u/pct/avail)=25G/32%/53G rssMB=685 hwmMB=685 sync=1 err30m=0
+2026-10-19T01:20:03Z OK SVC=active load=0.15 mem(t/u/a)=7747/844/6571 disk(u/pct/avail)=25G/32%/53G rssMB=696 hwmMB=696 sync=1 err30m=0
+2026-10-19T01:50:04Z OK SVC=active load=0.39 mem(t/u/a)=7747/853/6562 disk(u/pct/avail)=25G/32%/53G rssMB=446 hwmMB=905 sync=1 err30m=0
+2026-10-19T02:20:04Z OK SVC=active load=0.30 mem(t/u/a)=7747/841/6573 disk(u/pct/avail)=25G/32%/53G rssMB=458 hwmMB=905 sync=1 err30m=0
+2026-10-19T02:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/866/6548 disk(u/pct/avail)=25G/32%/53G rssMB=472 hwmMB=905 sync=1 err30m=0
+2026-10-19T03:20:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/852/6563 disk(u/pct/avail)=25G/32%/53G rssMB=476 hwmMB=905 sync=1 err30m=0
+2026-10-19T03:50:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/854/6561 disk(u/pct/avail)=25G/32%/53G rssMB=492 hwmMB=905 sync=1 err30m=0
+2026-10-19T04:20:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/860/6555 disk(u/pct/avail)=25G/32%/53G rssMB=502 hwmMB=905 sync=1 err30m=0
+2026-10-19T04:50:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/857/6558 disk(u/pct/avail)=25G/33%/53G rssMB=513 hwmMB=905 sync=1 err30m=0
+2026-10-19T05:20:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/872/6543 disk(u/pct/avail)=25G/33%/53G rssMB=520 hwmMB=905 sync=1 err30m=0
+2026-10-19T05:50:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/868/6547 disk(u/pct/avail)=25G/33%/53G rssMB=528 hwmMB=905 sync=1 err30m=0
+2026-10-19T06:20:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/860/6555 disk(u/pct/avail)=25G/33%/53G rssMB=540 hwmMB=905 sync=1 err30m=0
+2026-10-19T06:50:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/861/6554 disk(u/pct/avail)=25G/33%/53G rssMB=541 hwmMB=905 sync=1 err30m=0
+2026-10-19T07:20:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/845/6570 disk(u/pct/avail)=25G/33%/53G rssMB=541 hwmMB=905 sync=1 err30m=0
+2026-10-19T07:50:03Z OK SVC=active load=0.02 mem(t/u/a)=7747/865/6550 disk(u/pct/avail)=25G/33%/53G rssMB=541 hwmMB=905 sync=1 err30m=0
+2026-10-19T08:20:04Z OK SVC=active load=0.02 mem(t/u/a)=7747/881/6534 disk(u/pct/avail)=25G/33%/53G rssMB=541 hwmMB=905 sync=1 err30m=0
+2026-10-19T08:50:04Z OK SVC=active load=0.43 mem(t/u/a)=7747/863/6552 disk(u/pct/avail)=25G/33%/53G rssMB=541 hwmMB=905 sync=1 err30m=0
+2026-10-19T09:20:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/868/6546 disk(u/pct/avail)=25G/33%/53G rssMB=561 hwmMB=905 sync=1 err30m=0
+2026-10-19T09:50:25Z OK SVC=active load=0.49 mem(t/u/a)=7747/879/6536 disk(u/pct/avail)=25G/33%/53G rssMB=569 hwmMB=905 sync=1 err30m=0
+2026-10-19T10:20:04Z OK SVC=active load=0.46 mem(t/u/a)=7747/875/6540 disk(u/pct/avail)=25G/33%/53G rssMB=577 hwmMB=905 sync=1 err30m=0
+2026-10-19T10:50:04Z OK SVC=active load=0.40 mem(t/u/a)=7747/893/6522 disk(u/pct/avail)=26G/33%/53G rssMB=604 hwmMB=905 sync=1 err30m=0
+2026-10-19T11:20:05Z OK SVC=active load=0.49 mem(t/u/a)=7747/875/6539 disk(u/pct/avail)=25G/33%/53G rssMB=627 hwmMB=905 sync=1 err30m=0
+2026-10-19T11:50:06Z OK SVC=active load=0.63 mem(t/u/a)=7747/895/6519 disk(u/pct/avail)=25G/33%/53G rssMB=620 hwmMB=905 sync=1 err30m=0
+2026-10-19T12:20:04Z OK SVC=active load=1.02 mem(t/u/a)=7747/917/6497 disk(u/pct/avail)=26G/33%/53G rssMB=660 hwmMB=905 sync=1 err30m=0
+2026-10-19T12:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/891/6523 disk(u/pct/avail)=26G/33%/53G rssMB=677 hwmMB=905 sync=1 err30m=0
+2026-10-19T13:20:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/902/6512 disk(u/pct/avail)=26G/33%/53G rssMB=688 hwmMB=905 sync=1 err30m=0
+2026-10-19T13:50:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/889/6525 disk(u/pct/avail)=26G/33%/53G rssMB=698 hwmMB=905 sync=1 err30m=0
+2026-10-19T14:20:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/897/6517 disk(u/pct/avail)=26G/33%/53G rssMB=709 hwmMB=905 sync=1 err30m=0
+2026-10-19T14:50:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/906/6508 disk(u/pct/avail)=26G/33%/53G rssMB=723 hwmMB=905 sync=1 err30m=0
+2026-10-19T15:20:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/921/6435 disk(u/pct/avail)=17G/21%/62G rssMB=738 hwmMB=905 sync=1 err30m=0
+2026-10-19T15:50:03Z OK SVC=active load=0.66 mem(t/u/a)=7747/933/6423 disk(u/pct/avail)=17G/21%/62G rssMB=781 hwmMB=905 sync=1 err30m=0
+2026-10-19T16:20:08Z OK SVC=active load=0.74 mem(t/u/a)=7747/912/6444 disk(u/pct/avail)=17G/21%/62G rssMB=791 hwmMB=905 sync=1 err30m=0
+2026-10-19T16:50:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/921/6436 disk(u/pct/avail)=17G/22%/62G rssMB=804 hwmMB=905 sync=1 err30m=0
+2026-10-19T17:20:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/928/6428 disk(u/pct/avail)=17G/22%/62G rssMB=815 hwmMB=905 sync=1 err30m=0
+2026-10-19T17:50:04Z OK SVC=active load=0.69 mem(t/u/a)=7747/912/6445 disk(u/pct/avail)=17G/22%/62G rssMB=827 hwmMB=905 sync=1 err30m=0
+2026-10-19T18:20:04Z OK SVC=active load=0.23 mem(t/u/a)=7747/918/6438 disk(u/pct/avail)=17G/22%/62G rssMB=837 hwmMB=905 sync=1 err30m=0
+2026-10-19T18:50:04Z OK SVC=active load=0.09 mem(t/u/a)=7747/929/6427 disk(u/pct/avail)=17G/22%/62G rssMB=795 hwmMB=1120 sync=1 err30m=0
+2026-10-19T19:20:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/917/6439 disk(u/pct/avail)=17G/22%/62G rssMB=804 hwmMB=1120 sync=1 err30m=0
+2026-10-19T19:50:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/926/6431 disk(u/pct/avail)=17G/22%/61G rssMB=814 hwmMB=1120 sync=1 err30m=0
+2026-10-19T20:20:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/929/6427 disk(u/pct/avail)=17G/22%/61G rssMB=829 hwmMB=1120 sync=1 err30m=0
+2026-10-19T20:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/948/6408 disk(u/pct/avail)=17G/22%/62G rssMB=834 hwmMB=1120 sync=1 err30m=0
+2026-10-19T21:20:03Z OK SVC=active load=0.47 mem(t/u/a)=7747/927/6429 disk(u/pct/avail)=17G/22%/61G rssMB=844 hwmMB=1120 sync=1 err30m=0
+2026-10-19T21:50:03Z OK SVC=active load=1.07 mem(t/u/a)=7747/937/6420 disk(u/pct/avail)=17G/22%/61G rssMB=875 hwmMB=1120 sync=1 err30m=0
+2026-10-19T22:20:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/951/6405 disk(u/pct/avail)=17G/22%/61G rssMB=891 hwmMB=1120 sync=1 err30m=0
+2026-10-19T22:50:04Z OK SVC=active load=0.56 mem(t/u/a)=7747/946/6410 disk(u/pct/avail)=17G/22%/61G rssMB=905 hwmMB=1120 sync=1 err30m=0
+2026-10-19T23:20:04Z OK SVC=active load=0.24 mem(t/u/a)=7747/592/6764 disk(u/pct/avail)=17G/22%/61G rssMB=523 hwmMB=523 sync=1 err30m=0
+2026-10-19T23:50:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/610/6746 disk(u/pct/avail)=17G/22%/61G rssMB=545 hwmMB=545 sync=1 err30m=0
+2026-10-20T00:20:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/604/6752 disk(u/pct/avail)=17G/22%/61G rssMB=569 hwmMB=569 sync=1 err30m=0
+2026-10-20T00:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/624/6732 disk(u/pct/avail)=17G/22%/61G rssMB=593 hwmMB=593 sync=1 err30m=0
+2026-10-20T01:20:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/634/6723 disk(u/pct/avail)=17G/22%/61G rssMB=619 hwmMB=619 sync=1 err30m=0
+2026-10-20T01:50:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/658/6698 disk(u/pct/avail)=17G/22%/61G rssMB=645 hwmMB=645 sync=1 err30m=0
+2026-10-20T02:20:04Z OK SVC=active load=0.56 mem(t/u/a)=7747/669/6687 disk(u/pct/avail)=17G/22%/61G rssMB=671 hwmMB=671 sync=1 err30m=0
+2026-10-20T02:50:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/696/6660 disk(u/pct/avail)=17G/22%/61G rssMB=698 hwmMB=698 sync=1 err30m=0
+2026-10-20T03:20:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/700/6656 disk(u/pct/avail)=17G/22%/61G rssMB=721 hwmMB=724 sync=1 err30m=0
+2026-10-20T03:50:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/720/6633 disk(u/pct/avail)=17G/22%/62G rssMB=319 hwmMB=989 sync=1 err30m=0
+2026-10-20T04:20:04Z OK SVC=active load=0.04 mem(t/u/a)=7747/715/6639 disk(u/pct/avail)=17G/22%/62G rssMB=322 hwmMB=989 sync=1 err30m=0
+2026-10-20T04:50:04Z OK SVC=active load=0.13 mem(t/u/a)=7747/723/6630 disk(u/pct/avail)=17G/22%/62G rssMB=324 hwmMB=989 sync=1 err30m=0
+2026-10-20T05:20:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/742/6612 disk(u/pct/avail)=17G/22%/62G rssMB=357 hwmMB=989 sync=1 err30m=0
+2026-10-20T05:50:04Z OK SVC=active load=0.52 mem(t/u/a)=7747/766/6588 disk(u/pct/avail)=17G/22%/61G rssMB=392 hwmMB=989 sync=1 err30m=0
+2026-10-20T06:20:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/782/6572 disk(u/pct/avail)=17G/22%/61G rssMB=423 hwmMB=989 sync=1 err30m=0
+2026-10-20T06:50:04Z OK SVC=active load=0.04 mem(t/u/a)=7747/784/6570 disk(u/pct/avail)=17G/22%/61G rssMB=435 hwmMB=989 sync=1 err30m=0
+2026-10-20T07:20:04Z OK SVC=active load=0.37 mem(t/u/a)=7747/775/6578 disk(u/pct/avail)=17G/22%/61G rssMB=443 hwmMB=989 sync=1 err30m=0
+2026-10-20T07:50:04Z OK SVC=active load=0.58 mem(t/u/a)=7747/781/6573 disk(u/pct/avail)=17G/22%/61G rssMB=455 hwmMB=989 sync=1 err30m=0
+2026-10-20T08:20:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/803/6551 disk(u/pct/avail)=17G/22%/61G rssMB=496 hwmMB=989 sync=1 err30m=0
+2026-10-20T08:50:04Z OK SVC=active load=0.37 mem(t/u/a)=7747/800/6553 disk(u/pct/avail)=17G/22%/61G rssMB=533 hwmMB=989 sync=1 err30m=0
+2026-10-20T09:20:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/915/6438 disk(u/pct/avail)=17G/22%/61G rssMB=703 hwmMB=989 sync=1 err30m=0
+2026-10-20T09:50:03Z OK SVC=active load=0.06 mem(t/u/a)=7747/985/6368 disk(u/pct/avail)=17G/22%/61G rssMB=789 hwmMB=989 sync=1 err30m=0
+2026-10-20T10:20:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/1005/6348 disk(u/pct/avail)=17G/22%/61G rssMB=800 hwmMB=989 sync=1 err30m=0
+2026-10-20T10:50:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/1032/6322 disk(u/pct/avail)=17G/22%/61G rssMB=829 hwmMB=989 sync=1 err30m=0
+2026-10-20T11:20:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/1018/6336 disk(u/pct/avail)=17G/22%/61G rssMB=843 hwmMB=989 sync=1 err30m=0
+2026-10-20T11:50:04Z OK SVC=active load=0.32 mem(t/u/a)=7747/1030/6324 disk(u/pct/avail)=17G/22%/61G rssMB=857 hwmMB=989 sync=1 err30m=0
+2026-10-20T12:20:04Z OK SVC=active load=0.69 mem(t/u/a)=7747/1158/6195 disk(u/pct/avail)=17G/22%/61G rssMB=872 hwmMB=989 sync=1 err30m=0
+2026-10-20T12:50:04Z OK SVC=active load=0.37 mem(t/u/a)=7747/1019/6333 disk(u/pct/avail)=17G/22%/61G rssMB=882 hwmMB=989 sync=1 err30m=0
+2026-10-20T13:20:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/1044/6309 disk(u/pct/avail)=17G/22%/61G rssMB=899 hwmMB=989 sync=1 err30m=0
+2026-10-20T13:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/988/6365 disk(u/pct/avail)=17G/22%/61G rssMB=807 hwmMB=1050 sync=1 err30m=0
+2026-10-20T14:20:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/1004/6349 disk(u/pct/avail)=17G/22%/61G rssMB=823 hwmMB=1050 sync=1 err30m=0
+2026-10-20T14:50:05Z OK SVC=active load=0.03 mem(t/u/a)=7747/1030/6323 disk(u/pct/avail)=17G/22%/61G rssMB=861 hwmMB=1050 sync=1 err30m=0
+2026-10-20T15:20:04Z OK SVC=active load=0.26 mem(t/u/a)=7747/1019/6334 disk(u/pct/avail)=17G/22%/61G rssMB=909 hwmMB=1050 sync=1 err30m=0
+2026-10-20T15:50:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/1017/6336 disk(u/pct/avail)=17G/22%/61G rssMB=912 hwmMB=1050 sync=1 err30m=0
+2026-10-20T16:20:04Z OK SVC=active load=1.06 mem(t/u/a)=7747/1025/6327 disk(u/pct/avail)=17G/22%/61G rssMB=911 hwmMB=1050 sync=1 err30m=0
+2026-10-20T16:50:06Z OK SVC=active load=0.60 mem(t/u/a)=7747/1027/6325 disk(u/pct/avail)=17G/22%/61G rssMB=912 hwmMB=1050 sync=1 err30m=0
+2026-10-20T17:20:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/1032/6320 disk(u/pct/avail)=17G/22%/61G rssMB=912 hwmMB=1050 sync=1 err30m=0
+2026-10-20T17:50:05Z OK SVC=active load=0.63 mem(t/u/a)=7747/1026/6327 disk(u/pct/avail)=17G/22%/61G rssMB=912 hwmMB=1050 sync=1 err30m=0
+2026-10-20T18:20:04Z OK SVC=active load=0.23 mem(t/u/a)=7747/1026/6327 disk(u/pct/avail)=17G/22%/61G rssMB=912 hwmMB=1050 sync=1 err30m=0
+2026-10-20T18:50:04Z OK SVC=active load=0.11 mem(t/u/a)=7747/969/6384 disk(u/pct/avail)=17G/22%/61G rssMB=868 hwmMB=1050 sync=1 err30m=0
+2026-10-20T19:20:04Z OK SVC=active load=0.16 mem(t/u/a)=7747/992/6360 disk(u/pct/avail)=17G/22%/61G rssMB=904 hwmMB=1050 sync=1 err30m=0
+2026-10-20T19:50:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/985/6368 disk(u/pct/avail)=17G/22%/61G rssMB=1001 hwmMB=1050 sync=1 err30m=0
+2026-10-20T20:20:04Z OK SVC=active load=0.28 mem(t/u/a)=7747/970/6382 disk(u/pct/avail)=17G/22%/61G rssMB=1150 hwmMB=1150 sync=1 err30m=0
+2026-10-20T20:50:04Z OK SVC=active load=0.33 mem(t/u/a)=7747/989/6364 disk(u/pct/avail)=17G/22%/61G rssMB=1274 hwmMB=1274 sync=1 err30m=0
+2026-10-20T21:20:06Z OK SVC=active load=0.14 mem(t/u/a)=7747/971/6382 disk(u/pct/avail)=17G/22%/61G rssMB=1274 hwmMB=1274 sync=1 err30m=0
+2026-10-20T21:50:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/1000/6353 disk(u/pct/avail)=17G/22%/61G rssMB=1274 hwmMB=1274 sync=1 err30m=0
+2026-10-20T22:20:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/976/6376 disk(u/pct/avail)=17G/22%/61G rssMB=1274 hwmMB=1274 sync=1 err30m=0
+2026-10-20T22:50:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/980/6373 disk(u/pct/avail)=17G/22%/61G rssMB=1425 hwmMB=1425 sync=1 err30m=0
+2026-10-20T23:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/965/6387 disk(u/pct/avail)=17G/22%/61G rssMB=1579 hwmMB=1579 sync=1 err30m=0
+2026-10-20T23:50:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/990/6363 disk(u/pct/avail)=17G/22%/61G rssMB=1745 hwmMB=1745 sync=1 err30m=0
+2026-10-21T00:20:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/1002/6350 disk(u/pct/avail)=17G/22%/61G rssMB=1870 hwmMB=1870 sync=1 err30m=0
+2026-10-21T00:50:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/1007/6346 disk(u/pct/avail)=17G/22%/61G rssMB=2034 hwmMB=2034 sync=1 err30m=0
+2026-10-21T01:20:04Z OK SVC=active load=0.40 mem(t/u/a)=7747/1037/6315 disk(u/pct/avail)=17G/22%/61G rssMB=2107 hwmMB=2107 sync=1 err30m=0
+2026-10-21T01:50:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/1165/6247 disk(u/pct/avail)=17G/22%/61G rssMB=2227 hwmMB=2227 sync=1 err30m=0
+2026-10-21T02:20:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/1299/6118 disk(u/pct/avail)=17G/22%/61G rssMB=2346 hwmMB=2346 sync=1 err30m=0
+2026-10-21T02:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/1423/5994 disk(u/pct/avail)=17G/22%/61G rssMB=2458 hwmMB=2459 sync=1 err30m=0
+2026-10-21T03:20:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/1548/5869 disk(u/pct/avail)=17G/22%/61G rssMB=2573 hwmMB=2574 sync=1 err30m=0
+2026-10-21T03:50:04Z OK SVC=active load=0.13 mem(t/u/a)=7747/1667/5742 disk(u/pct/avail)=18G/22%/61G rssMB=2683 hwmMB=2684 sync=1 err30m=0
+2026-10-21T04:20:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/1763/5653 disk(u/pct/avail)=18G/23%/61G rssMB=2799 hwmMB=2800 sync=1 err30m=0
+2026-10-21T04:50:04Z OK SVC=active load=0.30 mem(t/u/a)=7747/1884/5525 disk(u/pct/avail)=18G/23%/61G rssMB=2887 hwmMB=2893 sync=1 err30m=0
+2026-10-21T05:20:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/2001/5412 disk(u/pct/avail)=17G/22%/61G rssMB=3105 hwmMB=3115 sync=1 err30m=0
+2026-10-21T05:50:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/2115/5301 disk(u/pct/avail)=17G/22%/61G rssMB=3251 hwmMB=3256 sync=1 err30m=0
+2026-10-21T06:20:46Z OK SVC=active load=0.27 mem(t/u/a)=7747/2231/5185 disk(u/pct/avail)=17G/22%/61G rssMB=3199 hwmMB=3319 sync=1 err30m=0
+2026-10-21T06:50:04Z OK SVC=active load=0.38 mem(t/u/a)=7747/2341/5075 disk(u/pct/avail)=17G/22%/61G rssMB=3320 hwmMB=3320 sync=1 err30m=0
+2026-10-21T07:20:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/2450/4966 disk(u/pct/avail)=17G/22%/61G rssMB=3441 hwmMB=3441 sync=1 err30m=0
+2026-10-21T07:50:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/2587/4826 disk(u/pct/avail)=17G/22%/61G rssMB=3465 hwmMB=3466 sync=1 err30m=0
+2026-10-21T08:20:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/2718/4699 disk(u/pct/avail)=18G/22%/61G rssMB=3504 hwmMB=3511 sync=1 err30m=0
+2026-10-21T08:50:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/2941/4475 disk(u/pct/avail)=18G/23%/61G rssMB=3553 hwmMB=3553 sync=1 err30m=0
+2026-10-21T09:20:06Z OK SVC=active load=0.43 mem(t/u/a)=7747/3004/4352 disk(u/pct/avail)=18G/23%/61G rssMB=3658 hwmMB=3659 sync=1 err30m=0
+2026-10-21T09:50:04Z OK SVC=active load=0.43 mem(t/u/a)=7747/3205/4175 disk(u/pct/avail)=18G/23%/61G rssMB=3813 hwmMB=3813 sync=1 err30m=0
+2026-10-21T10:20:05Z OK SVC=active load=0.28 mem(t/u/a)=7747/3400/3972 disk(u/pct/avail)=18G/23%/61G rssMB=3994 hwmMB=3995 sync=1 err30m=0
+2026-10-21T10:50:04Z OK SVC=active load=0.31 mem(t/u/a)=7747/3682/3733 disk(u/pct/avail)=18G/23%/61G rssMB=4222 hwmMB=4222 sync=1 err30m=0
+2026-10-21T11:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/3915/3465 disk(u/pct/avail)=18G/23%/61G rssMB=4484 hwmMB=4484 sync=1 err30m=0
+2026-10-21T11:50:05Z OK SVC=active load=0.45 mem(t/u/a)=7747/4190/3226 disk(u/pct/avail)=18G/23%/61G rssMB=4740 hwmMB=4740 sync=1 err30m=0
+2026-10-21T12:20:06Z OK SVC=active load=0.26 mem(t/u/a)=7747/4471/2945 disk(u/pct/avail)=18G/23%/61G rssMB=4992 hwmMB=4992 sync=1 err30m=0
+2026-10-21T12:50:04Z OK SVC=active load=0.55 mem(t/u/a)=7747/4750/2666 disk(u/pct/avail)=18G/23%/61G rssMB=5227 hwmMB=5227 sync=1 err30m=0
+2026-10-21T13:20:04Z OK SVC=active load=0.26 mem(t/u/a)=7747/4946/2470 disk(u/pct/avail)=18G/23%/61G rssMB=5454 hwmMB=5459 sync=1 err30m=0
+2026-10-21T13:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/5128/2284 disk(u/pct/avail)=18G/23%/61G rssMB=5543 hwmMB=5548 sync=1 err30m=0
+2026-10-21T14:20:04Z OK SVC=active load=0.30 mem(t/u/a)=7747/5259/2157 disk(u/pct/avail)=18G/23%/61G rssMB=5592 hwmMB=5599 sync=1 err30m=0
+2026-10-21T14:50:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/5378/2038 disk(u/pct/avail)=18G/23%/61G rssMB=5648 hwmMB=5653 sync=1 err30m=0
+2026-10-21T15:20:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/5527/1889 disk(u/pct/avail)=18G/23%/61G rssMB=5666 hwmMB=5670 sync=1 err30m=0
+2026-10-21T15:50:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/5601/1815 disk(u/pct/avail)=18G/23%/61G rssMB=5731 hwmMB=5736 sync=1 err30m=0
+2026-10-21T16:20:04Z OK SVC=active load=0.15 mem(t/u/a)=7747/5815/1601 disk(u/pct/avail)=18G/23%/61G rssMB=5741 hwmMB=5768 sync=1 err30m=0
+2026-10-21T16:50:07Z OK SVC=active load=0.34 mem(t/u/a)=7747/5863/1553 disk(u/pct/avail)=18G/23%/61G rssMB=5809 hwmMB=5809 sync=1 err30m=0
+2026-10-21T17:20:04Z OK SVC=active load=0.42 mem(t/u/a)=7747/6049/1367 disk(u/pct/avail)=18G/23%/61G rssMB=5815 hwmMB=5828 sync=1 err30m=0
+2026-10-21T17:50:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/6129/1287 disk(u/pct/avail)=18G/23%/61G rssMB=5898 hwmMB=5903 sync=1 err30m=0
+2026-10-21T18:20:04Z OK SVC=active load=0.36 mem(t/u/a)=7747/6301/1115 disk(u/pct/avail)=18G/23%/61G rssMB=5907 hwmMB=5941 sync=1 err30m=0
+2026-10-21T18:50:04Z ALERT SVC=active load=0.51 mem(t/u/a)=7747/6407/1009 disk(u/pct/avail)=18G/23%/61G rssMB=5965 hwmMB=5968 sync=1 err30m=0 :: ramAvailMB=1009
+2026-10-21T19:20:04Z ALERT SVC=active load=0.51 mem(t/u/a)=7747/6462/954 disk(u/pct/avail)=18G/23%/61G rssMB=6036 hwmMB=6037 sync=1 err30m=0 :: ramAvailMB=954
+2026-10-21T19:50:04Z ALERT SVC=active load=0.29 mem(t/u/a)=7747/6606/810 disk(u/pct/avail)=18G/23%/61G rssMB=6099 hwmMB=6106 sync=1 err30m=0 :: ramAvailMB=810
+2026-10-21T20:20:04Z ALERT SVC=active load=0.43 mem(t/u/a)=7747/6703/541 disk(u/pct/avail)=18G/23%/61G rssMB=6222 hwmMB=6222 sync=1 err30m=0 :: ramAvailMB=541, rssMB=6222
+2026-10-21T20:50:04Z ALERT SVC=active load=0.27 mem(t/u/a)=7747/6833/583 disk(u/pct/avail)=18G/23%/61G rssMB=6350 hwmMB=6350 sync=1 err30m=0 :: ramAvailMB=583, rssMB=6350
+2026-10-21T21:20:04Z ALERT SVC=active load=0.28 mem(t/u/a)=7747/6966/449 disk(u/pct/avail)=18G/23%/61G rssMB=6467 hwmMB=6467 sync=1 err30m=0 :: ramAvailMB=449, rssMB=6467
+2026-10-21T21:50:05Z ALERT SVC=active load=0.28 mem(t/u/a)=7747/7082/334 disk(u/pct/avail)=18G/23%/61G rssMB=6589 hwmMB=6589 sync=1 err30m=0 :: ramAvailMB=334, rssMB=6589
+2026-10-21T22:20:05Z ALERT SVC=active load=0.18 mem(t/u/a)=7747/7192/223 disk(u/pct/avail)=18G/23%/61G rssMB=6710 hwmMB=6715 sync=1 err30m=0 :: ramAvailMB=223, rssMB=6710
+2026-10-21T22:50:05Z ALERT SVC=active load=0.78 mem(t/u/a)=7747/7305/162 disk(u/pct/avail)=18G/23%/61G rssMB=6825 hwmMB=6835 sync=1 err30m=0 :: ramAvailMB=162, rssMB=6825
+2026-10-21T23:20:13Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-21T23:50:13Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-22T00:20:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/1276/6143 disk(u/pct/avail)=18G/23%/61G rssMB=850 hwmMB=850 sync=1 err30m=0
+2026-10-22T00:50:04Z OK SVC=active load=0.03 mem(t/u/a)=7747/1381/6037 disk(u/pct/avail)=18G/23%/61G rssMB=961 hwmMB=961 sync=1 err30m=0
+2026-10-22T01:20:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/1503/5915 disk(u/pct/avail)=18G/23%/61G rssMB=1068 hwmMB=1068 sync=1 err30m=0
+2026-10-22T01:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/1621/5797 disk(u/pct/avail)=18G/23%/61G rssMB=1180 hwmMB=1180 sync=1 err30m=0
+2026-10-22T02:20:04Z OK SVC=active load=0.22 mem(t/u/a)=7747/1705/5713 disk(u/pct/avail)=18G/23%/61G rssMB=1297 hwmMB=1297 sync=1 err30m=0
+2026-10-22T02:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/1841/5577 disk(u/pct/avail)=18G/23%/61G rssMB=1407 hwmMB=1407 sync=1 err30m=0
+2026-10-22T03:20:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/2012/5406 disk(u/pct/avail)=18G/23%/61G rssMB=1521 hwmMB=1521 sync=1 err30m=0
+2026-10-22T03:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/2059/5358 disk(u/pct/avail)=18G/23%/61G rssMB=1638 hwmMB=1638 sync=1 err30m=0
+2026-10-22T04:20:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/2172/5246 disk(u/pct/avail)=18G/23%/61G rssMB=1753 hwmMB=1753 sync=1 err30m=0
+2026-10-22T04:50:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/2393/5024 disk(u/pct/avail)=18G/23%/61G rssMB=1868 hwmMB=1868 sync=1 err30m=0
+2026-10-22T05:20:04Z OK SVC=active load=0.23 mem(t/u/a)=7747/2424/4993 disk(u/pct/avail)=18G/23%/61G rssMB=1985 hwmMB=1985 sync=1 err30m=0
+2026-10-22T05:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/2557/4860 disk(u/pct/avail)=18G/23%/61G rssMB=2104 hwmMB=2105 sync=1 err30m=0
+2026-10-22T06:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/2629/4782 disk(u/pct/avail)=18G/23%/61G rssMB=2220 hwmMB=2220 sync=1 err30m=0
+2026-10-22T06:50:04Z OK SVC=active load=0.09 mem(t/u/a)=7747/2774/4637 disk(u/pct/avail)=18G/23%/61G rssMB=2340 hwmMB=2340 sync=1 err30m=0
+2026-10-22T07:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/3032/4379 disk(u/pct/avail)=18G/23%/61G rssMB=2443 hwmMB=2444 sync=1 err30m=0
+2026-10-22T07:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/3019/4392 disk(u/pct/avail)=18G/23%/61G rssMB=2560 hwmMB=2560 sync=1 err30m=0
+2026-10-22T08:20:04Z OK SVC=active load=0.04 mem(t/u/a)=7747/3126/4286 disk(u/pct/avail)=18G/23%/61G rssMB=2682 hwmMB=2682 sync=1 err30m=0
+2026-10-22T08:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/3327/4084 disk(u/pct/avail)=18G/23%/61G rssMB=2795 hwmMB=2795 sync=1 err30m=0
+2026-10-22T09:20:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/3344/4067 disk(u/pct/avail)=18G/23%/61G rssMB=2911 hwmMB=2911 sync=1 err30m=0
+2026-10-22T09:50:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/3459/3952 disk(u/pct/avail)=18G/23%/61G rssMB=3028 hwmMB=3028 sync=1 err30m=0
+2026-10-22T10:20:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/3596/3815 disk(u/pct/avail)=18G/23%/61G rssMB=3148 hwmMB=3148 sync=1 err30m=0
+2026-10-22T10:50:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/3716/3696 disk(u/pct/avail)=18G/23%/61G rssMB=3269 hwmMB=3269 sync=1 err30m=0
+2026-10-22T11:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/3826/3586 disk(u/pct/avail)=18G/23%/61G rssMB=3394 hwmMB=3394 sync=1 err30m=0
+2026-10-22T11:50:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/4057/3354 disk(u/pct/avail)=18G/23%/61G rssMB=3516 hwmMB=3516 sync=1 err30m=0
+2026-10-22T12:20:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/4085/3326 disk(u/pct/avail)=18G/23%/61G rssMB=3639 hwmMB=3639 sync=1 err30m=0
+2026-10-22T12:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/4215/3196 disk(u/pct/avail)=18G/23%/61G rssMB=3764 hwmMB=3764 sync=1 err30m=0
+2026-10-22T13:20:04Z OK SVC=active load=0.28 mem(t/u/a)=7747/4331/3080 disk(u/pct/avail)=18G/23%/61G rssMB=3890 hwmMB=3890 sync=1 err30m=0
+2026-10-22T13:50:05Z OK SVC=active load=0.05 mem(t/u/a)=7747/602/6810 disk(u/pct/avail)=18G/23%/61G rssMB=400 hwmMB=400 sync=1 err30m=0
+2026-10-22T14:20:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/738/6673 disk(u/pct/avail)=18G/23%/61G rssMB=419 hwmMB=419 sync=1 err30m=0
+2026-10-22T14:50:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/618/6793 disk(u/pct/avail)=18G/23%/61G rssMB=421 hwmMB=421 sync=1 err30m=0
+2026-10-22T15:20:06Z OK SVC=active load=0.10 mem(t/u/a)=7747/626/6785 disk(u/pct/avail)=18G/23%/60G rssMB=423 hwmMB=423 sync=1 err30m=0
+2026-10-22T15:50:05Z OK SVC=active load=0.36 mem(t/u/a)=7747/745/6666 disk(u/pct/avail)=18G/23%/60G rssMB=452 hwmMB=452 sync=1 err30m=0
+2026-10-22T16:20:05Z OK SVC=active load=0.70 mem(t/u/a)=7747/629/6782 disk(u/pct/avail)=18G/23%/60G rssMB=457 hwmMB=457 sync=1 err30m=0
+2026-10-22T16:50:05Z OK SVC=active load=0.35 mem(t/u/a)=7747/639/6772 disk(u/pct/avail)=18G/23%/60G rssMB=468 hwmMB=468 sync=1 err30m=0
+2026-10-22T17:20:05Z OK SVC=active load=0.81 mem(t/u/a)=7747/665/6746 disk(u/pct/avail)=18G/23%/60G rssMB=498 hwmMB=498 sync=1 err30m=0
+2026-10-22T17:50:13Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-10-22T18:20:04Z OK SVC=active load=0.26 mem(t/u/a)=7747/840/6571 disk(u/pct/avail)=18G/23%/60G rssMB=703 hwmMB=703 sync=1 err30m=0
+2026-10-22T18:50:04Z OK SVC=active load=0.02 mem(t/u/a)=7747/933/6478 disk(u/pct/avail)=18G/23%/60G rssMB=515 hwmMB=515 sync=1 err30m=0
+2026-10-22T19:20:05Z OK SVC=active load=0.09 mem(t/u/a)=7747/964/6447 disk(u/pct/avail)=18G/23%/60G rssMB=562 hwmMB=562 sync=1 err30m=0
+2026-10-22T19:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/588/6823 disk(u/pct/avail)=18G/23%/60G rssMB=189 hwmMB=189 sync=1 err30m=0
+2026-10-22T20:20:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/747/6664 disk(u/pct/avail)=18G/23%/60G rssMB=658 hwmMB=658 sync=1 err30m=0
+2026-10-22T20:50:05Z OK SVC=active load=0.94 mem(t/u/a)=7747/748/6663 disk(u/pct/avail)=18G/23%/60G rssMB=742 hwmMB=742 sync=1 err30m=0
+2026-10-22T21:20:05Z OK SVC=active load=0.92 mem(t/u/a)=7747/850/6561 disk(u/pct/avail)=18G/23%/60G rssMB=835 hwmMB=835 sync=1 err30m=0
+2026-10-22T21:50:05Z OK SVC=active load=0.95 mem(t/u/a)=7747/830/6581 disk(u/pct/avail)=18G/23%/60G rssMB=926 hwmMB=926 sync=1 err30m=0
+2026-10-22T22:20:04Z OK SVC=active load=0.89 mem(t/u/a)=7747/826/6584 disk(u/pct/avail)=18G/23%/60G rssMB=1021 hwmMB=1021 sync=1 err30m=0
+2026-10-22T22:50:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/842/6569 disk(u/pct/avail)=18G/23%/60G rssMB=1111 hwmMB=1111 sync=1 err30m=0
+2026-10-22T23:20:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/931/6480 disk(u/pct/avail)=18G/23%/60G rssMB=1195 hwmMB=1195 sync=1 err30m=0
+2026-10-22T23:50:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/873/6538 disk(u/pct/avail)=18G/24%/60G rssMB=1279 hwmMB=1279 sync=1 err30m=0
+2026-10-23T00:20:04Z OK SVC=active load=0.90 mem(t/u/a)=7747/898/6513 disk(u/pct/avail)=18G/24%/60G rssMB=1355 hwmMB=1355 sync=1 err30m=0
+2026-10-23T00:50:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/879/6532 disk(u/pct/avail)=18G/24%/60G rssMB=1425 hwmMB=1425 sync=1 err30m=0
+2026-10-23T01:20:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/889/6522 disk(u/pct/avail)=18G/24%/60G rssMB=1497 hwmMB=1497 sync=1 err30m=0
+2026-10-23T01:50:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/901/6510 disk(u/pct/avail)=18G/23%/60G rssMB=1111 hwmMB=1773 sync=1 err30m=0
+2026-10-23T02:20:04Z OK SVC=active load=1.26 mem(t/u/a)=7747/894/6517 disk(u/pct/avail)=18G/23%/60G rssMB=1199 hwmMB=1773 sync=1 err30m=0
+2026-10-23T02:50:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/913/6498 disk(u/pct/avail)=18G/23%/60G rssMB=1296 hwmMB=1773 sync=1 err30m=0
+2026-10-23T03:20:04Z OK SVC=active load=0.87 mem(t/u/a)=7747/895/6516 disk(u/pct/avail)=18G/23%/60G rssMB=1373 hwmMB=1773 sync=1 err30m=0
+2026-10-23T03:50:04Z OK SVC=active load=0.89 mem(t/u/a)=7747/908/6503 disk(u/pct/avail)=18G/24%/60G rssMB=1454 hwmMB=1773 sync=1 err30m=0
+2026-10-23T04:20:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/586/6825 disk(u/pct/avail)=18G/24%/60G rssMB=330 hwmMB=330 sync=1 err30m=0
+2026-10-23T04:50:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/757/6654 disk(u/pct/avail)=18G/24%/60G rssMB=472 hwmMB=472 sync=1 err30m=0
+2026-10-23T05:20:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/703/6708 disk(u/pct/avail)=18G/24%/60G rssMB=664 hwmMB=953 sync=1 err30m=0
+2026-10-23T05:50:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/715/6696 disk(u/pct/avail)=18G/24%/60G rssMB=826 hwmMB=953 sync=1 err30m=0
+2026-10-23T06:20:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/697/6714 disk(u/pct/avail)=18G/24%/60G rssMB=956 hwmMB=956 sync=1 err30m=0
+2026-10-23T06:50:03Z ALERT SVC=inactive load=0.17 mem(t/u/a)=7747/540/6870 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T07:20:03Z ALERT SVC=inactive load=0.17 mem(t/u/a)=7747/459/6952 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T07:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/493/6918 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T08:20:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/463/6947 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T08:50:05Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/474/6937 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T09:20:06Z ALERT SVC=inactive load=0.11 mem(t/u/a)=7747/512/6899 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T09:50:05Z ALERT SVC=inactive load=0.12 mem(t/u/a)=7747/536/6875 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T10:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/492/6918 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T10:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/516/6895 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T11:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/534/6876 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T11:50:03Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/487/6924 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T12:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/472/6939 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T12:50:03Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/486/6925 disk(u/pct/avail)=18G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T13:20:03Z ALERT SVC=inactive load=0.15 mem(t/u/a)=7747/473/6937 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T13:50:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/474/6936 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T14:20:03Z ALERT SVC=inactive load=0.26 mem(t/u/a)=7747/482/6929 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T14:50:04Z ALERT SVC=inactive load=0.10 mem(t/u/a)=7747/483/6927 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T15:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/485/6926 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T15:50:03Z ALERT SVC=inactive load=0.17 mem(t/u/a)=7747/482/6928 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T16:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/472/6938 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T16:50:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/481/6930 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T17:20:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/467/6944 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T17:50:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/473/6937 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T18:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/479/6932 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T18:50:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/468/6943 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T19:20:04Z ALERT SVC=inactive load=0.18 mem(t/u/a)=7747/552/6858 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T19:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/485/6926 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T20:20:03Z ALERT SVC=inactive load=0.10 mem(t/u/a)=7747/569/6842 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T20:50:03Z ALERT SVC=inactive load=0.18 mem(t/u/a)=7747/486/6925 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T21:20:04Z ALERT SVC=inactive load=0.06 mem(t/u/a)=7747/557/6854 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T21:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/468/6942 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T22:20:03Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/552/6858 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T22:50:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/542/6869 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T23:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/475/6936 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-23T23:50:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/476/6934 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T00:20:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/551/6859 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T00:50:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/483/6928 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T01:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/463/6947 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T01:50:03Z ALERT SVC=inactive load=0.15 mem(t/u/a)=7747/545/6866 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T02:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/487/6924 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T02:50:03Z ALERT SVC=inactive load=0.26 mem(t/u/a)=7747/491/6920 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T03:20:03Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/474/6937 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T03:50:03Z ALERT SVC=inactive load=0.06 mem(t/u/a)=7747/497/6914 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T04:20:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/480/6930 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T04:50:03Z ALERT SVC=inactive load=0.17 mem(t/u/a)=7747/512/6899 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T05:20:03Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/479/6932 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T05:50:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/588/6822 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T06:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/551/6860 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T06:50:03Z ALERT SVC=inactive load=0.16 mem(t/u/a)=7747/478/6933 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T07:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/475/6935 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T07:50:04Z ALERT SVC=inactive load=0.12 mem(t/u/a)=7747/478/6933 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T08:20:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/490/6921 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T08:50:03Z ALERT SVC=inactive load=0.24 mem(t/u/a)=7747/487/6924 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T09:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/468/6943 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T09:50:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/466/6944 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T10:20:04Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/494/6917 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T10:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/485/6926 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T11:20:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/480/6931 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T11:50:03Z ALERT SVC=inactive load=0.12 mem(t/u/a)=7747/488/6922 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T12:20:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/470/6940 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T12:50:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/472/6938 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T13:20:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/481/6930 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T13:50:03Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/494/6916 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T14:20:03Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/481/6929 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T14:50:04Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/472/6938 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T15:20:03Z ALERT SVC=inactive load=0.21 mem(t/u/a)=7747/467/6943 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T15:50:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/602/6809 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T16:20:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/481/6930 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T16:50:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/482/6929 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T17:20:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/509/6901 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T17:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/484/6927 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T18:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/524/6886 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T18:50:03Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/477/6933 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T19:20:03Z ALERT SVC=inactive load=0.22 mem(t/u/a)=7747/471/6939 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T19:50:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/544/6866 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T20:20:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/491/6919 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T20:50:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/490/6920 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T21:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/544/6867 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T21:50:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/471/6940 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T22:20:04Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/476/6934 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T22:50:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/476/6934 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T23:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/495/6915 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-24T23:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/488/6922 disk(u/pct/avail)=19G/24%/60G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T00:20:04Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/514/6901 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T00:50:03Z ALERT SVC=inactive load=0.16 mem(t/u/a)=7747/490/6924 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T01:20:03Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/545/6869 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T01:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/497/6917 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T02:20:03Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/520/6894 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T02:50:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/481/6933 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T03:20:03Z ALERT SVC=inactive load=0.10 mem(t/u/a)=7747/472/6942 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T03:50:03Z ALERT SVC=inactive load=0.14 mem(t/u/a)=7747/475/6939 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T04:20:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/487/6927 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T04:50:03Z ALERT SVC=inactive load=0.05 mem(t/u/a)=7747/478/6936 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T05:20:03Z ALERT SVC=inactive load=0.06 mem(t/u/a)=7747/478/6937 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T05:50:03Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/477/6937 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T06:20:03Z ALERT SVC=inactive load=0.13 mem(t/u/a)=7747/461/6953 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T06:50:03Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/487/6927 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T07:20:03Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/485/6929 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T07:50:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/483/6931 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T08:20:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/522/6892 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T08:50:03Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/476/6938 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T09:20:03Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/527/6887 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T09:50:03Z ALERT SVC=inactive load=0.17 mem(t/u/a)=7747/496/6918 disk(u/pct/avail)=15G/19%/63G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-10-25T10:20:03Z OK SVC=active load=0.82 mem(t/u/a)=7747/636/6778 disk(u/pct/avail)=15G/19%/63G rssMB=836 hwmMB=836 sync=1 err30m=0
+2026-10-25T10:50:04Z OK SVC=active load=1.19 mem(t/u/a)=7747/647/6767 disk(u/pct/avail)=15G/19%/63G rssMB=1563 hwmMB=1563 sync=1 err30m=0
+2026-10-25T11:20:04Z OK SVC=active load=0.94 mem(t/u/a)=7747/671/6743 disk(u/pct/avail)=15G/19%/63G rssMB=2138 hwmMB=2138 sync=1 err30m=0
+2026-10-25T11:50:05Z OK SVC=active load=0.98 mem(t/u/a)=7747/779/6634 disk(u/pct/avail)=15G/19%/63G rssMB=2179 hwmMB=2180 sync=1 err30m=0
+2026-10-25T12:20:05Z OK SVC=active load=0.80 mem(t/u/a)=7747/791/6623 disk(u/pct/avail)=15G/19%/63G rssMB=2243 hwmMB=2243 sync=1 err30m=0
+2026-10-25T12:50:05Z OK SVC=active load=0.96 mem(t/u/a)=7747/849/6565 disk(u/pct/avail)=15G/20%/63G rssMB=2292 hwmMB=2292 sync=1 err30m=0
+2026-10-25T13:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/819/6595 disk(u/pct/avail)=15G/20%/63G rssMB=2148 hwmMB=2508 sync=1 err30m=0
+2026-10-25T13:50:05Z OK SVC=active load=0.69 mem(t/u/a)=7747/863/6551 disk(u/pct/avail)=15G/20%/63G rssMB=2167 hwmMB=2508 sync=1 err30m=0
+2026-10-25T14:20:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/830/6584 disk(u/pct/avail)=15G/20%/63G rssMB=2142 hwmMB=2508 sync=1 err30m=0
+2026-10-25T14:50:04Z OK SVC=active load=0.99 mem(t/u/a)=7747/809/6605 disk(u/pct/avail)=15G/20%/63G rssMB=2170 hwmMB=2508 sync=1 err30m=0
+2026-10-25T15:20:04Z OK SVC=active load=0.98 mem(t/u/a)=7747/867/6547 disk(u/pct/avail)=15G/20%/63G rssMB=2207 hwmMB=2508 sync=1 err30m=0
+2026-10-25T15:50:04Z OK SVC=active load=1.22 mem(t/u/a)=7747/828/6586 disk(u/pct/avail)=15G/20%/63G rssMB=2221 hwmMB=2508 sync=1 err30m=0
+2026-10-25T16:20:04Z OK SVC=active load=0.87 mem(t/u/a)=7747/861/6553 disk(u/pct/avail)=16G/20%/63G rssMB=2229 hwmMB=2508 sync=1 err30m=0
+2026-10-25T16:50:04Z OK SVC=active load=1.13 mem(t/u/a)=7747/876/6538 disk(u/pct/avail)=16G/20%/63G rssMB=2232 hwmMB=2508 sync=1 err30m=0
+2026-10-25T17:20:04Z OK SVC=active load=0.96 mem(t/u/a)=7747/826/6587 disk(u/pct/avail)=16G/20%/63G rssMB=2234 hwmMB=2508 sync=1 err30m=0
+2026-10-25T17:50:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/831/6583 disk(u/pct/avail)=16G/20%/63G rssMB=2130 hwmMB=2509 sync=1 err30m=0
+2026-10-25T18:20:04Z OK SVC=active load=1.51 mem(t/u/a)=7747/916/6498 disk(u/pct/avail)=16G/20%/63G rssMB=2151 hwmMB=2509 sync=1 err30m=0
+2026-10-25T18:50:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/881/6532 disk(u/pct/avail)=16G/20%/63G rssMB=2181 hwmMB=2509 sync=1 err30m=0
+2026-10-25T19:20:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/850/6564 disk(u/pct/avail)=16G/20%/63G rssMB=2204 hwmMB=2509 sync=1 err30m=0
+2026-10-25T19:50:04Z OK SVC=active load=1.43 mem(t/u/a)=7747/863/6551 disk(u/pct/avail)=16G/20%/63G rssMB=2213 hwmMB=2509 sync=1 err30m=0
+2026-10-25T20:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/902/6512 disk(u/pct/avail)=16G/20%/62G rssMB=2218 hwmMB=2509 sync=1 err30m=0
+2026-10-25T20:50:04Z OK SVC=active load=1.49 mem(t/u/a)=7747/847/6567 disk(u/pct/avail)=16G/20%/62G rssMB=2222 hwmMB=2509 sync=1 err30m=0
+2026-10-25T21:20:04Z OK SVC=active load=0.84 mem(t/u/a)=7747/886/6527 disk(u/pct/avail)=16G/20%/62G rssMB=2229 hwmMB=2509 sync=1 err30m=0
+2026-10-25T21:50:04Z OK SVC=active load=0.93 mem(t/u/a)=7747/844/6570 disk(u/pct/avail)=16G/21%/62G rssMB=2232 hwmMB=2509 sync=1 err30m=0
+2026-10-25T22:20:04Z OK SVC=active load=1.22 mem(t/u/a)=7747/830/6584 disk(u/pct/avail)=16G/21%/62G rssMB=2056 hwmMB=2509 sync=1 err30m=0
+2026-10-25T22:50:04Z OK SVC=active load=1.02 mem(t/u/a)=7747/876/6538 disk(u/pct/avail)=16G/21%/62G rssMB=2111 hwmMB=2509 sync=1 err30m=0
+2026-10-25T23:20:04Z OK SVC=active load=1.12 mem(t/u/a)=7747/880/6534 disk(u/pct/avail)=16G/21%/62G rssMB=2158 hwmMB=2509 sync=1 err30m=0
+2026-10-25T23:50:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/953/6460 disk(u/pct/avail)=16G/21%/62G rssMB=2163 hwmMB=2509 sync=1 err30m=0
+2026-10-26T00:20:04Z OK SVC=active load=1.09 mem(t/u/a)=7747/843/6571 disk(u/pct/avail)=16G/21%/62G rssMB=2166 hwmMB=2509 sync=1 err30m=0
+2026-10-26T00:50:04Z OK SVC=active load=1.21 mem(t/u/a)=7747/874/6540 disk(u/pct/avail)=16G/21%/62G rssMB=2168 hwmMB=2509 sync=1 err30m=0
+2026-10-26T01:20:04Z OK SVC=active load=1.01 mem(t/u/a)=7747/881/6533 disk(u/pct/avail)=16G/21%/62G rssMB=2171 hwmMB=2509 sync=1 err30m=0
+2026-10-26T01:50:03Z OK SVC=active load=0.55 mem(t/u/a)=7747/843/6571 disk(u/pct/avail)=16G/21%/62G rssMB=2173 hwmMB=2509 sync=1 err30m=0
+2026-10-26T02:20:04Z OK SVC=active load=1.15 mem(t/u/a)=7747/836/6577 disk(u/pct/avail)=16G/21%/62G rssMB=2176 hwmMB=2509 sync=1 err30m=0
+2026-10-26T02:50:04Z OK SVC=active load=1.35 mem(t/u/a)=7747/914/6500 disk(u/pct/avail)=16G/21%/62G rssMB=2178 hwmMB=2509 sync=1 err30m=0
+2026-10-26T03:20:04Z OK SVC=active load=0.94 mem(t/u/a)=7747/862/6551 disk(u/pct/avail)=16G/21%/62G rssMB=2181 hwmMB=2509 sync=1 err30m=0
+2026-10-26T03:50:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/867/6547 disk(u/pct/avail)=16G/21%/62G rssMB=2184 hwmMB=2509 sync=1 err30m=0
+2026-10-26T04:20:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/939/6474 disk(u/pct/avail)=16G/20%/62G rssMB=1328 hwmMB=2509 sync=1 err30m=0
+2026-10-26T04:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/866/6547 disk(u/pct/avail)=16G/20%/62G rssMB=1494 hwmMB=2509 sync=1 err30m=0
+2026-10-26T05:20:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/867/6547 disk(u/pct/avail)=16G/20%/62G rssMB=1500 hwmMB=2509 sync=1 err30m=0
+2026-10-26T05:50:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/907/6506 disk(u/pct/avail)=16G/21%/62G rssMB=1506 hwmMB=2509 sync=1 err30m=0
+2026-10-26T06:20:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/969/6444 disk(u/pct/avail)=16G/21%/62G rssMB=1513 hwmMB=2509 sync=1 err30m=0
+2026-10-26T06:50:03Z OK SVC=active load=0.82 mem(t/u/a)=7747/843/6570 disk(u/pct/avail)=16G/21%/62G rssMB=1517 hwmMB=2509 sync=1 err30m=0
+2026-10-26T07:20:04Z OK SVC=active load=1.26 mem(t/u/a)=7747/946/6467 disk(u/pct/avail)=16G/21%/62G rssMB=1524 hwmMB=2509 sync=1 err30m=0
+2026-10-26T07:50:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/864/6550 disk(u/pct/avail)=16G/21%/62G rssMB=1529 hwmMB=2509 sync=1 err30m=0
+2026-10-26T08:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/909/6504 disk(u/pct/avail)=16G/21%/62G rssMB=1508 hwmMB=2509 sync=1 err30m=0
+2026-10-26T08:50:08Z OK SVC=active load=0.81 mem(t/u/a)=7747/866/6547 disk(u/pct/avail)=16G/21%/62G rssMB=1520 hwmMB=2509 sync=1 err30m=0
+2026-10-26T09:20:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/869/6545 disk(u/pct/avail)=16G/21%/62G rssMB=1537 hwmMB=2509 sync=1 err30m=0
+2026-10-26T09:50:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/879/6535 disk(u/pct/avail)=16G/21%/62G rssMB=1552 hwmMB=2509 sync=1 err30m=0
+2026-10-26T10:20:04Z OK SVC=active load=0.79 mem(t/u/a)=7747/952/6462 disk(u/pct/avail)=16G/21%/62G rssMB=1567 hwmMB=2509 sync=1 err30m=0
+2026-10-26T10:50:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/927/6487 disk(u/pct/avail)=16G/21%/62G rssMB=1581 hwmMB=2509 sync=1 err30m=0
+2026-10-26T11:20:04Z OK SVC=active load=1.12 mem(t/u/a)=7747/922/6491 disk(u/pct/avail)=17G/21%/62G rssMB=1585 hwmMB=2509 sync=1 err30m=0
+2026-10-26T11:50:04Z OK SVC=active load=1.09 mem(t/u/a)=7747/841/6573 disk(u/pct/avail)=17G/21%/62G rssMB=1578 hwmMB=2509 sync=1 err30m=0
+2026-10-26T12:20:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/857/6556 disk(u/pct/avail)=17G/21%/62G rssMB=1588 hwmMB=2509 sync=1 err30m=0
+2026-10-26T12:50:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/856/6557 disk(u/pct/avail)=17G/21%/62G rssMB=1526 hwmMB=2509 sync=1 err30m=0
+2026-10-26T13:20:04Z OK SVC=active load=1.16 mem(t/u/a)=7747/865/6549 disk(u/pct/avail)=17G/21%/62G rssMB=1544 hwmMB=2509 sync=1 err30m=0
+2026-10-26T13:50:04Z OK SVC=active load=1.26 mem(t/u/a)=7747/871/6542 disk(u/pct/avail)=17G/21%/62G rssMB=1548 hwmMB=2509 sync=1 err30m=0
+2026-10-26T14:20:04Z OK SVC=active load=0.63 mem(t/u/a)=7747/942/6471 disk(u/pct/avail)=17G/22%/62G rssMB=1553 hwmMB=2509 sync=1 err30m=0
+2026-10-26T14:50:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/885/6529 disk(u/pct/avail)=17G/22%/62G rssMB=1559 hwmMB=2509 sync=1 err30m=0
+2026-10-26T15:20:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/881/6533 disk(u/pct/avail)=17G/22%/61G rssMB=1563 hwmMB=2509 sync=1 err30m=0
+2026-10-26T15:50:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/940/6474 disk(u/pct/avail)=17G/22%/61G rssMB=1565 hwmMB=2509 sync=1 err30m=0
+2026-10-26T16:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/865/6548 disk(u/pct/avail)=17G/22%/61G rssMB=1567 hwmMB=2509 sync=1 err30m=0
+2026-10-26T16:50:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/886/6527 disk(u/pct/avail)=17G/22%/61G rssMB=1568 hwmMB=2509 sync=1 err30m=0
+2026-10-26T17:20:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/971/6443 disk(u/pct/avail)=17G/22%/61G rssMB=1571 hwmMB=2509 sync=1 err30m=0
+2026-10-26T17:50:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/867/6546 disk(u/pct/avail)=17G/22%/61G rssMB=1575 hwmMB=2509 sync=1 err30m=0
+2026-10-26T18:20:04Z OK SVC=active load=0.57 mem(t/u/a)=7747/883/6531 disk(u/pct/avail)=17G/22%/61G rssMB=1577 hwmMB=2509 sync=1 err30m=0
+2026-10-26T18:50:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/964/6449 disk(u/pct/avail)=17G/22%/61G rssMB=1582 hwmMB=2509 sync=1 err30m=0
+2026-10-26T19:20:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/858/6555 disk(u/pct/avail)=17G/22%/61G rssMB=1587 hwmMB=2509 sync=1 err30m=0
+2026-10-26T19:50:04Z OK SVC=active load=1.17 mem(t/u/a)=7747/901/6512 disk(u/pct/avail)=17G/22%/61G rssMB=1527 hwmMB=2509 sync=1 err30m=0
+2026-10-26T20:20:04Z OK SVC=active load=1.46 mem(t/u/a)=7747/917/6497 disk(u/pct/avail)=17G/22%/61G rssMB=1552 hwmMB=2509 sync=1 err30m=0
+2026-10-26T20:50:04Z OK SVC=active load=1.25 mem(t/u/a)=7747/970/6444 disk(u/pct/avail)=17G/22%/61G rssMB=1574 hwmMB=2509 sync=1 err30m=0
+2026-10-26T21:20:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/905/6508 disk(u/pct/avail)=17G/22%/61G rssMB=1588 hwmMB=2509 sync=1 err30m=0
+2026-10-26T21:50:04Z OK SVC=active load=1.59 mem(t/u/a)=7747/898/6516 disk(u/pct/avail)=17G/22%/61G rssMB=1594 hwmMB=2509 sync=1 err30m=0
+2026-10-26T22:20:04Z OK SVC=active load=1.17 mem(t/u/a)=7747/892/6522 disk(u/pct/avail)=17G/22%/61G rssMB=1604 hwmMB=2509 sync=1 err30m=0
+2026-10-26T22:50:04Z OK SVC=active load=1.34 mem(t/u/a)=7747/914/6500 disk(u/pct/avail)=17G/22%/61G rssMB=1610 hwmMB=2509 sync=1 err30m=0
+2026-10-26T23:20:04Z OK SVC=active load=0.97 mem(t/u/a)=7747/975/6439 disk(u/pct/avail)=17G/22%/61G rssMB=1617 hwmMB=2509 sync=1 err30m=0
+2026-10-26T23:50:04Z OK SVC=active load=1.04 mem(t/u/a)=7747/859/6554 disk(u/pct/avail)=17G/22%/61G rssMB=1622 hwmMB=2509 sync=1 err30m=0
+2026-10-27T00:20:04Z OK SVC=active load=1.06 mem(t/u/a)=7747/964/6450 disk(u/pct/avail)=17G/22%/61G rssMB=1600 hwmMB=2509 sync=1 err30m=0
+2026-10-27T00:50:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/880/6534 disk(u/pct/avail)=17G/22%/61G rssMB=1170 hwmMB=2509 sync=1 err30m=0
+2026-10-27T01:20:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/940/6473 disk(u/pct/avail)=17G/22%/61G rssMB=1175 hwmMB=2509 sync=1 err30m=0
+2026-10-27T01:50:04Z OK SVC=active load=1.24 mem(t/u/a)=7747/878/6536 disk(u/pct/avail)=17G/22%/61G rssMB=1181 hwmMB=2509 sync=1 err30m=0
+2026-10-27T02:20:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/871/6542 disk(u/pct/avail)=17G/22%/61G rssMB=1185 hwmMB=2509 sync=1 err30m=0
+2026-10-27T02:50:04Z OK SVC=active load=1.14 mem(t/u/a)=7747/903/6511 disk(u/pct/avail)=17G/22%/61G rssMB=1192 hwmMB=2509 sync=1 err30m=0
+2026-10-27T03:20:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/934/6480 disk(u/pct/avail)=17G/22%/61G rssMB=1196 hwmMB=2509 sync=1 err30m=0
+2026-10-27T03:50:04Z OK SVC=active load=1.14 mem(t/u/a)=7747/945/6469 disk(u/pct/avail)=17G/22%/61G rssMB=1210 hwmMB=2509 sync=1 err30m=0
+2026-10-27T04:20:04Z OK SVC=active load=1.69 mem(t/u/a)=7747/893/6520 disk(u/pct/avail)=17G/22%/61G rssMB=1213 hwmMB=2509 sync=1 err30m=0
+2026-10-27T04:50:04Z OK SVC=active load=1.28 mem(t/u/a)=7747/1001/6413 disk(u/pct/avail)=17G/22%/61G rssMB=1156 hwmMB=2509 sync=1 err30m=0
+2026-10-27T05:20:04Z OK SVC=active load=1.32 mem(t/u/a)=7747/904/6509 disk(u/pct/avail)=18G/22%/61G rssMB=1160 hwmMB=2509 sync=1 err30m=0
+2026-10-27T05:50:04Z OK SVC=active load=0.89 mem(t/u/a)=7747/898/6515 disk(u/pct/avail)=18G/22%/61G rssMB=1167 hwmMB=2509 sync=1 err30m=0
+2026-10-27T06:20:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/914/6499 disk(u/pct/avail)=18G/23%/61G rssMB=1170 hwmMB=2509 sync=1 err30m=0
+2026-10-27T06:50:04Z OK SVC=active load=0.99 mem(t/u/a)=7747/925/6488 disk(u/pct/avail)=18G/23%/61G rssMB=1176 hwmMB=2509 sync=1 err30m=0
+2026-10-27T07:20:04Z OK SVC=active load=1.32 mem(t/u/a)=7747/879/6535 disk(u/pct/avail)=18G/23%/61G rssMB=1121 hwmMB=2509 sync=1 err30m=0
+2026-10-27T07:50:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/946/6467 disk(u/pct/avail)=18G/23%/61G rssMB=1126 hwmMB=2509 sync=1 err30m=0
+2026-10-27T08:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/904/6509 disk(u/pct/avail)=18G/23%/61G rssMB=1140 hwmMB=2509 sync=1 err30m=0
+2026-10-27T08:50:04Z OK SVC=active load=0.97 mem(t/u/a)=7747/887/6526 disk(u/pct/avail)=18G/23%/61G rssMB=1083 hwmMB=2509 sync=1 err30m=0
+2026-10-27T09:20:03Z OK SVC=active load=0.75 mem(t/u/a)=7747/895/6518 disk(u/pct/avail)=18G/23%/60G rssMB=1117 hwmMB=2509 sync=1 err30m=0
+2026-10-27T09:50:04Z OK SVC=active load=0.38 mem(t/u/a)=7747/893/6520 disk(u/pct/avail)=18G/23%/60G rssMB=1131 hwmMB=2509 sync=1 err30m=0
+2026-10-27T10:20:04Z OK SVC=active load=0.46 mem(t/u/a)=7747/931/6482 disk(u/pct/avail)=18G/23%/60G rssMB=1144 hwmMB=2509 sync=1 err30m=0
+2026-10-27T10:50:03Z OK SVC=active load=0.37 mem(t/u/a)=7747/949/6464 disk(u/pct/avail)=18G/23%/60G rssMB=1153 hwmMB=2509 sync=1 err30m=0
+2026-10-27T11:20:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/922/6491 disk(u/pct/avail)=18G/23%/60G rssMB=1168 hwmMB=2509 sync=1 err30m=0
+2026-10-27T11:50:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/943/6470 disk(u/pct/avail)=18G/23%/60G rssMB=1179 hwmMB=2509 sync=1 err30m=0
+2026-10-27T12:20:04Z OK SVC=active load=0.49 mem(t/u/a)=7747/880/6533 disk(u/pct/avail)=18G/23%/60G rssMB=1190 hwmMB=2509 sync=1 err30m=0
+2026-10-27T12:50:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/908/6506 disk(u/pct/avail)=18G/23%/60G rssMB=1198 hwmMB=2509 sync=1 err30m=0
+2026-10-27T13:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/963/6450 disk(u/pct/avail)=18G/23%/60G rssMB=1211 hwmMB=2509 sync=1 err30m=0
+2026-10-27T13:50:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/947/6466 disk(u/pct/avail)=18G/23%/60G rssMB=1231 hwmMB=2509 sync=1 err30m=0
+2026-10-27T14:20:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/869/6544 disk(u/pct/avail)=18G/23%/60G rssMB=1243 hwmMB=2509 sync=1 err30m=0
+2026-10-27T14:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/932/6481 disk(u/pct/avail)=18G/23%/60G rssMB=1259 hwmMB=2509 sync=1 err30m=0
+2026-10-27T15:20:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/930/6483 disk(u/pct/avail)=18G/23%/60G rssMB=1270 hwmMB=2509 sync=1 err30m=0
+2026-10-27T15:50:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/1037/6376 disk(u/pct/avail)=18G/23%/60G rssMB=1280 hwmMB=2509 sync=1 err30m=0
+2026-10-27T16:20:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/913/6500 disk(u/pct/avail)=18G/23%/60G rssMB=1294 hwmMB=2509 sync=1 err30m=0
+2026-10-27T16:50:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/971/6442 disk(u/pct/avail)=18G/23%/60G rssMB=1308 hwmMB=2509 sync=1 err30m=0
+2026-10-27T17:20:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/907/6506 disk(u/pct/avail)=18G/23%/60G rssMB=1322 hwmMB=2509 sync=1 err30m=0
+2026-10-27T17:50:03Z OK SVC=active load=0.51 mem(t/u/a)=7747/956/6457 disk(u/pct/avail)=18G/23%/60G rssMB=1334 hwmMB=2509 sync=1 err30m=0
+2026-10-27T18:20:03Z OK SVC=active load=0.59 mem(t/u/a)=7747/912/6501 disk(u/pct/avail)=18G/23%/60G rssMB=1347 hwmMB=2509 sync=1 err30m=0
+2026-10-27T18:50:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/883/6530 disk(u/pct/avail)=18G/23%/60G rssMB=1357 hwmMB=2509 sync=1 err30m=0
+2026-10-27T19:20:05Z OK SVC=active load=0.61 mem(t/u/a)=7747/879/6534 disk(u/pct/avail)=18G/23%/61G rssMB=717 hwmMB=2509 sync=1 err30m=0
+2026-10-27T19:50:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/901/6512 disk(u/pct/avail)=18G/23%/61G rssMB=729 hwmMB=2509 sync=1 err30m=0
+2026-10-27T20:20:03Z OK SVC=active load=0.93 mem(t/u/a)=7747/920/6493 disk(u/pct/avail)=18G/23%/61G rssMB=741 hwmMB=2509 sync=1 err30m=0
+2026-10-27T20:50:04Z OK SVC=active load=0.39 mem(t/u/a)=7747/926/6487 disk(u/pct/avail)=18G/23%/61G rssMB=767 hwmMB=2509 sync=1 err30m=0
+2026-10-27T21:20:03Z OK SVC=active load=0.19 mem(t/u/a)=7747/903/6510 disk(u/pct/avail)=18G/23%/61G rssMB=789 hwmMB=2509 sync=1 err30m=0
+2026-10-27T21:50:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/936/6477 disk(u/pct/avail)=18G/23%/61G rssMB=824 hwmMB=2509 sync=1 err30m=0
+2026-10-27T22:20:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/940/6473 disk(u/pct/avail)=18G/23%/61G rssMB=831 hwmMB=2509 sync=1 err30m=0
+2026-10-27T22:50:04Z OK SVC=active load=0.65 mem(t/u/a)=7747/957/6456 disk(u/pct/avail)=18G/23%/61G rssMB=843 hwmMB=2509 sync=1 err30m=0
+2026-10-27T23:20:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/931/6482 disk(u/pct/avail)=18G/23%/61G rssMB=859 hwmMB=2509 sync=1 err30m=0
+2026-10-27T23:50:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/938/6475 disk(u/pct/avail)=18G/23%/60G rssMB=866 hwmMB=2509 sync=1 err30m=0
+2026-10-28T00:20:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/932/6481 disk(u/pct/avail)=18G/23%/60G rssMB=897 hwmMB=2509 sync=1 err30m=0
+2026-10-28T00:50:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/952/6461 disk(u/pct/avail)=18G/23%/60G rssMB=916 hwmMB=2509 sync=1 err30m=0
+2026-10-28T01:20:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/949/6464 disk(u/pct/avail)=18G/23%/60G rssMB=849 hwmMB=2509 sync=1 err30m=0
+2026-10-28T01:50:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/942/6471 disk(u/pct/avail)=18G/23%/60G rssMB=883 hwmMB=2509 sync=1 err30m=0
+2026-10-28T02:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/949/6464 disk(u/pct/avail)=18G/23%/60G rssMB=914 hwmMB=2509 sync=1 err30m=0
+2026-10-28T02:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/946/6467 disk(u/pct/avail)=18G/23%/60G rssMB=943 hwmMB=2509 sync=1 err30m=0
+2026-10-28T03:20:04Z OK SVC=active load=0.91 mem(t/u/a)=7747/940/6473 disk(u/pct/avail)=18G/23%/60G rssMB=977 hwmMB=2509 sync=1 err30m=0
+2026-10-28T03:50:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/944/6469 disk(u/pct/avail)=18G/23%/60G rssMB=996 hwmMB=2509 sync=1 err30m=0
+2026-10-28T04:20:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/936/6477 disk(u/pct/avail)=18G/23%/60G rssMB=1027 hwmMB=2509 sync=1 err30m=0
+2026-10-28T04:50:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/947/6466 disk(u/pct/avail)=18G/23%/60G rssMB=1056 hwmMB=2509 sync=1 err30m=0
+2026-10-28T05:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/963/6450 disk(u/pct/avail)=18G/23%/60G rssMB=1073 hwmMB=2509 sync=1 err30m=0
+2026-10-28T05:50:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/946/6467 disk(u/pct/avail)=18G/24%/60G rssMB=1099 hwmMB=2509 sync=1 err30m=0
+2026-10-28T06:20:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/932/6481 disk(u/pct/avail)=18G/24%/60G rssMB=1129 hwmMB=2509 sync=1 err30m=0
+2026-10-28T06:50:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/928/6485 disk(u/pct/avail)=18G/24%/60G rssMB=1143 hwmMB=2509 sync=1 err30m=0
+2026-10-28T07:20:04Z OK SVC=active load=0.57 mem(t/u/a)=7747/937/6476 disk(u/pct/avail)=18G/24%/60G rssMB=1087 hwmMB=2509 sync=1 err30m=0
+2026-10-28T07:50:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/951/6462 disk(u/pct/avail)=18G/24%/60G rssMB=1113 hwmMB=2509 sync=1 err30m=0
+2026-10-28T08:20:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/958/6454 disk(u/pct/avail)=18G/24%/60G rssMB=1135 hwmMB=2509 sync=1 err30m=0
+2026-10-28T08:50:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/949/6464 disk(u/pct/avail)=18G/24%/60G rssMB=1149 hwmMB=2509 sync=1 err30m=0
+2026-10-28T09:20:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/946/6467 disk(u/pct/avail)=18G/24%/60G rssMB=1166 hwmMB=2509 sync=1 err30m=0
+2026-10-28T09:50:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/937/6476 disk(u/pct/avail)=19G/24%/60G rssMB=1195 hwmMB=2509 sync=1 err30m=0
+2026-10-28T10:20:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/942/6471 disk(u/pct/avail)=19G/24%/60G rssMB=1219 hwmMB=2509 sync=1 err30m=0
+2026-10-28T10:50:04Z OK SVC=active load=1.17 mem(t/u/a)=7747/950/6463 disk(u/pct/avail)=19G/24%/60G rssMB=1237 hwmMB=2509 sync=1 err30m=0
+2026-10-28T11:20:04Z OK SVC=active load=0.96 mem(t/u/a)=7747/947/6466 disk(u/pct/avail)=19G/24%/60G rssMB=1262 hwmMB=2509 sync=1 err30m=0
+2026-10-28T11:50:04Z OK SVC=active load=0.98 mem(t/u/a)=7747/937/6475 disk(u/pct/avail)=19G/24%/60G rssMB=1283 hwmMB=2509 sync=1 err30m=0
+2026-10-28T12:20:04Z OK SVC=active load=1.86 mem(t/u/a)=7747/942/6471 disk(u/pct/avail)=19G/24%/60G rssMB=1304 hwmMB=2509 sync=1 err30m=0
+2026-10-28T12:50:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/953/6459 disk(u/pct/avail)=19G/24%/60G rssMB=1319 hwmMB=2509 sync=1 err30m=0
+2026-10-28T13:20:05Z OK SVC=active load=1.06 mem(t/u/a)=7747/969/6444 disk(u/pct/avail)=19G/24%/60G rssMB=1339 hwmMB=2509 sync=1 err30m=0
+2026-10-28T13:50:04Z OK SVC=active load=1.21 mem(t/u/a)=7747/958/6455 disk(u/pct/avail)=19G/24%/60G rssMB=1354 hwmMB=2509 sync=1 err30m=0
+2026-10-28T14:20:04Z OK SVC=active load=1.04 mem(t/u/a)=7747/952/6461 disk(u/pct/avail)=19G/24%/60G rssMB=1243 hwmMB=2509 sync=1 err30m=0
+2026-10-28T14:50:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/955/6458 disk(u/pct/avail)=19G/24%/59G rssMB=1263 hwmMB=2509 sync=1 err30m=0
+2026-10-28T15:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/950/6463 disk(u/pct/avail)=19G/24%/59G rssMB=1279 hwmMB=2509 sync=1 err30m=0
+2026-10-28T15:50:04Z OK SVC=active load=0.89 mem(t/u/a)=7747/962/6451 disk(u/pct/avail)=19G/24%/59G rssMB=1299 hwmMB=2509 sync=1 err30m=0
+2026-10-28T16:20:04Z OK SVC=active load=0.97 mem(t/u/a)=7747/949/6464 disk(u/pct/avail)=19G/24%/59G rssMB=1317 hwmMB=2509 sync=1 err30m=0
+2026-10-28T16:50:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/951/6462 disk(u/pct/avail)=19G/24%/59G rssMB=1332 hwmMB=2509 sync=1 err30m=0
+2026-10-28T17:20:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/943/6470 disk(u/pct/avail)=19G/24%/59G rssMB=1351 hwmMB=2509 sync=1 err30m=0
+2026-10-28T17:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/942/6471 disk(u/pct/avail)=19G/24%/59G rssMB=1364 hwmMB=2509 sync=1 err30m=0
+2026-10-28T18:20:04Z OK SVC=active load=1.00 mem(t/u/a)=7747/940/6473 disk(u/pct/avail)=19G/24%/59G rssMB=1379 hwmMB=2509 sync=1 err30m=0
+2026-10-28T18:50:04Z OK SVC=active load=0.99 mem(t/u/a)=7747/942/6471 disk(u/pct/avail)=19G/25%/59G rssMB=1395 hwmMB=2509 sync=1 err30m=0
+2026-10-28T19:20:04Z OK SVC=active load=1.56 mem(t/u/a)=7747/940/6473 disk(u/pct/avail)=19G/24%/59G rssMB=1413 hwmMB=2509 sync=1 err30m=0
+2026-10-28T19:50:04Z OK SVC=active load=1.10 mem(t/u/a)=7747/955/6458 disk(u/pct/avail)=19G/25%/59G rssMB=1430 hwmMB=2509 sync=1 err30m=0
+2026-10-28T20:20:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/940/6472 disk(u/pct/avail)=19G/25%/59G rssMB=1444 hwmMB=2509 sync=1 err30m=0
+2026-10-28T20:50:15Z OK SVC=active load=0.82 mem(t/u/a)=7747/935/6478 disk(u/pct/avail)=19G/25%/59G rssMB=1408 hwmMB=2509 sync=1 err30m=0
+2026-10-28T21:20:04Z OK SVC=active load=1.08 mem(t/u/a)=7747/943/6470 disk(u/pct/avail)=19G/25%/59G rssMB=1420 hwmMB=2509 sync=1 err30m=0
+2026-10-28T21:50:04Z OK SVC=active load=1.20 mem(t/u/a)=7747/952/6461 disk(u/pct/avail)=19G/25%/59G rssMB=1435 hwmMB=2509 sync=1 err30m=0
+2026-10-28T22:20:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/985/6428 disk(u/pct/avail)=19G/25%/59G rssMB=1483 hwmMB=2509 sync=1 err30m=0
+2026-10-28T22:50:04Z OK SVC=active load=0.91 mem(t/u/a)=7747/982/6431 disk(u/pct/avail)=19G/25%/59G rssMB=1506 hwmMB=2509 sync=1 err30m=0
+2026-10-28T23:20:05Z OK SVC=active load=1.17 mem(t/u/a)=7747/994/6418 disk(u/pct/avail)=19G/25%/59G rssMB=1521 hwmMB=2509 sync=1 err30m=0
+2026-10-28T23:50:04Z OK SVC=active load=1.14 mem(t/u/a)=7747/989/6424 disk(u/pct/avail)=19G/25%/59G rssMB=1537 hwmMB=2509 sync=1 err30m=0
+2026-10-29T00:20:04Z OK SVC=active load=1.16 mem(t/u/a)=7747/981/6432 disk(u/pct/avail)=19G/25%/59G rssMB=1551 hwmMB=2509 sync=1 err30m=0
+2026-10-29T00:50:04Z OK SVC=active load=1.09 mem(t/u/a)=7747/975/6438 disk(u/pct/avail)=19G/25%/59G rssMB=1567 hwmMB=2509 sync=1 err30m=0
+2026-10-29T01:20:04Z OK SVC=active load=1.25 mem(t/u/a)=7747/1005/6408 disk(u/pct/avail)=19G/25%/59G rssMB=1577 hwmMB=2509 sync=1 err30m=0
+2026-10-29T01:50:04Z OK SVC=active load=1.16 mem(t/u/a)=7747/989/6423 disk(u/pct/avail)=19G/25%/59G rssMB=1589 hwmMB=2509 sync=1 err30m=0
+2026-10-29T02:20:04Z OK SVC=active load=1.32 mem(t/u/a)=7747/992/6420 disk(u/pct/avail)=19G/25%/59G rssMB=1598 hwmMB=2509 sync=1 err30m=0
+2026-10-29T02:50:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/984/6429 disk(u/pct/avail)=19G/25%/59G rssMB=1610 hwmMB=2509 sync=1 err30m=0
+2026-10-29T03:20:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/980/6432 disk(u/pct/avail)=19G/25%/59G rssMB=1624 hwmMB=2509 sync=1 err30m=0
+2026-10-29T03:50:04Z OK SVC=active load=1.25 mem(t/u/a)=7747/984/6429 disk(u/pct/avail)=20G/25%/59G rssMB=1637 hwmMB=2509 sync=1 err30m=0
+2026-10-29T04:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/990/6423 disk(u/pct/avail)=19G/24%/59G rssMB=1070 hwmMB=2509 sync=1 err30m=0
+2026-10-29T04:50:04Z OK SVC=active load=1.00 mem(t/u/a)=7747/989/6424 disk(u/pct/avail)=19G/25%/59G rssMB=1093 hwmMB=2509 sync=1 err30m=0
+2026-10-29T05:20:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/981/6432 disk(u/pct/avail)=19G/25%/59G rssMB=1115 hwmMB=2509 sync=1 err30m=0
+2026-10-29T05:50:04Z OK SVC=active load=1.29 mem(t/u/a)=7747/973/6440 disk(u/pct/avail)=19G/25%/59G rssMB=1134 hwmMB=2509 sync=1 err30m=0
+2026-10-29T06:20:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/974/6439 disk(u/pct/avail)=19G/25%/59G rssMB=1153 hwmMB=2509 sync=1 err30m=0
+2026-10-29T06:50:04Z OK SVC=active load=1.10 mem(t/u/a)=7747/988/6425 disk(u/pct/avail)=19G/25%/59G rssMB=1174 hwmMB=2509 sync=1 err30m=0
+2026-10-29T07:20:04Z OK SVC=active load=1.04 mem(t/u/a)=7747/993/6420 disk(u/pct/avail)=19G/25%/59G rssMB=1195 hwmMB=2509 sync=1 err30m=0
+2026-10-29T07:50:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/989/6424 disk(u/pct/avail)=19G/25%/59G rssMB=1212 hwmMB=2509 sync=1 err30m=0
+2026-10-29T08:20:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/986/6427 disk(u/pct/avail)=19G/25%/59G rssMB=1231 hwmMB=2509 sync=1 err30m=0
+2026-10-29T08:50:04Z OK SVC=active load=1.30 mem(t/u/a)=7747/989/6424 disk(u/pct/avail)=19G/25%/59G rssMB=1250 hwmMB=2509 sync=1 err30m=0
+2026-10-29T09:20:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/984/6428 disk(u/pct/avail)=19G/25%/59G rssMB=1268 hwmMB=2509 sync=1 err30m=0
+2026-10-29T09:50:04Z OK SVC=active load=0.42 mem(t/u/a)=7747/977/6436 disk(u/pct/avail)=19G/24%/59G rssMB=592 hwmMB=2509 sync=1 err30m=0
+2026-10-29T10:20:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/1065/6348 disk(u/pct/avail)=19G/24%/59G rssMB=608 hwmMB=2509 sync=1 err30m=0
+2026-10-29T10:50:04Z OK SVC=active load=0.58 mem(t/u/a)=7747/991/6422 disk(u/pct/avail)=19G/24%/59G rssMB=623 hwmMB=2509 sync=1 err30m=0
+2026-10-29T11:20:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/975/6438 disk(u/pct/avail)=19G/24%/59G rssMB=640 hwmMB=2509 sync=1 err30m=0
+2026-10-29T11:50:04Z OK SVC=active load=0.38 mem(t/u/a)=7747/1000/6413 disk(u/pct/avail)=19G/24%/59G rssMB=657 hwmMB=2509 sync=1 err30m=0
+2026-10-29T12:20:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/1038/6375 disk(u/pct/avail)=19G/24%/59G rssMB=670 hwmMB=2509 sync=1 err30m=0
+2026-10-29T12:50:04Z OK SVC=active load=0.37 mem(t/u/a)=7747/1063/6349 disk(u/pct/avail)=19G/24%/59G rssMB=682 hwmMB=2509 sync=1 err30m=0
+2026-10-29T13:20:04Z OK SVC=active load=0.31 mem(t/u/a)=7747/998/6415 disk(u/pct/avail)=19G/24%/59G rssMB=695 hwmMB=2509 sync=1 err30m=0
+2026-10-29T13:50:04Z OK SVC=active load=0.52 mem(t/u/a)=7747/996/6417 disk(u/pct/avail)=19G/24%/59G rssMB=710 hwmMB=2509 sync=1 err30m=0
+2026-10-29T14:20:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/993/6420 disk(u/pct/avail)=19G/25%/59G rssMB=724 hwmMB=2509 sync=1 err30m=0
+2026-10-29T14:50:04Z OK SVC=active load=1.26 mem(t/u/a)=7747/1059/6353 disk(u/pct/avail)=19G/25%/59G rssMB=741 hwmMB=2509 sync=1 err30m=0
+2026-10-29T15:20:04Z OK SVC=active load=0.48 mem(t/u/a)=7747/1061/6351 disk(u/pct/avail)=19G/25%/59G rssMB=762 hwmMB=2509 sync=1 err30m=0
+2026-10-29T15:50:05Z OK SVC=active load=1.03 mem(t/u/a)=7747/1045/6368 disk(u/pct/avail)=19G/25%/59G rssMB=782 hwmMB=2509 sync=1 err30m=0
+2026-10-29T16:20:07Z OK SVC=active load=0.63 mem(t/u/a)=7747/1015/6397 disk(u/pct/avail)=19G/25%/59G rssMB=891 hwmMB=2509 sync=1 err30m=0
+2026-10-29T16:50:05Z OK SVC=active load=0.67 mem(t/u/a)=7747/1009/6403 disk(u/pct/avail)=19G/25%/59G rssMB=972 hwmMB=2509 sync=1 err30m=0
+2026-10-29T17:20:04Z OK SVC=active load=1.25 mem(t/u/a)=7747/1006/6406 disk(u/pct/avail)=19G/25%/59G rssMB=1085 hwmMB=2509 sync=1 err30m=0
+2026-10-29T17:50:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/1126/6286 disk(u/pct/avail)=19G/25%/59G rssMB=1198 hwmMB=2509 sync=1 err30m=0
+2026-10-29T18:20:04Z OK SVC=active load=0.51 mem(t/u/a)=7747/1036/6377 disk(u/pct/avail)=19G/25%/59G rssMB=1315 hwmMB=2509 sync=1 err30m=0
+2026-10-29T18:50:04Z OK SVC=active load=0.34 mem(t/u/a)=7747/1027/6386 disk(u/pct/avail)=19G/25%/59G rssMB=1419 hwmMB=2509 sync=1 err30m=0
+2026-10-29T19:20:04Z OK SVC=active load=0.43 mem(t/u/a)=7747/1121/6291 disk(u/pct/avail)=19G/25%/59G rssMB=1515 hwmMB=2509 sync=1 err30m=0
+2026-10-29T19:50:05Z OK SVC=active load=1.17 mem(t/u/a)=7747/965/6447 disk(u/pct/avail)=19G/25%/59G rssMB=1552 hwmMB=2509 sync=1 err30m=0
+2026-10-29T20:20:04Z OK SVC=active load=0.72 mem(t/u/a)=7747/1004/6409 disk(u/pct/avail)=19G/25%/59G rssMB=1649 hwmMB=2509 sync=1 err30m=0
+2026-10-29T20:50:05Z OK SVC=active load=0.87 mem(t/u/a)=7747/991/6421 disk(u/pct/avail)=20G/25%/59G rssMB=1741 hwmMB=2509 sync=1 err30m=0
+2026-10-29T21:20:04Z OK SVC=active load=0.84 mem(t/u/a)=7747/1006/6407 disk(u/pct/avail)=19G/25%/59G rssMB=1831 hwmMB=2509 sync=1 err30m=0
+2026-10-29T21:50:04Z OK SVC=active load=0.99 mem(t/u/a)=7747/996/6416 disk(u/pct/avail)=20G/25%/59G rssMB=1922 hwmMB=2509 sync=1 err30m=0
+2026-10-29T22:20:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/998/6414 disk(u/pct/avail)=20G/25%/59G rssMB=2011 hwmMB=2509 sync=1 err30m=0
+2026-10-29T22:50:04Z OK SVC=active load=1.00 mem(t/u/a)=7747/992/6420 disk(u/pct/avail)=20G/25%/59G rssMB=2103 hwmMB=2509 sync=1 err30m=0
+2026-10-29T23:20:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/1020/6392 disk(u/pct/avail)=20G/25%/59G rssMB=2148 hwmMB=2509 sync=1 err30m=0
+2026-10-29T23:50:04Z OK SVC=active load=0.76 mem(t/u/a)=7747/1009/6404 disk(u/pct/avail)=20G/25%/59G rssMB=2236 hwmMB=2509 sync=1 err30m=0
+2026-10-30T00:20:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/1025/6388 disk(u/pct/avail)=20G/25%/59G rssMB=2333 hwmMB=2509 sync=1 err30m=0
+2026-10-30T00:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/1004/6408 disk(u/pct/avail)=20G/25%/59G rssMB=2414 hwmMB=2509 sync=1 err30m=0
+2026-10-30T01:20:04Z OK SVC=active load=1.01 mem(t/u/a)=7747/1026/6386 disk(u/pct/avail)=20G/25%/59G rssMB=2495 hwmMB=2509 sync=1 err30m=0
+2026-10-30T01:50:04Z OK SVC=active load=1.17 mem(t/u/a)=7747/1045/6368 disk(u/pct/avail)=20G/26%/58G rssMB=2583 hwmMB=2583 sync=1 err30m=0
+2026-10-30T02:20:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/1036/6377 disk(u/pct/avail)=20G/26%/58G rssMB=2661 hwmMB=2661 sync=1 err30m=0
+2026-10-30T02:50:04Z OK SVC=active load=0.79 mem(t/u/a)=7747/1023/6390 disk(u/pct/avail)=20G/26%/58G rssMB=2735 hwmMB=2735 sync=1 err30m=0
+2026-10-30T03:20:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/1044/6368 disk(u/pct/avail)=20G/26%/58G rssMB=2816 hwmMB=2816 sync=1 err30m=0
+2026-10-30T03:50:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/1030/6382 disk(u/pct/avail)=20G/26%/58G rssMB=2890 hwmMB=2890 sync=1 err30m=0
+2026-10-30T04:20:04Z OK SVC=active load=1.08 mem(t/u/a)=7747/1014/6399 disk(u/pct/avail)=20G/26%/58G rssMB=2913 hwmMB=2913 sync=1 err30m=0
+2026-10-30T04:50:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/1054/6359 disk(u/pct/avail)=20G/26%/58G rssMB=2413 hwmMB=2983 sync=1 err30m=0
+2026-10-30T05:20:04Z OK SVC=active load=1.22 mem(t/u/a)=7747/1045/6367 disk(u/pct/avail)=20G/26%/58G rssMB=2430 hwmMB=2983 sync=1 err30m=0
+2026-10-30T05:50:04Z OK SVC=active load=1.57 mem(t/u/a)=7747/1044/6369 disk(u/pct/avail)=20G/26%/58G rssMB=2448 hwmMB=2983 sync=1 err30m=0
+2026-10-30T06:20:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/1048/6364 disk(u/pct/avail)=20G/26%/58G rssMB=2463 hwmMB=2983 sync=1 err30m=0
+2026-10-30T06:50:04Z OK SVC=active load=1.15 mem(t/u/a)=7747/1043/6369 disk(u/pct/avail)=20G/26%/58G rssMB=2478 hwmMB=2983 sync=1 err30m=0
+2026-10-30T07:20:04Z OK SVC=active load=1.33 mem(t/u/a)=7747/1029/6383 disk(u/pct/avail)=20G/26%/58G rssMB=2495 hwmMB=2983 sync=1 err30m=0
+2026-10-30T07:50:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/1049/6363 disk(u/pct/avail)=20G/26%/58G rssMB=2512 hwmMB=2983 sync=1 err30m=0
+2026-10-30T08:20:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/1029/6384 disk(u/pct/avail)=20G/26%/58G rssMB=2508 hwmMB=2983 sync=1 err30m=0
+2026-10-30T08:50:04Z OK SVC=active load=1.22 mem(t/u/a)=7747/1025/6387 disk(u/pct/avail)=20G/26%/58G rssMB=2503 hwmMB=2983 sync=1 err30m=0
+2026-10-30T09:20:06Z OK SVC=active load=1.41 mem(t/u/a)=7747/1165/6247 disk(u/pct/avail)=20G/26%/58G rssMB=2446 hwmMB=2983 sync=1 err30m=0
+2026-10-30T09:50:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/1030/6382 disk(u/pct/avail)=20G/26%/58G rssMB=2462 hwmMB=2983 sync=1 err30m=0
+2026-10-30T10:20:04Z OK SVC=active load=0.99 mem(t/u/a)=7747/1037/6376 disk(u/pct/avail)=20G/26%/58G rssMB=2474 hwmMB=2983 sync=1 err30m=0
+2026-10-30T10:50:05Z OK SVC=active load=1.35 mem(t/u/a)=7747/1041/6371 disk(u/pct/avail)=20G/26%/58G rssMB=2489 hwmMB=2983 sync=1 err30m=0
+2026-10-30T11:20:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/1030/6383 disk(u/pct/avail)=20G/26%/58G rssMB=2206 hwmMB=2983 sync=1 err30m=0
+2026-10-30T11:50:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/1038/6374 disk(u/pct/avail)=20G/26%/58G rssMB=2220 hwmMB=2983 sync=1 err30m=0
+2026-10-30T12:20:04Z OK SVC=active load=1.15 mem(t/u/a)=7747/1038/6374 disk(u/pct/avail)=20G/26%/58G rssMB=2234 hwmMB=2983 sync=1 err30m=0
+2026-10-30T12:50:04Z OK SVC=active load=1.39 mem(t/u/a)=7747/1037/6375 disk(u/pct/avail)=20G/26%/58G rssMB=2248 hwmMB=2983 sync=1 err30m=0
+2026-10-30T13:20:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/1057/6355 disk(u/pct/avail)=20G/26%/58G rssMB=2263 hwmMB=2983 sync=1 err30m=0
+2026-10-30T13:50:05Z OK SVC=active load=1.65 mem(t/u/a)=7747/1042/6371 disk(u/pct/avail)=20G/26%/58G rssMB=2277 hwmMB=2983 sync=1 err30m=0
+2026-10-30T14:20:04Z OK SVC=active load=1.57 mem(t/u/a)=7747/1052/6360 disk(u/pct/avail)=20G/26%/58G rssMB=2291 hwmMB=2983 sync=1 err30m=0
+2026-10-30T14:50:04Z OK SVC=active load=1.08 mem(t/u/a)=7747/1037/6375 disk(u/pct/avail)=21G/26%/58G rssMB=2200 hwmMB=2983 sync=1 err30m=0
+2026-10-30T15:20:04Z OK SVC=active load=1.13 mem(t/u/a)=7747/1043/6369 disk(u/pct/avail)=21G/26%/58G rssMB=2213 hwmMB=2983 sync=1 err30m=0
+2026-10-30T15:50:04Z OK SVC=active load=1.28 mem(t/u/a)=7747/1043/6369 disk(u/pct/avail)=21G/27%/58G rssMB=2219 hwmMB=2983 sync=1 err30m=0
+2026-10-30T16:20:04Z OK SVC=active load=1.21 mem(t/u/a)=7747/1037/6375 disk(u/pct/avail)=21G/27%/58G rssMB=2218 hwmMB=2983 sync=1 err30m=0
+2026-10-30T16:50:04Z OK SVC=active load=1.45 mem(t/u/a)=7747/1092/6320 disk(u/pct/avail)=21G/27%/58G rssMB=2302 hwmMB=2983 sync=1 err30m=0
+2026-10-30T17:20:05Z OK SVC=active load=1.35 mem(t/u/a)=7747/1081/6331 disk(u/pct/avail)=21G/27%/58G rssMB=2288 hwmMB=2983 sync=1 err30m=0
+2026-10-30T17:50:05Z OK SVC=active load=1.30 mem(t/u/a)=7747/1090/6322 disk(u/pct/avail)=21G/27%/58G rssMB=2257 hwmMB=2983 sync=1 err30m=0
+2026-10-30T18:20:05Z OK SVC=active load=1.19 mem(t/u/a)=7747/1093/6319 disk(u/pct/avail)=21G/27%/58G rssMB=2261 hwmMB=2983 sync=1 err30m=0
+2026-10-30T18:50:05Z OK SVC=active load=1.16 mem(t/u/a)=7747/1093/6319 disk(u/pct/avail)=21G/27%/58G rssMB=2062 hwmMB=2983 sync=1 err30m=0
+2026-10-30T19:20:04Z OK SVC=active load=1.20 mem(t/u/a)=7747/1105/6308 disk(u/pct/avail)=21G/27%/58G rssMB=2075 hwmMB=2983 sync=1 err30m=0
+2026-10-30T19:50:05Z OK SVC=active load=1.27 mem(t/u/a)=7747/1097/6315 disk(u/pct/avail)=21G/27%/58G rssMB=2089 hwmMB=2983 sync=1 err30m=0
+2026-10-30T20:20:04Z OK SVC=active load=1.56 mem(t/u/a)=7747/1122/6290 disk(u/pct/avail)=21G/27%/58G rssMB=2103 hwmMB=2983 sync=1 err30m=0
+2026-10-30T20:50:04Z OK SVC=active load=1.13 mem(t/u/a)=7747/1127/6286 disk(u/pct/avail)=21G/27%/57G rssMB=2117 hwmMB=2983 sync=1 err30m=0
+2026-10-30T21:20:04Z OK SVC=active load=1.20 mem(t/u/a)=7747/1101/6311 disk(u/pct/avail)=21G/27%/58G rssMB=2130 hwmMB=2983 sync=1 err30m=0
+2026-10-30T21:50:04Z OK SVC=active load=1.80 mem(t/u/a)=7747/1101/6311 disk(u/pct/avail)=21G/27%/57G rssMB=2143 hwmMB=2983 sync=1 err30m=0
+2026-10-30T22:20:04Z OK SVC=active load=1.07 mem(t/u/a)=7747/1106/6307 disk(u/pct/avail)=21G/27%/57G rssMB=2157 hwmMB=2983 sync=1 err30m=0
+2026-10-30T22:50:04Z OK SVC=active load=1.14 mem(t/u/a)=7747/1115/6297 disk(u/pct/avail)=21G/27%/57G rssMB=2173 hwmMB=2983 sync=1 err30m=0
+2026-10-30T23:20:04Z OK SVC=active load=1.27 mem(t/u/a)=7747/1114/6298 disk(u/pct/avail)=21G/27%/57G rssMB=2186 hwmMB=2983 sync=1 err30m=0
+2026-10-30T23:50:04Z OK SVC=active load=1.26 mem(t/u/a)=7747/1132/6280 disk(u/pct/avail)=21G/27%/57G rssMB=2199 hwmMB=2983 sync=1 err30m=0
+2026-10-31T00:20:04Z OK SVC=active load=1.14 mem(t/u/a)=7747/1101/6311 disk(u/pct/avail)=21G/27%/57G rssMB=2211 hwmMB=2983 sync=1 err30m=0
+2026-10-31T00:50:04Z OK SVC=active load=1.31 mem(t/u/a)=7747/1128/6284 disk(u/pct/avail)=21G/27%/57G rssMB=2226 hwmMB=2983 sync=1 err30m=0
+2026-10-31T01:20:04Z OK SVC=active load=1.22 mem(t/u/a)=7747/1132/6281 disk(u/pct/avail)=21G/27%/57G rssMB=2239 hwmMB=2983 sync=1 err30m=0
+2026-10-31T01:50:04Z OK SVC=active load=1.27 mem(t/u/a)=7747/1115/6298 disk(u/pct/avail)=21G/27%/57G rssMB=2251 hwmMB=2983 sync=1 err30m=0
+2026-10-31T02:20:04Z OK SVC=active load=1.12 mem(t/u/a)=7747/1116/6296 disk(u/pct/avail)=21G/27%/57G rssMB=2191 hwmMB=2983 sync=1 err30m=0
+2026-10-31T02:50:04Z OK SVC=active load=1.75 mem(t/u/a)=7747/1132/6281 disk(u/pct/avail)=21G/27%/57G rssMB=2202 hwmMB=2983 sync=1 err30m=0
+2026-10-31T03:20:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/1114/6299 disk(u/pct/avail)=20G/26%/58G rssMB=947 hwmMB=2983 sync=1 err30m=0
+2026-10-31T03:50:04Z OK SVC=active load=0.87 mem(t/u/a)=7747/1112/6300 disk(u/pct/avail)=20G/26%/58G rssMB=968 hwmMB=2983 sync=1 err30m=0
+2026-10-31T04:20:04Z OK SVC=active load=1.06 mem(t/u/a)=7747/1103/6309 disk(u/pct/avail)=20G/26%/58G rssMB=988 hwmMB=2983 sync=1 err30m=0
+2026-10-31T04:50:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/1129/6283 disk(u/pct/avail)=20G/26%/58G rssMB=1005 hwmMB=2983 sync=1 err30m=0
+2026-10-31T05:20:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/1097/6316 disk(u/pct/avail)=20G/26%/58G rssMB=1024 hwmMB=2983 sync=1 err30m=0
+2026-10-31T05:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/1105/6307 disk(u/pct/avail)=20G/26%/58G rssMB=1043 hwmMB=2983 sync=1 err30m=0
+2026-10-31T06:20:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/1080/6332 disk(u/pct/avail)=20G/26%/58G rssMB=1060 hwmMB=2983 sync=1 err30m=0
+2026-10-31T06:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/1109/6303 disk(u/pct/avail)=20G/26%/58G rssMB=1084 hwmMB=2983 sync=1 err30m=0
+2026-10-31T07:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/1123/6289 disk(u/pct/avail)=20G/26%/58G rssMB=1100 hwmMB=2983 sync=1 err30m=0
+2026-10-31T07:50:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/1129/6284 disk(u/pct/avail)=20G/26%/58G rssMB=1115 hwmMB=2983 sync=1 err30m=0
+2026-10-31T08:20:04Z OK SVC=active load=1.30 mem(t/u/a)=7747/1120/6292 disk(u/pct/avail)=20G/26%/58G rssMB=1109 hwmMB=2983 sync=1 err30m=0
+2026-10-31T08:50:04Z OK SVC=active load=1.15 mem(t/u/a)=7747/1116/6297 disk(u/pct/avail)=20G/26%/58G rssMB=1129 hwmMB=2983 sync=1 err30m=0
+2026-10-31T09:20:04Z OK SVC=active load=0.90 mem(t/u/a)=7747/1227/6185 disk(u/pct/avail)=21G/26%/58G rssMB=1152 hwmMB=2983 sync=1 err30m=0
+2026-10-31T09:50:04Z OK SVC=active load=1.28 mem(t/u/a)=7747/1193/6219 disk(u/pct/avail)=21G/26%/58G rssMB=1174 hwmMB=2983 sync=1 err30m=0
+2026-10-31T10:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/1135/6277 disk(u/pct/avail)=21G/26%/58G rssMB=1194 hwmMB=2983 sync=1 err30m=0
+2026-10-31T10:50:04Z OK SVC=active load=1.09 mem(t/u/a)=7747/1129/6283 disk(u/pct/avail)=21G/27%/58G rssMB=1214 hwmMB=2983 sync=1 err30m=0
+2026-10-31T11:20:04Z OK SVC=active load=0.46 mem(t/u/a)=7747/1128/6284 disk(u/pct/avail)=21G/27%/58G rssMB=1228 hwmMB=2983 sync=1 err30m=0
+2026-10-31T11:50:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/1138/6275 disk(u/pct/avail)=21G/27%/58G rssMB=1237 hwmMB=2983 sync=1 err30m=0
+2026-10-31T12:20:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/1125/6287 disk(u/pct/avail)=21G/27%/58G rssMB=1246 hwmMB=2983 sync=1 err30m=0
+2026-10-31T12:50:04Z OK SVC=active load=0.40 mem(t/u/a)=7747/1125/6287 disk(u/pct/avail)=21G/27%/58G rssMB=1261 hwmMB=2983 sync=1 err30m=0
+2026-10-31T13:20:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/1120/6292 disk(u/pct/avail)=21G/27%/58G rssMB=1272 hwmMB=2983 sync=1 err30m=0
+2026-10-31T13:50:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/1224/6188 disk(u/pct/avail)=21G/27%/58G rssMB=1261 hwmMB=2983 sync=1 err30m=0
+2026-10-31T14:20:04Z OK SVC=active load=0.39 mem(t/u/a)=7747/1168/6244 disk(u/pct/avail)=21G/27%/58G rssMB=1268 hwmMB=2983 sync=1 err30m=0
+2026-10-31T14:50:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/1130/6282 disk(u/pct/avail)=21G/27%/58G rssMB=1273 hwmMB=2983 sync=1 err30m=0
+2026-10-31T15:20:04Z OK SVC=active load=0.52 mem(t/u/a)=7747/1102/6310 disk(u/pct/avail)=21G/27%/58G rssMB=1272 hwmMB=2983 sync=1 err30m=0
+2026-10-31T15:50:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/1122/6290 disk(u/pct/avail)=21G/27%/58G rssMB=1237 hwmMB=2983 sync=1 err30m=0
+2026-10-31T16:20:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/1108/6304 disk(u/pct/avail)=21G/27%/58G rssMB=1240 hwmMB=2983 sync=1 err30m=0
+2026-10-31T16:50:04Z OK SVC=active load=0.72 mem(t/u/a)=7747/1146/6266 disk(u/pct/avail)=21G/27%/57G rssMB=1252 hwmMB=2983 sync=1 err30m=0
+2026-10-31T17:20:04Z OK SVC=active load=1.24 mem(t/u/a)=7747/1120/6292 disk(u/pct/avail)=21G/27%/57G rssMB=1266 hwmMB=2983 sync=1 err30m=0
+2026-10-31T17:50:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/1130/6282 disk(u/pct/avail)=21G/27%/57G rssMB=1284 hwmMB=2983 sync=1 err30m=0
+2026-10-31T18:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/1130/6282 disk(u/pct/avail)=21G/27%/57G rssMB=1295 hwmMB=2983 sync=1 err30m=0
+2026-10-31T18:50:04Z OK SVC=active load=1.28 mem(t/u/a)=7747/1120/6292 disk(u/pct/avail)=21G/27%/57G rssMB=1313 hwmMB=2983 sync=1 err30m=0
+2026-10-31T19:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/1098/6314 disk(u/pct/avail)=21G/27%/57G rssMB=1331 hwmMB=2983 sync=1 err30m=0
+2026-10-31T19:50:04Z OK SVC=active load=1.15 mem(t/u/a)=7747/1141/6271 disk(u/pct/avail)=21G/27%/57G rssMB=1323 hwmMB=2983 sync=1 err30m=0
+2026-10-31T20:20:04Z OK SVC=active load=1.41 mem(t/u/a)=7747/1117/6295 disk(u/pct/avail)=21G/27%/57G rssMB=1330 hwmMB=2983 sync=1 err30m=0
+2026-10-31T20:50:04Z OK SVC=active load=1.54 mem(t/u/a)=7747/1140/6272 disk(u/pct/avail)=21G/27%/57G rssMB=1316 hwmMB=2983 sync=1 err30m=0
+2026-10-31T21:20:04Z OK SVC=active load=1.06 mem(t/u/a)=7747/1114/6298 disk(u/pct/avail)=21G/27%/57G rssMB=1319 hwmMB=2983 sync=1 err30m=0
+2026-10-31T21:50:04Z OK SVC=active load=1.47 mem(t/u/a)=7747/1121/6291 disk(u/pct/avail)=21G/27%/57G rssMB=1310 hwmMB=2983 sync=1 err30m=0
+2026-10-31T22:20:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/1187/6225 disk(u/pct/avail)=21G/27%/58G rssMB=669 hwmMB=2983 sync=1 err30m=0
+2026-10-31T22:50:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/1126/6286 disk(u/pct/avail)=21G/27%/58G rssMB=688 hwmMB=2983 sync=1 err30m=0
+2026-10-31T23:20:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/1125/6287 disk(u/pct/avail)=21G/27%/58G rssMB=699 hwmMB=2983 sync=1 err30m=0
+2026-10-31T23:50:04Z OK SVC=active load=0.42 mem(t/u/a)=7747/1103/6309 disk(u/pct/avail)=21G/27%/58G rssMB=710 hwmMB=2983 sync=1 err30m=0
+2026-11-01T00:20:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/1117/6295 disk(u/pct/avail)=19G/24%/59G rssMB=694 hwmMB=2983 sync=1 err30m=0
+2026-11-01T00:50:04Z OK SVC=active load=0.26 mem(t/u/a)=7747/1114/6298 disk(u/pct/avail)=19G/25%/59G rssMB=706 hwmMB=2983 sync=1 err30m=0
+2026-11-01T01:20:04Z OK SVC=active load=0.63 mem(t/u/a)=7747/1120/6292 disk(u/pct/avail)=19G/25%/59G rssMB=719 hwmMB=2983 sync=1 err30m=0
+2026-11-01T01:50:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/1103/6309 disk(u/pct/avail)=19G/25%/59G rssMB=730 hwmMB=2983 sync=1 err30m=0
+2026-11-01T02:20:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/1124/6288 disk(u/pct/avail)=19G/25%/59G rssMB=740 hwmMB=2983 sync=1 err30m=0
+2026-11-01T02:50:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/1105/6307 disk(u/pct/avail)=19G/25%/59G rssMB=751 hwmMB=2983 sync=1 err30m=0
+2026-11-01T03:20:04Z OK SVC=active load=0.44 mem(t/u/a)=7747/1114/6298 disk(u/pct/avail)=19G/25%/59G rssMB=762 hwmMB=2983 sync=1 err30m=0
+2026-11-01T03:50:04Z OK SVC=active load=0.61 mem(t/u/a)=7747/1212/6200 disk(u/pct/avail)=19G/25%/59G rssMB=773 hwmMB=2983 sync=1 err30m=0
+2026-11-01T04:20:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/1127/6285 disk(u/pct/avail)=19G/25%/59G rssMB=784 hwmMB=2983 sync=1 err30m=0
+2026-11-01T04:50:04Z OK SVC=active load=0.46 mem(t/u/a)=7747/1124/6288 disk(u/pct/avail)=19G/25%/59G rssMB=796 hwmMB=2983 sync=1 err30m=0
+2026-11-01T05:20:04Z OK SVC=active load=0.32 mem(t/u/a)=7747/1104/6308 disk(u/pct/avail)=19G/25%/59G rssMB=808 hwmMB=2983 sync=1 err30m=0
+2026-11-01T05:50:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/1115/6297 disk(u/pct/avail)=19G/25%/59G rssMB=820 hwmMB=2983 sync=1 err30m=0
+2026-11-01T06:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/1131/6281 disk(u/pct/avail)=19G/25%/59G rssMB=831 hwmMB=2983 sync=1 err30m=0
+2026-11-01T06:50:04Z OK SVC=active load=0.72 mem(t/u/a)=7747/1161/6250 disk(u/pct/avail)=19G/25%/59G rssMB=842 hwmMB=2983 sync=1 err30m=0
+2026-11-01T07:20:04Z OK SVC=active load=0.16 mem(t/u/a)=7747/1142/6270 disk(u/pct/avail)=19G/25%/59G rssMB=882 hwmMB=2983 sync=1 err30m=0
+2026-11-01T07:50:03Z OK SVC=active load=0.02 mem(t/u/a)=7747/898/6513 disk(u/pct/avail)=19G/25%/59G rssMB=664 hwmMB=664 sync=1 err30m=0
+2026-11-01T08:20:03Z OK SVC=active load=0.06 mem(t/u/a)=7747/1119/6293 disk(u/pct/avail)=19G/25%/59G rssMB=1963 hwmMB=1963 sync=1 err30m=0
+2026-11-01T08:50:19Z OK SVC=active load=0.10 mem(t/u/a)=7747/1420/5992 disk(u/pct/avail)=19G/25%/59G rssMB=3241 hwmMB=3248 sync=1 err30m=0
+2026-11-01T09:20:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/1598/5814 disk(u/pct/avail)=19G/25%/59G rssMB=3404 hwmMB=3404 sync=1 err30m=0
+2026-11-01T09:50:03Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/556/6855 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T10:20:03Z ALERT SVC=inactive load=0.18 mem(t/u/a)=7747/684/6728 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T10:50:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/639/6773 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T11:20:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/557/6855 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T11:50:04Z ALERT SVC=inactive load=0.15 mem(t/u/a)=7747/561/6851 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T12:20:03Z ALERT SVC=inactive load=0.39 mem(t/u/a)=7747/579/6832 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T12:50:04Z ALERT SVC=inactive load=0.20 mem(t/u/a)=7747/551/6860 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T13:20:04Z ALERT SVC=inactive load=0.50 mem(t/u/a)=7747/680/6732 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T13:50:06Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/572/6840 disk(u/pct/avail)=19G/25%/59G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-01T14:20:05Z OK SVC=active load=0.15 mem(t/u/a)=7747/656/6756 disk(u/pct/avail)=19G/25%/59G rssMB=844 hwmMB=844 sync=1 err30m=0
+2026-11-01T14:50:04Z OK SVC=active load=0.38 mem(t/u/a)=7747/716/6696 disk(u/pct/avail)=19G/25%/59G rssMB=1988 hwmMB=1988 sync=1 err30m=0
+2026-11-01T15:20:04Z OK SVC=active load=0.79 mem(t/u/a)=7747/761/6651 disk(u/pct/avail)=20G/25%/59G rssMB=2844 hwmMB=2844 sync=1 err30m=0
+2026-11-01T15:50:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/823/6589 disk(u/pct/avail)=19G/25%/59G rssMB=2855 hwmMB=2855 sync=1 err30m=0
+2026-11-01T16:20:05Z OK SVC=active load=0.84 mem(t/u/a)=7747/761/6651 disk(u/pct/avail)=19G/25%/59G rssMB=2864 hwmMB=2864 sync=1 err30m=0
+2026-11-01T16:50:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/784/6627 disk(u/pct/avail)=20G/25%/59G rssMB=2873 hwmMB=2873 sync=1 err30m=0
+2026-11-01T17:20:05Z OK SVC=active load=0.61 mem(t/u/a)=7747/848/6564 disk(u/pct/avail)=19G/25%/59G rssMB=2893 hwmMB=2893 sync=1 err30m=0
+2026-11-01T17:50:04Z OK SVC=active load=0.58 mem(t/u/a)=7747/823/6589 disk(u/pct/avail)=20G/25%/59G rssMB=2914 hwmMB=2914 sync=1 err30m=0
+2026-11-01T18:20:04Z OK SVC=active load=0.39 mem(t/u/a)=7747/838/6574 disk(u/pct/avail)=20G/25%/59G rssMB=2927 hwmMB=2927 sync=1 err30m=0
+2026-11-01T18:50:04Z OK SVC=active load=0.87 mem(t/u/a)=7747/862/6550 disk(u/pct/avail)=20G/25%/59G rssMB=2936 hwmMB=2936 sync=1 err30m=0
+2026-11-01T19:20:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/864/6548 disk(u/pct/avail)=20G/25%/59G rssMB=2949 hwmMB=2949 sync=1 err30m=0
+2026-11-01T19:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/877/6535 disk(u/pct/avail)=20G/25%/59G rssMB=2962 hwmMB=2962 sync=1 err30m=0
+2026-11-01T20:20:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/882/6529 disk(u/pct/avail)=20G/25%/59G rssMB=2973 hwmMB=2973 sync=1 err30m=0
+2026-11-01T20:50:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/845/6566 disk(u/pct/avail)=20G/25%/59G rssMB=2991 hwmMB=2991 sync=1 err30m=0
+2026-11-01T21:20:04Z OK SVC=active load=1.09 mem(t/u/a)=7747/904/6507 disk(u/pct/avail)=20G/25%/59G rssMB=3009 hwmMB=3010 sync=1 err30m=0
+2026-11-01T21:50:05Z OK SVC=active load=0.88 mem(t/u/a)=7747/896/6516 disk(u/pct/avail)=20G/25%/59G rssMB=3014 hwmMB=3014 sync=1 err30m=0
+2026-11-01T22:20:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/877/6535 disk(u/pct/avail)=20G/25%/59G rssMB=3016 hwmMB=3016 sync=1 err30m=0
+2026-11-01T22:50:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/909/6502 disk(u/pct/avail)=20G/25%/59G rssMB=3017 hwmMB=3017 sync=1 err30m=0
+2026-11-01T23:20:04Z OK SVC=active load=0.91 mem(t/u/a)=7747/843/6569 disk(u/pct/avail)=20G/25%/59G rssMB=3018 hwmMB=3018 sync=1 err30m=0
+2026-11-01T23:50:04Z OK SVC=active load=0.69 mem(t/u/a)=7747/924/6487 disk(u/pct/avail)=20G/26%/58G rssMB=2998 hwmMB=3207 sync=1 err30m=0
+2026-11-02T00:20:04Z OK SVC=active load=0.99 mem(t/u/a)=7747/897/6515 disk(u/pct/avail)=20G/26%/58G rssMB=3000 hwmMB=3207 sync=1 err30m=0
+2026-11-02T00:50:04Z OK SVC=active load=0.63 mem(t/u/a)=7747/1004/6408 disk(u/pct/avail)=20G/25%/59G rssMB=3000 hwmMB=3207 sync=1 err30m=0
+2026-11-02T01:20:04Z OK SVC=active load=1.20 mem(t/u/a)=7747/883/6529 disk(u/pct/avail)=20G/25%/59G rssMB=3000 hwmMB=3207 sync=1 err30m=0
+2026-11-02T01:50:04Z OK SVC=active load=0.72 mem(t/u/a)=7747/935/6476 disk(u/pct/avail)=20G/25%/59G rssMB=3000 hwmMB=3207 sync=1 err30m=0
+2026-11-02T02:20:04Z OK SVC=active load=0.65 mem(t/u/a)=7747/844/6567 disk(u/pct/avail)=20G/26%/58G rssMB=2968 hwmMB=3207 sync=1 err30m=0
+2026-11-02T02:50:04Z OK SVC=active load=0.55 mem(t/u/a)=7747/868/6543 disk(u/pct/avail)=20G/25%/59G rssMB=2974 hwmMB=3207 sync=1 err30m=0
+2026-11-02T03:20:04Z OK SVC=active load=1.25 mem(t/u/a)=7747/846/6565 disk(u/pct/avail)=20G/26%/58G rssMB=2979 hwmMB=3207 sync=1 err30m=0
+2026-11-02T03:50:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/967/6445 disk(u/pct/avail)=20G/26%/58G rssMB=2987 hwmMB=3207 sync=1 err30m=0
+2026-11-02T04:20:04Z OK SVC=active load=0.97 mem(t/u/a)=7747/845/6566 disk(u/pct/avail)=20G/26%/58G rssMB=2994 hwmMB=3207 sync=1 err30m=0
+2026-11-02T04:50:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/854/6557 disk(u/pct/avail)=20G/26%/58G rssMB=2994 hwmMB=3207 sync=1 err30m=0
+2026-11-02T05:20:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/877/6534 disk(u/pct/avail)=20G/26%/58G rssMB=2995 hwmMB=3207 sync=1 err30m=0
+2026-11-02T05:50:04Z OK SVC=active load=0.65 mem(t/u/a)=7747/872/6540 disk(u/pct/avail)=20G/26%/58G rssMB=2995 hwmMB=3207 sync=1 err30m=0
+2026-11-02T06:20:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/930/6478 disk(u/pct/avail)=20G/26%/58G rssMB=2997 hwmMB=3207 sync=1 err30m=0
+2026-11-02T06:50:04Z OK SVC=active load=0.56 mem(t/u/a)=7747/875/6536 disk(u/pct/avail)=20G/26%/58G rssMB=3001 hwmMB=3207 sync=1 err30m=0
+2026-11-02T07:20:04Z OK SVC=active load=0.93 mem(t/u/a)=7747/866/6545 disk(u/pct/avail)=20G/26%/58G rssMB=3001 hwmMB=3207 sync=1 err30m=0
+2026-11-02T07:50:04Z OK SVC=active load=1.01 mem(t/u/a)=7747/873/6538 disk(u/pct/avail)=20G/26%/58G rssMB=3003 hwmMB=3207 sync=1 err30m=0
+2026-11-02T08:20:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/879/6532 disk(u/pct/avail)=20G/26%/58G rssMB=3004 hwmMB=3207 sync=1 err30m=0
+2026-11-02T08:50:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/880/6532 disk(u/pct/avail)=20G/26%/58G rssMB=2757 hwmMB=3460 sync=1 err30m=0
+2026-11-02T09:20:05Z OK SVC=active load=0.26 mem(t/u/a)=7747/896/6515 disk(u/pct/avail)=20G/26%/58G rssMB=2758 hwmMB=3460 sync=1 err30m=0
+2026-11-02T09:50:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/886/6525 disk(u/pct/avail)=20G/26%/58G rssMB=2759 hwmMB=3460 sync=1 err30m=0
+2026-11-02T10:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/883/6528 disk(u/pct/avail)=20G/26%/58G rssMB=2760 hwmMB=3460 sync=1 err30m=0
+2026-11-02T10:50:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/880/6531 disk(u/pct/avail)=20G/26%/58G rssMB=2761 hwmMB=3460 sync=1 err30m=0
+2026-11-02T11:20:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/892/6519 disk(u/pct/avail)=20G/26%/58G rssMB=2764 hwmMB=3460 sync=1 err30m=0
+2026-11-02T11:50:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/904/6507 disk(u/pct/avail)=20G/26%/58G rssMB=2765 hwmMB=3460 sync=1 err30m=0
+2026-11-02T12:20:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/890/6521 disk(u/pct/avail)=20G/26%/58G rssMB=2767 hwmMB=3460 sync=1 err30m=0
+2026-11-02T12:50:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/899/6512 disk(u/pct/avail)=20G/26%/58G rssMB=2768 hwmMB=3460 sync=1 err30m=0
+2026-11-02T13:20:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/904/6508 disk(u/pct/avail)=20G/26%/58G rssMB=2771 hwmMB=3460 sync=1 err30m=0
+2026-11-02T13:50:06Z OK SVC=active load=1.34 mem(t/u/a)=7747/887/6524 disk(u/pct/avail)=20G/26%/58G rssMB=2767 hwmMB=3460 sync=1 err30m=0
+2026-11-02T14:20:04Z OK SVC=active load=1.03 mem(t/u/a)=7747/900/6511 disk(u/pct/avail)=20G/26%/58G rssMB=2768 hwmMB=3460 sync=1 err30m=0
+2026-11-02T14:50:04Z OK SVC=active load=0.62 mem(t/u/a)=7747/871/6540 disk(u/pct/avail)=20G/26%/58G rssMB=2770 hwmMB=3460 sync=1 err30m=0
+2026-11-02T15:20:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/891/6520 disk(u/pct/avail)=20G/26%/58G rssMB=2773 hwmMB=3460 sync=1 err30m=0
+2026-11-02T15:50:05Z OK SVC=active load=1.00 mem(t/u/a)=7747/887/6524 disk(u/pct/avail)=20G/26%/58G rssMB=2774 hwmMB=3460 sync=1 err30m=0
+2026-11-02T16:20:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/874/6538 disk(u/pct/avail)=20G/26%/58G rssMB=2779 hwmMB=3460 sync=1 err30m=0
+2026-11-02T16:50:04Z OK SVC=active load=0.93 mem(t/u/a)=7747/886/6525 disk(u/pct/avail)=20G/26%/58G rssMB=2781 hwmMB=3460 sync=1 err30m=0
+2026-11-02T17:20:05Z OK SVC=active load=1.17 mem(t/u/a)=7747/890/6522 disk(u/pct/avail)=20G/26%/58G rssMB=2782 hwmMB=3460 sync=1 err30m=0
+2026-11-02T17:50:04Z OK SVC=active load=1.01 mem(t/u/a)=7747/892/6520 disk(u/pct/avail)=20G/26%/58G rssMB=2784 hwmMB=3460 sync=1 err30m=0
+2026-11-02T18:20:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/894/6517 disk(u/pct/avail)=20G/26%/58G rssMB=2789 hwmMB=3460 sync=1 err30m=0
+2026-11-02T18:50:04Z OK SVC=active load=0.85 mem(t/u/a)=7747/878/6533 disk(u/pct/avail)=20G/26%/58G rssMB=2206 hwmMB=3460 sync=1 err30m=0
+2026-11-02T19:20:05Z OK SVC=active load=0.91 mem(t/u/a)=7747/877/6534 disk(u/pct/avail)=20G/26%/58G rssMB=2208 hwmMB=3460 sync=1 err30m=0
+2026-11-02T19:50:04Z OK SVC=active load=1.34 mem(t/u/a)=7747/885/6526 disk(u/pct/avail)=20G/26%/58G rssMB=2214 hwmMB=3460 sync=1 err30m=0
+2026-11-02T20:20:05Z OK SVC=active load=0.97 mem(t/u/a)=7747/869/6542 disk(u/pct/avail)=20G/26%/58G rssMB=2208 hwmMB=3460 sync=1 err30m=0
+2026-11-02T20:50:04Z OK SVC=active load=1.18 mem(t/u/a)=7747/880/6531 disk(u/pct/avail)=20G/26%/58G rssMB=2212 hwmMB=3460 sync=1 err30m=0
+2026-11-02T21:20:04Z OK SVC=active load=0.82 mem(t/u/a)=7747/889/6523 disk(u/pct/avail)=20G/26%/58G rssMB=2218 hwmMB=3460 sync=1 err30m=0
+2026-11-02T21:50:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/884/6527 disk(u/pct/avail)=20G/26%/58G rssMB=2223 hwmMB=3460 sync=1 err30m=0
+2026-11-02T22:20:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/900/6511 disk(u/pct/avail)=20G/26%/58G rssMB=2237 hwmMB=3460 sync=1 err30m=0
+2026-11-02T22:50:04Z OK SVC=active load=1.11 mem(t/u/a)=7747/887/6524 disk(u/pct/avail)=20G/26%/58G rssMB=2242 hwmMB=3460 sync=1 err30m=0
+2026-11-02T23:20:04Z OK SVC=active load=0.58 mem(t/u/a)=7747/901/6510 disk(u/pct/avail)=20G/26%/58G rssMB=2249 hwmMB=3460 sync=1 err30m=0
+2026-11-02T23:50:04Z OK SVC=active load=0.78 mem(t/u/a)=7747/885/6526 disk(u/pct/avail)=20G/26%/58G rssMB=2253 hwmMB=3460 sync=1 err30m=0
+2026-11-03T00:20:04Z OK SVC=active load=0.97 mem(t/u/a)=7747/904/6508 disk(u/pct/avail)=20G/26%/58G rssMB=2257 hwmMB=3460 sync=1 err30m=0
+2026-11-03T00:50:04Z OK SVC=active load=0.96 mem(t/u/a)=7747/896/6515 disk(u/pct/avail)=20G/26%/58G rssMB=2260 hwmMB=3460 sync=1 err30m=0
+2026-11-03T01:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/895/6516 disk(u/pct/avail)=20G/26%/58G rssMB=2291 hwmMB=3460 sync=1 err30m=0
+2026-11-03T01:50:04Z OK SVC=active load=1.00 mem(t/u/a)=7747/903/6508 disk(u/pct/avail)=20G/26%/58G rssMB=1927 hwmMB=3460 sync=1 err30m=0
+2026-11-03T02:20:04Z OK SVC=active load=0.66 mem(t/u/a)=7747/912/6499 disk(u/pct/avail)=20G/26%/58G rssMB=1973 hwmMB=3460 sync=1 err30m=0
+2026-11-03T02:50:04Z OK SVC=active load=0.42 mem(t/u/a)=7747/909/6502 disk(u/pct/avail)=20G/26%/58G rssMB=2019 hwmMB=3460 sync=1 err30m=0
+2026-11-03T03:20:04Z OK SVC=active load=0.53 mem(t/u/a)=7747/931/6481 disk(u/pct/avail)=20G/26%/58G rssMB=2065 hwmMB=3460 sync=1 err30m=0
+2026-11-03T03:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/912/6500 disk(u/pct/avail)=20G/26%/58G rssMB=2098 hwmMB=3460 sync=1 err30m=0
+2026-11-03T04:20:04Z OK SVC=active load=0.43 mem(t/u/a)=7747/907/6504 disk(u/pct/avail)=20G/26%/58G rssMB=2137 hwmMB=3460 sync=1 err30m=0
+2026-11-03T04:50:04Z OK SVC=active load=0.45 mem(t/u/a)=7747/981/6430 disk(u/pct/avail)=20G/26%/58G rssMB=2179 hwmMB=3460 sync=1 err30m=0
+2026-11-03T05:20:04Z OK SVC=active load=0.42 mem(t/u/a)=7747/909/6503 disk(u/pct/avail)=20G/26%/58G rssMB=2216 hwmMB=3460 sync=1 err30m=0
+2026-11-03T05:50:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/898/6514 disk(u/pct/avail)=20G/26%/58G rssMB=2256 hwmMB=3460 sync=1 err30m=0
+2026-11-03T06:20:04Z OK SVC=active load=0.58 mem(t/u/a)=7747/901/6510 disk(u/pct/avail)=20G/26%/58G rssMB=2296 hwmMB=3460 sync=1 err30m=0
+2026-11-03T06:50:04Z OK SVC=active load=0.36 mem(t/u/a)=7747/900/6511 disk(u/pct/avail)=20G/26%/58G rssMB=2332 hwmMB=3460 sync=1 err30m=0
+2026-11-03T07:20:05Z OK SVC=active load=0.84 mem(t/u/a)=7747/903/6508 disk(u/pct/avail)=20G/26%/58G rssMB=2370 hwmMB=3460 sync=1 err30m=0
+2026-11-03T07:50:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/910/6501 disk(u/pct/avail)=20G/26%/58G rssMB=2407 hwmMB=3460 sync=1 err30m=0
+2026-11-03T08:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/905/6506 disk(u/pct/avail)=20G/26%/58G rssMB=2444 hwmMB=3460 sync=1 err30m=0
+2026-11-03T08:50:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/899/6512 disk(u/pct/avail)=20G/26%/58G rssMB=2473 hwmMB=3460 sync=1 err30m=0
+2026-11-03T09:20:04Z OK SVC=active load=0.91 mem(t/u/a)=7747/904/6508 disk(u/pct/avail)=20G/26%/58G rssMB=2509 hwmMB=3460 sync=1 err30m=0
+2026-11-03T09:50:04Z OK SVC=active load=0.59 mem(t/u/a)=7747/912/6500 disk(u/pct/avail)=20G/26%/58G rssMB=2540 hwmMB=3460 sync=1 err30m=0
+2026-11-03T10:20:06Z OK SVC=active load=0.28 mem(t/u/a)=7747/917/6494 disk(u/pct/avail)=20G/26%/58G rssMB=2547 hwmMB=3460 sync=1 err30m=0
+2026-11-03T10:50:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/898/6513 disk(u/pct/avail)=20G/26%/58G rssMB=2553 hwmMB=3460 sync=1 err30m=0
+2026-11-03T11:20:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/907/6504 disk(u/pct/avail)=21G/27%/57G rssMB=2383 hwmMB=3460 sync=1 err30m=0
+2026-11-03T11:50:04Z OK SVC=active load=0.48 mem(t/u/a)=7747/879/6532 disk(u/pct/avail)=21G/27%/57G rssMB=2386 hwmMB=3460 sync=1 err30m=0
+2026-11-03T12:20:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/886/6526 disk(u/pct/avail)=21G/27%/57G rssMB=2390 hwmMB=3460 sync=1 err30m=0
+2026-11-03T12:50:04Z OK SVC=active load=1.65 mem(t/u/a)=7747/895/6512 disk(u/pct/avail)=21G/27%/57G rssMB=2395 hwmMB=3460 sync=1 err30m=0
+2026-11-03T13:20:04Z OK SVC=active load=0.95 mem(t/u/a)=7747/908/6499 disk(u/pct/avail)=21G/27%/57G rssMB=2394 hwmMB=3460 sync=1 err30m=0
+2026-11-03T13:50:04Z OK SVC=active load=0.49 mem(t/u/a)=7747/904/6503 disk(u/pct/avail)=21G/27%/57G rssMB=2397 hwmMB=3460 sync=1 err30m=0
+2026-11-03T14:20:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/921/6486 disk(u/pct/avail)=21G/27%/57G rssMB=2401 hwmMB=3460 sync=1 err30m=0
+2026-11-03T14:50:05Z OK SVC=active load=0.52 mem(t/u/a)=7747/912/6496 disk(u/pct/avail)=21G/27%/57G rssMB=2406 hwmMB=3460 sync=1 err30m=0
+2026-11-03T15:20:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/907/6501 disk(u/pct/avail)=21G/27%/57G rssMB=2417 hwmMB=3460 sync=1 err30m=0
+2026-11-03T15:50:04Z OK SVC=active load=0.67 mem(t/u/a)=7747/905/6503 disk(u/pct/avail)=21G/27%/57G rssMB=2421 hwmMB=3460 sync=1 err30m=0
+2026-11-03T16:20:05Z OK SVC=active load=1.39 mem(t/u/a)=7747/920/6488 disk(u/pct/avail)=21G/27%/57G rssMB=2423 hwmMB=3460 sync=1 err30m=0
+2026-11-03T16:50:05Z OK SVC=active load=1.04 mem(t/u/a)=7747/914/6493 disk(u/pct/avail)=21G/27%/57G rssMB=2420 hwmMB=3460 sync=1 err30m=0
+2026-11-03T17:20:04Z OK SVC=active load=0.80 mem(t/u/a)=7747/883/6528 disk(u/pct/avail)=21G/27%/57G rssMB=2426 hwmMB=3460 sync=1 err30m=0
+2026-11-03T17:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/906/6505 disk(u/pct/avail)=21G/27%/57G rssMB=2423 hwmMB=3460 sync=1 err30m=0
+2026-11-03T18:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/908/6503 disk(u/pct/avail)=21G/27%/57G rssMB=2414 hwmMB=3460 sync=1 err30m=0
+2026-11-03T18:50:04Z OK SVC=active load=0.94 mem(t/u/a)=7747/907/6504 disk(u/pct/avail)=21G/27%/57G rssMB=2418 hwmMB=3460 sync=1 err30m=0
+2026-11-03T19:20:05Z OK SVC=active load=1.15 mem(t/u/a)=7747/906/6505 disk(u/pct/avail)=21G/27%/57G rssMB=2416 hwmMB=3460 sync=1 err30m=0
+2026-11-03T19:50:04Z OK SVC=active load=0.81 mem(t/u/a)=7747/905/6506 disk(u/pct/avail)=21G/28%/57G rssMB=2329 hwmMB=3460 sync=1 err30m=0
+2026-11-03T20:20:04Z OK SVC=active load=0.83 mem(t/u/a)=7747/887/6524 disk(u/pct/avail)=21G/28%/57G rssMB=2330 hwmMB=3460 sync=1 err30m=0
+2026-11-03T20:50:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/878/6533 disk(u/pct/avail)=21G/28%/57G rssMB=2334 hwmMB=3460 sync=1 err30m=0
+2026-11-03T21:20:04Z OK SVC=active load=0.86 mem(t/u/a)=7747/893/6518 disk(u/pct/avail)=21G/28%/57G rssMB=2366 hwmMB=3460 sync=1 err30m=0
+2026-11-03T21:50:04Z OK SVC=active load=0.91 mem(t/u/a)=7747/913/6498 disk(u/pct/avail)=21G/28%/57G rssMB=2372 hwmMB=3460 sync=1 err30m=0
+2026-11-03T22:20:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/932/6479 disk(u/pct/avail)=22G/28%/57G rssMB=2381 hwmMB=3460 sync=1 err30m=0
+2026-11-03T22:50:04Z OK SVC=active load=0.57 mem(t/u/a)=7747/942/6469 disk(u/pct/avail)=21G/28%/57G rssMB=2384 hwmMB=3460 sync=1 err30m=0
+2026-11-03T23:20:04Z OK SVC=active load=0.74 mem(t/u/a)=7747/908/6503 disk(u/pct/avail)=21G/28%/57G rssMB=2387 hwmMB=3460 sync=1 err30m=0
+2026-11-03T23:50:04Z OK SVC=active load=1.00 mem(t/u/a)=7747/911/6500 disk(u/pct/avail)=22G/28%/57G rssMB=2389 hwmMB=3460 sync=1 err30m=0
+2026-11-04T00:20:04Z OK SVC=active load=0.90 mem(t/u/a)=7747/916/6495 disk(u/pct/avail)=22G/28%/57G rssMB=2395 hwmMB=3460 sync=1 err30m=0
+2026-11-04T00:50:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/900/6511 disk(u/pct/avail)=22G/28%/57G rssMB=2401 hwmMB=3460 sync=1 err30m=0
+2026-11-04T01:20:04Z OK SVC=active load=0.77 mem(t/u/a)=7747/932/6479 disk(u/pct/avail)=22G/28%/57G rssMB=2388 hwmMB=3460 sync=1 err30m=0
+2026-11-04T01:50:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/912/6499 disk(u/pct/avail)=22G/28%/57G rssMB=2393 hwmMB=3460 sync=1 err30m=0
+2026-11-04T02:20:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/905/6506 disk(u/pct/avail)=22G/28%/57G rssMB=2395 hwmMB=3460 sync=1 err30m=0
+2026-11-04T02:50:12Z OK SVC=active load=0.68 mem(t/u/a)=7747/930/6482 disk(u/pct/avail)=22G/28%/57G rssMB=2331 hwmMB=3460 sync=1 err30m=0
+2026-11-04T03:20:04Z OK SVC=active load=0.64 mem(t/u/a)=7747/926/6485 disk(u/pct/avail)=22G/28%/57G rssMB=2326 hwmMB=3460 sync=1 err30m=0
+2026-11-04T03:50:04Z OK SVC=active load=1.13 mem(t/u/a)=7747/914/6497 disk(u/pct/avail)=22G/28%/57G rssMB=2328 hwmMB=3460 sync=1 err30m=0
+2026-11-04T04:20:04Z OK SVC=active load=1.05 mem(t/u/a)=7747/915/6496 disk(u/pct/avail)=22G/28%/57G rssMB=2334 hwmMB=3460 sync=1 err30m=0
+2026-11-04T04:50:05Z OK SVC=active load=0.75 mem(t/u/a)=7747/905/6506 disk(u/pct/avail)=22G/28%/57G rssMB=2338 hwmMB=3460 sync=1 err30m=0
+2026-11-04T05:20:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/901/6510 disk(u/pct/avail)=22G/28%/57G rssMB=2342 hwmMB=3460 sync=1 err30m=0
+2026-11-04T05:50:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/942/6469 disk(u/pct/avail)=22G/28%/57G rssMB=2213 hwmMB=3460 sync=1 err30m=0
+2026-11-04T06:20:04Z OK SVC=active load=0.68 mem(t/u/a)=7747/918/6493 disk(u/pct/avail)=22G/28%/57G rssMB=2215 hwmMB=3460 sync=1 err30m=0
+2026-11-04T06:50:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/910/6501 disk(u/pct/avail)=22G/28%/57G rssMB=2221 hwmMB=3460 sync=1 err30m=0
+2026-11-04T07:20:04Z OK SVC=active load=1.08 mem(t/u/a)=7747/934/6477 disk(u/pct/avail)=22G/28%/57G rssMB=2178 hwmMB=3460 sync=1 err30m=0
+2026-11-04T07:50:04Z OK SVC=active load=0.97 mem(t/u/a)=7747/936/6475 disk(u/pct/avail)=22G/28%/57G rssMB=2190 hwmMB=3460 sync=1 err30m=0
+2026-11-04T08:20:04Z OK SVC=active load=0.60 mem(t/u/a)=7747/927/6484 disk(u/pct/avail)=22G/28%/57G rssMB=2199 hwmMB=3460 sync=1 err30m=0
+2026-11-04T08:50:04Z OK SVC=active load=0.65 mem(t/u/a)=7747/928/6483 disk(u/pct/avail)=22G/28%/57G rssMB=2188 hwmMB=3460 sync=1 err30m=0
+2026-11-04T09:20:04Z OK SVC=active load=0.88 mem(t/u/a)=7747/914/6498 disk(u/pct/avail)=22G/28%/57G rssMB=2193 hwmMB=3460 sync=1 err30m=0
+2026-11-04T09:50:04Z OK SVC=active load=1.06 mem(t/u/a)=7747/919/6492 disk(u/pct/avail)=22G/28%/56G rssMB=2195 hwmMB=3460 sync=1 err30m=0
+2026-11-04T10:20:04Z OK SVC=active load=0.71 mem(t/u/a)=7747/900/6512 disk(u/pct/avail)=22G/28%/56G rssMB=2198 hwmMB=3460 sync=1 err30m=0
+2026-11-04T10:50:04Z OK SVC=active load=0.73 mem(t/u/a)=7747/925/6486 disk(u/pct/avail)=22G/28%/56G rssMB=2198 hwmMB=3460 sync=1 err30m=0
+2026-11-04T11:20:05Z OK SVC=active load=0.58 mem(t/u/a)=7747/917/6494 disk(u/pct/avail)=22G/28%/56G rssMB=2201 hwmMB=3460 sync=1 err30m=0
+2026-11-04T11:50:05Z OK SVC=active load=0.71 mem(t/u/a)=7747/899/6513 disk(u/pct/avail)=22G/28%/56G rssMB=2203 hwmMB=3460 sync=1 err30m=0
+2026-11-04T12:20:04Z OK SVC=active load=0.92 mem(t/u/a)=7747/951/6456 disk(u/pct/avail)=22G/28%/56G rssMB=2216 hwmMB=3460 sync=1 err30m=0
+2026-11-04T12:50:05Z ALERT SVC=active load=0.06 mem(t/u/a)=7747/434/6984 disk(u/pct/avail)=21G/27%/57G rssMB=374 hwmMB=374 sync=1 err30m=25 :: journalErrors=25
+2026-11-04T13:20:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/536/6882 disk(u/pct/avail)=21G/27%/57G rssMB=1578 hwmMB=1578 sync=1 err30m=0
+2026-11-04T13:50:04Z OK SVC=active load=0.17 mem(t/u/a)=7747/630/6788 disk(u/pct/avail)=21G/27%/57G rssMB=1354 hwmMB=1354 sync=1 err30m=0
+2026-11-04T14:20:04Z OK SVC=active load=0.15 mem(t/u/a)=7747/567/6851 disk(u/pct/avail)=22G/28%/57G rssMB=515 hwmMB=515 sync=1 err30m=0
+2026-11-04T14:50:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/640/6778 disk(u/pct/avail)=22G/28%/57G rssMB=1643 hwmMB=1643 sync=1 err30m=0
+2026-11-04T15:20:04Z ALERT SVC=active load=0.10 mem(t/u/a)=7747/672/6745 disk(u/pct/avail)=22G/28%/57G rssMB=744 hwmMB=744 sync=1 err30m=1 :: journalErrors=1
+2026-11-04T15:50:04Z OK SVC=active load=0.02 mem(t/u/a)=7747/939/6479 disk(u/pct/avail)=22G/28%/57G rssMB=2219 hwmMB=2219 sync=1 err30m=0
+2026-11-04T16:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/443/6975 disk(u/pct/avail)=22G/28%/57G rssMB=97 hwmMB=101 sync=1 err30m=0
+2026-11-04T16:50:04Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/390/7027 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-04T17:20:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/545/6873 disk(u/pct/avail)=22G/28%/57G rssMB=623 hwmMB=623 sync=1 err30m=0
+2026-11-04T17:50:04Z ALERT SVC=active load=0.29 mem(t/u/a)=7747/630/6788 disk(u/pct/avail)=22G/28%/57G rssMB=1045 hwmMB=1045 sync=1 err30m=1 :: journalErrors=1
+2026-11-04T18:20:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/637/6781 disk(u/pct/avail)=22G/28%/57G rssMB=2104 hwmMB=2104 sync=1 err30m=0
+2026-11-04T18:50:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/633/6784 disk(u/pct/avail)=22G/28%/57G rssMB=2722 hwmMB=2722 sync=1 err30m=0
+2026-11-04T19:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/647/6770 disk(u/pct/avail)=22G/28%/57G rssMB=2722 hwmMB=2722 sync=1 err30m=0
+2026-11-04T19:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/646/6771 disk(u/pct/avail)=22G/28%/57G rssMB=2722 hwmMB=2722 sync=1 err30m=0
+2026-11-04T20:20:04Z OK SVC=active load=0.02 mem(t/u/a)=7747/638/6780 disk(u/pct/avail)=22G/28%/57G rssMB=2722 hwmMB=2722 sync=1 err30m=0
+2026-11-04T20:50:06Z OK SVC=active load=0.19 mem(t/u/a)=7747/638/6779 disk(u/pct/avail)=22G/28%/57G rssMB=2722 hwmMB=2722 sync=1 err30m=0
+2026-11-04T21:20:04Z OK SVC=active load=0.03 mem(t/u/a)=7747/635/6783 disk(u/pct/avail)=22G/28%/57G rssMB=2722 hwmMB=2722 sync=1 err30m=0
+2026-11-04T21:50:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/396/7021 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-04T22:20:04Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/384/7033 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-04T22:50:04Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/387/7031 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-04T23:20:04Z ALERT SVC=inactive load=0.20 mem(t/u/a)=7747/397/7020 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-04T23:50:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/399/7019 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T00:20:04Z ALERT SVC=inactive load=0.18 mem(t/u/a)=7747/402/7015 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T00:50:04Z ALERT SVC=inactive load=0.05 mem(t/u/a)=7747/404/7014 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T01:20:04Z ALERT SVC=inactive load=0.09 mem(t/u/a)=7747/395/7022 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T01:50:04Z ALERT SVC=inactive load=0.16 mem(t/u/a)=7747/398/7019 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T02:20:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/382/7036 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T02:50:04Z ALERT SVC=inactive load=0.09 mem(t/u/a)=7747/389/7028 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T03:20:04Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/388/7029 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T03:50:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/395/7018 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T04:20:04Z ALERT SVC=inactive load=0.16 mem(t/u/a)=7747/407/7006 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T04:50:04Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/394/7019 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T05:20:04Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/407/7006 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T05:50:04Z ALERT SVC=inactive load=0.10 mem(t/u/a)=7747/411/7002 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T06:20:04Z ALERT SVC=inactive load=0.05 mem(t/u/a)=7747/409/7004 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T06:50:04Z ALERT SVC=inactive load=0.18 mem(t/u/a)=7747/414/6999 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T07:20:04Z ALERT SVC=inactive load=0.29 mem(t/u/a)=7747/410/7003 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T07:50:04Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/414/6999 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T08:20:04Z ALERT SVC=inactive load=0.22 mem(t/u/a)=7747/408/7005 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T08:50:04Z ALERT SVC=inactive load=0.04 mem(t/u/a)=7747/392/7021 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T09:20:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/402/7010 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T09:50:04Z ALERT SVC=inactive load=0.19 mem(t/u/a)=7747/414/6999 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T10:20:04Z ALERT SVC=inactive load=0.03 mem(t/u/a)=7747/402/7011 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T10:50:04Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/394/7018 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T11:20:04Z ALERT SVC=inactive load=0.00 mem(t/u/a)=7747/409/7003 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T11:50:04Z ALERT SVC=inactive load=0.01 mem(t/u/a)=7747/409/7004 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T12:20:04Z ALERT SVC=inactive load=0.11 mem(t/u/a)=7747/412/7000 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T12:50:04Z ALERT SVC=inactive load=0.02 mem(t/u/a)=7747/396/7017 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T13:20:04Z ALERT SVC=inactive load=0.08 mem(t/u/a)=7747/417/6995 disk(u/pct/avail)=21G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T13:50:04Z ALERT SVC=inactive load=0.07 mem(t/u/a)=7747/414/6999 disk(u/pct/avail)=22G/28%/57G rssMB=? hwmMB=? sync=1 err30m=0 :: service=inactive
+2026-11-05T14:20:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/508/6905 disk(u/pct/avail)=22G/28%/57G rssMB=1040 hwmMB=1040 sync=1 err30m=0
+2026-11-05T14:50:05Z OK SVC=active load=0.17 mem(t/u/a)=7747/520/6893 disk(u/pct/avail)=21G/28%/57G rssMB=2141 hwmMB=2141 sync=1 err30m=0
+2026-11-05T15:20:04Z OK SVC=active load=0.15 mem(t/u/a)=7747/541/6871 disk(u/pct/avail)=22G/28%/57G rssMB=2725 hwmMB=2725 sync=1 err30m=0
+2026-11-05T15:50:05Z OK SVC=active load=0.64 mem(t/u/a)=7747/533/6879 disk(u/pct/avail)=22G/28%/57G rssMB=2730 hwmMB=2730 sync=1 err30m=0
+2026-11-05T16:20:05Z OK SVC=active load=0.20 mem(t/u/a)=7747/536/6876 disk(u/pct/avail)=22G/28%/57G rssMB=2736 hwmMB=2736 sync=1 err30m=0
+2026-11-05T16:50:05Z OK SVC=active load=0.08 mem(t/u/a)=7747/565/6847 disk(u/pct/avail)=22G/28%/57G rssMB=2743 hwmMB=2743 sync=1 err30m=0
+2026-11-05T17:20:05Z OK SVC=active load=0.13 mem(t/u/a)=7747/572/6840 disk(u/pct/avail)=22G/28%/57G rssMB=2749 hwmMB=2749 sync=1 err30m=0
+2026-11-05T17:50:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/575/6837 disk(u/pct/avail)=22G/28%/57G rssMB=2755 hwmMB=2755 sync=1 err30m=0
+2026-11-05T18:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/570/6842 disk(u/pct/avail)=22G/28%/57G rssMB=2761 hwmMB=2761 sync=1 err30m=0
+2026-11-05T18:50:05Z OK SVC=active load=0.19 mem(t/u/a)=7747/568/6845 disk(u/pct/avail)=22G/28%/57G rssMB=2769 hwmMB=2769 sync=1 err30m=0
+2026-11-05T19:20:05Z OK SVC=active load=0.13 mem(t/u/a)=7747/593/6819 disk(u/pct/avail)=22G/28%/57G rssMB=2775 hwmMB=2775 sync=1 err30m=0
+2026-11-05T19:50:05Z OK SVC=active load=0.16 mem(t/u/a)=7747/611/6802 disk(u/pct/avail)=22G/28%/57G rssMB=2785 hwmMB=2785 sync=1 err30m=0
+2026-11-05T20:20:05Z OK SVC=active load=0.05 mem(t/u/a)=7747/607/6805 disk(u/pct/avail)=22G/28%/57G rssMB=2793 hwmMB=2793 sync=1 err30m=0
+2026-11-05T20:50:05Z OK SVC=active load=0.26 mem(t/u/a)=7747/623/6789 disk(u/pct/avail)=22G/28%/57G rssMB=2798 hwmMB=2799 sync=1 err30m=0
+2026-11-05T21:20:05Z OK SVC=active load=0.25 mem(t/u/a)=7747/617/6795 disk(u/pct/avail)=22G/28%/57G rssMB=2806 hwmMB=2807 sync=1 err30m=0
+2026-11-05T21:50:05Z OK SVC=active load=0.16 mem(t/u/a)=7747/636/6777 disk(u/pct/avail)=22G/28%/57G rssMB=2813 hwmMB=2815 sync=1 err30m=0
+2026-11-05T22:20:05Z OK SVC=active load=0.69 mem(t/u/a)=7747/616/6796 disk(u/pct/avail)=22G/28%/57G rssMB=2820 hwmMB=2821 sync=1 err30m=0
+2026-11-05T22:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/635/6778 disk(u/pct/avail)=22G/28%/57G rssMB=2827 hwmMB=2828 sync=1 err30m=0
+2026-11-05T23:20:04Z OK SVC=active load=0.15 mem(t/u/a)=7747/638/6774 disk(u/pct/avail)=22G/28%/57G rssMB=2834 hwmMB=2835 sync=1 err30m=0
+2026-11-05T23:50:04Z OK SVC=active load=0.40 mem(t/u/a)=7747/648/6765 disk(u/pct/avail)=22G/28%/57G rssMB=2841 hwmMB=2844 sync=1 err30m=0
+2026-11-06T00:20:05Z OK SVC=active load=0.14 mem(t/u/a)=7747/652/6760 disk(u/pct/avail)=22G/28%/57G rssMB=2848 hwmMB=2849 sync=1 err30m=0
+2026-11-06T00:50:05Z OK SVC=active load=0.33 mem(t/u/a)=7747/665/6748 disk(u/pct/avail)=22G/28%/57G rssMB=2856 hwmMB=2856 sync=1 err30m=0
+2026-11-06T01:20:05Z OK SVC=active load=0.12 mem(t/u/a)=7747/668/6744 disk(u/pct/avail)=22G/28%/57G rssMB=2865 hwmMB=2865 sync=1 err30m=0
+2026-11-06T01:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/670/6742 disk(u/pct/avail)=22G/28%/57G rssMB=2871 hwmMB=2871 sync=1 err30m=0
+2026-11-06T02:20:05Z OK SVC=active load=0.13 mem(t/u/a)=7747/682/6730 disk(u/pct/avail)=22G/28%/57G rssMB=2877 hwmMB=2877 sync=1 err30m=0
+2026-11-06T02:50:05Z OK SVC=active load=0.07 mem(t/u/a)=7747/694/6719 disk(u/pct/avail)=22G/28%/57G rssMB=2883 hwmMB=2883 sync=1 err30m=0
+2026-11-06T03:20:04Z OK SVC=active load=0.24 mem(t/u/a)=7747/698/6715 disk(u/pct/avail)=22G/28%/56G rssMB=2889 hwmMB=2889 sync=1 err30m=0
+2026-11-06T03:50:04Z OK SVC=active load=0.11 mem(t/u/a)=7747/706/6706 disk(u/pct/avail)=22G/28%/57G rssMB=2895 hwmMB=2895 sync=1 err30m=0
+2026-11-06T04:20:05Z OK SVC=active load=0.10 mem(t/u/a)=7747/725/6687 disk(u/pct/avail)=22G/28%/57G rssMB=2901 hwmMB=2901 sync=1 err30m=0
+2026-11-06T04:50:04Z OK SVC=active load=0.26 mem(t/u/a)=7747/730/6682 disk(u/pct/avail)=22G/28%/56G rssMB=2908 hwmMB=2908 sync=1 err30m=0
+2026-11-06T05:20:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/734/6678 disk(u/pct/avail)=22G/28%/56G rssMB=2913 hwmMB=2913 sync=1 err30m=0
+2026-11-06T05:50:04Z OK SVC=active load=0.49 mem(t/u/a)=7747/749/6663 disk(u/pct/avail)=22G/28%/56G rssMB=2919 hwmMB=2919 sync=1 err30m=0
+2026-11-06T06:20:04Z OK SVC=active load=0.28 mem(t/u/a)=7747/744/6668 disk(u/pct/avail)=22G/28%/56G rssMB=2924 hwmMB=2925 sync=1 err30m=0
+2026-11-06T06:50:05Z OK SVC=active load=0.29 mem(t/u/a)=7747/730/6683 disk(u/pct/avail)=22G/28%/56G rssMB=2925 hwmMB=2925 sync=1 err30m=0
+2026-11-06T07:20:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/717/6695 disk(u/pct/avail)=22G/28%/56G rssMB=2922 hwmMB=2925 sync=1 err30m=0
+2026-11-06T07:50:04Z OK SVC=active load=0.16 mem(t/u/a)=7747/730/6683 disk(u/pct/avail)=22G/28%/56G rssMB=2923 hwmMB=2925 sync=1 err30m=0
+2026-11-06T08:20:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/739/6674 disk(u/pct/avail)=22G/28%/56G rssMB=2924 hwmMB=2925 sync=1 err30m=0
+2026-11-06T08:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/726/6686 disk(u/pct/avail)=22G/28%/56G rssMB=2925 hwmMB=2925 sync=1 err30m=0
+2026-11-06T09:20:04Z OK SVC=active load=0.44 mem(t/u/a)=7747/724/6688 disk(u/pct/avail)=22G/28%/56G rssMB=2926 hwmMB=2926 sync=1 err30m=0
+2026-11-06T09:50:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/741/6671 disk(u/pct/avail)=22G/28%/56G rssMB=2929 hwmMB=2929 sync=1 err30m=0
+2026-11-06T10:20:06Z OK SVC=active load=0.65 mem(t/u/a)=7747/746/6667 disk(u/pct/avail)=22G/28%/56G rssMB=2930 hwmMB=2930 sync=1 err30m=0
+2026-11-06T10:50:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/744/6668 disk(u/pct/avail)=22G/28%/56G rssMB=2935 hwmMB=2935 sync=1 err30m=0
+2026-11-06T11:20:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/752/6660 disk(u/pct/avail)=22G/28%/56G rssMB=2940 hwmMB=2940 sync=1 err30m=0
+2026-11-06T11:50:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/710/6703 disk(u/pct/avail)=22G/28%/56G rssMB=2823 hwmMB=3120 sync=1 err30m=0
+2026-11-06T12:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/729/6683 disk(u/pct/avail)=22G/28%/56G rssMB=2825 hwmMB=3120 sync=1 err30m=0
+2026-11-06T12:50:04Z OK SVC=active load=0.13 mem(t/u/a)=7747/725/6687 disk(u/pct/avail)=22G/28%/56G rssMB=2826 hwmMB=3120 sync=1 err30m=0
+2026-11-06T13:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/738/6674 disk(u/pct/avail)=22G/28%/56G rssMB=2830 hwmMB=3120 sync=1 err30m=0
+2026-11-06T13:50:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/732/6681 disk(u/pct/avail)=22G/28%/56G rssMB=2833 hwmMB=3120 sync=1 err30m=0
+2026-11-06T14:20:04Z OK SVC=active load=0.26 mem(t/u/a)=7747/731/6681 disk(u/pct/avail)=22G/28%/56G rssMB=2835 hwmMB=3120 sync=1 err30m=0
+2026-11-06T14:50:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/753/6660 disk(u/pct/avail)=22G/28%/56G rssMB=2841 hwmMB=3120 sync=1 err30m=0
+2026-11-06T15:20:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/759/6653 disk(u/pct/avail)=22G/28%/56G rssMB=2844 hwmMB=3120 sync=1 err30m=0
+2026-11-06T15:50:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/768/6644 disk(u/pct/avail)=22G/28%/56G rssMB=2850 hwmMB=3120 sync=1 err30m=0
+2026-11-06T16:20:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/769/6644 disk(u/pct/avail)=22G/28%/56G rssMB=2851 hwmMB=3120 sync=1 err30m=0
+2026-11-06T16:50:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/760/6652 disk(u/pct/avail)=22G/28%/56G rssMB=2855 hwmMB=3120 sync=1 err30m=0
+2026-11-06T17:20:04Z OK SVC=active load=0.50 mem(t/u/a)=7747/757/6655 disk(u/pct/avail)=22G/28%/56G rssMB=2856 hwmMB=3120 sync=1 err30m=0
+2026-11-06T17:50:04Z OK SVC=active load=0.16 mem(t/u/a)=7747/760/6652 disk(u/pct/avail)=22G/28%/56G rssMB=2857 hwmMB=3120 sync=1 err30m=0
+2026-11-06T18:20:04Z OK SVC=active load=0.15 mem(t/u/a)=7747/755/6658 disk(u/pct/avail)=22G/28%/56G rssMB=2857 hwmMB=3120 sync=1 err30m=0
+2026-11-06T18:50:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/758/6655 disk(u/pct/avail)=22G/29%/56G rssMB=2858 hwmMB=3120 sync=1 err30m=0
+2026-11-06T19:20:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/777/6635 disk(u/pct/avail)=22G/29%/56G rssMB=2859 hwmMB=3120 sync=1 err30m=0
+2026-11-06T19:50:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/770/6643 disk(u/pct/avail)=22G/28%/56G rssMB=2860 hwmMB=3120 sync=1 err30m=0
+2026-11-06T20:20:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/779/6633 disk(u/pct/avail)=22G/29%/56G rssMB=2861 hwmMB=3120 sync=1 err30m=0
+2026-11-06T20:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/768/6644 disk(u/pct/avail)=22G/29%/56G rssMB=2861 hwmMB=3120 sync=1 err30m=0
+2026-11-06T21:20:04Z OK SVC=active load=0.28 mem(t/u/a)=7747/760/6652 disk(u/pct/avail)=22G/29%/56G rssMB=2862 hwmMB=3120 sync=1 err30m=0
+2026-11-06T21:50:04Z OK SVC=active load=0.14 mem(t/u/a)=7747/749/6663 disk(u/pct/avail)=22G/29%/56G rssMB=2863 hwmMB=3120 sync=1 err30m=0
+2026-11-06T22:20:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/758/6654 disk(u/pct/avail)=22G/29%/56G rssMB=2865 hwmMB=3120 sync=1 err30m=0
+2026-11-06T22:50:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/760/6653 disk(u/pct/avail)=22G/29%/56G rssMB=2865 hwmMB=3120 sync=1 err30m=0
+2026-11-06T23:20:04Z OK SVC=active load=0.43 mem(t/u/a)=7747/768/6645 disk(u/pct/avail)=22G/29%/56G rssMB=2866 hwmMB=3120 sync=1 err30m=0
+2026-11-06T23:50:04Z OK SVC=active load=0.19 mem(t/u/a)=7747/759/6653 disk(u/pct/avail)=22G/29%/56G rssMB=2866 hwmMB=3120 sync=1 err30m=0
+2026-11-07T00:20:04Z OK SVC=active load=0.24 mem(t/u/a)=7747/751/6661 disk(u/pct/avail)=22G/29%/56G rssMB=2865 hwmMB=3120 sync=1 err30m=0
+2026-11-07T00:50:04Z OK SVC=active load=0.24 mem(t/u/a)=7747/750/6662 disk(u/pct/avail)=22G/29%/56G rssMB=2862 hwmMB=3120 sync=1 err30m=0
+2026-11-07T01:20:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/749/6663 disk(u/pct/avail)=22G/29%/56G rssMB=2862 hwmMB=3120 sync=1 err30m=0
+2026-11-07T01:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/746/6666 disk(u/pct/avail)=22G/29%/56G rssMB=2860 hwmMB=3120 sync=1 err30m=0
+2026-11-07T02:20:04Z OK SVC=active load=0.13 mem(t/u/a)=7747/771/6641 disk(u/pct/avail)=22G/29%/56G rssMB=2860 hwmMB=3120 sync=1 err30m=0
+2026-11-07T02:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/750/6662 disk(u/pct/avail)=22G/29%/56G rssMB=2860 hwmMB=3120 sync=1 err30m=0
+2026-11-07T03:20:04Z OK SVC=active load=0.17 mem(t/u/a)=7747/746/6667 disk(u/pct/avail)=22G/29%/56G rssMB=2859 hwmMB=3120 sync=1 err30m=0
+2026-11-07T03:50:04Z OK SVC=active load=0.02 mem(t/u/a)=7747/756/6657 disk(u/pct/avail)=22G/29%/56G rssMB=2858 hwmMB=3120 sync=1 err30m=0
+2026-11-07T04:20:04Z OK SVC=active load=0.32 mem(t/u/a)=7747/765/6647 disk(u/pct/avail)=22G/29%/56G rssMB=2847 hwmMB=3120 sync=1 err30m=0
+2026-11-07T04:50:04Z OK SVC=active load=0.33 mem(t/u/a)=7747/755/6658 disk(u/pct/avail)=22G/29%/56G rssMB=2848 hwmMB=3120 sync=1 err30m=0
+2026-11-07T05:20:04Z OK SVC=active load=0.54 mem(t/u/a)=7747/746/6666 disk(u/pct/avail)=22G/29%/56G rssMB=2848 hwmMB=3120 sync=1 err30m=0
+2026-11-07T05:50:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/779/6634 disk(u/pct/avail)=22G/29%/56G rssMB=2849 hwmMB=3120 sync=1 err30m=0
+2026-11-07T06:20:04Z OK SVC=active load=0.75 mem(t/u/a)=7747/763/6649 disk(u/pct/avail)=22G/29%/56G rssMB=2849 hwmMB=3120 sync=1 err30m=0
+2026-11-07T06:50:04Z OK SVC=active load=0.09 mem(t/u/a)=7747/769/6643 disk(u/pct/avail)=22G/29%/56G rssMB=2849 hwmMB=3120 sync=1 err30m=0
+2026-11-07T07:20:04Z OK SVC=active load=0.55 mem(t/u/a)=7747/770/6643 disk(u/pct/avail)=22G/29%/56G rssMB=2850 hwmMB=3120 sync=1 err30m=0
+2026-11-07T07:50:04Z OK SVC=active load=0.27 mem(t/u/a)=7747/754/6658 disk(u/pct/avail)=22G/29%/56G rssMB=2850 hwmMB=3120 sync=1 err30m=0
+2026-11-07T08:20:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/766/6646 disk(u/pct/avail)=22G/29%/56G rssMB=2851 hwmMB=3120 sync=1 err30m=0
+2026-11-07T08:50:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/742/6671 disk(u/pct/avail)=22G/29%/56G rssMB=2732 hwmMB=3191 sync=1 err30m=0
+2026-11-07T09:20:04Z OK SVC=active load=0.09 mem(t/u/a)=7747/754/6659 disk(u/pct/avail)=22G/29%/56G rssMB=2732 hwmMB=3191 sync=1 err30m=0
+2026-11-07T09:50:04Z OK SVC=active load=0.28 mem(t/u/a)=7747/756/6656 disk(u/pct/avail)=22G/29%/56G rssMB=2732 hwmMB=3191 sync=1 err30m=0
+2026-11-07T10:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/765/6648 disk(u/pct/avail)=22G/29%/56G rssMB=2733 hwmMB=3191 sync=1 err30m=0
+2026-11-07T10:50:04Z OK SVC=active load=0.15 mem(t/u/a)=7747/750/6662 disk(u/pct/avail)=22G/29%/56G rssMB=2733 hwmMB=3191 sync=1 err30m=0
+2026-11-07T11:20:04Z OK SVC=active load=0.31 mem(t/u/a)=7747/764/6648 disk(u/pct/avail)=22G/29%/56G rssMB=2734 hwmMB=3191 sync=1 err30m=0
+2026-11-07T11:50:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/751/6661 disk(u/pct/avail)=22G/29%/56G rssMB=2734 hwmMB=3191 sync=1 err30m=0
+2026-11-07T12:20:04Z OK SVC=active load=0.33 mem(t/u/a)=7747/758/6655 disk(u/pct/avail)=22G/29%/56G rssMB=2735 hwmMB=3191 sync=1 err30m=0
+2026-11-07T12:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/754/6658 disk(u/pct/avail)=22G/29%/56G rssMB=2735 hwmMB=3191 sync=1 err30m=0
+2026-11-07T13:20:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/758/6654 disk(u/pct/avail)=22G/29%/56G rssMB=2737 hwmMB=3191 sync=1 err30m=0
+2026-11-07T13:50:04Z OK SVC=active load=0.14 mem(t/u/a)=7747/765/6648 disk(u/pct/avail)=22G/29%/56G rssMB=2740 hwmMB=3191 sync=1 err30m=0
+2026-11-07T14:20:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/759/6653 disk(u/pct/avail)=22G/29%/56G rssMB=2742 hwmMB=3191 sync=1 err30m=0
+2026-11-07T14:50:04Z OK SVC=active load=0.06 mem(t/u/a)=7747/757/6655 disk(u/pct/avail)=23G/29%/56G rssMB=2743 hwmMB=3191 sync=1 err30m=0
+2026-11-07T15:20:04Z OK SVC=active load=0.04 mem(t/u/a)=7747/754/6658 disk(u/pct/avail)=23G/29%/56G rssMB=2744 hwmMB=3191 sync=1 err30m=0
+2026-11-07T15:50:04Z OK SVC=active load=0.49 mem(t/u/a)=7747/752/6660 disk(u/pct/avail)=23G/29%/56G rssMB=2745 hwmMB=3191 sync=1 err30m=0
+2026-11-07T16:20:04Z OK SVC=active load=0.13 mem(t/u/a)=7747/754/6659 disk(u/pct/avail)=23G/29%/56G rssMB=2745 hwmMB=3191 sync=1 err30m=0
+2026-11-07T16:50:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/761/6651 disk(u/pct/avail)=23G/29%/56G rssMB=2745 hwmMB=3191 sync=1 err30m=0
+2026-11-07T17:20:04Z OK SVC=active load=0.23 mem(t/u/a)=7747/743/6669 disk(u/pct/avail)=23G/29%/56G rssMB=2742 hwmMB=3191 sync=1 err30m=0
+2026-11-07T17:50:04Z OK SVC=active load=0.41 mem(t/u/a)=7747/750/6663 disk(u/pct/avail)=23G/29%/56G rssMB=2741 hwmMB=3191 sync=1 err30m=0
+2026-11-07T18:20:04Z OK SVC=active load=0.17 mem(t/u/a)=7747/763/6649 disk(u/pct/avail)=23G/29%/56G rssMB=2744 hwmMB=3191 sync=1 err30m=0
+2026-11-07T18:50:04Z OK SVC=active load=0.32 mem(t/u/a)=7747/752/6661 disk(u/pct/avail)=23G/29%/56G rssMB=2749 hwmMB=3191 sync=1 err30m=0
+2026-11-07T19:20:04Z OK SVC=active load=0.20 mem(t/u/a)=7747/765/6648 disk(u/pct/avail)=23G/29%/56G rssMB=2751 hwmMB=3191 sync=1 err30m=0
+2026-11-07T19:50:04Z OK SVC=active load=0.25 mem(t/u/a)=7747/753/6660 disk(u/pct/avail)=23G/29%/56G rssMB=2750 hwmMB=3191 sync=1 err30m=0
+2026-11-07T20:20:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/768/6644 disk(u/pct/avail)=23G/29%/56G rssMB=2749 hwmMB=3191 sync=1 err30m=0
+2026-11-07T20:50:04Z OK SVC=active load=0.32 mem(t/u/a)=7747/743/6669 disk(u/pct/avail)=23G/29%/56G rssMB=2748 hwmMB=3191 sync=1 err30m=0
+2026-11-07T21:20:04Z OK SVC=active load=0.32 mem(t/u/a)=7747/760/6652 disk(u/pct/avail)=23G/29%/56G rssMB=2747 hwmMB=3191 sync=1 err30m=0
+2026-11-07T21:50:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/774/6638 disk(u/pct/avail)=23G/29%/56G rssMB=2747 hwmMB=3191 sync=1 err30m=0
+2026-11-07T22:20:04Z OK SVC=active load=0.11 mem(t/u/a)=7747/766/6646 disk(u/pct/avail)=23G/29%/56G rssMB=2747 hwmMB=3191 sync=1 err30m=0
+2026-11-07T22:50:04Z OK SVC=active load=0.48 mem(t/u/a)=7747/777/6636 disk(u/pct/avail)=23G/29%/56G rssMB=2768 hwmMB=3191 sync=1 err30m=0
+2026-11-07T23:20:04Z OK SVC=active load=0.22 mem(t/u/a)=7747/782/6630 disk(u/pct/avail)=23G/29%/56G rssMB=2766 hwmMB=3191 sync=1 err30m=0
+2026-11-07T23:50:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/787/6625 disk(u/pct/avail)=23G/29%/56G rssMB=2768 hwmMB=3191 sync=1 err30m=0
+2026-11-08T00:20:04Z OK SVC=active load=0.70 mem(t/u/a)=7747/772/6640 disk(u/pct/avail)=19G/25%/59G rssMB=2520 hwmMB=3191 sync=1 err30m=0
+2026-11-08T00:50:04Z OK SVC=active load=0.10 mem(t/u/a)=7747/787/6625 disk(u/pct/avail)=19G/25%/59G rssMB=2525 hwmMB=3191 sync=1 err30m=0
+2026-11-08T01:20:13Z ALERT ssh-unreachable ovh-uk1 (no output)
+2026-11-08T01:50:04Z OK SVC=active load=0.04 mem(t/u/a)=7747/794/6618 disk(u/pct/avail)=19G/25%/59G rssMB=2525 hwmMB=3191 sync=1 err30m=0
+2026-11-08T02:20:04Z OK SVC=active load=0.18 mem(t/u/a)=7747/786/6626 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T02:50:04Z OK SVC=active load=0.47 mem(t/u/a)=7747/801/6612 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T03:20:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/782/6631 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T03:50:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/803/6609 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T04:20:04Z OK SVC=active load=0.13 mem(t/u/a)=7747/799/6614 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T04:50:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/790/6622 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T05:20:04Z OK SVC=active load=0.05 mem(t/u/a)=7747/786/6626 disk(u/pct/avail)=19G/25%/59G rssMB=2526 hwmMB=3191 sync=1 err30m=0
+2026-11-08T05:50:04Z OK SVC=active load=0.08 mem(t/u/a)=7747/809/6603 disk(u/pct/avail)=19G/25%/59G rssMB=2405 hwmMB=3191 sync=1 err30m=0
+2026-11-08T06:20:04Z OK SVC=active load=0.21 mem(t/u/a)=7747/802/6610 disk(u/pct/avail)=19G/25%/59G rssMB=2405 hwmMB=3191 sync=1 err30m=0
+2026-11-08T06:50:04Z OK SVC=active load=0.12 mem(t/u/a)=7747/796/6617 disk(u/pct/avail)=19G/25%/59G rssMB=2406 hwmMB=3191 sync=1 err30m=0
+2026-11-08T07:20:04Z OK SVC=active load=0.00 mem(t/u/a)=7747/796/6616 disk(u/pct/avail)=19G/25%/59G rssMB=2406 hwmMB=3191 sync=1 err30m=0
+2026-11-08T07:50:04Z OK SVC=active load=0.07 mem(t/u/a)=7747/800/6612 disk(u/pct/avail)=19G/25%/59G rssMB=2407 hwmMB=3191 sync=1 err30m=0
+2026-11-08T08:20:04Z OK SVC=active load=0.14 mem(t/u/a)=7747/814/6598 disk(u/pct/avail)=19G/25%/59G rssMB=2407 hwmMB=3191 sync=1 err30m=0
+2026-11-08T08:50:04Z OK SVC=active load=0.35 mem(t/u/a)=7747/867/6545 disk(u/pct/avail)=19G/25%/59G rssMB=2520 hwmMB=3191 sync=1 err30m=0
+2026-11-08T09:20:04Z OK SVC=active load=0.29 mem(t/u/a)=7747/806/6606 disk(u/pct/avail)=19G/25%/59G rssMB=2521 hwmMB=3191 sync=1 err30m=0
+2026-11-08T09:50:04Z OK SVC=active load=0.23 mem(t/u/a)=7747/811/6601 disk(u/pct/avail)=19G/25%/59G rssMB=2521 hwmMB=3191 sync=1 err30m=0

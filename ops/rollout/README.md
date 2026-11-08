@@ -1,7 +1,7 @@
 # RC18 Fleet Rollout — Monday 2026-11-09 10:00 UTC
 
-Coordinated, **non-rolling** upgrade of all 10 seats to `slay3rd-rc18`
-(sha256 `7e821f922b8812cea970923278899f710a70a9a419ba5cf3c7c790091bf482d2`)
+Coordinated, **non-rolling** upgrade of all 10 seats to `slay3rd-rc18v2`
+(sha256 `133234bfa370f6531682c5746f9a859c31b98392612bde321d2c75c07c361f64`)
 plus onboarding of breskulpeak (11 seats total).
 
 Consensus-critical: rc18 changes vote-verification behavior (staged

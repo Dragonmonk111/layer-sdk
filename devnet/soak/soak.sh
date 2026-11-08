@@ -24,9 +24,9 @@ BIN="$1"
 ROUNDS="${2:-25}"
 SOAK=/tmp/jcl-soak
 
-height() { grep -o 'height=[0-9]*' "$SOAK/node0/node.log" 2>/dev/null | tail -1 | cut -d= -f2; }
-staged() { grep -c 'staged_parent: simulated' "$SOAK/node0/node.log" "$SOAK/node1/node.log" 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'; }
-wedge() { grep -c 'certified but not executed' "$SOAK/node0/node.log" "$SOAK/node1/node.log" 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'; }
+height() { sed 's/\x1b\[[0-9;]*m//g' "$SOAK"/node*/node.log 2>/dev/null | grep -o 'Block finalized with BLS threshold certificate.*height=[0-9]*' | grep -o 'height=[0-9]*' | tail -1 | cut -d= -f2; }
+staged() { grep -c 'staged_parent: simulated' "$SOAK"/node*/node.log 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'; }
+wedge() { grep -c 'certified but not executed' "$SOAK"/node*/node.log 2>/dev/null | awk -F: '{s+=$2} END{print s+0}'; }
 
 stop_all() {
     for i in 0 1 2 3; do
@@ -65,10 +65,14 @@ stall_events=0
 for r in $(seq 1 "$ROUNDS"); do
     hpre=$(height); hpre=${hpre:-0}
     p2=$(cat "$SOAK/node2/node.pid"); p3=$(cat "$SOAK/node3/node.pid")
-    kill -STOP "$p2" "$p3" 2>/dev/null
+    if [ $((r % 2)) -eq 0 ]; then
+        kill -STOP "$p2" 2>/dev/null; sleep 1; kill -STOP "$p3" 2>/dev/null   # staggered
+    else
+        kill -STOP "$p2" "$p3" 2>/dev/null                                   # simultaneous
+    fi
     sleep $((3 + RANDOM % 4))          # straddle a view + timeout
     kill -CONT "$p2" "$p3" 2>/dev/null
-    sleep 8                           # recovery window
+    sleep 15                          # recovery window (recommended paces re-dials ~1/min)
     hpost=$(height); hpost=${hpost:-0}
     w=$(wedge); s=$(staged)
     if [ "$hpost" -le "$hpre" ]; then
