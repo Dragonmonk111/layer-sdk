@@ -48,7 +48,10 @@ use commonware_cryptography::{
 };
 use commonware_math::algebra::Random;
 use commonware_parallel::Sequential;
-use commonware_utils::{ordered::{Quorum, Set}, N3f1};
+use commonware_utils::{
+    ordered::{Quorum, Set},
+    N3f1,
+};
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -141,6 +144,8 @@ fn main() {
             "dkg-synthesize-genesis-output" => {
                 return cmd_dkg_synthesize_genesis_output(&args[2..])
             }
+            "seal" => return cmd_seal(&args[2..]),
+            "unseal" => return cmd_unseal(&args[2..]),
             _ => {}
         }
     }
@@ -187,9 +192,7 @@ fn legacy_main(args: &[String]) {
         std::process::exit(1);
     }
 
-    println!(
-        "Generating BLS12-381 DKG key material for {num_validators}-node testnet..."
-    );
+    println!("Generating BLS12-381 DKG key material for {num_validators}-node testnet...");
     println!("Output directory: {output_dir}");
 
     // Use a deterministic RNG seeded with zero for reproducible testnet keys.
@@ -241,9 +244,8 @@ fn legacy_main(args: &[String]) {
             use rand::RngCore;
             let mut seed = vec![0u8; 24]; // MAYO SK_SEED_BYTES
             rng.fill_bytes(&mut seed);
-            let (pk, _sk) =
-                sriracha_mayo::SecretKey::<sriracha_mayo::Mayo2>::from_seed(&seed)
-                    .expect("MAYO2 keygen from 24-byte seed");
+            let (pk, _sk) = sriracha_mayo::SecretKey::<sriracha_mayo::Mayo2>::from_seed(&seed)
+                .expect("MAYO2 keygen from 24-byte seed");
             let pk_bytes: &[u8] = pk.as_ref();
             (seed, pk_bytes.to_vec())
         })
@@ -254,17 +256,10 @@ fn legacy_main(args: &[String]) {
     let validator_mayo_public_keys: Option<Vec<String>> = if mayo_pairs.is_empty() {
         None
     } else {
-        Some(
-            mayo_pairs
-                .iter()
-                .map(|(_, pk)| hex::encode(pk))
-                .collect(),
-        )
+        Some(mayo_pairs.iter().map(|(_, pk)| hex::encode(pk)).collect())
     };
 
-    println!(
-        "BLS DKG complete: {threshold_required}/{threshold_total} threshold (N3f1)"
-    );
+    println!("BLS DKG complete: {threshold_required}/{threshold_total} threshold (N3f1)");
     println!(
         "Group threshold public key: {}...",
         &threshold_public_key_hex[..std::cmp::min(32, threshold_public_key_hex.len())]
@@ -280,9 +275,9 @@ fn legacy_main(args: &[String]) {
 
         // Encode the BLS share private scalar using Encode trait.
         // Private.expose() allows us to access the inner scalar for encoding.
-        let bls_private_hex = share.private.expose(|scalar| {
-            hex::encode(scalar.encode().as_ref())
-        });
+        let bls_private_hex = share
+            .private
+            .expose(|scalar| hex::encode(scalar.encode().as_ref()));
 
         // Compute the BLS public share for this participant.
         // For MinSig, this is a G2 point.
@@ -322,8 +317,7 @@ fn legacy_main(args: &[String]) {
             .expect("JSON serialization of ValidatorKeys cannot fail");
 
         let path = format!("{dir}/keys.json");
-        std::fs::write(&path, &json)
-            .unwrap_or_else(|e| panic!("Failed to write {path}: {e}"));
+        std::fs::write(&path, &json).unwrap_or_else(|e| panic!("Failed to write {path}: {e}"));
 
         println!(
             "  validator-{validator_index}: {path} (share_index={}, ed25519_pub={}...)",
@@ -458,7 +452,9 @@ fn has_flag(args: &[String], flag: &str) -> bool {
 /// keys.json (BLS fields empty until `finalize`), and a share-request.json
 /// to publish to the coordinator.
 fn cmd_keygen_share(args: &[String]) {
-    let output_dir = get_arg(args, "--output-dir").unwrap_or("./my-validator").to_string();
+    let output_dir = get_arg(args, "--output-dir")
+        .unwrap_or("./my-validator")
+        .to_string();
     let moniker = get_arg(args, "--name").unwrap_or("validator").to_string();
     let p2p_address = get_arg(args, "--p2p").unwrap_or("0.0.0.0:7001").to_string();
 
@@ -563,9 +559,15 @@ fn cmd_keygen_share(args: &[String]) {
 /// shares with OsRng, and emits per-validator packages + shared.json +
 /// node-<i>.toml templates.
 fn cmd_assemble_genesis(args: &[String]) {
-    let input_dir = get_arg(args, "--input-dir").unwrap_or("./share-requests").to_string();
-    let output_dir = get_arg(args, "--output-dir").unwrap_or("./ceremony-out").to_string();
-    let chain_id = get_arg(args, "--chain-id").unwrap_or("junoclaw-1").to_string();
+    let input_dir = get_arg(args, "--input-dir")
+        .unwrap_or("./share-requests")
+        .to_string();
+    let output_dir = get_arg(args, "--output-dir")
+        .unwrap_or("./ceremony-out")
+        .to_string();
+    let chain_id = get_arg(args, "--chain-id")
+        .unwrap_or("junoclaw-1")
+        .to_string();
     if chain_id == "junoclaw-1" {
         println!(
             "WARNING: --chain-id not set, defaulting to \"junoclaw-1\". \
@@ -580,8 +582,8 @@ fn cmd_assemble_genesis(args: &[String]) {
 
     // Load every *.json in input-dir as a share-request.
     let mut requests: Vec<ShareRequest> = Vec::new();
-    let entries = std::fs::read_dir(&input_dir)
-        .unwrap_or_else(|e| panic!("Failed to read {input_dir}: {e}"));
+    let entries =
+        std::fs::read_dir(&input_dir).unwrap_or_else(|e| panic!("Failed to read {input_dir}: {e}"));
     for entry in entries {
         let path = entry.expect("read_dir entry").path();
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
@@ -595,7 +597,10 @@ fn cmd_assemble_genesis(args: &[String]) {
     }
 
     if requests.len() < 4 {
-        eprintln!("Error: need at least 4 share-requests for N3f1 consensus (got {})", requests.len());
+        eprintln!(
+            "Error: need at least 4 share-requests for N3f1 consensus (got {})",
+            requests.len()
+        );
         std::process::exit(1);
     }
 
@@ -613,15 +618,21 @@ fn cmd_assemble_genesis(args: &[String]) {
         // requests over `ed25519_pk` alone — same rule the operator used.
         let mut attest_msg = pk_bytes.clone();
         if let Some(mh) = &req.mayo_public_hex {
-            let mpk = hex::decode(mh)
-                .unwrap_or_else(|_| panic!("{}: bad mayo_public_hex", req.moniker));
+            let mpk =
+                hex::decode(mh).unwrap_or_else(|_| panic!("{}: bad mayo_public_hex", req.moniker));
             if mpk.len() != 4912 {
-                panic!("{}: mayo_public_hex must be a MAYO2 compact pk (4912 bytes)", req.moniker);
+                panic!(
+                    "{}: mayo_public_hex must be a MAYO2 compact pk (4912 bytes)",
+                    req.moniker
+                );
             }
             attest_msg.extend_from_slice(&mpk);
         }
         if !pk.verify(DKG_ATTEST_NAMESPACE, &attest_msg, &sig) {
-            panic!("{}: attestation verification failed — pubkey not signed by its owner", req.moniker);
+            panic!(
+                "{}: attestation verification failed — pubkey not signed by its owner",
+                req.moniker
+            );
         }
     }
     println!("Verified {} attestations.", requests.len());
@@ -653,12 +664,17 @@ fn cmd_assemble_genesis(args: &[String]) {
     // Duplicate pubkey check.
     for w in requests.windows(2) {
         if w[0].ed25519_public_hex == w[1].ed25519_public_hex {
-            panic!("duplicate ed25519 pubkey: {} and {}", w[0].moniker, w[1].moniker);
+            panic!(
+                "duplicate ed25519 pubkey: {} and {}",
+                w[0].moniker, w[1].moniker
+            );
         }
     }
 
-    let validator_public_keys: Vec<String> =
-        requests.iter().map(|r| r.ed25519_public_hex.clone()).collect();
+    let validator_public_keys: Vec<String> = requests
+        .iter()
+        .map(|r| r.ed25519_public_hex.clone())
+        .collect();
     let validator_mayo_public_keys: Option<Vec<String>> = if all_mayo {
         Some(
             requests
@@ -667,7 +683,9 @@ fn cmd_assemble_genesis(args: &[String]) {
                 .collect(),
         )
     } else {
-        println!("Classical-only ceremony (no MAYO identity) — hybrid_consensus will refuse to boot.");
+        println!(
+            "Classical-only ceremony (no MAYO identity) — hybrid_consensus will refuse to boot."
+        );
         None
     };
 
@@ -681,8 +699,13 @@ fn cmd_assemble_genesis(args: &[String]) {
     let threshold_total = sharing.total().get();
     let sharing_hex = hex::encode(sharing.encode().as_ref());
 
-    println!("BLS dealing complete: {threshold_required}/{threshold_total} threshold (N3f1, OsRng)");
-    println!("Group threshold pubkey: {}...", &threshold_public_key_hex[..32]);
+    println!(
+        "BLS dealing complete: {threshold_required}/{threshold_total} threshold (N3f1, OsRng)"
+    );
+    println!(
+        "Group threshold pubkey: {}...",
+        &threshold_public_key_hex[..32]
+    );
 
     std::fs::create_dir_all(&output_dir)
         .unwrap_or_else(|e| panic!("Failed to create {output_dir}: {e}"));
@@ -690,8 +713,7 @@ fn cmd_assemble_genesis(args: &[String]) {
     // Per-validator private share package + node.toml template.
     for (i, (req, share)) in requests.iter().zip(shares.iter()).enumerate() {
         let dir = format!("{output_dir}/validator-{i}");
-        std::fs::create_dir_all(&dir)
-            .unwrap_or_else(|e| panic!("Failed to create {dir}: {e}"));
+        std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("Failed to create {dir}: {e}"));
 
         let package = BlsSharePackage {
             validator_index: i,
@@ -783,7 +805,9 @@ fn cmd_assemble_genesis(args: &[String]) {
 /// public key matches the sharing polynomial at its index.
 fn cmd_finalize(args: &[String]) {
     let keys_path = get_arg(args, "--keys").unwrap_or("./keys.json").to_string();
-    let share_path = get_arg(args, "--bls-share").unwrap_or("./bls-share.json").to_string();
+    let share_path = get_arg(args, "--bls-share")
+        .unwrap_or("./bls-share.json")
+        .to_string();
 
     if has_flag(args, "--help") || has_flag(args, "-h") {
         println!("Usage: generate-testnet-keys finalize [--keys <keys.json>] [--bls-share <bls-share.json>]");
@@ -823,7 +847,9 @@ fn cmd_finalize(args: &[String]) {
         .expect("share index out of range for polynomial");
     let actual_pub = share.public::<MinSig>();
     if expected_pub.encode().as_ref() != actual_pub.encode().as_ref() {
-        eprintln!("Error: share does not match the sharing polynomial — package corrupt or mismatched.");
+        eprintln!(
+            "Error: share does not match the sharing polynomial — package corrupt or mismatched."
+        );
         std::process::exit(1);
     }
 
@@ -843,15 +869,15 @@ fn cmd_finalize(args: &[String]) {
 
     // Hybrid identity: the ceremony's MAYO table (if any) must contain
     // the pk this operator generated at keygen-share time.
-    match (
-        &package.validator_mayo_public_keys,
-        &keys.mayo_public_hex,
-    ) {
+    match (&package.validator_mayo_public_keys, &keys.mayo_public_hex) {
         (Some(table), Some(own)) => {
             match table.get(package.validator_index) {
                 Some(t) if t == own => {}
                 _ => {
-                    eprintln!("Error: our mayo_public_hex is absent from the ceremony table at index {}", package.validator_index);
+                    eprintln!(
+                        "Error: our mayo_public_hex is absent from the ceremony table at index {}",
+                        package.validator_index
+                    );
                     std::process::exit(1);
                 }
             }
@@ -874,7 +900,10 @@ fn cmd_finalize(args: &[String]) {
     println!("keys.json finalized.");
     println!("  validator_index: {}", keys.validator_index);
     println!("  share_index:     {}", keys.share_index);
-    println!("  threshold:       {}/{}", keys.threshold_required, keys.threshold_total);
+    println!(
+        "  threshold:       {}/{}",
+        keys.threshold_required, keys.threshold_total
+    );
     println!("\nPoint bls_key_path + identity_key_path at {keys_path} in node.toml.");
     println!("Delete bls-share.json — its contents now live in keys.json.");
 }
@@ -1024,10 +1053,12 @@ fn x25519_pub_from_ed_pub(ed: &[u8]) -> [u8; 32] {
 fn dealing_key(shared: &[u8; 32]) -> [u8; 32] {
     use sha2::Digest;
     let mut k = [0u8; 32];
-    k.copy_from_slice(&sha2::Sha256::new()
-        .chain_update(b"junoclaw-dealing-v1")
-        .chain_update(shared)
-        .finalize());
+    k.copy_from_slice(
+        &sha2::Sha256::new()
+            .chain_update(b"junoclaw-dealing-v1")
+            .chain_update(shared)
+            .finalize(),
+    );
     k
 }
 
@@ -1037,8 +1068,9 @@ fn encrypt_for_recipient(recipient_ed_hex: &str, plaintext: &[u8]) -> EncField {
     let recip = x25519_dalek::PublicKey::from(x25519_pub_from_ed_pub(&ed));
     let eph = x25519_dalek::StaticSecret::random_from_rng(OsRng);
     let shared = eph.diffie_hellman(&recip);
-    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&dealing_key(shared.as_bytes()))
-        .expect("key length");
+    let cipher =
+        chacha20poly1305::XChaCha20Poly1305::new_from_slice(&dealing_key(shared.as_bytes()))
+            .expect("key length");
     let mut nonce = [0u8; 24];
     use rand::RngCore;
     OsRng.fill_bytes(&mut nonce);
@@ -1065,8 +1097,9 @@ fn decrypt_for_me(enc: &EncField, my_seed: &[u8]) -> Vec<u8> {
         .try_into()
         .expect("ephem must be 32 bytes");
     let shared = me.diffie_hellman(&x25519_dalek::PublicKey::from(eph_bytes));
-    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&dealing_key(shared.as_bytes()))
-        .expect("key length");
+    let cipher =
+        chacha20poly1305::XChaCha20Poly1305::new_from_slice(&dealing_key(shared.as_bytes()))
+            .expect("key length");
     let nonce = hex::decode(&enc.nonce_hex).expect("bad nonce hex");
     cipher
         .decrypt(
@@ -1090,10 +1123,51 @@ fn resolve_priv_bytes(f: &DealingPrivFile, my_seed: &[u8]) -> Vec<u8> {
     .expect("bad priv_msg_hex")
 }
 
+/// Seal an arbitrary file to a recipient's Ed25519 public key (jc-share
+/// phase 1). Emits the same x25519-xchacha20poly1305-v1 JSON envelope used
+/// for dealing-priv files, so any transport sees ciphertext only.
+fn cmd_seal(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!(
+            "Usage: generate-testnet-keys seal --to <ed25519 public hex> --in <file> --out <file>"
+        );
+        return;
+    }
+    let to = get_arg(args, "--to").expect("--to <ed25519 public hex> required");
+    let input = get_arg(args, "--in").expect("--in <file> required");
+    let output = get_arg(args, "--out").expect("--out <file> required");
+    let plaintext = std::fs::read(input).unwrap_or_else(|e| panic!("read {input}: {e}"));
+    let enc = encrypt_for_recipient(to, &plaintext);
+    write_json(output, &enc);
+    println!(
+        "sealed {} bytes -> {output} (recipient {})",
+        plaintext.len(),
+        short(to)
+    );
+}
+
+/// Unseal a file addressed to our keys.json Ed25519 identity.
+fn cmd_unseal(args: &[String]) {
+    if has_flag(args, "--help") || has_flag(args, "-h") {
+        println!(
+            "Usage: generate-testnet-keys unseal [--keys <keys.json>] --in <file> --out <file>"
+        );
+        return;
+    }
+    let keys_path = get_arg(args, "--keys").unwrap_or("./keys.json");
+    let input = get_arg(args, "--in").expect("--in <file> required");
+    let output = get_arg(args, "--out").expect("--out <file> required");
+    let keys: ValidatorKeys = load_json(keys_path);
+    let enc: EncField = load_json(input);
+    let seed = hex::decode(&keys.ed25519_private_hex).expect("bad ed25519_private_hex");
+    let plaintext = decrypt_for_me(&enc, &seed);
+    std::fs::write(output, &plaintext).unwrap_or_else(|e| panic!("write {output}: {e}"));
+    println!("unsealed {} bytes -> {output}", plaintext.len());
+}
+
 fn load_json<T: for<'de> Deserialize<'de>>(path: &str) -> T {
     serde_json::from_str(
-        &std::fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("Failed to read {path}: {e}")),
+        &std::fs::read_to_string(path).unwrap_or_else(|e| panic!("Failed to read {path}: {e}")),
     )
     .unwrap_or_else(|e| panic!("{path} is not valid: {e}"))
 }
@@ -1208,7 +1282,9 @@ fn cmd_dkg_info(args: &[String]) {
         .expect("--round required")
         .parse()
         .expect("--round must be a u64");
-    let out = get_arg(args, "--out").unwrap_or("./dkg-info.json").to_string();
+    let out = get_arg(args, "--out")
+        .unwrap_or("./dkg-info.json")
+        .to_string();
 
     let players = load_and_verify_requests(&input_dir);
     let dealer_hexes: Vec<String> = match &dealers_dir {
@@ -1216,7 +1292,10 @@ fn cmd_dkg_info(args: &[String]) {
             .iter()
             .map(|r| r.ed25519_public_hex.clone())
             .collect(),
-        None => players.iter().map(|r| r.ed25519_public_hex.clone()).collect(),
+        None => players
+            .iter()
+            .map(|r| r.ed25519_public_hex.clone())
+            .collect(),
     };
     if players.len() < 4 {
         eprintln!(
@@ -1229,7 +1308,10 @@ fn cmd_dkg_info(args: &[String]) {
     let previous_output_hex = get_arg(args, "--previous").map(|p| {
         let f: DkgOutputFile = load_json(&p);
         if f.round >= round {
-            panic!("--round must exceed previous round {} (got {round})", f.round);
+            panic!(
+                "--round must exceed previous round {} (got {round})",
+                f.round
+            );
         }
         f.output_hex
     });
@@ -1238,7 +1320,10 @@ fn cmd_dkg_info(args: &[String]) {
         chain_id,
         round,
         dealers: dealer_hexes,
-        players: players.iter().map(|r| r.ed25519_public_hex.clone()).collect(),
+        players: players
+            .iter()
+            .map(|r| r.ed25519_public_hex.clone())
+            .collect(),
         previous_output_hex,
     };
     // Construct the Info now so a malformed spec fails here, not mid-ceremony.
@@ -1270,7 +1355,9 @@ fn cmd_dkg_deal(args: &[String]) {
         .unwrap_or("./dkg-info.json")
         .to_string();
     let keys_path = get_arg(args, "--keys").unwrap_or("./keys.json").to_string();
-    let out_dir = get_arg(args, "--out-dir").unwrap_or("./dkg-out").to_string();
+    let out_dir = get_arg(args, "--out-dir")
+        .unwrap_or("./dkg-out")
+        .to_string();
     // Per-player files are sealed to the recipient's Ed25519 identity by
     // default — the coordinator who ferries them never holds plaintext
     // shares. --plaintext-priv emits the legacy cleartext format for
@@ -1300,8 +1387,7 @@ fn cmd_dkg_deal(args: &[String]) {
         .expect("undecodable share")
     });
 
-    std::fs::create_dir_all(&out_dir)
-        .unwrap_or_else(|e| panic!("Failed to create {out_dir}: {e}"));
+    std::fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("Failed to create {out_dir}: {e}"));
     let seed_path = format!("{out_dir}/dealer.seed");
     let seed: [u8; 32] = match std::fs::read(&seed_path) {
         Ok(b) if b.len() == 32 => b.try_into().unwrap(),
@@ -1316,13 +1402,9 @@ fn cmd_dkg_deal(args: &[String]) {
         }
     };
 
-    let (_dealer, pub_msg, priv_msgs) = Dealer::<MinSig, _>::start::<N3f1>(
-        ChaCha8Rng::from_seed(seed),
-        info,
-        sk,
-        prev_share,
-    )
-    .expect("dealer start failed");
+    let (_dealer, pub_msg, priv_msgs) =
+        Dealer::<MinSig, _>::start::<N3f1>(ChaCha8Rng::from_seed(seed), info, sk, prev_share)
+            .expect("dealer start failed");
 
     let pub_file = DealingPubFile {
         dealer: me_hex.clone(),
@@ -1412,11 +1494,8 @@ fn cmd_dkg_ack(args: &[String]) {
             &bound,
         )
         .expect("undecodable DealerPubMsg");
-        let priv_msg = DealerPrivMsg::read_cfg(
-            &mut &resolve_priv_bytes(&f, &my_seed)[..],
-            &(),
-        )
-        .expect("undecodable DealerPrivMsg");
+        let priv_msg = DealerPrivMsg::read_cfg(&mut &resolve_priv_bytes(&f, &my_seed)[..], &())
+            .expect("undecodable DealerPrivMsg");
         match player.dealer_message::<N3f1>(dealer, pub_msg, priv_msg) {
             Some(ack) => {
                 let af = AckFile {
@@ -1527,10 +1606,7 @@ fn cmd_dkg_log(args: &[String]) {
 }
 
 /// Load every `log-*.json`, check signatures, return the verified log map.
-fn load_checked_logs(
-    logs_dir: &str,
-    info: &DkgInfo,
-) -> BTreeMap<DkgPk, DealerLog<MinSig, DkgPk>> {
+fn load_checked_logs(logs_dir: &str, info: &DkgInfo) -> BTreeMap<DkgPk, DealerLog<MinSig, DkgPk>> {
     let bound = NonZeroU32::new(10_000).unwrap();
     let mut logs = BTreeMap::new();
     for entry in std::fs::read_dir(logs_dir).expect("read logs-dir") {
@@ -1580,7 +1656,9 @@ fn cmd_dkg_finalize(args: &[String]) {
     let requests_dir = get_arg(args, "--requests")
         .expect("--requests required")
         .to_string();
-    let out = get_arg(args, "--out").unwrap_or("./bls-share.json").to_string();
+    let out = get_arg(args, "--out")
+        .unwrap_or("./bls-share.json")
+        .to_string();
 
     let logs = load_checked_logs(&logs_dir, &info);
     let me = sk.public_key();
@@ -1604,11 +1682,8 @@ fn cmd_dkg_finalize(args: &[String]) {
             &bound,
         )
         .expect("undecodable DealerPubMsg");
-        let priv_msg = DealerPrivMsg::read_cfg(
-            &mut &resolve_priv_bytes(&f, &my_seed)[..],
-            &(),
-        )
-        .expect("undecodable DealerPrivMsg");
+        let priv_msg = DealerPrivMsg::read_cfg(&mut &resolve_priv_bytes(&f, &my_seed)[..], &())
+            .expect("undecodable DealerPrivMsg");
         player.dealer_message::<N3f1>(decode_ed_pk(&f.dealer), pub_msg, priv_msg);
     }
 
@@ -1637,8 +1712,12 @@ fn cmd_dkg_finalize(args: &[String]) {
             .iter()
             .map(|r| r.ed25519_public_hex.clone())
             .collect(),
-        validator_mayo_public_keys: all_mayo
-            .then(|| requests.iter().map(|r| r.mayo_public_hex.clone().unwrap()).collect()),
+        validator_mayo_public_keys: all_mayo.then(|| {
+            requests
+                .iter()
+                .map(|r| r.mayo_public_hex.clone().unwrap())
+                .collect()
+        }),
     };
     write_json(&out, &package);
 
@@ -1659,7 +1738,10 @@ fn cmd_dkg_finalize(args: &[String]) {
         "  threshold: {}/{}",
         package.threshold_required, package.threshold_total
     );
-    println!("  group key: {}...", &package.threshold_public_key_hex[..32]);
+    println!(
+        "  group key: {}...",
+        &package.threshold_public_key_hex[..32]
+    );
     println!("Run `finalize --keys keys.json --bls-share {out}` to merge.");
 }
 
@@ -1727,7 +1809,10 @@ fn cmd_dkg_observe(args: &[String]) {
     println!("Observed Output (public material only):");
     println!("  shared.json:       {shared_path}");
     println!("  reshare output:    {out_path}  (pass via --previous next round)");
-    println!("  group key:         {}...", &out_file.threshold_public_key_hex[..32]);
+    println!(
+        "  group key:         {}...",
+        &out_file.threshold_public_key_hex[..32]
+    );
     if !output.revealed().is_empty() {
         println!(
             "  note: {} player share(s) were revealed in dealer logs",
@@ -1759,7 +1844,9 @@ fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
         println!("so the existing set can reshare without rotating the group key.");
         return;
     }
-    let keys_path = get_arg(args, "--keys").expect("--keys required").to_string();
+    let keys_path = get_arg(args, "--keys")
+        .expect("--keys required")
+        .to_string();
     let shared_path = get_arg(args, "--shared")
         .expect("--shared required")
         .to_string();
@@ -1792,11 +1879,8 @@ fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
     )
     .expect("keys.json: bad sharing_hex");
     let bound = NonZeroU32::new(10_000).unwrap();
-    let sharing = Sharing::<MinSig>::read_cfg(
-        &mut &sharing_bytes[..],
-        &(bound, ModeVersion::v0()),
-    )
-    .expect("undecodable Sharing");
+    let sharing = Sharing::<MinSig>::read_cfg(&mut &sharing_bytes[..], &(bound, ModeVersion::v0()))
+        .expect("undecodable Sharing");
     assert_eq!(
         sharing.total().get() as usize,
         pks.len(),
@@ -1855,7 +1939,10 @@ fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
         file.threshold_required,
         file.threshold_total
     );
-    println!("  group key: {}...  (unchanged — this is the whole point)", &file.threshold_public_key_hex[..32]);
+    println!(
+        "  group key: {}...  (unchanged — this is the whole point)",
+        &file.threshold_public_key_hex[..32]
+    );
 
     // Optional: verify each available G1 keys.json — the share's public half
     // must equal partial_public(position(pk)), exactly what Dealer::start
@@ -1868,9 +1955,14 @@ fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
                 continue;
             }
             let k: ValidatorKeys = load_json(path.to_str().unwrap());
-            let Some(share_hex) = k.share_hex.as_deref() else { continue };
-            let share = Share::read_cfg(&mut &hex::decode(share_hex).expect("bad share_hex")[..], &())
-                .expect("undecodable share");
+            let Some(share_hex) = k.share_hex.as_deref() else {
+                continue;
+            };
+            let share = Share::read_cfg(
+                &mut &hex::decode(share_hex).expect("bad share_hex")[..],
+                &(),
+            )
+            .expect("undecodable share");
             let pk = decode_ed_pk(&k.ed25519_public_hex);
             let participant = players
                 .index(&pk)
@@ -1893,7 +1985,10 @@ fn cmd_dkg_synthesize_genesis_output(args: &[String]) {
         }
         println!("  {verified} key share(s) verified against round-0 output");
     }
-    println!("Next: dkg-info --requests <dir> --dealers <dir> --chain-id {} --round 1 --previous {out}", shared.chain_id);
+    println!(
+        "Next: dkg-info --requests <dir> --dealers <dir> --chain-id {} --round 1 --previous {out}",
+        shared.chain_id
+    );
 }
 
 #[cfg(test)]
