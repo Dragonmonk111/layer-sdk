@@ -522,7 +522,7 @@ fn submit_evidence_verifies_real_bls_partials() {
                 seat_index: 1,
                 view: 43,
                 msg_a: Binary::from(union_unique(ns, vote_a)),
-                sig_a: Binary::from(sig_wrong),
+                sig_a: Binary::from(sig_wrong.clone()),
                 msg_b: Binary::from(union_unique(ns, vote_b)),
                 sig_b: Binary::from(sig_wrong),
             },

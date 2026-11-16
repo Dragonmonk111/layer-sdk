@@ -7,6 +7,11 @@ on:
 
 name: Basic Checks
 
+env:
+  # librocksdb-sys 0.16/rocksdb 8.10 headers miss <cstdint> includes and fail
+  # under GCC 13+ (ubuntu-latest). Pre-include it for the C++ build only.
+  CXXFLAGS: "-include cstdint"
+
 jobs:
   test:
     name: Test Suite

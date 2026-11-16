@@ -13,7 +13,7 @@ pub fn mul(a: u8, b: u8) -> u8 {
     p ^= (a & 4) * b;
     p ^= (a & 8) * b;
     let top = p & 0xf0;
-    ((p ^ (top >> 4) ^ (top >> 3)) & 0x0f) as u8
+    (p ^ (top >> 4) ^ (top >> 3)) & 0x0f
 }
 
 /// GF(16) addition / subtraction (same operation: XOR).
@@ -61,9 +61,7 @@ pub fn m_vec_add(m_vec_limbs: usize, a: &[u64], b: &mut [u64]) {
 /// Copy an m-vector.
 #[inline(always)]
 pub fn m_vec_copy(m_vec_limbs: usize, src: &[u64], dst: &mut [u64]) {
-    for i in 0..m_vec_limbs {
-        dst[i] = src[i];
-    }
+    dst[..m_vec_limbs].copy_from_slice(&src[..m_vec_limbs]);
 }
 
 /// Multiply m-vector by x (the primitive element) and add into acc.

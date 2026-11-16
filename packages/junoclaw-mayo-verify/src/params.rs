@@ -17,15 +17,15 @@ pub trait ParameterSet: Copy + core::fmt::Debug + PartialEq + Eq {
     /// Field size (q = 16).
     const Q: usize = 16;
     /// m-vector limbs (ceil(m / 16)).
-    const M_VEC_LIMBS: usize = (Self::M + 15) / 16;
+    const M_VEC_LIMBS: usize = Self::M.div_ceil(16);
     /// Bytes to encode m nibbles.
-    const M_BYTES: usize = (Self::M + 1) / 2;
+    const M_BYTES: usize = Self::M.div_ceil(2);
     /// Bytes for O matrix (v * o nibbles).
-    const O_BYTES: usize = (Self::V * Self::O + 1) / 2;
+    const O_BYTES: usize = (Self::V * Self::O).div_ceil(2);
     /// Bytes for vinegar vectors.
-    const V_BYTES: usize = (Self::V + 1) / 2;
+    const V_BYTES: usize = Self::V.div_ceil(2);
     /// R bytes.
-    const R_BYTES: usize = (Self::K * Self::O + 1) / 2;
+    const R_BYTES: usize = (Self::K * Self::O).div_ceil(2);
     /// P1 bytes (upper-triangular v×v matrix of m-vectors).
     const P1_BYTES: usize = Self::V * (Self::V + 1) / 2 * Self::M_VEC_LIMBS * 8;
     /// P2 bytes (v×o matrix of m-vectors).

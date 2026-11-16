@@ -17,15 +17,11 @@ fn aes128_ctr(key: &[u8], out: &mut [u8]) {
     use aes::Aes128;
     let mut cipher = Aes128::new_from_slice(key).unwrap();
     let mut block = [0u8; 16];
-    let mut counter: u32 = 0;
-    for chunk in out.chunks_mut(16) {
-        block[12..16].copy_from_slice(&counter.to_be_bytes());
+    for (counter, chunk) in out.chunks_mut(16).enumerate() {
+        block[12..16].copy_from_slice(&(counter as u32).to_be_bytes());
         let mut ga = GenericArray::clone_from_slice(&block);
         cipher.encrypt_block_mut(&mut ga);
-        for (o, b) in chunk.iter_mut().zip(ga.iter()) {
-            *o = *b;
-        }
-        counter += 1;
+        chunk.copy_from_slice(&ga[..chunk.len()]);
     }
 }
 
@@ -45,11 +41,12 @@ fn shake256(out: &mut [u8], data: &[u8]) {
 // Public-key expansion
 // ---------------------------------------------------------------------------
 
+/// P1, P2, P3 matrices as `Vec<u64>` limbs.
+type PkMatrices = (Vec<u64>, Vec<u64>, Vec<u64>);
+
 /// Expand a compact MAYO public key into P1, P2, P3.
 /// Returns `(P1, P2, P3)` as Vec<u64> limbs.
-pub(crate) fn expand_pk<P: ParameterSet>(
-    cpk: &[u8],
-) -> Result<(Vec<u64>, Vec<u64>, Vec<u64>), Error> {
+pub(crate) fn expand_pk<P: ParameterSet>(cpk: &[u8]) -> Result<PkMatrices, Error> {
     if cpk.len() != P::PK_BYTES {
         return Err(Error::InvalidLength {
             expected: P::PK_BYTES,
@@ -93,7 +90,7 @@ pub(crate) fn expand_pk<P: ParameterSet>(
 
 /// Unpack m-vectors from packed bytes.
 fn unpack_m_vecs(inp: &[u8], out: &mut [u64], vecs: usize, m: usize) {
-    let m_vec_limbs = (m + 15) / 16;
+    let m_vec_limbs = m.div_ceil(16);
     let half = m / 2;
     let copy_len = core::cmp::min(half, m_vec_limbs * 8);
     for i in 0..vecs {
@@ -114,7 +111,7 @@ fn unpack_m_vecs(inp: &[u8], out: &mut [u64], vecs: usize, m: usize) {
 /// Unpack a single m-vector from `half = m/2` packed bytes into `m_vec_limbs`
 /// little-endian u64 limbs.
 fn unpack_one_mvec(packed: &[u8], out: &mut [u64], m: usize) {
-    let m_vec_limbs = (m + 15) / 16;
+    let m_vec_limbs = m.div_ceil(16);
     let half = m / 2;
     let copy_len = core::cmp::min(half, m_vec_limbs * 8);
     let mut tmp = [0u8; 72];
