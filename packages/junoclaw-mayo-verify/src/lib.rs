@@ -137,7 +137,10 @@ mod tests {
                 ("MAYO-3", measure::<Mayo3>()),
                 ("MAYO-5", measure::<Mayo5>()),
             ] {
-                println!("{name}: peak heap = {peak} bytes ({:.1} KB)", peak as f64 / 1024.0);
+                println!(
+                    "{name}: peak heap = {peak} bytes ({:.1} KB)",
+                    peak as f64 / 1024.0
+                );
             }
         }
     }
@@ -194,10 +197,10 @@ mod tests {
     #[cfg(feature = "test-c")]
     #[test]
     fn test_mayo2_expand_pk_matches_c() {
-        use sriracha_mayo::Mayo2 as CMayo2;
+        use core::ffi::c_int;
         use rand_chacha::ChaCha20Rng;
         use rand_core::SeedableRng;
-        use core::ffi::c_int;
+        use sriracha_mayo::Mayo2 as CMayo2;
 
         extern "C" {
             fn pqmayo_MAYO_2_opt_mayo_expand_pk(pk: *mut u64, cpk: *const u8) -> c_int;

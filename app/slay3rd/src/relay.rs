@@ -229,7 +229,8 @@ mod tests {
     fn test_broadcast_sends_bytes_to_channel() {
         rt().block_on(async {
             let pending = Arc::new(Mutex::new(BTreeMap::new()));
-            let (broadcast_tx, mut broadcast_rx) = tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+            let (broadcast_tx, mut broadcast_rx) =
+                tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
             let mut relay = LayerRelay::new(pending.clone(), Some(broadcast_tx));
 
             let payload = make_payload(1);
@@ -247,8 +248,14 @@ mod tests {
 
             // Receive bytes from channel
             let received = broadcast_rx.try_recv();
-            assert!(received.is_ok(), "broadcast should send serialized payload bytes to channel");
-            assert!(!received.unwrap().is_empty(), "broadcast bytes should be non-empty");
+            assert!(
+                received.is_ok(),
+                "broadcast should send serialized payload bytes to channel"
+            );
+            assert!(
+                !received.unwrap().is_empty(),
+                "broadcast bytes should be non-empty"
+            );
         });
     }
 
@@ -265,7 +272,10 @@ mod tests {
             assert!(ok, "receive_payload should succeed for valid bytes");
 
             let pending = pending_arc.lock().await;
-            assert!(pending.contains_key(&digest), "payload should be in pending_payloads after receive");
+            assert!(
+                pending.contains_key(&digest),
+                "payload should be in pending_payloads after receive"
+            );
         });
     }
 

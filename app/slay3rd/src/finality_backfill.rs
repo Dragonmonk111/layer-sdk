@@ -84,14 +84,14 @@ pub fn spawn<T: PersistentStorage + Send + Sync + 'static>(
             let tip = app.info().map(|i| i.height).unwrap_or(0);
             payload_floor(&app, tip)
         };
-        info!(donors = donors.len(), dry_run, floor, "finality-backfill: started");
+        info!(
+            donors = donors.len(),
+            dry_run, floor, "finality-backfill: started"
+        );
         let mut scan_next: u64 = floor.max(1);
         let mut missing: VecDeque<u64> = VecDeque::new();
         let mut clients: ClientList = Vec::new();
-        let mut cooldown: HashMap<String, u32> = donors
-            .iter()
-            .map(|d| (d.clone(), 0u32))
-            .collect();
+        let mut cooldown: HashMap<String, u32> = donors.iter().map(|d| (d.clone(), 0u32)).collect();
 
         loop {
             // --- 1. advance the scan watermark, collecting gaps -----------
@@ -265,7 +265,11 @@ async fn fetch_finality(
             );
             continue;
         }
-        let key = (resp.proposal_bytes, resp.certificate_bytes, resp.timestamp_nanos);
+        let key = (
+            resp.proposal_bytes,
+            resp.certificate_bytes,
+            resp.timestamp_nanos,
+        );
         match candidates.iter_mut().find(|(k, _)| *k == key) {
             Some((_, n)) => *n += 1,
             None => candidates.push((key, 1)),

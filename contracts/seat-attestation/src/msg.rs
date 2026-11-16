@@ -134,7 +134,9 @@ pub struct ConfigResponse {
 
 #[cw_serde]
 pub enum Cw4QueryMsg {
-    Member { addr: String },
+    Member {
+        addr: String,
+    },
     ListMembers {
         start_after: Option<String>,
         limit: Option<u32>,

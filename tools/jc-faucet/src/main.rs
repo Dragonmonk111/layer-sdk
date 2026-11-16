@@ -78,13 +78,7 @@ fn faucet_key(seed: &[u8; 32]) -> SigningKey {
     SigningKey::from_slice(seed).expect("valid secp256k1 key from SHA256 seed")
 }
 
-fn sign_send_tx(
-    seed: &[u8; 32],
-    to: &str,
-    amount: u128,
-    sequence: u64,
-    chain_id: &str,
-) -> Vec<u8> {
+fn sign_send_tx(seed: &[u8; 32], to: &str, amount: u128, sequence: u64, chain_id: &str) -> Vec<u8> {
     let key = faucet_key(seed);
     let from = key
         .public_key()
@@ -112,13 +106,23 @@ fn sign_send_tx(
     let body = cosmrs::tx::Body::new(vec![any], "", 0u16);
     let signer_info = SignerInfo::single_direct(Some(key.public_key()), sequence);
     let auth_info = signer_info.auth_info(Fee::from_amount_and_gas(fee_coin, GAS_LIMIT));
-    let doc = SignDoc::new(&body, &auth_info, &chain_id.parse().unwrap(), FIXED_ACCOUNT_NUMBER)
-        .expect("valid sign doc");
-    doc.sign(&key).expect("signing succeeded").to_bytes().expect("tx serialization")
+    let doc = SignDoc::new(
+        &body,
+        &auth_info,
+        &chain_id.parse().unwrap(),
+        FIXED_ACCOUNT_NUMBER,
+    )
+    .expect("valid sign doc");
+    doc.sign(&key)
+        .expect("signing succeeded")
+        .to_bytes()
+        .expect("tx serialization")
 }
 
 async fn connect(grpc_addr: &str) -> Result<Channel, Box<dyn std::error::Error>> {
-    Ok(Channel::from_shared(format!("http://{}", grpc_addr))?.connect().await?)
+    Ok(Channel::from_shared(format!("http://{}", grpc_addr))?
+        .connect()
+        .await?)
 }
 
 async fn query_sequence(grpc_addr: &str, address: &str) -> Result<u64, Box<dyn std::error::Error>> {
@@ -207,13 +211,16 @@ async fn drip(
     headers: HeaderMap,
     Json(req): Json<DripRequest>,
 ) -> Result<Json<DripResponse>, (axum::http::StatusCode, Json<serde_json::Value>)> {
-    let bad = |code: axum::http::StatusCode, msg: &str| {
-        (code, Json(serde_json::json!({"error": msg})))
-    };
+    let bad =
+        |code: axum::http::StatusCode, msg: &str| (code, Json(serde_json::json!({"error": msg})));
 
     // Validate: proper juno1 bech32 address.
-    let account = AccountId::from_str(req.address.trim())
-        .map_err(|_| bad(axum::http::StatusCode::BAD_REQUEST, "invalid bech32 address"))?;
+    let account = AccountId::from_str(req.address.trim()).map_err(|_| {
+        bad(
+            axum::http::StatusCode::BAD_REQUEST,
+            "invalid bech32 address",
+        )
+    })?;
     if account.prefix() != BECH32_PREFIX {
         return Err(bad(
             axum::http::StatusCode::BAD_REQUEST,
@@ -258,20 +265,24 @@ async fn drip(
     // Sign + broadcast under the sequence lock so two drips can't collide.
     let _seq_guard = st.seq_lock.lock().await;
     let sequence = st.sequence.load(Ordering::Relaxed);
-    let mut tx_bytes = sign_send_tx(&st.key_seed, &req.address, st.amount, sequence, &st.chain_id);
+    let mut tx_bytes = sign_send_tx(
+        &st.key_seed,
+        &req.address,
+        st.amount,
+        sequence,
+        &st.chain_id,
+    );
     let mut txhash = {
         let h = Sha256::digest(&tx_bytes);
         hex::encode_upper(h)
     };
 
-    let mut client = TxServiceClient::new(
-        connect(&st.grpc).await.map_err(|e| {
-            bad(
-                axum::http::StatusCode::BAD_GATEWAY,
-                &format!("node unreachable: {e}"),
-            )
-        })?,
-    );
+    let mut client = TxServiceClient::new(connect(&st.grpc).await.map_err(|e| {
+        bad(
+            axum::http::StatusCode::BAD_GATEWAY,
+            &format!("node unreachable: {e}"),
+        )
+    })?);
     let mut resp = client
         .broadcast_tx(BroadcastTxRequest {
             tx_bytes,
@@ -292,17 +303,20 @@ async fn drip(
             // this process. The chain is authoritative — resync and retry
             // once before failing (previously: every drip failed forever
             // once drift happened).
-            let chain_seq = query_sequence(&st.grpc, &st.address)
-                .await
-                .map_err(|e| {
-                    bad(
-                        axum::http::StatusCode::BAD_GATEWAY,
-                        &format!("sequence resync query failed: {e}"),
-                    )
-                })?;
+            let chain_seq = query_sequence(&st.grpc, &st.address).await.map_err(|e| {
+                bad(
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    &format!("sequence resync query failed: {e}"),
+                )
+            })?;
             st.sequence.store(chain_seq, Ordering::Relaxed);
-            tx_bytes =
-                sign_send_tx(&st.key_seed, &req.address, st.amount, chain_seq, &st.chain_id);
+            tx_bytes = sign_send_tx(
+                &st.key_seed,
+                &req.address,
+                st.amount,
+                chain_seq,
+                &st.chain_id,
+            );
             txhash = {
                 let h = Sha256::digest(&tx_bytes);
                 hex::encode_upper(h)
@@ -355,7 +369,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let grpc = std::env::var("FAUCET_GRPC").expect("FAUCET_GRPC=host:port is required");
     let listen = env_or("FAUCET_LISTEN", "0.0.0.0:8081");
-    let amount: u128 = env_or("FAUCET_AMOUNT", "1000000").parse().expect("FAUCET_AMOUNT must be an integer");
+    let amount: u128 = env_or("FAUCET_AMOUNT", "1000000")
+        .parse()
+        .expect("FAUCET_AMOUNT must be an integer");
     let seed = env_or("FAUCET_KEY_SEED", "junoclaw-deployer-v1");
     let chain_id = env_or("FAUCET_CHAIN_ID", "junoclaw-1");
     let addr_cd = Duration::from_secs(env_u64("FAUCET_ADDR_COOLDOWN_SECS", 21_600));

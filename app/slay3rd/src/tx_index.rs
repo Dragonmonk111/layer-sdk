@@ -76,7 +76,10 @@ impl TxIndex {
 /// upper-case. Used for both the in-memory cache and the `_txres/` store keys.
 pub fn normalize(hash: &str) -> String {
     let h = hash.trim();
-    let h = h.strip_prefix("0x").or_else(|| h.strip_prefix("0X")).unwrap_or(h);
+    let h = h
+        .strip_prefix("0x")
+        .or_else(|| h.strip_prefix("0X"))
+        .unwrap_or(h);
     h.to_ascii_uppercase()
 }
 
@@ -193,7 +196,10 @@ mod tests {
     #[test]
     fn success_result_maps_events_and_gas() {
         let res: TxResult<TestErr> = TxResult {
-            gas: GasInfo { gas_used: 725_804, gas_wanted: 4_000_000 },
+            gas: GasInfo {
+                gas_used: 725_804,
+                gas_wanted: 4_000_000,
+            },
             result: Ok(LayerTxResponse::new(
                 vec![],
                 vec![vec![CwEvent::new("wasm").add_attribute("valid", "true")]],
@@ -213,7 +219,10 @@ mod tests {
     #[test]
     fn failed_result_maps_code_and_log() {
         let res: TxResult<TestErr> = TxResult {
-            gas: GasInfo { gas_used: 309_573, gas_wanted: 4_000_000 },
+            gas: GasInfo {
+                gas_used: 309_573,
+                gas_wanted: 4_000_000,
+            },
             result: Err(TestErr("MAYO signature verification failed")),
         };
         let r = tx_response_from_result("CD".into(), 9, &res);

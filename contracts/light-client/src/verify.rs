@@ -123,29 +123,36 @@ pub fn verify_certificate(
     certificate_bytes: &[u8],
 ) -> Result<DecodedProposal, ContractError> {
     if group_public_key.len() != 96 {
-        return Err(ContractError::InvalidPublicKeyLength(group_public_key.len()));
+        return Err(ContractError::InvalidPublicKeyLength(
+            group_public_key.len(),
+        ));
     }
     if certificate_bytes.len() != 48 {
-        return Err(ContractError::InvalidCertificateLength(certificate_bytes.len()));
+        return Err(ContractError::InvalidCertificateLength(
+            certificate_bytes.len(),
+        ));
     }
 
     let decoded = decode_proposal(proposal_bytes)?;
 
     let mut pk_bytes = [0u8; 96];
     pk_bytes.copy_from_slice(group_public_key);
-    let pubkey: G2Affine =
-        Option::from(G2Affine::from_compressed(&pk_bytes)).ok_or(ContractError::InvalidPublicKey)?;
+    let pubkey: G2Affine = Option::from(G2Affine::from_compressed(&pk_bytes))
+        .ok_or(ContractError::InvalidPublicKey)?;
 
     let mut sig_bytes = [0u8; 48];
     sig_bytes.copy_from_slice(certificate_bytes);
-    let signature: G1Affine =
-        Option::from(G1Affine::from_compressed(&sig_bytes)).ok_or(ContractError::InvalidCertificate)?;
+    let signature: G1Affine = Option::from(G1Affine::from_compressed(&sig_bytes))
+        .ok_or(ContractError::InvalidCertificate)?;
 
     let namespace = finalize_namespace();
     let msg = union_unique(&namespace, proposal_bytes);
 
     let hm: G1Projective =
-        <G1Projective as HashToCurve<ExpandMsgXmd<sha2_09::Sha256>>>::hash_to_curve(&msg, G1_MESSAGE_DST);
+        <G1Projective as HashToCurve<ExpandMsgXmd<sha2_09::Sha256>>>::hash_to_curve(
+            &msg,
+            G1_MESSAGE_DST,
+        );
     let hm_affine = G1Affine::from(hm);
 
     let lhs = pairing(&signature, &G2Affine::generator());
@@ -167,7 +174,7 @@ pub(crate) mod tests {
         dkg, primitives::ops::threshold, primitives::variant::MinSig,
     };
     use commonware_parallel::Sequential;
-    use commonware_utils::{test_rng_seeded, NZU32, N3f1};
+    use commonware_utils::{test_rng_seeded, N3f1, NZU32};
 
     /// Encodes `Proposal { round: { epoch, view }, parent, payload }` using
     /// the exact same varint-then-fixed-digest layout as

@@ -428,8 +428,12 @@ impl Bank {
         for coin in balances {
             if !coin.amount.is_zero() {
                 self.transfer(
-                    storage, meter, block, sm,
-                    from.clone(), to.clone(),
+                    storage,
+                    meter,
+                    block,
+                    sm,
+                    from.clone(),
+                    to.clone(),
                     vec![coin.clone()],
                 )?;
                 distributed.push(coin);

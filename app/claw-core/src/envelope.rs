@@ -157,8 +157,7 @@ impl SignedFrame {
             return Err(EnvelopeError::Malformed);
         }
         let pubkey: [u8; 32] = bytes[..32].try_into().unwrap();
-        let payload_len =
-            u32::from_be_bytes(bytes[32..36].try_into().unwrap()) as usize;
+        let payload_len = u32::from_be_bytes(bytes[32..36].try_into().unwrap()) as usize;
         let rest = &bytes[36..];
         if rest.len() < payload_len {
             return Err(EnvelopeError::Malformed);
@@ -263,7 +262,10 @@ mod tests {
     fn unknown_and_reserved_tags_rejected() {
         for tag in [0x00u8, 0x03, 0x7f, 0xff] {
             let err = FrameSig::decode(&[tag, 0, 0, 0, 0]).unwrap_err();
-            assert_eq!(err.to_string(), EnvelopeError::UnknownSuite(tag).to_string());
+            assert_eq!(
+                err.to_string(),
+                EnvelopeError::UnknownSuite(tag).to_string()
+            );
             assert!(matches!(err, EnvelopeError::UnknownSuite(t) if t == tag));
         }
     }

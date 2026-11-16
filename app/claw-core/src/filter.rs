@@ -122,8 +122,7 @@ mod tests {
         let f: Filter =
             serde_json::from_str(r##"{"kinds":[9],"#h":["chan"],"since":10,"until":20}"##).unwrap();
         assert!(f.matches(&e));
-        let other_chan: Filter =
-            serde_json::from_str(r##"{"kinds":[9],"#h":["other"]}"##).unwrap();
+        let other_chan: Filter = serde_json::from_str(r##"{"kinds":[9],"#h":["other"]}"##).unwrap();
         assert!(!other_chan.matches(&e));
     }
 

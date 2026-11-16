@@ -272,8 +272,7 @@ mod tests {
             height: Some(187),
         };
         let exec_msg = Msg::Wasm(WasmMsg::Execute {
-            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c")
-                .unwrap(),
+            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c").unwrap(),
             contract_addr: AccountId::parse_string("juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc")
                 .unwrap(),
             msg: serde_json::to_vec(&orig_msg).unwrap().into(),
@@ -294,8 +293,7 @@ mod tests {
             height: Some(165),
         };
         let init_msg = Msg::Wasm(WasmMsg::Instantiate {
-            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c")
-                .unwrap(),
+            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c").unwrap(),
             admin: Some(
                 AccountId::parse_string("juno1vfkxzcmtdphkcetndahqqqqqqqqqqqqq9t7uyc").unwrap(),
             ),
@@ -320,8 +318,7 @@ mod tests {
             height: Some(165),
         };
         let init_msg = Msg::Wasm(WasmMsg::Instantiate {
-            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c")
-                .unwrap(),
+            sender: AccountId::parse_string("juno1ve6ku6mevd5xjcmtv4hqqqqqqqqqqqqqexxx7c").unwrap(),
             admin: None,
             code_id: 12345,
             label: "sticky".into(),

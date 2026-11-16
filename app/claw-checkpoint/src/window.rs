@@ -139,10 +139,7 @@ mod tests {
         ts.sort_unstable();
         assert_eq!(ts, vec![1, 2, 3, 4, 5]);
         // Request bounds: [1,5], [1,3], [1,1] — until = prev min - 1.
-        assert_eq!(
-            src.calls,
-            vec![(1, 5, 2), (1, 3, 2), (1, 1, 2)]
-        );
+        assert_eq!(src.calls, vec![(1, 5, 2), (1, 3, 2), (1, 1, 2)]);
     }
 
     #[tokio::test]

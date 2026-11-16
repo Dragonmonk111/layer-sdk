@@ -63,7 +63,9 @@ impl PayloadStore {
     }
 
     fn path(&self, digest: &[u8; 32], height: u64) -> Option<PathBuf> {
-        self.dir.as_ref().map(|d| d.join(format!("{}.{}", hex::encode(digest), height)))
+        self.dir
+            .as_ref()
+            .map(|d| d.join(format!("{}.{}", hex::encode(digest), height)))
     }
 
     pub fn contains(&self, digest: &[u8; 32]) -> bool {
@@ -176,7 +178,10 @@ mod tests {
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("slay3rd-payload-store-{tag}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!(
+            "slay3rd-payload-store-{tag}-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&d);
         d
     }

@@ -44,23 +44,24 @@ use tonic::{
 };
 
 use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
-use layer_proto::cosmos::bank::v1beta1::{MsgSend, query_client::QueryClient as BankQueryClient, QueryBalanceRequest};
+use layer_proto::cosmos::bank::v1beta1::{
+    query_client::QueryClient as BankQueryClient, MsgSend, QueryBalanceRequest,
+};
+use layer_proto::cosmos::base::tendermint::v1beta1::{
+    service_client::ServiceClient as TmServiceClient, GetLatestBlockRequest,
+};
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
     service_client::ServiceClient as TxServiceClient, BroadcastMode, BroadcastTxRequest,
     GetTxRequest, SimulateRequest,
 };
-use layer_proto::cosmos::base::tendermint::v1beta1::{
-    service_client::ServiceClient as TmServiceClient, GetLatestBlockRequest,
-};
 use layer_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient as WasmQueryClient, MsgExecuteContract, MsgInstantiateContract,
-    MsgStoreCode, QueryCodesRequest, QueryContractsByCodeRequest,
-    QuerySmartContractStateRequest,
+    MsgStoreCode, QueryCodesRequest, QueryContractsByCodeRequest, QuerySmartContractStateRequest,
 };
 use layer_proto::layer::lightclient::v1::{
-    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest,
-    QueryBlockResponse, QueryLatestHeightRequest, QueryProofRequest,
+    query_client::QueryClient as LightClientQueryClient, QueryBlockRequest, QueryBlockResponse,
+    QueryLatestHeightRequest, QueryProofRequest,
 };
 
 mod ibc;
@@ -382,10 +383,12 @@ fn print_usage() {
     eprintln!("  create-client   Create the 08-wasm client on the counterparty chain");
     eprintln!("  update-client   Submit a new finalized header to the client");
     eprintln!("  store-code      Gov-propose the contract wasm on the counterparty");
-    eprintln!("  assemble-proof  Build a MembershipProof JSON for a storage key
+    eprintln!(
+        "  assemble-proof  Build a MembershipProof JSON for a storage key
   send            MsgSend tokens on the counterparty (fund the relayer key)
   keygen          Generate a secp256k1 key + print the juno address
-  account         Query account_number/sequence on the counterparty");
+  account         Query account_number/sequence on the counterparty"
+    );
     eprintln!();
     eprintln!("JunoClaw sovereign IBC (signs with deployer key, or --jc-key-file/--jc-key-hex):");
     eprintln!("  jc-create-client  Register a nominal client for the counterparty");
@@ -398,7 +401,9 @@ fn print_usage() {
     eprintln!();
     eprintln!("JunoClaw CosmWasm (signs with deployer key, or --jc-key-file/--jc-key-hex):");
     eprintln!("  jc-store-code     MsgStoreCode — upload a .wasm to JunoClaw");
-    eprintln!("  jc-instantiate    MsgInstantiateContract --code-id <n> [--label <l>] [--msg <json>]");
+    eprintln!(
+        "  jc-instantiate    MsgInstantiateContract --code-id <n> [--label <l>] [--msg <json>]"
+    );
     eprintln!("  jc-execute        MsgExecuteContract --contract <addr> --msg <json|@file>");
     eprintln!("  jc-query          Query/SmartContractState --contract <addr> --msg <json|@file>");
     eprintln!("  jc-contracts      Query/ContractsByCode --code-id <n>");
@@ -416,9 +421,15 @@ fn print_usage() {
     eprintln!("Common flags:");
     eprintln!("  --layer-grpc <host:port>   JunoClaw gRPC (default 127.0.0.1:9090)");
     eprintln!("  --grpc <host:port>         Counterparty gRPC (default 127.0.0.1:9190)");
-    eprintln!("  --key-hex <hex>            Counterparty secp256k1 private key (or RELAYER_KEY_HEX env)");
-    eprintln!("  --jc-key-file <path>       JunoClaw secp256k1 key file (or JUNOCLAW_KEY_FILE env)");
-    eprintln!("                             preferred over --jc-key-hex — hex args show in ps/history");
+    eprintln!(
+        "  --key-hex <hex>            Counterparty secp256k1 private key (or RELAYER_KEY_HEX env)"
+    );
+    eprintln!(
+        "  --jc-key-file <path>       JunoClaw secp256k1 key file (or JUNOCLAW_KEY_FILE env)"
+    );
+    eprintln!(
+        "                             preferred over --jc-key-hex — hex args show in ps/history"
+    );
     eprintln!("  --mnemonic <words>         Counterparty BIP39 mnemonic (or RELAYER_MNEMONIC env)");
     eprintln!("  --cp-chain-id <id>         Counterparty chain id (default uni-7)");
     eprintln!("  --bech32-prefix <p>        Counterparty bech32 prefix (default juno)");
@@ -427,20 +438,26 @@ fn print_usage() {
     eprintln!("  --gas <n>                  Gas limit (default 4000000)");
     eprintln!();
     eprintln!("fetch:            --height <N>");
-    eprintln!("create-client:    --height <N> --wasm <path> --group-pubkey-hex <hex> --chain-id <id>");
+    eprintln!(
+        "create-client:    --height <N> --wasm <path> --group-pubkey-hex <hex> --chain-id <id>"
+    );
     eprintln!("update-client:    --height <N> --client-id <id>");
     eprintln!("store-code:       --wasm <path> --title <t> --summary <s> [--deposit <amt><denom>]");
     eprintln!("assemble-proof:   --storage-key-hex <hex>");
     eprintln!("send:             --to <addr> --amount <n><denom>");
     eprintln!();
     eprintln!("IBC proof commands auto-update the 08-wasm client to proof_height first:");
-    eprintln!("  conn-try:       --client-id <08-wasm-N> --cp-client-id <id> --cp-connection-id <id>");
+    eprintln!(
+        "  conn-try:       --client-id <08-wasm-N> --cp-client-id <id> --cp-connection-id <id>"
+    );
     eprintln!("  conn-confirm:   --client-id <id> --connection-id <id> --cp-connection-id <id>");
     eprintln!("  chan-try:       --client-id <id> --connection-id <id> --cp-channel-id <id> [--cp-port-id <p>] [--version <v>]");
     eprintln!("  chan-confirm:   --client-id <id> --channel-id <id> --cp-channel-id <id> [--cp-port-id <p>]");
     eprintln!("  recv-packet:    --client-id <id> --channel-id <id> --cp-channel-id <id> --sequence <n> --to <rcpt> --amount <n><denom>");
     eprintln!();
-    eprintln!("relay (daemon, JunoClaw-centric: --channel-id = JunoClaw source, --cp-channel-id = dest):");
+    eprintln!(
+        "relay (daemon, JunoClaw-centric: --channel-id = JunoClaw source, --cp-channel-id = dest):"
+    );
     eprintln!("  relay:          --client-id <08-wasm-N> --channel-id <jc-chan> --cp-channel-id <cp-chan>");
     eprintln!("                  [--interval <s>] [--update-cadence <blocks>] [--max-retries <n>]");
     eprintln!("                  [--min-fee-balance <n>] [--health-addr <host:port>]");
@@ -518,9 +535,7 @@ fn parse_args() -> Result<Args, String> {
             "--to" => a.to = Some(val(&mut i)?),
             "--amount" => a.amount = Some(val(&mut i)?),
             "--wasm" => a.wasm = Some(val(&mut i)?),
-            "--height" => {
-                a.height = Some(val(&mut i)?.parse().map_err(|_| "invalid --height")?)
-            }
+            "--height" => a.height = Some(val(&mut i)?.parse().map_err(|_| "invalid --height")?),
             "--client-id" => a.client_id = Some(val(&mut i)?),
             "--group-pubkey-hex" => a.group_pubkey_hex = Some(val(&mut i)?),
             "--chain-id" => a.chain_id = val(&mut i)?,
@@ -553,12 +568,14 @@ fn parse_args() -> Result<Args, String> {
             "--ordering" => a.ordering = Some(val(&mut i)?),
             "--version" => a.version = Some(val(&mut i)?),
             "--proof-height" => {
-                a.proof_height =
-                    Some(val(&mut i)?.parse().map_err(|_| "invalid --proof-height")?)
+                a.proof_height = Some(val(&mut i)?.parse().map_err(|_| "invalid --proof-height")?)
             }
             "--timeout-height" => {
-                a.timeout_height =
-                    Some(val(&mut i)?.parse().map_err(|_| "invalid --timeout-height")?)
+                a.timeout_height = Some(
+                    val(&mut i)?
+                        .parse()
+                        .map_err(|_| "invalid --timeout-height")?,
+                )
             }
             "--timeout-timestamp" => {
                 a.timeout_timestamp = Some(
@@ -567,9 +584,7 @@ fn parse_args() -> Result<Args, String> {
                         .map_err(|_| "invalid --timeout-timestamp")?,
                 )
             }
-            "--interval" => {
-                a.interval = val(&mut i)?.parse().map_err(|_| "invalid --interval")?
-            }
+            "--interval" => a.interval = val(&mut i)?.parse().map_err(|_| "invalid --interval")?,
             "--update-cadence" => {
                 a.update_cadence = val(&mut i)?
                     .parse()
@@ -582,13 +597,9 @@ fn parse_args() -> Result<Args, String> {
             }
             "--health-addr" => a.health_addr = Some(val(&mut i)?),
             "--max-retries" => {
-                a.max_retries = val(&mut i)?
-                    .parse()
-                    .map_err(|_| "invalid --max-retries")?
+                a.max_retries = val(&mut i)?.parse().map_err(|_| "invalid --max-retries")?
             }
-            "--code-id" => {
-                a.code_id = Some(val(&mut i)?.parse().map_err(|_| "invalid --code-id")?)
-            }
+            "--code-id" => a.code_id = Some(val(&mut i)?.parse().map_err(|_| "invalid --code-id")?),
             "--contract" => a.contract = Some(val(&mut i)?),
             "--msg" => a.msg_json = Some(val(&mut i)?),
             "--label" => a.label = Some(val(&mut i)?),
@@ -716,11 +727,7 @@ async fn broadcast(grpc: &str, tx_bytes: Vec<u8>) -> Result<String, Box<dyn std:
         .into_inner();
     let tx_resp = resp.tx_response.ok_or("empty broadcast response")?;
     if tx_resp.code != 0 {
-        return Err(format!(
-            "tx failed (code {}): {}",
-            tx_resp.code, tx_resp.raw_log
-        )
-        .into());
+        return Err(format!("tx failed (code {}): {}", tx_resp.code, tx_resp.raw_log).into());
     }
     Ok(if tx_resp.txhash.is_empty() {
         local_hash
@@ -828,10 +835,7 @@ async fn simulate(grpc: &str, tx_bytes: Vec<u8>) -> Result<u64, Box<dyn std::err
 /// Simulate and print the full result — gas plus the wasm events/log the
 /// contract produced. Used to check MAYO verification output without
 /// committing state.
-async fn simulate_report(
-    grpc: &str,
-    tx_bytes: Vec<u8>,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn simulate_report(grpc: &str, tx_bytes: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
     let mut client = TxServiceClient::new(connect(grpc).await?)
         .max_decoding_message_size(32 * 1024 * 1024)
         .max_encoding_message_size(32 * 1024 * 1024);
@@ -843,7 +847,10 @@ async fn simulate_report(
         .await?
         .into_inner();
     if let Some(g) = &resp.gas_info {
-        println!("simulate: gas_used={} gas_wanted={}", g.gas_used, g.gas_wanted);
+        println!(
+            "simulate: gas_used={} gas_wanted={}",
+            g.gas_used, g.gas_wanted
+        );
     }
     if let Some(r) = &resp.result {
         if !r.log.is_empty() {
@@ -958,13 +965,33 @@ async fn cmd_fetch(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     // payload-variant divergence at the same height. Printed before the
     // proposal decode so fast-forwarded records (empty proposal_bytes)
     // still yield a comparable digest.
-    println!("payload_sha256:    {}", hex::encode(Sha256::digest(&resp.payload_bytes)));
-    println!("certificate_bytes: {} bytes (b64 {})", resp.certificate_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.certificate_bytes));
+    println!(
+        "payload_sha256:    {}",
+        hex::encode(Sha256::digest(&resp.payload_bytes))
+    );
+    println!(
+        "certificate_bytes: {} bytes (b64 {})",
+        resp.certificate_bytes.len(),
+        base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &resp.certificate_bytes
+        )
+    );
     if !resp.proposal_bytes.is_empty() {
         let proposal = decode_proposal(&resp.proposal_bytes)?;
-        println!("epoch/view/parent: {}/{}/{}", proposal.epoch, proposal.view, proposal.parent);
+        println!(
+            "epoch/view/parent: {}/{}/{}",
+            proposal.epoch, proposal.view, proposal.parent
+        );
         println!("payload_digest:    {}", hex::encode(proposal.payload));
-        println!("proposal_bytes:    {} bytes (b64 {})", resp.proposal_bytes.len(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &resp.proposal_bytes));
+        println!(
+            "proposal_bytes:    {} bytes (b64 {})",
+            resp.proposal_bytes.len(),
+            base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                &resp.proposal_bytes
+            )
+        );
     } else {
         println!("proposal_bytes:    EMPTY (fast-forwarded height — cert-only record)");
     }
@@ -1025,7 +1052,10 @@ async fn cmd_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         signer: signer.clone(),
     };
     let account = query_account(&a.grpc, &signer).await?;
-    println!("signer: {signer} (account_number {}, sequence {})", account.account_number, account.sequence);
+    println!(
+        "signer: {signer} (account_number {}, sequence {})",
+        account.account_number, account.sequence
+    );
     let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_CREATE_CLIENT, &msg), a, &account)?;
     let hash = broadcast(&a.grpc, tx_bytes).await?;
     println!("MsgCreateClient broadcast OK — txhash {hash}");
@@ -1047,7 +1077,11 @@ async fn cmd_update_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let wasm_path = a.wasm.as_ref().ok_or("store-code requires --wasm")?;
     let wasm_bytes = std::fs::read(wasm_path)?;
-    println!("wasm: {} bytes, checksum {}", wasm_bytes.len(), hex::encode(Sha256::digest(&wasm_bytes)));
+    println!(
+        "wasm: {} bytes, checksum {}",
+        wasm_bytes.len(),
+        hex::encode(Sha256::digest(&wasm_bytes))
+    );
 
     let key = signer_key(a)?;
     let signer = key.public_key().account_id(&a.bech32_prefix)?.to_string();
@@ -1062,7 +1096,10 @@ async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
             wasm_byte_code: wasm_bytes,
         };
         let account = query_account(&a.grpc, &signer).await?;
-        println!("signer: {signer} (account_number {}, sequence {})", account.account_number, account.sequence);
+        println!(
+            "signer: {signer} (account_number {}, sequence {})",
+            account.account_number, account.sequence
+        );
         let tx_bytes = sign_and_encode(&key, any_of(TYPE_URL_MSG_STORE_CODE, &store), a, &account)?;
         let hash = broadcast(&a.grpc, tx_bytes).await?;
         println!("MsgStoreCode broadcast OK — txhash {hash}");
@@ -1105,7 +1142,10 @@ async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         }],
         proposer: signer.clone(),
         metadata: String::new(),
-        title: a.title.clone().unwrap_or_else(|| "Upload JunoClaw BLS light client".into()),
+        title: a
+            .title
+            .clone()
+            .unwrap_or_else(|| "Upload JunoClaw BLS light client".into()),
         summary: a
             .summary
             .clone()
@@ -1122,7 +1162,10 @@ async fn cmd_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     )?;
     if a.simulate {
         let used = simulate(&a.grpc, tx_bytes).await?;
-        println!("simulate: gas_used={used} (tx {} bytes)", std::fs::metadata(wasm_path)?.len());
+        println!(
+            "simulate: gas_used={used} (tx {} bytes)",
+            std::fs::metadata(wasm_path)?.len()
+        );
         return Ok(());
     }
     let hash = broadcast(&a.grpc, tx_bytes).await?;
@@ -1180,7 +1223,10 @@ async fn cmd_assemble_proof(a: &Args) -> Result<(), Box<dyn std::error::Error>> 
 
 async fn cmd_send(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let to = a.to.as_ref().ok_or("send requires --to <address>")?;
-    let amount = a.amount.as_ref().ok_or("send requires --amount <n><denom>")?;
+    let amount = a
+        .amount
+        .as_ref()
+        .ok_or("send requires --amount <n><denom>")?;
     let split = amount
         .find(|c: char| c.is_alphabetic())
         .ok_or("invalid --amount (expected <amount><denom>)")?;
@@ -1197,8 +1243,16 @@ async fn cmd_send(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         }],
     };
     let account = query_account(&a.grpc, &signer).await?;
-    println!("signer: {signer} (account_number {}, sequence {})", account.account_number, account.sequence);
-    let tx_bytes = sign_and_encode(&key, any_of("/cosmos.bank.v1beta1.MsgSend", &msg), a, &account)?;
+    println!(
+        "signer: {signer} (account_number {}, sequence {})",
+        account.account_number, account.sequence
+    );
+    let tx_bytes = sign_and_encode(
+        &key,
+        any_of("/cosmos.bank.v1beta1.MsgSend", &msg),
+        a,
+        &account,
+    )?;
     let hash = broadcast(&a.grpc, tx_bytes).await?;
     println!("MsgSend broadcast OK — txhash {hash}");
     Ok(())
@@ -1268,8 +1322,8 @@ fn layer_fee_amount(gas_limit: u64) -> u128 {
 /// history on any multi-user host (POSTHUMAN g1 finding).
 fn layer_signer_key(a: &Args) -> Result<SigningKey, Box<dyn std::error::Error>> {
     if let Some(path) = a.jc_key_file.as_ref() {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| format!("--jc-key-file {path}: {e}"))?;
+        let contents =
+            std::fs::read_to_string(path).map_err(|e| format!("--jc-key-file {path}: {e}"))?;
         let bytes = hex::decode(contents.trim().trim_start_matches("0x"))
             .map_err(|e| format!("--jc-key-file {path}: not hex: {e}"))?;
         return Ok(SigningKey::from_slice(&bytes)?);
@@ -1526,8 +1580,7 @@ async fn cmd_jc_execute(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         msg: msg_json.into_bytes(),
         funds: vec![],
     };
-    let hash =
-        submit_layer_any_sim(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg)).await?;
+    let hash = submit_layer_any_sim(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg)).await?;
     println!("jc-execute {contract} broadcast OK — txhash {hash}");
     Ok(())
 }
@@ -1597,10 +1650,7 @@ async fn assemble_membership_proof(
     key: Vec<u8>,
 ) -> Result<(Vec<u8>, u64), Box<dyn std::error::Error>> {
     let mut client = layer_client(layer_grpc).await?;
-    let proof = client
-        .proof(QueryProofRequest { key })
-        .await?
-        .into_inner();
+    let proof = client.proof(QueryProofRequest { key }).await?.into_inner();
     let proof_height = proof.state_height + 1;
     // Block `proof_height` carries the state_root for the proven state, but it
     // is the unfinalized tip at query time — poll until it commits.
@@ -1645,7 +1695,10 @@ fn commitment_height(h: u64) -> Option<IbcHeight> {
 // ---- JunoClaw IbcMsg subcommands ----
 
 async fn cmd_jc_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let client_id = a.client_id.as_ref().ok_or("jc-create-client requires --client-id")?;
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("jc-create-client requires --client-id")?;
     let msg = IbcMsg::CreateClient {
         sender: layer_sender(a)?,
         client_id: client_id.clone(),
@@ -1653,12 +1706,18 @@ async fn cmd_jc_create_client(a: &Args) -> Result<(), Box<dyn std::error::Error>
         latest_height: a.height.unwrap_or(0),
     };
     let hash = submit_ibc_msg(a, msg).await?;
-    println!("IbcMsg::CreateClient({client_id} -> {}) broadcast OK — txhash {hash}", a.cp_chain_id);
+    println!(
+        "IbcMsg::CreateClient({client_id} -> {}) broadcast OK — txhash {hash}",
+        a.cp_chain_id
+    );
     Ok(())
 }
 
 async fn cmd_jc_conn_init(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let client_id = a.client_id.as_ref().ok_or("jc-conn-init requires --client-id")?;
+    let client_id = a
+        .client_id
+        .as_ref()
+        .ok_or("jc-conn-init requires --client-id")?;
     let connection_id = a
         .connection_id
         .as_ref()
@@ -1758,7 +1817,9 @@ async fn cmd_jc_transfer(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .channel_id
         .as_ref()
         .ok_or("jc-transfer requires --channel-id")?;
-    let receiver = a.to.as_ref().ok_or("jc-transfer requires --to <receiver>")?;
+    let receiver =
+        a.to.as_ref()
+            .ok_or("jc-transfer requires --to <receiver>")?;
     let amount = a
         .amount
         .as_ref()
@@ -1894,7 +1955,12 @@ async fn cmd_conn_confirm(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         signer: signer.clone(),
     };
     let account = query_account(&a.grpc, &signer).await?;
-    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_CONN_OPEN_CONFIRM, &msg), a, &account)?;
+    let tx_bytes = sign_and_encode(
+        &key,
+        any_of(ibc::TYPE_URL_CONN_OPEN_CONFIRM, &msg),
+        a,
+        &account,
+    )?;
     let hash = broadcast(&a.grpc, tx_bytes).await?;
     println!("MsgConnectionOpenConfirm broadcast OK — txhash {hash}");
     Ok(())
@@ -1988,7 +2054,12 @@ async fn cmd_chan_confirm(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         signer: signer.clone(),
     };
     let account = query_account(&a.grpc, &signer).await?;
-    let tx_bytes = sign_and_encode(&key, any_of(ibc::TYPE_URL_CHAN_OPEN_CONFIRM, &msg), a, &account)?;
+    let tx_bytes = sign_and_encode(
+        &key,
+        any_of(ibc::TYPE_URL_CHAN_OPEN_CONFIRM, &msg),
+        a,
+        &account,
+    )?;
     let hash = broadcast(&a.grpc, tx_bytes).await?;
     println!("MsgChannelOpenConfirm broadcast OK — txhash {hash}");
     Ok(())
@@ -2010,7 +2081,9 @@ async fn cmd_recv_packet(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .ok_or("recv-packet requires --cp-channel-id")?;
     let sequence = a.sequence.ok_or("recv-packet requires --sequence")?;
-    let receiver = a.to.as_ref().ok_or("recv-packet requires --to <receiver>")?;
+    let receiver =
+        a.to.as_ref()
+            .ok_or("recv-packet requires --to <receiver>")?;
     let amount = a
         .amount
         .as_ref()
@@ -2030,10 +2103,9 @@ async fn cmd_recv_packet(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
 
     // Proof of JunoClaw's packet commitment at
     // ibc/commitments/ports/<src_port>/channels/<src_chan>/sequences/<seq>.
-    let key = format!(
-        "ibc/commitments/ports/{cp_port_id}/channels/{cp_channel_id}/sequences/{sequence}"
-    )
-    .into_bytes();
+    let key =
+        format!("ibc/commitments/ports/{cp_port_id}/channels/{cp_channel_id}/sequences/{sequence}")
+            .into_bytes();
     let (proof_commitment, proof_height) = assemble_membership_proof(&a.layer_grpc, key).await?;
     println!("proof_commitment over packet seq {sequence} @ height {proof_height}");
 
@@ -2151,7 +2223,10 @@ async fn cp_latest(grpc: &str) -> Result<(u64, u64), Box<dyn std::error::Error>>
     let header = resp
         .sdk_block
         .and_then(|b| b.header.map(|h| (h.height, h.time)))
-        .or_else(|| resp.block.and_then(|b| b.header.map(|h| (h.height, h.time))));
+        .or_else(|| {
+            resp.block
+                .and_then(|b| b.header.map(|h| (h.height, h.time)))
+        });
     let (height, time) = header.ok_or("GetLatestBlock returned no header")?;
     let nanos = time
         .map(|t| t.seconds.max(0) as u64 * 1_000_000_000 + t.nanos.max(0) as u64)
@@ -2436,15 +2511,14 @@ async fn relay_tick(
         pending += 1;
 
         // Read the stored packet — needed for both recv and timeout detection.
-        let packet = match query_value(&a.layer_grpc, jc_packet_data_key(jc_port, jc_channel, seq))
-            .await?
-        {
-            Some(v) => ibc::Packet::decode(v.as_slice())?,
-            None => {
-                eprintln!("relay: seq {seq} has a commitment but no stored packet — skipping");
-                continue;
-            }
-        };
+        let packet =
+            match query_value(&a.layer_grpc, jc_packet_data_key(jc_port, jc_channel, seq)).await? {
+                Some(v) => ibc::Packet::decode(v.as_slice())?,
+                None => {
+                    eprintln!("relay: seq {seq} has a commitment but no stored packet — skipping");
+                    continue;
+                }
+            };
 
         // Timeout already elapsed on the counterparty? Re-delivering would be
         // rejected by ibc-go — submit IbcMsg::Timeout on JunoClaw instead to

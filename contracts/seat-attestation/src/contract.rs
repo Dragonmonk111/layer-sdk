@@ -100,7 +100,9 @@ pub fn execute(
             sig_a,
             msg_b,
             sig_b,
-        } => execute_submit_evidence(deps, env, info, seat_index, view, msg_a, sig_a, msg_b, sig_b),
+        } => execute_submit_evidence(
+            deps, env, info, seat_index, view, msg_a, sig_a, msg_b, sig_b,
+        ),
     }
 }
 
@@ -135,9 +137,7 @@ fn execute_update_attestation(
     } else {
         // Fresh claim: one member may hold only one seat.
         if let Some(other) = MEMBER_SEAT.may_load(deps.storage, info.sender.clone())? {
-            return Err(ContractError::MemberAlreadyBound {
-                seat_index: other,
-            });
+            return Err(ContractError::MemberAlreadyBound { seat_index: other });
         }
     }
 
@@ -187,11 +187,7 @@ fn execute_update_attestation(
     SEATS.save(deps.storage, seat_index, &record)?;
     MEMBER_SEAT.save(deps.storage, info.sender.clone(), &seat_index)?;
     HOT_KEY_OWNER.save(deps.storage, record.hot_ed25519.to_vec(), &seat_index)?;
-    BLS_KEY_OWNER.save(
-        deps.storage,
-        record.bls_share_pubkey.to_vec(),
-        &seat_index,
-    )?;
+    BLS_KEY_OWNER.save(deps.storage, record.bls_share_pubkey.to_vec(), &seat_index)?;
     NPUB_OWNER.save(deps.storage, record.npub.to_vec(), &seat_index)?;
     if let Some(mayo) = &record.mayo_pubkey {
         MAYO_KEY_OWNER.save(deps.storage, mayo.to_vec(), &seat_index)?;
@@ -353,9 +349,9 @@ fn verify_partial_sig(deps: Deps, msg: &[u8], sig: &[u8], share_pk: &[u8]) -> bo
     if sig.len() != 48 || share_pk.len() != 96 {
         return false;
     }
-    let Ok(hm) = deps
-        .api
-        .bls12_381_hash_to_g1(cosmwasm_std::HashFunction::Sha256, msg, BLS_SIG_DST)
+    let Ok(hm) =
+        deps.api
+            .bls12_381_hash_to_g1(cosmwasm_std::HashFunction::Sha256, msg, BLS_SIG_DST)
     else {
         return false;
     };

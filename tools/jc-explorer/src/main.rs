@@ -32,9 +32,7 @@ use axum::routing::get;
 use axum::Router;
 use layer_proto::cosmos::base::abci::v1beta1::TxResponse;
 use layer_proto::layer::lightclient::v1::query_client::QueryClient as LcClient;
-use layer_proto::layer::lightclient::v1::{
-    QueryBlockRequest, QueryLatestHeightRequest,
-};
+use layer_proto::layer::lightclient::v1::{QueryBlockRequest, QueryLatestHeightRequest};
 use prost::Message as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -176,20 +174,21 @@ fn archive_lookup(conn: &rusqlite::Connection, height: u64) -> Option<ArchiveBlo
 }
 
 fn decode_block(height: u64, ts: u64, cert: &[u8], payload: &[u8]) -> BlockInfo {
-    let (digest, tx_count, state_root, proposer, tx_hashes) = match BlockPayload::from_bytes_ext(payload) {
-        Some(p) => (
-            hex::encode(Sha256::digest(payload)),
-            p.txs.len(),
-            hex::encode(p.state_root),
-            hex::encode(&p.proposer[..p.proposer.len().min(8)]),
-            // CometBFT convention: txhash = sha256(raw tx), upper-hex.
-            p.txs
-                .iter()
-                .map(|t| hex::encode_upper(Sha256::digest(t)))
-                .collect::<Vec<_>>(),
-        ),
-        None => ("—".into(), 0, "—".into(), "—".into(), vec![]),
-    };
+    let (digest, tx_count, state_root, proposer, tx_hashes) =
+        match BlockPayload::from_bytes_ext(payload) {
+            Some(p) => (
+                hex::encode(Sha256::digest(payload)),
+                p.txs.len(),
+                hex::encode(p.state_root),
+                hex::encode(&p.proposer[..p.proposer.len().min(8)]),
+                // CometBFT convention: txhash = sha256(raw tx), upper-hex.
+                p.txs
+                    .iter()
+                    .map(|t| hex::encode_upper(Sha256::digest(t)))
+                    .collect::<Vec<_>>(),
+            ),
+            None => ("—".into(), 0, "—".into(), "—".into(), vec![]),
+        };
     let (hybrid, signers, participants, mayo) = match parse_hybrid_envelope(cert) {
         Ok(e) => (true, e.signers, e.participants, e.mayo_sig_count),
         Err(_) => (false, vec![], 0, 0),
@@ -230,7 +229,11 @@ async fn lc_client(grpc: &str) -> Result<LcClient<Channel>, tonic::transport::Er
     } else {
         format!("http://{grpc}")
     };
-    Channel::from_shared(uri).unwrap().connect().await.map(LcClient::new)
+    Channel::from_shared(uri)
+        .unwrap()
+        .connect()
+        .await
+        .map(LcClient::new)
 }
 
 async fn fetch_block(grpc: &str, h: u64) -> Option<BlockInfo> {
@@ -284,7 +287,9 @@ fn page(title: &str, body: &str) -> Html<String> {
 }
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn ago(nanos: u64) -> String {
@@ -315,13 +320,17 @@ async fn home(State(st): State<AppState>) -> Html<String> {
         v.sort_by_key(|b| std::cmp::Reverse(b.height));
         (c.tip, v)
     };
-    let archive_pill = st.archive.as_ref().map(|a| {
-        let conn = a.lock().unwrap();
-        let n: i64 = conn
-            .query_row("SELECT count(*) FROM blocks", [], |r| r.get(0))
-            .unwrap_or(0);
-        format!("<div class=pill><b>{n}</b><span>archived blocks</span></div>")
-    }).unwrap_or_default();
+    let archive_pill = st
+        .archive
+        .as_ref()
+        .map(|a| {
+            let conn = a.lock().unwrap();
+            let n: i64 = conn
+                .query_row("SELECT count(*) FROM blocks", [], |r| r.get(0))
+                .unwrap_or(0);
+            format!("<div class=pill><b>{n}</b><span>archived blocks</span></div>")
+        })
+        .unwrap_or_default();
     let history_link = if st.archive.is_some() {
         " · <a href='/history'>deep history</a>"
     } else {
@@ -567,7 +576,10 @@ async fn history_page(
         String::new()
     };
     let newer = if q.to.map(|t| t < tip as u64).unwrap_or(false) {
-        format!("<a href='/history?to={}'>↑ newer</a> ", q.to.unwrap() + PAGE as u64)
+        format!(
+            "<a href='/history?to={}'>↑ newer</a> ",
+            q.to.unwrap() + PAGE as u64
+        )
     } else {
         String::new()
     };
@@ -620,7 +632,9 @@ async fn address_page(
                 .prepare("SELECT denom, amount FROM balances WHERE address=?1")
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let rows = stq
-                .query_map([&addr], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .query_map([&addr], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                })
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let mut s = String::new();
             let mut any = false;
@@ -842,14 +856,20 @@ struct ArchiveBlocksQ {
     n: Option<usize>,
 }
 
-async fn api_archive_status(State(st): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn api_archive_status(
+    State(st): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let arc = st.archive.as_ref().ok_or(StatusCode::NOT_FOUND)?;
     let conn = arc.lock().unwrap();
     let total: i64 = conn
         .query_row("SELECT count(*) FROM blocks", [], |r| r.get(0))
         .unwrap_or(0);
     let certs: i64 = conn
-        .query_row("SELECT count(*) FROM blocks WHERE cert IS NOT NULL", [], |r| r.get(0))
+        .query_row(
+            "SELECT count(*) FROM blocks WHERE cert IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(0);
     let typed_seq: Option<String> = conn
         .query_row("SELECT v FROM meta WHERE k='typed_seq'", [], |r| r.get(0))
@@ -948,7 +968,9 @@ async fn api_address(
             Ok(rows)
         })
         .unwrap_or_default();
-    Ok(Json(serde_json::json!({"address": addr, "balances": balances, "txs": txs})))
+    Ok(Json(
+        serde_json::json!({"address": addr, "balances": balances, "txs": txs}),
+    ))
 }
 
 async fn api_tx(
@@ -1021,8 +1043,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Read-only open — the archiver keeps writing (WAL).
         let conn = rusqlite::Connection::open_with_flags(
             &path,
-            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
-                | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )
         .unwrap_or_else(|e| {
             eprintln!("[jc-explorer] archive open failed ({path}): {e} — deep history disabled");

@@ -70,10 +70,7 @@ mod tests {
             height: 1,
             timestamp_nanos: 1_000_000_000,
             proposer: vec![1u8; 32],
-            txs: vec![
-                Bytes::from("tx1"),
-                Bytes::from("tx2"),
-            ],
+            txs: vec![Bytes::from("tx1"), Bytes::from("tx2")],
             parent_digest: [0u8; 32],
             state_root: [0u8; 32],
         }

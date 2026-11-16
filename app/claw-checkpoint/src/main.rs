@@ -114,7 +114,10 @@ fn parse_args() -> Result<Args, String> {
     }
     let once = has(&args, "--once");
     let interval_secs = opt(&args, "--interval-secs")
-        .map(|s| s.parse::<u64>().map_err(|_| format!("bad --interval-secs: {s:?}")))
+        .map(|s| {
+            s.parse::<u64>()
+                .map_err(|_| format!("bad --interval-secs: {s:?}"))
+        })
         .transpose()?;
     if !once && interval_secs.is_none() {
         return Err("either --once or --interval-secs <n> is required".into());
@@ -354,7 +357,10 @@ async fn main() {
     };
 
     if let Err(e) = std::fs::create_dir_all(&args.state_dir) {
-        eprintln!("error: cannot create --state-dir {}: {e}", args.state_dir.display());
+        eprintln!(
+            "error: cannot create --state-dir {}: {e}",
+            args.state_dir.display()
+        );
         std::process::exit(1);
     }
     let load = |p: &Option<PathBuf>| -> Option<SigningKey> {

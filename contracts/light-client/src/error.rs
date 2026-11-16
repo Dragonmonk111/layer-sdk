@@ -26,7 +26,9 @@ pub enum ContractError {
     #[error("proposal bytes are malformed (truncated varint or wrong length)")]
     InvalidProposal,
 
-    #[error("BLS12-381 pairing check failed — certificate does not verify against the group public key")]
+    #[error(
+        "BLS12-381 pairing check failed — certificate does not verify against the group public key"
+    )]
     VerificationFailed,
 
     #[error("no consensus state stored for height {0}")]

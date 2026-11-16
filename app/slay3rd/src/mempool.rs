@@ -127,9 +127,7 @@ impl Mempool {
             return Err(SubmitError::Duplicate);
         }
         if let Some(m) = &meta {
-            if self.sender_counts.get(&m.sender).copied().unwrap_or(0)
-                >= self.max_per_sender
-            {
+            if self.sender_counts.get(&m.sender).copied().unwrap_or(0) >= self.max_per_sender {
                 return Err(SubmitError::SenderFull);
             }
         }
@@ -278,7 +276,10 @@ mod tests {
         let batch = pool.peek_batch(3, BIG);
         assert_eq!(batch.len(), 3);
         assert_eq!(batch[0], tx1, "FIFO order violated: first tx should be tx1");
-        assert_eq!(batch[1], tx2, "FIFO order violated: second tx should be tx2");
+        assert_eq!(
+            batch[1], tx2,
+            "FIFO order violated: second tx should be tx2"
+        );
         assert_eq!(batch[2], tx3, "FIFO order violated: third tx should be tx3");
     }
 
@@ -306,7 +307,10 @@ mod tests {
     #[test]
     fn test_peek_empty() {
         let pool = Mempool::new(10);
-        assert!(pool.peek_batch(5, BIG).is_empty(), "peek on empty mempool should return empty vec");
+        assert!(
+            pool.peek_batch(5, BIG).is_empty(),
+            "peek on empty mempool should return empty vec"
+        );
     }
 
     #[test]
@@ -314,7 +318,11 @@ mod tests {
         let mut pool = Mempool::new(10);
         pool.submit(Bytes::from("tx1")).unwrap();
         pool.submit(Bytes::from("tx2")).unwrap();
-        assert_eq!(pool.peek_batch(100, BIG).len(), 2, "should return only available txs");
+        assert_eq!(
+            pool.peek_batch(100, BIG).len(),
+            2,
+            "should return only available txs"
+        );
     }
 
     #[test]
@@ -350,7 +358,10 @@ mod tests {
     #[test]
     fn test_byte_limits() {
         let mut pool = Mempool::with_limits(10, 10, 4);
-        assert_eq!(pool.submit(Bytes::from("12345")), Err(SubmitError::TooLarge));
+        assert_eq!(
+            pool.submit(Bytes::from("12345")),
+            Err(SubmitError::TooLarge)
+        );
         pool.submit(Bytes::from("aaaa")).unwrap();
         pool.submit(Bytes::from("bbbb")).unwrap();
         assert_eq!(pool.submit(Bytes::from("ccc")), Err(SubmitError::Full));
@@ -451,7 +462,9 @@ mod tests {
             sequence: 0,
             store_code: true,
         };
-        assert!(pool.submit_checked(Bytes::from(vec![0u8; 5]), Some(m)).is_ok());
+        assert!(pool
+            .submit_checked(Bytes::from(vec![0u8; 5]), Some(m))
+            .is_ok());
     }
 
     /// Sender counters must be released when a tx leaves the pool.

@@ -163,8 +163,8 @@ impl PubKey {
                 else {
                     return Err(TxError::InvalidSignature);
                 };
-                let secp_ok = secp256k1_verify(message_hash, secp_sig, secp256k1.as_slice())
-                    .unwrap_or(false);
+                let secp_ok =
+                    secp256k1_verify(message_hash, secp_sig, secp256k1.as_slice()).unwrap_or(false);
                 let mayo_ok = mayo_variant.verify(message_hash, mayo_sig, mayo_pk.as_slice());
                 if secp_ok && mayo_ok {
                     Ok(())
@@ -173,9 +173,7 @@ impl PubKey {
                 }
             }
             PubKey::Ed25519(pk) => {
-                if !ed25519_verify(message_hash, signature, pk.as_slice())
-                    .unwrap_or(false)
-                {
+                if !ed25519_verify(message_hash, signature, pk.as_slice()).unwrap_or(false) {
                     Err(TxError::InvalidSignature)
                 } else {
                     Ok(())

@@ -210,17 +210,21 @@ impl StateMachine {
             Err(_) => return Ok(vec![]),
         };
         let collector = fee_collector_account();
-        let distributed = self.bank.distribute_fees(
-            storage, meter, block, self, &collector, &proposer,
-        )?;
+        let distributed = self
+            .bank
+            .distribute_fees(storage, meter, block, self, &collector, &proposer)?;
         let mut events = vec![];
         if !distributed.is_empty() {
-            let total: String = distributed.iter()
+            let total: String = distributed
+                .iter()
                 .map(|c| format!("{}{}", c.amount, c.denom))
-                .collect::<Vec<_>>().join(", ");
-            events.push(Event::new("fee_distribution")
-                .add_attribute("proposer", proposer.to_string())
-                .add_attribute("amount", total));
+                .collect::<Vec<_>>()
+                .join(", ");
+            events.push(
+                Event::new("fee_distribution")
+                    .add_attribute("proposer", proposer.to_string())
+                    .add_attribute("amount", total),
+            );
         }
         Ok(events)
     }

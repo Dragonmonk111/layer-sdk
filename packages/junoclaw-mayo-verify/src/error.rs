@@ -6,10 +6,7 @@ use core::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     /// Input has wrong length for the parameter set.
-    InvalidLength {
-        expected: usize,
-        actual: usize,
-    },
+    InvalidLength { expected: usize, actual: usize },
     /// Verification failed (invalid signature).
     VerifyFailed,
     /// AES-128-CTR key expansion failed.

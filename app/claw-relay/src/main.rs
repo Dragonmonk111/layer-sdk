@@ -75,10 +75,12 @@ type Shared = Arc<App>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter(
-        tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "claw_relay=info".into()),
-    ).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "claw_relay=info".into()),
+        )
+        .init();
 
     let args: Vec<String> = std::env::args().collect();
     let opt = |name: &str| -> Option<String> {
@@ -257,9 +259,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
                             if filters.iter().any(|f| f.matches(&ev))
                                 && out_tx
                                     .unbounded_send(Message::Text(
-                                        serde_json::json!(["EVENT", sub, *ev])
-                                            .to_string()
-                                            .into(),
+                                        serde_json::json!(["EVENT", sub, *ev]).to_string().into(),
                                     ))
                                     .is_err()
                             {
@@ -294,9 +294,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
     while let Some(Ok(msg)) = ws_rx.next().await {
         let Message::Text(txt) = msg else { continue };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else {
-            let _ = out_tx2.unbounded_send(Message::Text(
-                r#"["NOTICE","error: bad json"]"#.into(),
-            ));
+            let _ = out_tx2.unbounded_send(Message::Text(r#"["NOTICE","error: bad json"]"#.into()));
             continue;
         };
         handle_frame(&app, &subs, &out_tx2, &v, &challenge).await;
@@ -400,11 +398,16 @@ async fn handle_frame(
                 && ev.tag_value("challenge") == Some(challenge)
                 && ev.verify().is_ok();
             send(serde_json::json!([
-                "OK", id, ok,
+                "OK",
+                id,
+                ok,
                 if ok { "" } else { "error: bad auth" }
             ]));
         }
-        _ => send(serde_json::json!(["NOTICE", format!("error: unsupported {kind}")])),
+        _ => send(serde_json::json!([
+            "NOTICE",
+            format!("error: unsupported {kind}")
+        ])),
     }
 }
 
@@ -541,12 +544,13 @@ async fn http_events(
             if fresh {
                 let _ = app.tx.send(std::sync::Arc::new(ev.clone()));
             }
-            axum::Json(serde_json::json!({"accepted": true, "event_id": ev.id}))
-                .into_response()
+            axum::Json(serde_json::json!({"accepted": true, "event_id": ev.id})).into_response()
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            axum::Json(serde_json::json!({"accepted": false, "event_id": ev.id, "error": format!("{e}")})),
+            axum::Json(
+                serde_json::json!({"accepted": false, "event_id": ev.id, "error": format!("{e}")}),
+            ),
         )
             .into_response(),
     }
@@ -747,8 +751,7 @@ mod tests {
             allowlist: Arc::new(RwLock::new(HashSet::new())),
             tx: broadcast::channel(16).0,
         });
-        let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> =
-            Arc::new(RwLock::new(HashMap::new()));
+        let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> = Arc::new(RwLock::new(HashMap::new()));
         let (out_tx, mut out_rx) = mpsc::unbounded::<Message>();
         async fn next_json(rx: &mut mpsc::UnboundedReceiver<Message>) -> serde_json::Value {
             match rx.next().await.expect("reply") {
@@ -768,13 +771,27 @@ mod tests {
         // 2. populated set, pubkey not in it -> still denied
         app.allowlist.write().await.insert("f".repeat(64));
         let ev2 = signed_event("hi2", "chan-a", 2);
-        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2.clone()]), "t").await;
+        handle_frame(
+            &app,
+            &subs,
+            &out_tx,
+            &serde_json::json!(["EVENT", ev2.clone()]),
+            "t",
+        )
+        .await;
         let v = next_json(&mut out_rx).await;
         assert_eq!(v[2], false);
 
         // 3. allowlisted pubkey -> admitted
         app.allowlist.write().await.insert(ev2.pubkey.clone());
-        handle_frame(&app, &subs, &out_tx, &serde_json::json!(["EVENT", ev2]), "t").await;
+        handle_frame(
+            &app,
+            &subs,
+            &out_tx,
+            &serde_json::json!(["EVENT", ev2]),
+            "t",
+        )
+        .await;
         let v = next_json(&mut out_rx).await;
         assert_eq!(v[0], "OK");
         assert_eq!(v[2], true);
@@ -785,8 +802,7 @@ mod tests {
     /// gossip ingress: every reject path plus the accept path.
     #[tokio::test]
     async fn admit_event_accepts_and_rejects() {
-        let dir =
-            std::env::temp_dir().join(format!("claw-test-admit-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("claw-test-admit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let app = Arc::new(App {
             store: Store::open(&dir.join("t.redb")).unwrap(),

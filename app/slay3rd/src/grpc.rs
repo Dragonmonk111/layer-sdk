@@ -30,17 +30,11 @@ use layer_cosmos::{encode_cosmos_response, parse_cosmos_query, parse_cosmos_tx};
 use layer_storage::PersistentStorage;
 
 use layer_proto::cosmos::tx::v1beta1::{
-    service_server::Service as CosmTxService, AuthInfo, BroadcastTxRequest,
-    BroadcastTxResponse, GetBlockWithTxsRequest, GetBlockWithTxsResponse,
-    GetTxRequest, GetTxResponse, GetTxsEventRequest, GetTxsEventResponse,
-    SimulateRequest, SimulateResponse, Tx, TxBody,
+    service_server::Service as CosmTxService, AuthInfo, BroadcastTxRequest, BroadcastTxResponse,
+    GetBlockWithTxsRequest, GetBlockWithTxsResponse, GetTxRequest, GetTxResponse,
+    GetTxsEventRequest, GetTxsEventResponse, SimulateRequest, SimulateResponse, Tx, TxBody,
     TxDecodeAminoRequest, TxDecodeAminoResponse, TxDecodeRequest, TxDecodeResponse,
-    TxEncodeAminoRequest, TxEncodeAminoResponse, TxEncodeRequest, TxEncodeResponse,
-    TxRaw,
-};
-use layer_proto::layer::sync::v1::{
-    query_server::Query as SyncQuery, BlockWrites, QueryLatestSequenceRequest,
-    QueryLatestSequenceResponse, StreamChangesSinceRequest, StreamCurrentStateRequest, WriteData,
+    TxEncodeAminoRequest, TxEncodeAminoResponse, TxEncodeRequest, TxEncodeResponse, TxRaw,
 };
 use layer_proto::layer::lightclient::v1::{
     query_server::Query as LightClientQuery, QueryBlockRequest, QueryBlockResponse,
@@ -49,6 +43,10 @@ use layer_proto::layer::lightclient::v1::{
 use layer_proto::layer::statesync::v1::{
     query_server::Query as StateSyncQuery, ListSnapshotsRequest, ListSnapshotsResponse,
     LoadSnapshotChunkRequest, LoadSnapshotChunkResponse, SnapshotMeta,
+};
+use layer_proto::layer::sync::v1::{
+    query_server::Query as SyncQuery, BlockWrites, QueryLatestSequenceRequest,
+    QueryLatestSequenceResponse, StreamChangesSinceRequest, StreamCurrentStateRequest, WriteData,
 };
 
 use layer_proto::cosmos::base::abci::v1beta1::{
@@ -194,7 +192,10 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
             sender: signed.signer.to_string(),
             sequence: signed.signing_info.sequence,
             store_code: signed.msgs.iter().any(|m| {
-                matches!(m, layer_std::Msg::Wasm(layer_std::WasmMsg::StoreCode { .. }))
+                matches!(
+                    m,
+                    layer_std::Msg::Wasm(layer_std::WasmMsg::StoreCode { .. })
+                )
             }),
         };
 
@@ -405,7 +406,8 @@ impl<T: PersistentStorage + Send + Sync + 'static> CosmTxService for LayerGrpcSe
 
 #[tonic::async_trait]
 impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcService<T> {
-    type CurrentStateStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<WriteData, Status>> + Send>>;
+    type CurrentStateStream =
+        Pin<Box<dyn tokio_stream::Stream<Item = Result<WriteData, Status>> + Send>>;
     type ChangesSinceStream =
         Pin<Box<dyn tokio_stream::Stream<Item = Result<BlockWrites, Status>> + Send>>;
 
@@ -444,8 +446,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
             let app = self.app.read().await;
             app.changes_since(sequence)
         };
-        let mapped =
-            stream.map(|r: Result<BlockWrites, String>| r.map_err(Status::internal));
+        let mapped = stream.map(|r: Result<BlockWrites, String>| r.map_err(Status::internal));
         Ok(Response::new(Box::pin(mapped)))
     }
 }
@@ -575,7 +576,9 @@ impl<T: PersistentStorage + Send + Sync + 'static> LightClientQuery for LayerGrp
         };
 
         let proof = proof.ok_or_else(|| {
-            Status::not_found("key does not exist in committed state — non-membership proofs are not supported")
+            Status::not_found(
+                "key does not exist in committed state — non-membership proofs are not supported",
+            )
         })?;
 
         Ok(Response::new(QueryProofResponse {
@@ -681,8 +684,7 @@ pub async fn handle_cosmos_query<T: PersistentStorage + Send + Sync + 'static>(
     };
 
     // query() returns PulsarResult<QueryResponse<PulsarError>>
-    let query_response =
-        response.map_err(|e| Status::internal(format!("query failed: {e}")))?;
+    let query_response = response.map_err(|e| Status::internal(format!("query failed: {e}")))?;
 
     encode_cosmos_response(query_response).map_err(|e| Status::internal(e.to_string()))
 }
@@ -735,8 +737,12 @@ impl<T: PersistentStorage + Send + Sync + 'static> Clone for CosmosQueryService<
 }
 
 /// Type alias for the CosmosQueryService future to avoid ambiguity with multiple Service traits.
-pub type CosmosQueryFuture =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Result<http::Response<AxumBody>, std::convert::Infallible>> + Send>>;
+pub type CosmosQueryFuture = std::pin::Pin<
+    Box<
+        dyn std::future::Future<Output = Result<http::Response<AxumBody>, std::convert::Infallible>>
+            + Send,
+    >,
+>;
 
 impl<T: PersistentStorage + Send + Sync + 'static> tower_service::Service<http::Request<AxumBody>>
     for CosmosQueryService<T>
@@ -754,9 +760,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> tower_service::Service<http::
 
     fn call(&mut self, request: http::Request<AxumBody>) -> CosmosQueryFuture {
         let state = self.state.clone();
-        Box::pin(async move {
-            Ok(handle_cosmos_request(state, request).await)
-        })
+        Box::pin(async move { Ok(handle_cosmos_request(state, request).await) })
     }
 }
 
@@ -957,15 +961,18 @@ mod tests {
 
         rt.block_on(async {
             let svc = make_service(init_app());
-            svc.tx_index.insert(layer_proto::cosmos::base::abci::v1beta1::TxResponse {
-                txhash: "0C330C87AB".to_string(),
-                height: 460_286,
-                gas_used: 309_396,
-                ..Default::default()
-            });
+            svc.tx_index
+                .insert(layer_proto::cosmos::base::abci::v1beta1::TxResponse {
+                    txhash: "0C330C87AB".to_string(),
+                    height: 460_286,
+                    gas_used: 309_396,
+                    ..Default::default()
+                });
 
             let resp = svc
-                .get_tx(Request::new(GetTxRequest { hash: "0c330c87ab".into() }))
+                .get_tx(Request::new(GetTxRequest {
+                    hash: "0c330c87ab".into(),
+                }))
                 .await
                 .expect("indexed tx must be found")
                 .into_inner();
@@ -974,7 +981,9 @@ mod tests {
             assert_eq!(tr.gas_used, 309_396);
 
             let err = svc
-                .get_tx(Request::new(GetTxRequest { hash: "DEADBEEF".into() }))
+                .get_tx(Request::new(GetTxRequest {
+                    hash: "DEADBEEF".into(),
+                }))
                 .await
                 .expect_err("unknown tx must error");
             assert_eq!(err.code(), tonic::Code::NotFound);
@@ -1015,8 +1024,7 @@ mod tests {
         let signer_info = SignerInfo::single_direct(Some(sender_public_key), 0);
         let auth_info = signer_info.auth_info(Fee::from_amount_and_gas(fee_coin, 200_000u64));
 
-        let sign_doc =
-            SignDoc::new(&tx_body, &auth_info, &chain_id, ACCOUNT_NUMBER).unwrap();
+        let sign_doc = SignDoc::new(&tx_body, &auth_info, &chain_id, ACCOUNT_NUMBER).unwrap();
         let tx_signed = sign_doc.sign(&sender_private_key).unwrap();
         tx_signed.to_bytes().unwrap()
     }
@@ -1057,7 +1065,8 @@ mod tests {
                 let mut app = svc.app.write().await;
                 app.set_block_certificate(1, vec![0xAA; 48]).unwrap();
                 app.set_block_proposal(1, vec![0xBB; 32]).unwrap();
-                app.set_block_timestamp(1, 1_700_000_000_000_000_000).unwrap();
+                app.set_block_timestamp(1, 1_700_000_000_000_000_000)
+                    .unwrap();
             }
 
             // --- Full header after persistence ---
@@ -1149,10 +1158,7 @@ mod tests {
             let tx_bytes = build_signed_tx_bytes();
             let result = svc
                 .broadcast_tx(Request::new(
-                    layer_proto::cosmos::tx::v1beta1::BroadcastTxRequest {
-                        tx_bytes,
-                        mode: 0,
-                    },
+                    layer_proto::cosmos::tx::v1beta1::BroadcastTxRequest { tx_bytes, mode: 0 },
                 ))
                 .await;
             assert!(
@@ -1172,13 +1178,15 @@ mod tests {
                 let pool = svc.mempool.lock().await;
                 pool.len()
             };
-            assert_eq!(pool_len, 0, "mempool should be empty — no tx passed check_tx");
+            assert_eq!(
+                pool_len, 0,
+                "mempool should be empty — no tx passed check_tx"
+            );
 
             // --- Verify the uninitialized node guard works ---
             // Create a service with an uninitialized app
             let uninit_storage = MemoryStore::default();
-            let uninit_logic =
-                StateMachine::new(&AppConfig::new("/tmp/slay3rd-grpc-uninit-test"));
+            let uninit_logic = StateMachine::new(&AppConfig::new("/tmp/slay3rd-grpc-uninit-test"));
             let uninit_app = App::new(uninit_storage, uninit_logic);
             let uninit_svc = make_service(uninit_app);
 
@@ -1186,18 +1194,12 @@ mod tests {
             let tx_bytes = build_signed_tx_bytes();
             let result = uninit_svc
                 .broadcast_tx(Request::new(
-                    layer_proto::cosmos::tx::v1beta1::BroadcastTxRequest {
-                        tx_bytes,
-                        mode: 0,
-                    },
+                    layer_proto::cosmos::tx::v1beta1::BroadcastTxRequest { tx_bytes, mode: 0 },
                 ))
                 .await;
             // Could be InvalidArgument (parse fails first) or Unavailable (init guard)
             // Either is acceptable — we just confirm it doesn't panic
-            assert!(
-                result.is_err(),
-                "uninitialized node should return an error"
-            );
+            assert!(result.is_err(), "uninitialized node should return an error");
         });
     }
 
@@ -1247,10 +1249,7 @@ mod tests {
             // --- Valid signed tx, unfunded account → non-OK + error text ---
             let tx_bytes = build_signed_tx_bytes();
             let err = svc
-                .simulate(Request::new(SimulateRequest {
-                    tx: None,
-                    tx_bytes,
-                }))
+                .simulate(Request::new(SimulateRequest { tx: None, tx_bytes }))
                 .await
                 .expect_err("failed simulation must not return Ok");
             assert_eq!(err.code(), tonic::Code::Internal);
@@ -1322,13 +1321,8 @@ mod tests {
                     .await
                     .unwrap()
                     .into_inner();
-                let cksum: [u8; 32] =
-                    <sha2::Sha256 as sha2::Digest>::digest(&r.chunk).into();
-                assert_eq!(
-                    &cksum[..],
-                    &r.checksum[..],
-                    "chunk {i} checksum mismatch"
-                );
+                let cksum: [u8; 32] = <sha2::Sha256 as sha2::Digest>::digest(&r.chunk).into();
+                assert_eq!(&cksum[..], &r.checksum[..], "chunk {i} checksum mismatch");
                 records.extend(layer_app::decode_snapshot_chunk(&r.chunk).unwrap());
             }
             assert!(!records.is_empty(), "genesis must produce KV records");

@@ -11,9 +11,9 @@
 //!   2. Generate test keys: `cargo run -p generate-testnet-keys -- --validators 2`
 //!   3. Two TOML config files in /tmp/slay3rd-p2p-test/ for the 2 nodes
 
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use std::path::PathBuf;
 
 /// Spawns 2 slay3rd nodes as real OS processes on localhost with different P2P
 /// and gRPC ports. Verifies they connect via authenticated P2P and reach
@@ -97,19 +97,19 @@ fn test_authenticated_p2p() {
 
     // Read the public keys from the key files
     let key0_json: serde_json::Value = {
-        let contents = std::fs::read_to_string(&key0_path)
-            .expect("Failed to read node0.json");
+        let contents = std::fs::read_to_string(&key0_path).expect("Failed to read node0.json");
         serde_json::from_str(&contents).expect("Failed to parse node0.json")
     };
     let key1_json: serde_json::Value = {
-        let contents = std::fs::read_to_string(&key1_path)
-            .expect("Failed to read node1.json");
+        let contents = std::fs::read_to_string(&key1_path).expect("Failed to read node1.json");
         serde_json::from_str(&contents).expect("Failed to parse node1.json")
     };
 
-    let pk0 = key0_json["ed25519_public_hex"].as_str()
+    let pk0 = key0_json["ed25519_public_hex"]
+        .as_str()
         .expect("ed25519_public_hex not found in node0.json");
-    let pk1 = key1_json["ed25519_public_hex"].as_str()
+    let pk1 = key1_json["ed25519_public_hex"]
+        .as_str()
         .expect("ed25519_public_hex not found in node1.json");
 
     // Create data directories for each node

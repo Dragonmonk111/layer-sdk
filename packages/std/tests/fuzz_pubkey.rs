@@ -72,9 +72,7 @@ fn fuzz_from_hybrid_any_bytes_never_panics() {
         let len = rng.below(600);
         let input = rng.bytes(len);
         if let Some(pk) = PubKey::from_hybrid_any_bytes(&input) {
-            let wire = pk
-                .to_hybrid_any_bytes()
-                .expect("parsed key must re-encode");
+            let wire = pk.to_hybrid_any_bytes().expect("parsed key must re-encode");
             assert_eq!(wire, input, "round-trip changed canonical wire form");
         }
     }

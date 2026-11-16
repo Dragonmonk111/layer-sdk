@@ -19,8 +19,8 @@ const AUX: [u8; 32] = [0u8; 32];
 pub fn load_signing_key(path: &Path) -> Result<SigningKey, Error> {
     let raw = std::fs::read_to_string(path)?;
     let s = raw.trim();
-    let bytes = hex::decode(s)
-        .map_err(|e| Error::Key(format!("{}: bad hex: {e}", path.display())))?;
+    let bytes =
+        hex::decode(s).map_err(|e| Error::Key(format!("{}: bad hex: {e}", path.display())))?;
     let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
         Error::Key(format!(
             "{}: expected 32-byte secret, got {} bytes",
@@ -114,7 +114,12 @@ mod tests {
         let sk = load_signing_key(&p).unwrap();
         assert_eq!(
             hex::encode(sk.verifying_key().to_bytes()),
-            hex::encode(SigningKey::from_bytes(&[9u8; 32]).unwrap().verifying_key().to_bytes())
+            hex::encode(
+                SigningKey::from_bytes(&[9u8; 32])
+                    .unwrap()
+                    .verifying_key()
+                    .to_bytes()
+            )
         );
         std::fs::remove_dir_all(&dir).ok();
     }

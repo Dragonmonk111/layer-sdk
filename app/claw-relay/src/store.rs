@@ -117,8 +117,8 @@ impl Store {
             for item in idx.range(lo.as_slice()..hi.as_slice())? {
                 let (_, gid) = item?;
                 if let Some(gv) = events.get(gid.value())? {
-                    let ev: Event = serde_json::from_str(gv.value())
-                        .map_err(|e| StoreError::Db(e.into()))?;
+                    let ev: Event =
+                        serde_json::from_str(gv.value()).map_err(|e| StoreError::Db(e.into()))?;
                     if f.matches(&ev) {
                         vals.push(ev);
                     }

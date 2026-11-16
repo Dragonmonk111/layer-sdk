@@ -86,8 +86,8 @@ impl Event {
         )
         .map_err(|_| EventError::BadPubkey)?;
         let sig_bytes = hex::decode(&self.sig).map_err(|_| EventError::BadHex("sig"))?;
-        let sig = Signature::try_from(sig_bytes.as_slice())
-            .map_err(|_| EventError::BadSignature)?;
+        let sig =
+            Signature::try_from(sig_bytes.as_slice()).map_err(|_| EventError::BadSignature)?;
         let id = hex::decode(&self.id).map_err(|_| EventError::BadHex("id"))?;
         vk.verify_raw(&id, &sig)
             .map_err(|_| EventError::SigVerifyFailed)

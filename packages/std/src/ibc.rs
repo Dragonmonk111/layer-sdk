@@ -13,8 +13,14 @@ use crate::account_id::AccountId;
 /// handshake `Ack` steps advance our side INIT→OPEN on relayer instruction and
 /// carry the counterparty proof opaquely without verifying it. The genuine
 /// counterparty verifier is the production (A56) phase.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(::cosmwasm_schema::serde::Serialize, ::cosmwasm_schema::serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    ::cosmwasm_schema::serde::Serialize,
+    ::cosmwasm_schema::serde::Deserialize,
+)]
 #[serde(crate = "::cosmwasm_schema::serde", rename_all = "snake_case")]
 pub enum IbcMsg {
     /// Register a nominal counterparty light client (devnet: stores id/chain/height,
@@ -135,8 +141,14 @@ impl Display for IbcMsg {
 }
 
 /// Response data returned by IBC message handlers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(::cosmwasm_schema::serde::Serialize, ::cosmwasm_schema::serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    ::cosmwasm_schema::serde::Serialize,
+    ::cosmwasm_schema::serde::Deserialize,
+)]
 #[serde(crate = "::cosmwasm_schema::serde", rename_all = "snake_case")]
 pub enum IbcMsgData {
     CreateClient { client_id: String },

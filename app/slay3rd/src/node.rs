@@ -23,16 +23,16 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use commonware_consensus::{Automaton, CertifiableAutomaton};
 use commonware_consensus::simplex::types::Context;
 use commonware_consensus::types::{Epoch, Round};
+use commonware_consensus::{Automaton, CertifiableAutomaton};
 use commonware_cryptography::{sha256, Hasher, PublicKey};
 
 use layer_app::App;
 use layer_std::api::Block;
 use layer_std::Timestamp;
 use layer_storage::PersistentStorage;
-use tokio::sync::{Mutex, RwLock, oneshot};
+use tokio::sync::{oneshot, Mutex, RwLock};
 
 // Cosmos tx deserialization for execute_block()
 use layer_cosmos::parse_cosmos_tx;
@@ -122,7 +122,10 @@ const MAX_FUTURE_DRIFT: Duration = Duration::from_secs(2);
 pub enum FetchRequest {
     Digest([u8; 32]),
     /// Inclusive start + count (count ≤ BACKFILL_BATCH_SIZE).
-    HeightRange { start: u64, count: u16 },
+    HeightRange {
+        start: u64,
+        count: u16,
+    },
 }
 
 /// Apply a chaos fault-injection mode to a freshly built proposal payload
@@ -355,7 +358,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> Clone for Layer
 }
 
 impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P> {
-    pub fn new(app: Arc<RwLock<App<T>>>, mempool: Arc<Mutex<Mempool>>, initial_height: u64) -> Self {
+    pub fn new(
+        app: Arc<RwLock<App<T>>>,
+        mempool: Arc<Mutex<Mempool>>,
+        initial_height: u64,
+    ) -> Self {
         // Executed tip digest: genesis parent at height 0, otherwise the digest
         // of the persisted payload at the resume height. If that payload is
         // missing the node cannot link new blocks and will (correctly) refuse
@@ -462,7 +469,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             }
             requested.insert(digest);
         }
-        if let Some(tx) = self.fetch_tx.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(tx) = self
+            .fetch_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             let _ = tx.send(FetchRequest::Digest(digest));
         }
     }
@@ -582,10 +594,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         if !stuck {
             return;
         }
-        let marker = dir.join(format!(
-            "wedge-recovered-{}",
-            &hex::encode(parent)[..16]
-        ));
+        let marker = dir.join(format!("wedge-recovered-{}", &hex::encode(parent)[..16]));
         if marker.exists() {
             return;
         }
@@ -731,15 +740,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         let held: HashSet<u64> = {
             let pending = self.pending_payloads.lock().await;
             let mut held: HashSet<u64> = pending.values().map(|p| p.height).collect();
-            held.extend(
-                (tip + 1..=target)
-                    .filter(|h| {
-                        self.store
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .contains_height(*h)
-                    }),
-            );
+            held.extend((tip + 1..=target).filter(|h| {
+                self.store
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains_height(*h)
+            }));
             held
         };
 
@@ -810,7 +816,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 req.insert(h, now);
             }
         }
-        if let Some(tx) = self.fetch_tx.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(tx) = self
+            .fetch_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             while remaining > 0 {
                 let n = remaining.min(BACKFILL_BATCH_SIZE);
                 let _ = tx.send(FetchRequest::HeightRange {
@@ -883,8 +894,10 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         // Relay catch-up bound: capture the observed-tip evidence from
         // BEFORE this push, so a peer cannot self-authorize its own far
         // payload (sending it once would otherwise advance max_seen).
-        let within_observed =
-            payload.height <= self.max_seen_height.load(std::sync::atomic::Ordering::Relaxed);
+        let within_observed = payload.height
+            <= self
+                .max_seen_height
+                .load(std::sync::atomic::Ordering::Relaxed);
         // Always record the height — even rejected pushes are evidence of
         // the peer tip and give backfill a fetch target.
         self.note_height_observed(payload.height);
@@ -924,7 +937,9 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                 return (Err("pending payload capacity reached"), false);
             };
             pending.remove(&victim);
-        } else if !solicited && pending.len() >= MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE {
+        } else if !solicited
+            && pending.len() >= MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE
+        {
             // Keep headroom for solicited replies so unsolicited pushes can
             // never fill the buffer to the point the rule above engages on
             // every catch-up reply.
@@ -939,7 +954,10 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         if let Some(p) = self.pending_payloads.lock().await.get(digest) {
             return Some(p.clone());
         }
-        self.store.lock().unwrap_or_else(|e| e.into_inner()).get(digest)
+        self.store
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(digest)
     }
 
     /// Executed tip as (height, digest).
@@ -1111,7 +1129,10 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         }
 
         if let Some((height, _)) = result {
-            self.pending_payloads.lock().await.retain(|_, p| p.height > height);
+            self.pending_payloads
+                .lock()
+                .await
+                .retain(|_, p| p.height > height);
             self.store
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
@@ -1134,9 +1155,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         /// batch so a ~110k-height catch-up can't wedge finalize.
         const MAX_PRUNE_PER_BLOCK: u64 = 2_048;
 
-        let Some(keep) = self.prune_keep_heights else { return };
+        let Some(keep) = self.prune_keep_heights else {
+            return;
+        };
         let target_floor = tip.saturating_sub(keep);
-        self.prune_finality_records(target_floor, MAX_PRUNE_PER_BLOCK).await;
+        self.prune_finality_records(target_floor, MAX_PRUNE_PER_BLOCK)
+            .await;
         let old_floor = {
             let app = self.app.read().await;
             app.prune_floor()
@@ -1144,7 +1168,9 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         if target_floor <= old_floor {
             return;
         }
-        let new_floor = old_floor.saturating_add(MAX_PRUNE_PER_BLOCK).min(target_floor);
+        let new_floor = old_floor
+            .saturating_add(MAX_PRUNE_PER_BLOCK)
+            .min(target_floor);
         let heights: Vec<u64> = ((old_floor + 1)..=new_floor).collect();
 
         // txres keys are hash-keyed, not height-keyed — recover each
@@ -1165,11 +1191,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         match app.prune_sidecars(&heights, &txhashes, new_floor) {
             Ok(removed) => {
                 if removed > 0 {
-                    tracing::debug!(
-                        floor = new_floor,
-                        removed,
-                        "sidecar pruning advanced"
-                    );
+                    tracing::debug!(floor = new_floor, removed, "sidecar pruning advanced");
                 }
             }
             Err(e) => {
@@ -1217,7 +1239,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         if !invalid.is_empty() {
             let mut pool = self.mempool.lock().await;
             let evicted = pool.remove_committed(invalid.iter());
-            tracing::info!(evicted, remaining = pool.len(), "mempool recheck evicted invalid txs");
+            tracing::info!(
+                evicted,
+                remaining = pool.len(),
+                "mempool recheck evicted invalid txs"
+            );
         }
     }
 
@@ -1251,11 +1277,11 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         // Each entry in payload.txs is a raw Cosmos proto-encoded tx (cosmos.tx.v1beta1.TxRaw).
         // parse_cosmos_tx() handles the full proto decode + signature extraction.
         let chain_id = {
-            let app = self.app.read().await;  // SHARED read lock — read-only
+            let app = self.app.read().await; // SHARED read lock — read-only
             app.info()
                 .map(|b| b.chain_id.clone())
                 .unwrap_or_else(|| "junoclaw-1".to_string())
-        };  // read lock released here
+        }; // read lock released here
 
         let mut txs: Vec<layer_std::Tx> = Vec::with_capacity(payload.txs.len());
         let mut tx_hashes: Vec<String> = Vec::with_capacity(payload.txs.len());
@@ -1299,12 +1325,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         let payload_bytes = payload.to_bytes();
         let (result, exec_elapsed) = {
             let exec_start = Instant::now();
-            let mut app = self.app.write().await;  // EXCLUSIVE write lock — mutates state
+            let mut app = self.app.write().await; // EXCLUSIVE write lock — mutates state
             (
                 app.finalize_block_with_payload(block, Some(payload_bytes)),
                 exec_start.elapsed(),
             )
-        };  // write lock released here
+        }; // write lock released here
 
         match result {
             Ok(response) => {
@@ -1341,7 +1367,12 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                     self.tx_index.insert(resp);
                 }
 
-                if let Err(e) = self.store.lock().unwrap_or_else(|e| e.into_inner()).put_executed(&payload) {
+                if let Err(e) = self
+                    .store
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .put_executed(&payload)
+                {
                     tracing::warn!(height, error = %e, "Failed to persist executed payload to payload store");
                 }
 
@@ -1490,20 +1521,13 @@ where
             // validators' verify() rejection is exercised on the network.
             if let Some(mode) = node.fault_inject.as_deref() {
                 if apply_fault_inject(&mut payload, mode) {
-                    tracing::warn!(
-                        mode,
-                        height,
-                        "fault_inject: proposing corrupted payload"
-                    );
+                    tracing::warn!(mode, height, "fault_inject: proposing corrupted payload");
                 }
             }
 
             let payload_bytes = payload.to_bytes().len();
             let digest_bytes = Self::compute_digest(&payload);
-            tracing::info!(
-                payload_bytes = payload_bytes,
-                "propose: built BlockPayload"
-            );
+            tracing::info!(payload_bytes = payload_bytes, "propose: built BlockPayload");
 
             // Store in pending map so the relay can broadcast it.
             {
@@ -1545,7 +1569,12 @@ where
             let start = Instant::now();
             let mut last_request: Option<Instant> = None;
             let verdict = loop {
-                let candidate = node.pending_payloads.lock().await.get(&digest_bytes).cloned();
+                let candidate = node
+                    .pending_payloads
+                    .lock()
+                    .await
+                    .get(&digest_bytes)
+                    .cloned();
                 if candidate.is_none()
                     && start.elapsed() >= FETCH_RETRY
                     && last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY)
@@ -1609,11 +1638,7 @@ where
     T: PersistentStorage + Send + Sync + 'static,
     P: PublicKey + Clone + Send + Sync + 'static,
 {
-    async fn certify(
-        &mut self,
-        round: Round,
-        payload: Self::Digest,
-    ) -> oneshot::Receiver<bool> {
+    async fn certify(&mut self, round: Round, payload: Self::Digest) -> oneshot::Receiver<bool> {
         let (tx, rx) = oneshot::channel();
         let view_num = round.view().get();
 
@@ -1717,8 +1742,8 @@ mod tests {
     use std::sync::Arc;
 
     use cosmwasm_std::{to_json_binary, Timestamp as CwTimestamp};
-    use layer_app::{App, AppConfig, StateMachine};
     use layer_app::genesis::{GenesisState, WasmParams};
+    use layer_app::{App, AppConfig, StateMachine};
     use layer_std::api::{InitChainRequest, TmPubKey, ValidatorUpdate};
     use layer_storage::MemoryStore;
     use tokio::sync::{Mutex, RwLock};
@@ -1795,9 +1820,7 @@ mod tests {
         app
     }
 
-    fn make_layer_node_locked(
-        _guard: &std::sync::MutexGuard<()>,
-    ) -> TestNode {
+    fn make_layer_node_locked(_guard: &std::sync::MutexGuard<()>) -> TestNode {
         let app = Arc::new(RwLock::new(init_app()));
         let mempool = Arc::new(Mutex::new(Mempool::new(1000)));
         // App starts with initial_height=1, meaning first block is height=1.
@@ -1898,11 +1921,17 @@ mod tests {
         let digest = insert_payload_sync(&node, payload);
 
         let success = rt().block_on(node.execute_block(digest));
-        assert!(success, "execute_block should succeed for valid empty-tx payload");
+        assert!(
+            success,
+            "execute_block should succeed for valid empty-tx payload"
+        );
 
         // Check that height was incremented
         let height = rt().block_on(async { *node.current_height.lock().await });
-        assert_eq!(height, 1, "height should be incremented to 1 after first certify");
+        assert_eq!(
+            height, 1,
+            "height should be incremented to 1 after first certify"
+        );
     }
 
     #[test]
@@ -1917,7 +1946,10 @@ mod tests {
             let pending = pending_arc.lock().await;
             pending.contains_key(&digest)
         });
-        assert!(in_pending_before, "payload should be in pending before certify");
+        assert!(
+            in_pending_before,
+            "payload should be in pending before certify"
+        );
 
         rt().block_on(node.execute_block(digest));
 
@@ -1927,7 +1959,10 @@ mod tests {
             let pending = pending_arc.lock().await;
             pending.contains_key(&digest)
         });
-        assert!(!in_pending_after, "payload should be removed from pending after certify");
+        assert!(
+            !in_pending_after,
+            "payload should be removed from pending after certify"
+        );
     }
 
     #[test]
@@ -1935,7 +1970,10 @@ mod tests {
         let node = make_layer_node();
         let unknown_digest = [99u8; 32];
         let result = rt().block_on(node.execute_block(unknown_digest));
-        assert!(!result, "execute_block should return false for unknown digest");
+        assert!(
+            !result,
+            "execute_block should return false for unknown digest"
+        );
     }
 
     #[test]
@@ -2001,7 +2039,10 @@ mod tests {
             let map = arc2.lock().await;
             map.contains_key(&digest)
         });
-        assert!(found, "pending_payloads() should return the same shared Arc");
+        assert!(
+            found,
+            "pending_payloads() should return the same shared Arc"
+        );
     }
 
     #[test]
@@ -2011,14 +2052,20 @@ mod tests {
         // Block 1 (height = 1)
         let payload1 = make_payload_at_genesis_time(1, [0u8; 32]);
         let digest1 = insert_payload_sync(&node, payload1);
-        assert!(rt().block_on(node.execute_block(digest1)), "first block should certify");
+        assert!(
+            rt().block_on(node.execute_block(digest1)),
+            "first block should certify"
+        );
         let h1 = rt().block_on(async { *node.current_height.lock().await });
         assert_eq!(h1, 1);
 
         // Block 2 (height = 2)
         let payload2 = make_payload_at_genesis_time(2, digest1);
         let digest2 = insert_payload_sync(&node, payload2);
-        assert!(rt().block_on(node.execute_block(digest2)), "second block should certify");
+        assert!(
+            rt().block_on(node.execute_block(digest2)),
+            "second block should certify"
+        );
         let h2 = rt().block_on(async { *node.current_height.lock().await });
         assert_eq!(h2, 2);
     }
@@ -2055,13 +2102,22 @@ mod tests {
         let digest = insert_payload_sync(&node, p);
         let hash_before = rt().block_on(async { node.app().read().await.app_hash() });
         let ok = rt().block_on(async {
-            let rx = node.certify(Round::new(Epoch::new(0), commonware_consensus::types::View::new(1)), sha256::Digest::from(digest)).await;
+            let rx = node
+                .certify(
+                    Round::new(Epoch::new(0), commonware_consensus::types::View::new(1)),
+                    sha256::Digest::from(digest),
+                )
+                .await;
             rx.await.unwrap()
         });
         assert!(ok, "certify should succeed when payload is available");
         let hash_after = rt().block_on(async { node.app().read().await.app_hash() });
         assert_eq!(hash_before, hash_after, "certify must not mutate state");
-        assert_eq!(rt().block_on(node.executed_tip()).0, 0, "certify must not advance height");
+        assert_eq!(
+            rt().block_on(node.executed_tip()).0,
+            0,
+            "certify must not advance height"
+        );
     }
 
     /// rc14 regression (2026-10-21 g1 halt): ensure_executed must NEVER drive
@@ -2149,7 +2205,10 @@ mod tests {
                 .await;
             rx.await.unwrap()
         });
-        assert!(!ok, "certify must refuse a payload conflicting with executed chain");
+        assert!(
+            !ok,
+            "certify must refuse a payload conflicting with executed chain"
+        );
 
         // certify() on the executed block itself still succeeds (replay path).
         // finalize() removes executed payloads from pending — re-admit pa so
@@ -2166,7 +2225,10 @@ mod tests {
                 .await;
             rx.await.unwrap()
         });
-        assert!(ok, "certify must accept the executed block at the tip height");
+        assert!(
+            ok,
+            "certify must accept the executed block at the tip height"
+        );
     }
 
     /// Undetermined cases fail open: a candidate above the executed tip gets
@@ -2224,7 +2286,11 @@ mod tests {
         p1.state_root = [7u8; 32];
         let d1 = insert_payload_sync(&node, p1);
         assert_eq!(rt().block_on(node.finalize(d1)), None);
-        assert_eq!(rt().block_on(node.executed_tip()).0, 0, "divergent block must not execute");
+        assert_eq!(
+            rt().block_on(node.executed_tip()).0,
+            0,
+            "divergent block must not execute"
+        );
     }
 
     /// Executing a block removes its txs from the pool; finalize() then
@@ -2246,8 +2312,14 @@ mod tests {
         assert!(rt().block_on(node.execute_block(d1)));
         rt().block_on(async {
             let pool = node.mempool.lock().await;
-            assert!(!pool.contains(&tx_hash(&committed)), "committed tx must leave the pool");
-            assert!(pool.contains(&tx_hash(&stale)), "execute alone must not evict other txs");
+            assert!(
+                !pool.contains(&tx_hash(&committed)),
+                "committed tx must leave the pool"
+            );
+            assert!(
+                pool.contains(&tx_hash(&stale)),
+                "execute alone must not evict other txs"
+            );
         });
 
         let p2 = valid_child(&node, 2, d1);
@@ -2272,19 +2344,35 @@ mod tests {
         };
         rt().block_on(async {
             assert_eq!(node.accept_peer_payload(at(1)).await, Ok(true));
-            assert_eq!(node.accept_peer_payload(at(1)).await, Ok(false), "duplicate is a no-op");
-            assert!(node.accept_peer_payload(at(0)).await.is_err(), "stale height rejected");
+            assert_eq!(
+                node.accept_peer_payload(at(1)).await,
+                Ok(false),
+                "duplicate is a no-op"
+            );
             assert!(
-                node.accept_peer_payload(at(PEER_PAYLOAD_LOOKAHEAD + 1)).await.is_err(),
+                node.accept_peer_payload(at(0)).await.is_err(),
+                "stale height rejected"
+            );
+            assert!(
+                node.accept_peer_payload(at(PEER_PAYLOAD_LOOKAHEAD + 1))
+                    .await
+                    .is_err(),
                 "unsolicited payload beyond lookahead rejected"
             );
             let far = at(PEER_PAYLOAD_LOOKAHEAD + 1);
             node.request_payload(far.digest());
-            assert_eq!(node.accept_peer_payload(far).await, Ok(true), "solicited reply bypasses window");
+            assert_eq!(
+                node.accept_peer_payload(far).await,
+                Ok(true),
+                "solicited reply bypasses window"
+            );
 
             let mut big = at(2);
             big.txs = vec![bytes::Bytes::from(vec![0u8; MAX_BLOCK_TX_BYTES + 1])];
-            assert!(node.accept_peer_payload(big).await.is_err(), "oversized payload rejected");
+            assert!(
+                node.accept_peer_payload(big).await.is_err(),
+                "oversized payload rejected"
+            );
 
             let mut inserted = 0usize;
             loop {
@@ -2334,7 +2422,10 @@ mod tests {
             let pending = node.pending_payloads.lock().await;
             assert_eq!(pending.len(), MAX_PENDING_PAYLOADS_TOTAL);
             assert!(pending.contains_key(&tip_link_digest));
-            assert!(!pending.contains_key(&victim), "furthest entry evicted for solicited reply");
+            assert!(
+                !pending.contains_key(&victim),
+                "furthest entry evicted for solicited reply"
+            );
         });
     }
 
@@ -2356,7 +2447,8 @@ mod tests {
             let far = at(PEER_PAYLOAD_LOOKAHEAD + 50);
             assert!(node.accept_peer_payload(far.clone()).await.is_err());
             assert_eq!(
-                node.max_seen_height.load(std::sync::atomic::Ordering::Relaxed),
+                node.max_seen_height
+                    .load(std::sync::atomic::Ordering::Relaxed),
                 far.height,
                 "rejected pushes still advance the fetch target"
             );
@@ -2649,7 +2741,8 @@ mod tests {
             {
                 let mut app = node.app.write().await;
                 for h in 1..=5u64 {
-                    app.set_block_finality(h, vec![h as u8], vec![h as u8; 2], h).unwrap();
+                    app.set_block_finality(h, vec![h as u8], vec![h as u8; 2], h)
+                        .unwrap();
                 }
             }
             node.prune_sidecars(5).await;
@@ -2676,13 +2769,24 @@ mod tests {
             parent_digest: parent,
             state_root: root,
         };
-        let check = |p: &BlockPayload| validate_payload(p, &parent, 5, &root, parent_time, now, &[1u8; 32]);
+        let check =
+            |p: &BlockPayload| validate_payload(p, &parent, 5, &root, parent_time, now, &[1u8; 32]);
         assert!(check(&good).is_ok());
-        let mut p = good.clone(); p.parent_digest = [0u8; 32]; assert!(check(&p).is_err());
-        let mut p = good.clone(); p.height = 6; assert!(check(&p).is_err());
-        let mut p = good.clone(); p.state_root = [0u8; 32]; assert!(check(&p).is_err());
-        let mut p = good.clone(); p.timestamp_nanos = parent_time; assert!(check(&p).is_err());
-        let mut p = good.clone(); p.proposer = vec![2u8; 32]; assert!(check(&p).is_err());
+        let mut p = good.clone();
+        p.parent_digest = [0u8; 32];
+        assert!(check(&p).is_err());
+        let mut p = good.clone();
+        p.height = 6;
+        assert!(check(&p).is_err());
+        let mut p = good.clone();
+        p.state_root = [0u8; 32];
+        assert!(check(&p).is_err());
+        let mut p = good.clone();
+        p.timestamp_nanos = parent_time;
+        assert!(check(&p).is_err());
+        let mut p = good.clone();
+        p.proposer = vec![2u8; 32];
+        assert!(check(&p).is_err());
         let mut p = good.clone();
         p.txs = vec![bytes::Bytes::from(vec![0u8; MAX_BLOCK_TX_BYTES / 2 + 1]); 2];
         assert!(check(&p).is_err(), "block byte budget must be enforced");
@@ -2706,11 +2810,17 @@ mod tests {
             };
             validate_payload(&p, &parent, 5, &root, parent_time, now, &[1u8; 32])
         };
-        assert!(at(parent_time).is_err(), "must be strictly after the parent");
+        assert!(
+            at(parent_time).is_err(),
+            "must be strictly after the parent"
+        );
         assert!(at(parent_time + 1).is_ok());
         assert!(at(now).is_ok());
         assert!(at(now + drift).is_ok());
-        assert!(at(now + drift + 1).is_err(), "too far ahead of the local clock");
+        assert!(
+            at(now + drift + 1).is_err(),
+            "too far ahead of the local clock"
+        );
     }
 
     #[test]
@@ -2718,7 +2828,10 @@ mod tests {
         assert_eq!(proposal_timestamp_nanos(100, 500), 500);
         assert_eq!(proposal_timestamp_nanos(500, 500), 501);
         assert_eq!(proposal_timestamp_nanos(900, 500), 901);
-        assert!(now_nanos() > view_timestamp_nanos(0), "wall clock is past the test genesis");
+        assert!(
+            now_nanos() > view_timestamp_nanos(0),
+            "wall clock is past the test genesis"
+        );
     }
 
     /// Build a properly signed Cosmos tx bytes (cosmos.tx.v1beta1.TxRaw encoded) using cosmrs.

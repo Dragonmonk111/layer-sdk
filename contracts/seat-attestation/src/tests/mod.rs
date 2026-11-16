@@ -125,12 +125,7 @@ fn get_seat(fx: &Fixture, seat_index: u8) -> Option<SeatRecord> {
 fn attest_happy_path() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(3, 0xAA),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(3, 0xAA), &[])
         .unwrap();
 
     let seat = get_seat(&fx, 3).expect("seat must exist");
@@ -157,12 +152,7 @@ fn non_member_rejected() {
     let mut fx = setup(default_members());
     let err = fx
         .app
-        .execute_contract(
-            mk(OUTSIDER),
-            fx.seat.clone(),
-            &attest_msg(0, 0x01),
-            &[],
-        )
+        .execute_contract(mk(OUTSIDER), fx.seat.clone(), &attest_msg(0, 0x01), &[])
         .unwrap_err();
     assert!(
         err_contains(&err, "holds no weight"),
@@ -174,24 +164,14 @@ fn non_member_rejected() {
 fn seat_collision_rejected() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
 
     // A different member cannot steal the seat — last-writer-wins is
     // seat-stealing; rebinding requires a revoke first.
     let err = fx
         .app
-        .execute_contract(
-            mk(MEMBER_B),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0B),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_B), fx.seat.clone(), &attest_msg(1, 0x0B), &[])
         .unwrap_err();
     assert!(
         err_contains(&err, "different member"),
@@ -203,22 +183,12 @@ fn seat_collision_rejected() {
 fn member_holds_one_seat_only() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
 
     let err = fx
         .app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(2, 0x0B),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(2, 0x0B), &[])
         .unwrap_err();
     assert!(
         err_contains(&err, "only one seat"),
@@ -230,23 +200,13 @@ fn member_holds_one_seat_only() {
 fn rotation_moves_old_keys_to_history() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
     let first = get_seat(&fx, 1).unwrap();
 
     // Same member, same seat, new keys — this is a rotation.
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0B),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0B), &[])
         .unwrap();
 
     let seat = get_seat(&fx, 1).unwrap();
@@ -269,12 +229,7 @@ fn rotation_moves_old_keys_to_history() {
 fn bound_member_can_revoke() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
 
     // An outsider cannot revoke.
@@ -305,12 +260,7 @@ fn bound_member_can_revoke() {
 fn dao_core_can_revoke_then_member_rebinds() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
 
     fx.app
@@ -325,37 +275,19 @@ fn dao_core_can_revoke_then_member_rebinds() {
 
     // After the dao_core revoke the seat is free for another member.
     fx.app
-        .execute_contract(
-            mk(MEMBER_B),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0B),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_B), fx.seat.clone(), &attest_msg(1, 0x0B), &[])
         .unwrap();
-    assert_eq!(
-        get_seat(&fx, 1).unwrap().member_addr,
-        mk(MEMBER_B)
-    );
+    assert_eq!(get_seat(&fx, 1).unwrap().member_addr, mk(MEMBER_B));
 }
 
 #[test]
 fn prune_removed_member_and_refuse_active() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
     fx.app
-        .execute_contract(
-            mk(MEMBER_B),
-            fx.seat.clone(),
-            &attest_msg(2, 0x0B),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_B), fx.seat.clone(), &attest_msg(2, 0x0B), &[])
         .unwrap();
 
     // Permissionless, but refused while the member still holds weight.
@@ -396,16 +328,16 @@ fn list_active_seats_paginates_and_joins_membership() {
         (MEMBER_C, 2u8, 0x12u8),
     ] {
         fx.app
-            .execute_contract(
-                mk(member),
-                fx.seat.clone(),
-                &attest_msg(seat, tag),
-                &[],
-            )
+            .execute_contract(mk(member), fx.seat.clone(), &attest_msg(seat, tag), &[])
             .unwrap();
     }
 
-    fn query(app: &App, seat: &Addr, start_after: Option<u8>, limit: Option<u32>) -> Vec<SeatRecord> {
+    fn query(
+        app: &App,
+        seat: &Addr,
+        start_after: Option<u8>,
+        limit: Option<u32>,
+    ) -> Vec<SeatRecord> {
         app.wrap()
             .query_wasm_smart::<SeatsResponse>(
                 seat.as_str(),
@@ -442,12 +374,7 @@ fn list_active_seats_paginates_and_joins_membership() {
 fn submit_evidence_dedups_and_flags_unverified() {
     let mut fx = setup(default_members());
     fx.app
-        .execute_contract(
-            mk(MEMBER_A),
-            fx.seat.clone(),
-            &attest_msg(1, 0x0A),
-            &[],
-        )
+        .execute_contract(mk(MEMBER_A), fx.seat.clone(), &attest_msg(1, 0x0A), &[])
         .unwrap();
 
     let ev = ExecuteMsg::SubmitEvidence {
@@ -491,7 +418,10 @@ fn submit_evidence_dedups_and_flags_unverified() {
     let stored: EvidenceResponse = fx
         .app
         .wrap()
-        .query_wasm_smart(fx.seat.as_str(), &QueryMsg::ListEvidence { seat_index: None })
+        .query_wasm_smart(
+            fx.seat.as_str(),
+            &QueryMsg::ListEvidence { seat_index: None },
+        )
         .unwrap();
     assert_eq!(stored.evidence.len(), 1);
     let rec = &stored.evidence[0];
@@ -522,8 +452,12 @@ fn submit_evidence_verifies_real_bls_partials() {
     let ns = b"slay3r-consensus-v1_NOTARIZE";
     let vote_a = b"proposal-a@view42";
     let vote_b = b"proposal-b@view42";
-    let sig_a = ops::sign_message::<MinSig>(&sk, ns, vote_a).encode().to_vec();
-    let sig_b = ops::sign_message::<MinSig>(&sk, ns, vote_b).encode().to_vec();
+    let sig_a = ops::sign_message::<MinSig>(&sk, ns, vote_a)
+        .encode()
+        .to_vec();
+    let sig_b = ops::sign_message::<MinSig>(&sk, ns, vote_b)
+        .encode()
+        .to_vec();
     assert_eq!(sig_a.len(), 48);
     assert_eq!(sig_b.len(), 48);
 
@@ -563,7 +497,12 @@ fn submit_evidence_verifies_real_bls_partials() {
     let stored: EvidenceResponse = fx
         .app
         .wrap()
-        .query_wasm_smart(fx.seat.as_str(), &QueryMsg::ListEvidence { seat_index: Some(1) })
+        .query_wasm_smart(
+            fx.seat.as_str(),
+            &QueryMsg::ListEvidence {
+                seat_index: Some(1),
+            },
+        )
         .unwrap();
     assert_eq!(stored.evidence.len(), 1);
     assert!(
@@ -572,7 +511,9 @@ fn submit_evidence_verifies_real_bls_partials() {
     );
 
     // A signature over a *different* message must not verify.
-    let sig_wrong = ops::sign_message::<MinSig>(&sk, ns, b"other").encode().to_vec();
+    let sig_wrong = ops::sign_message::<MinSig>(&sk, ns, b"other")
+        .encode()
+        .to_vec();
     fx.app
         .execute_contract(
             mk(OUTSIDER),
@@ -591,12 +532,20 @@ fn submit_evidence_verifies_real_bls_partials() {
     let stored: EvidenceResponse = fx
         .app
         .wrap()
-        .query_wasm_smart(fx.seat.as_str(), &QueryMsg::ListEvidence { seat_index: Some(1) })
+        .query_wasm_smart(
+            fx.seat.as_str(),
+            &QueryMsg::ListEvidence {
+                seat_index: Some(1),
+            },
+        )
         .unwrap();
     let rec = stored
         .evidence
         .iter()
         .find(|e| e.view == 43)
         .expect("evidence must be stored");
-    assert!(!rec.verified, "forged partials must land with verified=false");
+    assert!(
+        !rec.verified,
+        "forged partials must land with verified=false"
+    );
 }

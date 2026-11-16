@@ -48,7 +48,8 @@ pub(crate) unsafe fn make_backend(
     // This is sound because make_backend's safety contract requires all pointees
     // to outlive the returned Backend (see doc comment above).
     let storage_ptr: *mut (dyn Storage + 'static) = transmute(contract_storage as *mut dyn Storage);
-    let query_ptr: *const (dyn ReadonlyStorage + 'static) = transmute(query_storage as *const dyn ReadonlyStorage);
+    let query_ptr: *const (dyn ReadonlyStorage + 'static) =
+        transmute(query_storage as *const dyn ReadonlyStorage);
     let storage = VmStore {
         storage: storage_ptr,
         meter: meter as *const GasMeter,
@@ -279,41 +280,43 @@ fn layer_response_to_cosmwasm(
             }
             x => unsupported_response(&x),
         },
-        Wasm(wasm) => match wasm {
-            layer_std::response::WasmQueryResponse::Smart(data) => Ok(data),
-            layer_std::response::WasmQueryResponse::Raw(value) => Ok(value),
-            layer_std::response::WasmQueryResponse::ContractInfo(info) => {
-                let res = cosmwasm_std::ContractInfoResponse::new(
-                    info.code_id,
-                    info.creator.into(),
-                    info.admin.map(|a| a.into()),
-                    info.pinned,
-                    info.ibc_port,
-                );
-                Ok(to_json_binary(&res).unwrap())
+        Wasm(wasm) => {
+            match wasm {
+                layer_std::response::WasmQueryResponse::Smart(data) => Ok(data),
+                layer_std::response::WasmQueryResponse::Raw(value) => Ok(value),
+                layer_std::response::WasmQueryResponse::ContractInfo(info) => {
+                    let res = cosmwasm_std::ContractInfoResponse::new(
+                        info.code_id,
+                        info.creator.into(),
+                        info.admin.map(|a| a.into()),
+                        info.pinned,
+                        info.ibc_port,
+                    );
+                    Ok(to_json_binary(&res).unwrap())
+                }
+                layer_std::response::WasmQueryResponse::CodeInfo(info) => {
+                    let CodeInfo {
+                        code_id,
+                        creator,
+                        checksum,
+                        pinned: _,
+                    } = info.code_info;
+                    let cs_bytes: [u8; 32] = checksum.as_slice().try_into().map_err(|_| {
+                        SystemError::InvalidResponse {
+                            error: "Invalid checksum length".to_string(),
+                            response: Binary::from(b""),
+                        }
+                    })?;
+                    let res = cosmwasm_std::CodeInfoResponse::new(
+                        code_id,
+                        cosmwasm_std::Addr::unchecked(creator.to_string()),
+                        cosmwasm_std::Checksum::from(cs_bytes),
+                    );
+                    Ok(to_json_binary(&res).unwrap())
+                }
+                x => unsupported_response(&x),
             }
-            layer_std::response::WasmQueryResponse::CodeInfo(info) => {
-                let CodeInfo {
-                    code_id,
-                    creator,
-                    checksum,
-                    pinned: _,
-                } = info.code_info;
-                let cs_bytes: [u8; 32] = checksum.as_slice().try_into().map_err(|_| {
-                    SystemError::InvalidResponse {
-                        error: "Invalid checksum length".to_string(),
-                        response: Binary::from(b""),
-                    }
-                })?;
-                let res = cosmwasm_std::CodeInfoResponse::new(
-                    code_id,
-                    cosmwasm_std::Addr::unchecked(creator.to_string()),
-                    cosmwasm_std::Checksum::from(cs_bytes),
-                );
-                Ok(to_json_binary(&res).unwrap())
-            }
-            x => unsupported_response(&x),
-        },
+        }
         x => unsupported_response(&x),
     }
 }

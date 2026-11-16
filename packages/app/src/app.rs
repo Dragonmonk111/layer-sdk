@@ -503,7 +503,9 @@ impl<T: PersistentStorage + 'static> App<T> {
         let reader = self.storage.reader();
         let mut store = ScratchTx::new(&reader);
         let block_meter = self.simulate_gas_meter();
-        let res = self.logic.query_simulate(&mut store, &block_meter, &block, tx);
+        let res = self
+            .logic
+            .query_simulate(&mut store, &block_meter, &block, tx);
         reader.abort();
         TxResult {
             gas: GasInfo {
@@ -777,11 +779,7 @@ impl<T: PersistentStorage + 'static> App<T> {
     ///
     /// # Returns
     /// `Ok(())` on success, or an error if the storage write fails.
-    pub fn set_block_certificate(
-        &mut self,
-        height: u64,
-        certificate: Vec<u8>,
-    ) -> PulsarResult<()> {
+    pub fn set_block_certificate(&mut self, height: u64, certificate: Vec<u8>) -> PulsarResult<()> {
         let meter = GasMeter::infinite();
         let mut writer = self.storage.writer();
         let key = format!("{}{}", BLOCK_CERTIFICATE_KEY_PREFIX, height);
@@ -963,7 +961,11 @@ impl<T: PersistentStorage + 'static> App<T> {
     pub fn prune_floor(&self) -> u64 {
         let meter = GasMeter::infinite();
         let reader = self.storage.reader();
-        let result = PRUNE_FLOOR.may_load(&reader, &meter).ok().flatten().unwrap_or(0);
+        let result = PRUNE_FLOOR
+            .may_load(&reader, &meter)
+            .ok()
+            .flatten()
+            .unwrap_or(0);
         reader.abort();
         result
     }
@@ -1306,8 +1308,18 @@ fn consensus_entries<'a>(
     store: &'a dyn ReadonlyStorage,
     meter: &'a GasMeter,
 ) -> PulsarResult<impl Iterator<Item = layer_std::GasResult<cosmwasm_std::Record>> + 'a> {
-    let below = store.range(meter, None, Some(SIDECAR_PREFIX), cosmwasm_std::Order::Ascending)?;
-    let above = store.range(meter, Some(SIDECAR_PREFIX_END), None, cosmwasm_std::Order::Ascending)?;
+    let below = store.range(
+        meter,
+        None,
+        Some(SIDECAR_PREFIX),
+        cosmwasm_std::Order::Ascending,
+    )?;
+    let above = store.range(
+        meter,
+        Some(SIDECAR_PREFIX_END),
+        None,
+        cosmwasm_std::Order::Ascending,
+    )?;
     Ok(below.chain(above))
 }
 
@@ -1412,8 +1424,9 @@ impl<W: Transaction> ReadonlyStorage for TrackingWriter<W> {
         start: Option<&[u8]>,
         end: Option<&[u8]>,
         order: cosmwasm_std::Order,
-    ) -> layer_std::GasResult<Box<dyn Iterator<Item = layer_std::GasResult<cosmwasm_std::Record>> + 'a>>
-    {
+    ) -> layer_std::GasResult<
+        Box<dyn Iterator<Item = layer_std::GasResult<cosmwasm_std::Record>> + 'a>,
+    > {
         self.inner.range(meter, start, end, order)
     }
 }
@@ -1765,9 +1778,15 @@ mod tests {
             Some(with_payload.compute_state_root().unwrap()),
             "in-commit state root must match post-commit recomputation"
         );
-        assert_eq!(with_payload.get_block_payload(1), Some(b"payload-bytes".to_vec()));
+        assert_eq!(
+            with_payload.get_block_payload(1),
+            Some(b"payload-bytes".to_vec())
+        );
         assert_eq!(plain.get_block_payload(1), None);
-        assert_eq!(res_a.app_hash, res_b.app_hash, "payload sidecar must not affect app_hash");
+        assert_eq!(
+            res_a.app_hash, res_b.app_hash,
+            "payload sidecar must not affect app_hash"
+        );
         assert_eq!(with_payload.state_root(), plain.state_root());
     }
 
@@ -2229,7 +2248,16 @@ mod tests {
         let storage = MemoryStore::default();
         let meter = GasMeter::infinite();
         let keys: [&[u8]; 11] = [
-            b"\x00", b"A", b"^", b"^\xff", b"_", b"_cert/1", b"_\xff\xff", b"`", b"`a", b"a",
+            b"\x00",
+            b"A",
+            b"^",
+            b"^\xff",
+            b"_",
+            b"_cert/1",
+            b"_\xff\xff",
+            b"`",
+            b"`a",
+            b"a",
             b"\xff\xff",
         ];
         let mut writer = storage.writer();

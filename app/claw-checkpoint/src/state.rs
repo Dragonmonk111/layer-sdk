@@ -28,9 +28,9 @@ impl ChannelState {
     pub fn load(dir: &Path, name: &str) -> io::Result<Option<Self>> {
         let p = Self::path(dir, name);
         match std::fs::read_to_string(&p) {
-            Ok(s) => serde_json::from_str(&s)
-                .map(Some)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{}: {e}", p.display()))),
+            Ok(s) => serde_json::from_str(&s).map(Some).map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, format!("{}: {e}", p.display()))
+            }),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
         }

@@ -75,7 +75,10 @@ type ClassicalCertificate = <InnerScheme as CertificateScheme>::Certificate;
 /// `union_unique` (varint namespace-length prefix) before hashing — the two
 /// halves are bound to the same subject but sign slightly different byte
 /// strings.
-fn namespaced_message<D: Digest>(namespace: &SchemeNamespace, subject: &SimplexSubject<'_, D>) -> Vec<u8> {
+fn namespaced_message<D: Digest>(
+    namespace: &SchemeNamespace,
+    subject: &SimplexSubject<'_, D>,
+) -> Vec<u8> {
     let ns: &[u8] = subject.namespace(namespace);
     let msg = subject.message();
     let mut out = Vec::with_capacity(ns.len() + msg.len());
@@ -328,7 +331,10 @@ impl SigLog {
         }
         let mut buf = Vec::with_capacity(4 + msg.len() + MAYO_SIG_BYTES);
         encode_record(&mut buf, msg, sig);
-        let res = self.file.write_all(&buf).and_then(|()| self.file.sync_data());
+        let res = self
+            .file
+            .write_all(&buf)
+            .and_then(|()| self.file.sync_data());
         if res.is_err() {
             self.failed = true;
         }
@@ -494,10 +500,7 @@ impl CertificateScheme for HybridScheme {
         // MAYO signs the identical namespaced bytes the BLS half signs.
         let msg = namespaced_message(&self.namespace, &subject);
         let pq = {
-            let mut cache = self
-                .sig_cache
-                .lock()
-                .expect("sig cache mutex poisoned");
+            let mut cache = self.sig_cache.lock().expect("sig cache mutex poisoned");
             match cache.get(&msg) {
                 Some(sig) => sig,
                 None => {
@@ -584,12 +587,9 @@ impl CertificateScheme for HybridScheme {
             }
         }
 
-        let inner_res = self.inner.verify_attestations::<R, D, _>(
-            rng,
-            subject.clone(),
-            inner_atts,
-            strategy,
-        );
+        let inner_res =
+            self.inner
+                .verify_attestations::<R, D, _>(rng, subject.clone(), inner_atts, strategy);
         invalid.extend(inner_res.invalid.iter().copied());
 
         // MAYO-verify each classically-valid attestation.
@@ -617,11 +617,7 @@ impl CertificateScheme for HybridScheme {
         Verification::new(verified, invalid)
     }
 
-    fn assemble<I, M>(
-        &self,
-        attestations: I,
-        strategy: &impl Strategy,
-    ) -> Option<Self::Certificate>
+    fn assemble<I, M>(&self, attestations: I, strategy: &impl Strategy) -> Option<Self::Certificate>
     where
         I: IntoIterator<Item = Attestation<Self>>,
         I::IntoIter: Send,
@@ -727,12 +723,14 @@ mod tests {
     }
 
     fn carried(n: u32) -> Vec<(Participant, [u8; MAYO_SIG_BYTES])> {
-        (0..n).map(|i| (Participant::new(i), sig(i as u8))).collect()
+        (0..n)
+            .map(|i| (Participant::new(i), sig(i as u8)))
+            .collect()
     }
 
     fn temp_log(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("slay3rd-siglog-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("slay3rd-siglog-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("mayo_sigs.log")
@@ -741,14 +739,20 @@ mod tests {
     #[test]
     fn pq_quorum_needs_enough_valid_signatures() {
         let c = carried(3);
-        assert!(pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 3, |_, _| true));
-        assert!(!pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 4, |_, _| true));
+        assert!(pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 3, |_, _| {
+            true
+        }));
+        assert!(!pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 4, |_, _| {
+            true
+        }));
     }
 
     #[test]
     fn pq_quorum_rejects_an_invalid_carried_signature() {
         let c = carried(4);
-        assert!(!pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 3, |_, s| s[0] != 3));
+        assert!(!pq_quorum_met(c.iter().map(|(p, s)| (*p, s)), 3, |_, s| s
+            [0]
+            != 3));
     }
 
     #[test]

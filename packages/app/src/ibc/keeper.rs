@@ -1,6 +1,7 @@
 use cosmwasm_std::{ensure_eq, BlockInfo, Coin, Event};
 use sha2::{Digest, Sha256};
 
+use cosmos_sdk_proto::ibc::core::channel::v1::Packet;
 use cosmos_sdk_proto::ibc::core::channel::v1::{
     Channel, Counterparty as ChannelCounterparty, Order, State as ChannelState,
 };
@@ -9,7 +10,6 @@ use cosmos_sdk_proto::ibc::core::commitment::v1::MerklePrefix;
 use cosmos_sdk_proto::ibc::core::connection::v1::{
     ConnectionEnd, Counterparty as ConnectionCounterparty, State as ConnectionState, Version,
 };
-use cosmos_sdk_proto::ibc::core::channel::v1::Packet;
 use cosmos_sdk_proto::prost::Message;
 
 use layer_std::api::MsgResponse;
@@ -125,10 +125,7 @@ impl Ibc {
                 )?;
                 let events = vec![Event::new("ibc_connection_open_init")
                     .add_attribute("connection_id", &connection_id)];
-                Ok(MsgResponse::new(
-                    events,
-                    IbcMsgData::ConnectionOpenInit {},
-                ))
+                Ok(MsgResponse::new(events, IbcMsgData::ConnectionOpenInit {}))
             }
             IbcMsg::ConnectionOpenAck {
                 sender,
@@ -337,10 +334,7 @@ impl Ibc {
             client_id: client_id.to_string(),
             versions: vec![Version {
                 identifier: "1".to_string(),
-                features: vec![
-                    "ORDER_ORDERED".to_string(),
-                    "ORDER_UNORDERED".to_string(),
-                ],
+                features: vec!["ORDER_ORDERED".to_string(), "ORDER_UNORDERED".to_string()],
             }],
             state: ConnectionState::Init as i32,
             counterparty: Some(ConnectionCounterparty {
@@ -449,9 +443,9 @@ impl Ibc {
         counterparty_version: &str,
     ) -> PulsarResult<()> {
         let key = paths::channel_path(port_id, channel_id);
-        let raw = self
-            .read_raw(storage, meter, &key)?
-            .ok_or_else(|| IbcError::ChannelNotFound(port_id.to_string(), channel_id.to_string()))?;
+        let raw = self.read_raw(storage, meter, &key)?.ok_or_else(|| {
+            IbcError::ChannelNotFound(port_id.to_string(), channel_id.to_string())
+        })?;
         let mut chan = Channel::decode(raw.as_slice())
             .map_err(|e| IbcError::Invalid(format!("decode Channel: {e}")))?;
         if chan.state != ChannelState::Init as i32 {
@@ -490,7 +484,9 @@ impl Ibc {
         // Channel must be OPEN.
         let chan_raw = self
             .read_raw(storage, meter, &paths::channel_path(port_id, channel_id))?
-            .ok_or_else(|| IbcError::ChannelNotFound(port_id.to_string(), channel_id.to_string()))?;
+            .ok_or_else(|| {
+                IbcError::ChannelNotFound(port_id.to_string(), channel_id.to_string())
+            })?;
         let chan = Channel::decode(chan_raw.as_slice())
             .map_err(|e| IbcError::Invalid(format!("decode Channel: {e}")))?;
         if chan.state != ChannelState::Open as i32 {
@@ -521,9 +517,9 @@ impl Ibc {
 
         // Read + bump the send sequence.
         let seq_key = paths::next_sequence_send_path(port_id, channel_id);
-        let seq_raw = self
-            .read_raw(storage, meter, &seq_key)?
-            .ok_or_else(|| IbcError::ChannelNotFound(port_id.to_string(), channel_id.to_string()))?;
+        let seq_raw = self.read_raw(storage, meter, &seq_key)?.ok_or_else(|| {
+            IbcError::ChannelNotFound(port_id.to_string(), channel_id.to_string())
+        })?;
         let mut seq_bytes = [0u8; 8];
         seq_bytes.copy_from_slice(&seq_raw[..8]);
         let sequence = u64::from_be_bytes(seq_bytes);
@@ -594,8 +590,14 @@ impl Ibc {
         sequence: u64,
     ) -> PulsarResult<()> {
         // Clear the packet commitment (devnet: ack proof carried, not verified).
-        storage.remove(meter, &paths::packet_commitment_path(port_id, channel_id, sequence))?;
-        storage.remove(meter, &paths::packet_data_path(port_id, channel_id, sequence))?;
+        storage.remove(
+            meter,
+            &paths::packet_commitment_path(port_id, channel_id, sequence),
+        )?;
+        storage.remove(
+            meter,
+            &paths::packet_data_path(port_id, channel_id, sequence),
+        )?;
         Ok(())
     }
 
@@ -619,7 +621,11 @@ impl Ibc {
         // Load the stored packet — the commitment path only holds a hash, so we
         // read the full proto `Packet` written at send time.
         let raw = self
-            .read_raw(storage, meter, &paths::packet_data_path(port_id, channel_id, sequence))?
+            .read_raw(
+                storage,
+                meter,
+                &paths::packet_data_path(port_id, channel_id, sequence),
+            )?
             .ok_or_else(|| {
                 IbcError::Invalid(format!(
                     "no stored packet to time out at {port_id}/{channel_id}/seq{sequence}"
@@ -638,9 +644,8 @@ impl Ibc {
         }
         let data: FungibleTokenPacketData = cosmwasm_std::from_json(&packet.data)
             .map_err(|e| IbcError::Invalid(format!("decode packet data: {e}")))?;
-        let refund_to = AccountId::parse_string(&data.sender).map_err(|e| {
-            IbcError::Invalid(format!("packet sender '{}': {e}", data.sender))
-        })?;
+        let refund_to = AccountId::parse_string(&data.sender)
+            .map_err(|e| IbcError::Invalid(format!("packet sender '{}': {e}", data.sender)))?;
         let amount: u128 = data
             .amount
             .parse()
@@ -664,8 +669,14 @@ impl Ibc {
 
         // Clear the packet commitment + stored packet (devnet: timeout proof
         // carried, not verified).
-        storage.remove(meter, &paths::packet_commitment_path(port_id, channel_id, sequence))?;
-        storage.remove(meter, &paths::packet_data_path(port_id, channel_id, sequence))?;
+        storage.remove(
+            meter,
+            &paths::packet_commitment_path(port_id, channel_id, sequence),
+        )?;
+        storage.remove(
+            meter,
+            &paths::packet_data_path(port_id, channel_id, sequence),
+        )?;
 
         Ok((refund_to, coin))
     }
@@ -695,10 +706,11 @@ impl Ibc {
         channel_id: &str,
     ) -> PulsarResult<Option<Channel>> {
         match self.read_raw(storage, meter, &paths::channel_path(port_id, channel_id))? {
-            Some(raw) => Ok(Some(
-                Channel::decode(raw.as_slice())
-                    .map_err(|e| IbcError::Invalid(format!("decode Channel: {e}")))?,
-            )),
+            Some(raw) => {
+                Ok(Some(Channel::decode(raw.as_slice()).map_err(|e| {
+                    IbcError::Invalid(format!("decode Channel: {e}"))
+                })?))
+            }
             None => Ok(None),
         }
     }

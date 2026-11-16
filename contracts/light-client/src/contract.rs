@@ -6,7 +6,9 @@
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{from_json, to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError};
+use cosmwasm_std::{
+    from_json, to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+};
 use sha2::{Digest, Sha256};
 
 use crate::error::ContractError;
@@ -32,8 +34,8 @@ pub fn instantiate(
 
     // Validate the group public key eagerly so a malformed ceremony output
     // fails at client creation, not on the first header.
-    let pk_bytes =
-        hex::decode(&client_state.group_public_key_hex).map_err(|_| ContractError::InvalidPublicKey)?;
+    let pk_bytes = hex::decode(&client_state.group_public_key_hex)
+        .map_err(|_| ContractError::InvalidPublicKey)?;
     if pk_bytes.len() != 96 {
         return Err(ContractError::InvalidPublicKeyLength(pk_bytes.len()));
     }
@@ -42,11 +44,7 @@ pub fn instantiate(
     // finds a valid `clientState` (Any-wrapped wasm ClientState proto) and the
     // consensus state at `consensusStates/{rev}-{height}`. The contract's JSON
     // state is carried inside each wrapper's `data` field.
-    wasmstore::save_consensus_state(
-        deps.storage,
-        &client_state.latest_height,
-        &consensus_state,
-    )?;
+    wasmstore::save_consensus_state(deps.storage, &client_state.latest_height, &consensus_state)?;
     wasmstore::save_client_state(deps.storage, &client_state, &msg.checksum)?;
 
     // NOTE: the 08-wasm VM forbids contract responses carrying attributes/events
@@ -57,7 +55,10 @@ pub fn instantiate(
 
 /// Runs §6 verification for a header against the current client state.
 /// Does not mutate storage — callers decide whether to persist.
-fn check_header(client_state: &ClientState, header: &Header) -> Result<DecodedProposal, ContractError> {
+fn check_header(
+    client_state: &ClientState,
+    header: &Header,
+) -> Result<DecodedProposal, ContractError> {
     if let Some(frozen_at) = &client_state.frozen_height {
         return Err(ContractError::ClientFrozen(frozen_at.revision_height));
     }
@@ -124,8 +125,8 @@ fn check_misbehaviour(
     let decoded_b = check_header(client_state, &misbehaviour.header_b)?;
 
     let same_round = decoded_a.epoch == decoded_b.epoch && decoded_a.view == decoded_b.view;
-    let same_height =
-        misbehaviour.header_a.height.revision_height == misbehaviour.header_b.height.revision_height;
+    let same_height = misbehaviour.header_a.height.revision_height
+        == misbehaviour.header_b.height.revision_height;
     if !same_round && !same_height {
         return Err(ContractError::MisbehaviourMismatch);
     }
@@ -188,10 +189,9 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
             //    digest. The proof verifies against the state committed by
             //    THIS height's payload (post-state of height-1 — app-hash
             //    semantics), so relayers pass proof_height = state_height+1.
-            let consensus = wasmstore::may_load_consensus_state(deps.storage, &height)?
-                .ok_or(ContractError::ConsensusStateNotFound(
-                    height.revision_height,
-                ))?;
+            let consensus = wasmstore::may_load_consensus_state(deps.storage, &height)?.ok_or(
+                ContractError::ConsensusStateNotFound(height.revision_height),
+            )?;
 
             // 2. Parse our proof format (JSON inside the opaque proof bytes).
             let proof: MembershipProof = from_json(proof.as_slice())?;
@@ -287,9 +287,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
                 from_json::<Header>(client_message.as_slice())
             {
                 check_header(&client_state, &header).map(|_| ())
-            } else if let Ok(misbehaviour) =
-                from_json::<Misbehaviour>(client_message.as_slice())
-            {
+            } else if let Ok(misbehaviour) = from_json::<Misbehaviour>(client_message.as_slice()) {
                 check_misbehaviour(&client_state, &misbehaviour)
             } else {
                 Err(ContractError::InvalidProposal)
@@ -317,9 +315,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, StdError> {
 mod tests {
     use super::*;
     use crate::merkle::BlockPayloadMirror;
+    use crate::msg::MerklePath;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
     use cosmwasm_std::to_json_vec;
-    use crate::msg::MerklePath;
 
     fn build_client_state(pubkey_hex: &str, latest_height: u64) -> ClientState {
         ClientState {
@@ -342,7 +340,9 @@ mod tests {
         let mut deps = mock_dependencies();
         let creator = deps.api.addr_make("creator");
         let msg = InstantiateMsg {
-            client_state: Binary::new(to_json_vec(&build_client_state(pubkey_hex, latest_height)).unwrap()),
+            client_state: Binary::new(
+                to_json_vec(&build_client_state(pubkey_hex, latest_height)).unwrap(),
+            ),
             consensus_state: Binary::new(to_json_vec(consensus_state).unwrap()),
             checksum: Binary::default(),
         };
@@ -481,10 +481,8 @@ mod tests {
         assert_eq!(client.frozen_height.unwrap().revision_height, 12);
 
         // Status query now reports Frozen.
-        let status: StatusResponse = from_json(
-            query(deps.as_ref(), mock_env(), QueryMsg::Status {}).unwrap(),
-        )
-        .unwrap();
+        let status: StatusResponse =
+            from_json(query(deps.as_ref(), mock_env(), QueryMsg::Status {}).unwrap()).unwrap();
         assert_eq!(status.status, "Frozen");
 
         // Further updates are rejected.
@@ -495,10 +493,7 @@ mod tests {
                 client_message: Binary::new(to_json_vec(&header_a).unwrap()),
             },
         );
-        assert!(matches!(
-            res,
-            Err(ContractError::ClientFrozen(12))
-        ));
+        assert!(matches!(res, Err(ContractError::ClientFrozen(12))));
     }
 
     #[test]
@@ -756,7 +751,10 @@ mod tests {
                 value: Binary::from(value),
             },
         );
-        assert!(matches!(res, Err(ContractError::ConsensusStateNotFound(99))));
+        assert!(matches!(
+            res,
+            Err(ContractError::ConsensusStateNotFound(99))
+        ));
     }
 
     #[test]
@@ -779,12 +777,13 @@ mod tests {
                 delay_time_period: 0,
                 delay_block_period: 0,
                 proof: Binary::default(),
-                merkle_path: MerklePath {
-                    key_path: vec![],
-                },
+                merkle_path: MerklePath { key_path: vec![] },
             },
         );
-        assert!(matches!(res, Err(ContractError::MembershipProofsUnsupported)));
+        assert!(matches!(
+            res,
+            Err(ContractError::MembershipProofsUnsupported)
+        ));
     }
 
     #[test]

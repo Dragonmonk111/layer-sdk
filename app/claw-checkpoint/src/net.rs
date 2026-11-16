@@ -108,9 +108,7 @@ impl RelayClient {
         // and the next pass re-fetches the true window from storage.
         let _ = self
             .ws
-            .send(Message::Text(
-                serde_json::json!(["CLOSE", sub]).to_string(),
-            ))
+            .send(Message::Text(serde_json::json!(["CLOSE", sub]).to_string()))
             .await;
         Ok(events)
     }
@@ -133,11 +131,7 @@ impl RelayClient {
                     continue;
                 }
                 let ok = v.get(2).and_then(|x| x.as_bool()).unwrap_or(false);
-                let m = v
-                    .get(3)
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let m = v.get(3).and_then(|x| x.as_str()).unwrap_or("").to_string();
                 return if ok {
                     Ok(())
                 } else {
@@ -168,7 +162,9 @@ impl PageSource for RelayClient {
 /// Exists to avoid pulling reqwest for one localhost smart query.
 pub async fn http_get(url: &str) -> Result<String, Error> {
     let rest = url.strip_prefix("http://").ok_or_else(|| {
-        Error::Config(format!("smart-query endpoint must be http:// — got {url:?}"))
+        Error::Config(format!(
+            "smart-query endpoint must be http:// — got {url:?}"
+        ))
     })?;
     let (authority, path) = match rest.split_once('/') {
         Some((a, p)) => (a.to_string(), format!("/{p}")),
@@ -240,9 +236,8 @@ fn dechunk(mut buf: &[u8]) -> Result<Vec<u8>, Error> {
 /// `GET <api>/api/wasm/smart/<contract>?query=<b64url(query)>` — same
 /// endpoint + b64url-no-pad encoding the shell daemon's curl used.
 pub fn smart_query_url(api: &str, contract: &str, query: &serde_json::Value) -> String {
-    let q = URL_SAFE_NO_PAD.encode(
-        serde_json::to_vec(query).expect("query serialization cannot fail"),
-    );
+    let q =
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(query).expect("query serialization cannot fail"));
     format!(
         "{}/api/wasm/smart/{}?query={}",
         api.trim_end_matches('/'),

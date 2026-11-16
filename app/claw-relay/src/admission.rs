@@ -20,11 +20,11 @@
 //! https endpoint — operators point `--chain-api` wherever they can
 //! reach committed state; TLS is provided by reqwest/rustls.
 
+use reqwest::Client;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use reqwest::Client;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -62,18 +62,17 @@ pub async fn poll_loop(cfg: Cw4Config, target: Arc<RwLock<HashSet<String>>>) {
 /// it deterministically. `ever_populated` distinguishes
 /// "never populated (fail-closed)" from "populated then failed
 /// (keep-last-good)" for logging.
-async fn poll_step(
-    cfg: &Cw4Config,
-    target: &RwLock<HashSet<String>>,
-    ever_populated: &mut bool,
-) {
+async fn poll_step(cfg: &Cw4Config, target: &RwLock<HashSet<String>>, ever_populated: &mut bool) {
     match refresh_once(cfg).await {
         Ok(mapped) => match merge(&mapped, &cfg.breakglass) {
             Some(set) => {
                 let n = set.len();
                 *target.write().await = set;
                 if !*ever_populated {
-                    info!(npubs = n, "cw4 admission populated — writes open to bound members");
+                    info!(
+                        npubs = n,
+                        "cw4 admission populated — writes open to bound members"
+                    );
                 }
                 *ever_populated = true;
             }
@@ -400,7 +399,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("claw-adm0-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bindings = dir.join("bindings.json");
-        std::fs::write(&bindings, r#"{"juno1nobody":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}"#).unwrap();
+        std::fs::write(
+            &bindings,
+            r#"{"juno1nobody":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}"#,
+        )
+        .unwrap();
 
         let good = "HTTP/1.1 200 OK\r\nContent-Length: 53\r\n\r\n{\"data\":{\"members\":[{\"addr\":\"juno1aaa\",\"weight\":1}]}}";
         let api = canned_server(vec![good]).await;

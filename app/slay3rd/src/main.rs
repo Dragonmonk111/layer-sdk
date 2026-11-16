@@ -51,10 +51,12 @@ use commonware_cryptography::bls12381::primitives::{
 use commonware_cryptography::{ed25519, sha256};
 use commonware_math::algebra::Random;
 use commonware_p2p::authenticated::lookup::{Config as P2pConfig, Network};
-use commonware_p2p::{Address as P2pAddress, AddressableManager, Recipients, Receiver, Sender as P2pSender};
+use commonware_p2p::{
+    Address as P2pAddress, AddressableManager, Receiver, Recipients, Sender as P2pSender,
+};
 use commonware_parallel::Sequential;
 use commonware_runtime::{buffer::paged::CacheRef, Metrics, Runner};
-use commonware_utils::{ordered::Map, N3f1, NZU16, NZUsize};
+use commonware_utils::{ordered::Map, N3f1, NZUsize, NZU16};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
@@ -83,10 +85,10 @@ use slay3rd::{
 use layer_app::{App, AppConfig, StateMachine};
 use layer_storage::PersistentStorage;
 
-#[cfg(feature = "rocksdb")]
-use layer_storage::RockStore;
 #[cfg(not(feature = "rocksdb"))]
 use layer_storage::MemoryStore;
+#[cfg(feature = "rocksdb")]
+use layer_storage::RockStore;
 
 // Page cache parameters for the consensus engine WAL.
 const PAGE_SIZE: NonZeroU16 = NZU16!(4096);
@@ -181,13 +183,21 @@ fn log_machine_spec(data_dir: &str) {
     }
     if let Some(g) = mem_gib {
         if g < MIN_RAM_GIB {
-            warn!(mem_gib = g, min = MIN_RAM_GIB, "host below min spec — total RAM");
+            warn!(
+                mem_gib = g,
+                min = MIN_RAM_GIB,
+                "host below min spec — total RAM"
+            );
         }
     }
     if let Some(g) = disk_gib {
         if g < MIN_DISK_FREE_GIB {
-            warn!(disk_free_gib = g, min = MIN_DISK_FREE_GIB, data_dir,
-                "host below min spec — free disk on data_dir");
+            warn!(
+                disk_free_gib = g,
+                min = MIN_DISK_FREE_GIB,
+                data_dir,
+                "host below min spec — free disk on data_dir"
+            );
         }
     }
 }
@@ -211,8 +221,7 @@ fn total_memory_gib() -> Option<f64> {
 #[cfg(unix)]
 fn disk_free_gib(path: &str) -> Option<f64> {
     use std::os::unix::ffi::OsStrExt;
-    let c_path =
-        std::ffi::CString::new(std::path::Path::new(path).as_os_str().as_bytes()).ok()?;
+    let c_path = std::ffi::CString::new(std::path::Path::new(path).as_os_str().as_bytes()).ok()?;
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
     if unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) } != 0 {
         return None;
@@ -493,9 +502,7 @@ where
         if self.muted {
             Ok(VoteGateChecked::Muted(self.suppressed.clone()))
         } else {
-            Ok(VoteGateChecked::Live(
-                self.inner.check(recipients).await?,
-            ))
+            Ok(VoteGateChecked::Live(self.inner.check(recipients).await?))
         }
     }
 }
@@ -577,7 +584,10 @@ async fn run_executor<T: PersistentStorage + Send + Sync + 'static>(
         }
         let mut app = app.write().await;
         match app.set_block_finality(height, f.cert_bytes, f.proposal_bytes, timestamp_nanos) {
-            Ok(()) => tracing::info!(height, "Finality record stored (certificate, proposal, timestamp)"),
+            Ok(()) => tracing::info!(
+                height,
+                "Finality record stored (certificate, proposal, timestamp)"
+            ),
             Err(e) => tracing::error!(
                 height,
                 error = ?e,
@@ -615,7 +625,9 @@ where
                 // Queue the certified digest for the exact-digest fetch path
                 // (drained by backfill_tick). Unbounded send — report() runs
                 // inline in the consensus voter and must never block.
-                let _ = self.certified_digest_tx.send(finalization.proposal.payload.0);
+                let _ = self
+                    .certified_digest_tx
+                    .send(finalization.proposal.payload.0);
             }
             Activity::Notarization(notarization) => {
                 tracing::debug!(
@@ -733,9 +745,7 @@ fn main() {
     let runner_cfg = commonware_runtime::tokio::Config::new()
         .with_storage_directory(std::path::PathBuf::from(&consensus_dir));
     let runner = commonware_runtime::tokio::Runner::new(runner_cfg);
-    runner.start(|context| async move {
-        run_node(context, config, km).await
-    });
+    runner.start(|context| async move { run_node(context, config, km).await });
 }
 
 /// Main async node logic. Receives a commonware_runtime::tokio::Context from the Runner.
@@ -768,15 +778,13 @@ async fn run_node(
     let mut participant_keys: Vec<ed25519::PublicKey> = Vec::new();
     for hex_key in &km.validator_public_keys {
         match hex::decode(hex_key) {
-            Ok(key_bytes) => {
-                match ed25519::PublicKey::decode(bytes::Bytes::from(key_bytes)) {
-                    Ok(pk) => participant_keys.push(pk),
-                    Err(e) => {
-                        error!(error = %e, "Failed to decode validator Ed25519 public key");
-                        return;
-                    }
+            Ok(key_bytes) => match ed25519::PublicKey::decode(bytes::Bytes::from(key_bytes)) {
+                Ok(pk) => participant_keys.push(pk),
+                Err(e) => {
+                    error!(error = %e, "Failed to decode validator Ed25519 public key");
+                    return;
                 }
-            }
+            },
             Err(e) => {
                 error!(error = %e, "Invalid hex in validator_public_keys");
                 return;
@@ -807,8 +815,7 @@ async fn run_node(
                 return;
             }
         };
-        let mut pairs: Vec<(ed25519::PublicKey, Vec<u8>)> =
-            Vec::with_capacity(mayo_hexes.len());
+        let mut pairs: Vec<(ed25519::PublicKey, Vec<u8>)> = Vec::with_capacity(mayo_hexes.len());
         for (pk, mh) in participant_keys.iter().cloned().zip(mayo_hexes.iter()) {
             match hex::decode(mh) {
                 Ok(b) if b.len() == junoclaw_mayo_verify::Mayo2::PK_BYTES => pairs.push((pk, b)),
@@ -911,16 +918,14 @@ async fn run_node(
                 return;
             }
         };
-        let sharing = match Sharing::<MinSig>::read_cfg(
-            &mut &sharing_bytes[..],
-            &(n, ModeVersion::v0()),
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                error!(error = %e, "Failed to decode sharing from keys.json");
-                return;
-            }
-        };
+        let sharing =
+            match Sharing::<MinSig>::read_cfg(&mut &sharing_bytes[..], &(n, ModeVersion::v0())) {
+                Ok(s) => s,
+                Err(e) => {
+                    error!(error = %e, "Failed to decode sharing from keys.json");
+                    return;
+                }
+            };
         let share = match Share::read_cfg(&mut &share_bytes[..], &()) {
             Ok(s) => s,
             Err(e) => {
@@ -1032,9 +1037,11 @@ async fn run_node(
         Ok(()) => {
             info!("App loaded from existing storage");
             if config.state_sync.is_some() {
-                warn!("[state_sync] is configured but stored state already \
+                warn!(
+                    "[state_sync] is configured but stored state already \
                        exists — sync skipped. To discard local state and \
-                       re-sync, set force = true under [state_sync].");
+                       re-sync, set force = true under [state_sync]."
+                );
             }
         }
         Err(AppLoadError::NoStoredState) => {
@@ -1156,13 +1163,14 @@ async fn run_node(
 
     // Durable payload store: certified-but-unexecuted payloads survive restart
     // and are re-broadcast; executed payloads are retained to serve peers.
-    let payload_store = match slay3rd::payload_store::PayloadStore::open(format!("{}/payloads", config.data_dir)) {
-        Ok(s) => s,
-        Err(e) => {
-            error!(error = %e, "Failed to open payload store");
-            return;
-        }
-    };
+    let payload_store =
+        match slay3rd::payload_store::PayloadStore::open(format!("{}/payloads", config.data_dir)) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(error = %e, "Failed to open payload store");
+                return;
+            }
+        };
     let (layer_node, recovered_payloads) = layer_node.with_payload_store(payload_store).await;
     if config.fault_inject.is_some() && !config.insecure_devnet {
         error!("fault_inject requires insecure_devnet = true — chaos testing is devnet-only");
@@ -1207,7 +1215,8 @@ async fn run_node(
             "FAULT INJECTION ENABLED — chaos testing only, never enable on a real validator"
         );
     }
-    let (payload_fetch_tx, payload_fetch_rx) = tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
+    let (payload_fetch_tx, payload_fetch_rx) =
+        tokio::sync::mpsc::unbounded_channel::<FetchRequest>();
     layer_node.set_fetch_sender(payload_fetch_tx);
     info!(recovered = recovered_payloads.len(), "Payload store opened");
 
@@ -1291,12 +1300,14 @@ async fn run_node(
     // gRPC service and forwarded to all validator peers over P2P channel 4,
     // so a tx submitted to a non-leader does not wait for that node's own
     // proposal slot (M1).
-    let (tx_gossip_tx, tx_gossip_rx) =
-        tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
+    let (tx_gossip_tx, tx_gossip_rx) = tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
 
     // CRITICAL: The relay MUST receive the SAME pending_payloads Arc from LayerNode.
     // This is what allows non-proposer validators to find payloads in verify().
-    let relay = LayerRelay::new(layer_node.pending_payloads(), Some(payload_broadcast_tx.clone()));
+    let relay = LayerRelay::new(
+        layer_node.pending_payloads(),
+        Some(payload_broadcast_tx.clone()),
+    );
     // CONS-05: Reporter holds the app Arc so it can persist BLS certificates
     // via set_block_certificate() when the Finalization activity fires.
     let (exec_tx, exec_rx) = tokio::sync::mpsc::unbounded_channel::<FinalizedBlock>();
@@ -1307,12 +1318,13 @@ async fn run_node(
     // records are absent by construction. The sweep backfills them from
     // the state-sync donor gRPCs (read-only for donors, sidecar writes
     // locally). Idles with a warning when no donors are configured.
-    let fb = config.finality_backfill.clone().unwrap_or(
-        slay3rd::config::FinalityBackfillConfig {
+    let fb = config
+        .finality_backfill
+        .clone()
+        .unwrap_or(slay3rd::config::FinalityBackfillConfig {
             enabled: true,
             dry_run: false,
-        },
-    );
+        });
     if fb.enabled {
         slay3rd::finality_backfill::spawn(
             app_arc.clone(),
@@ -1363,7 +1375,9 @@ async fn run_node(
     //   4. Chain add_service() for the tonic services — these take priority over the fallback
     // -----------------------------------------------------------------------
     {
-        let grpc_addr: SocketAddr = config.grpc_listen.parse()
+        let grpc_addr: SocketAddr = config
+            .grpc_listen
+            .parse()
             .expect("Invalid grpc_listen address in config");
 
         let grpc_svc = LayerGrpcService {
@@ -1443,15 +1457,16 @@ async fn run_node(
     // -----------------------------------------------------------------------
 
     // Decode our Ed25519 private key for P2P identity
-    let ed25519_priv_bytes = hex::decode(&km.ed25519_private_hex)
-        .expect("Invalid hex in ed25519_private_hex");
-    let ed25519_private_key = ed25519::PrivateKey::decode(
-        bytes::Bytes::from(ed25519_priv_bytes)
-    ).expect("Invalid ed25519 private key bytes");
+    let ed25519_priv_bytes =
+        hex::decode(&km.ed25519_private_hex).expect("Invalid hex in ed25519_private_hex");
+    let ed25519_private_key = ed25519::PrivateKey::decode(bytes::Bytes::from(ed25519_priv_bytes))
+        .expect("Invalid ed25519 private key bytes");
 
     // Use the key decoded from km.ed25519_public_hex — already decoded early for sorted-position lookup.
     let our_ed25519_pk = our_ed25519_pk_early.clone();
-    let p2p_listen: SocketAddr = config.p2p_listen.parse()
+    let p2p_listen: SocketAddr = config
+        .p2p_listen
+        .parse()
         .expect("Invalid p2p_listen address in config");
 
     // Config::recommended() — production cadence. Config::local() was used
@@ -1467,7 +1482,7 @@ async fn run_node(
         ed25519_private_key.clone(),
         b"slay3r-p2p-v1",
         p2p_listen,
-        10 * 1024 * 1024,  // 10MB max message size (accommodates large store-code txs)
+        10 * 1024 * 1024, // 10MB max message size (accommodates large store-code txs)
     );
 
     let p2p_ctx = context.with_label("p2p");
@@ -1511,7 +1526,9 @@ async fn run_node(
 
     // Add peers from config
     for peer in &config.peers {
-        let addr: SocketAddr = peer.address.parse()
+        let addr: SocketAddr = peer
+            .address
+            .parse()
             .unwrap_or_else(|_| panic!("Invalid peer address: {}", peer.address));
         let pk_bytes = hex::decode(&peer.public_key)
             .unwrap_or_else(|_| panic!("Invalid peer public_key hex: {}", peer.public_key));
@@ -1553,7 +1570,10 @@ async fn run_node(
     // Start AFTER register() calls
     network.start();
 
-    info!("Authenticated P2P network initialized ({} peers)", config.peers.len() + 1);
+    info!(
+        "Authenticated P2P network initialized ({} peers)",
+        config.peers.len() + 1
+    );
 
     // -----------------------------------------------------------------------
     // Payload relay P2P tasks
@@ -1617,8 +1637,7 @@ async fn run_node(
     {
         let mesh_reached = mesh_reached.clone();
         let seat_of = seat_of.clone();
-        let peer_keys: Vec<String> =
-            config.peers.iter().map(|p| p.public_key.clone()).collect();
+        let peer_keys: Vec<String> = config.peers.iter().map(|p| p.public_key.clone()).collect();
         let quorum = km.threshold_required as usize;
         tokio::spawn(async move {
             loop {
@@ -1628,8 +1647,12 @@ async fn run_node(
                 m.retain(|_, t| now.duration_since(*t) < Duration::from_secs(120));
                 let connected = m.len();
                 if connected >= mesh_peer_total {
-                    tracing::info!(connected, configured = mesh_peer_total, quorum,
-                        "peer mesh: reached {connected}/{mesh_peer_total} peers in last 2m");
+                    tracing::info!(
+                        connected,
+                        configured = mesh_peer_total,
+                        quorum,
+                        "peer mesh: reached {connected}/{mesh_peer_total} peers in last 2m"
+                    );
                 } else {
                     // Name the missing seats (key prefix + roster index) —
                     // a thin mesh is the observable half of a blocked or
@@ -1672,8 +1695,7 @@ async fn run_node(
         let mut rx = tx_gossip_rx;
         tokio::spawn(async move {
             while let Some(tx_bytes) = rx.recv().await {
-                if let Err(e) =
-                    P2pSender::send(&mut sender, Recipients::All, tx_bytes, true).await
+                if let Err(e) = P2pSender::send(&mut sender, Recipients::All, tx_bytes, true).await
                 {
                     tracing::warn!(error = ?e, "Tx gossip: send failed");
                 }
@@ -1696,11 +1718,9 @@ async fn run_node(
             loop {
                 match tx_p2p_receiver.recv().await {
                     Ok((peer, message)) => {
-                        let peer_prefix: String =
-                            peer.to_string().chars().take(8).collect();
+                        let peer_prefix: String = peer.to_string().chars().take(8).collect();
                         let raw: bytes::Bytes = message.into();
-                        let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id)
-                        else {
+                        let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id) else {
                             if let Some(suppressed) = drops.should_log("tx-gossip-undecodable") {
                                 tracing::warn!(
                                     peer = %peer_prefix,
@@ -1719,9 +1739,7 @@ async fn run_node(
                             store_code: signed.msgs.iter().any(|m| {
                                 matches!(
                                     m,
-                                    layer_std::Msg::Wasm(
-                                        layer_std::WasmMsg::StoreCode { .. }
-                                    )
+                                    layer_std::Msg::Wasm(layer_std::WasmMsg::StoreCode { .. })
                                 )
                             }),
                         };
@@ -1739,10 +1757,7 @@ async fn run_node(
                             }
                             continue;
                         }
-                        let _ = mempool
-                            .lock()
-                            .await
-                            .submit_checked(raw, Some(meta));
+                        let _ = mempool.lock().await.submit_checked(raw, Some(meta));
                     }
                     Err(_) => break,
                 }
@@ -1773,7 +1788,9 @@ async fn run_node(
                         msg
                     }
                 };
-                match P2pSender::send(&mut sender, Recipients::All, bytes::Bytes::from(msg), true).await {
+                match P2pSender::send(&mut sender, Recipients::All, bytes::Bytes::from(msg), true)
+                    .await
+                {
                     Ok(sent_to) => {
                         let mut m = mesh_reached.lock().await;
                         let now = std::time::Instant::now();
@@ -1819,8 +1836,7 @@ async fn run_node(
             loop {
                 match payload_p2p_receiver.recv().await {
                     Ok((sender_pk, message)) => {
-                        let peer_prefix: String =
-                            sender_pk.to_string().chars().take(8).collect();
+                        let peer_prefix: String = sender_pk.to_string().chars().take(8).collect();
                         // Any authenticated inbound message proves the link —
                         // the strongest mesh signal, and the only one a
                         // non-proposing seat produces (rc11 soak: the
@@ -1848,7 +1864,9 @@ async fn run_node(
                                     Recipients::One(sender_pk),
                                     bytes::Bytes::from(msg),
                                     true,
-                                ).await {
+                                )
+                                .await
+                                {
                                     tracing::warn!(error = ?e, "Payload fetch: reply send failed");
                                 }
                             }
@@ -1863,8 +1881,8 @@ async fn run_node(
                                 continue;
                             }
                             let start = u64::from_be_bytes(payload_bytes[..8].try_into().unwrap());
-                            let count = u16::from_be_bytes(payload_bytes[8..10].try_into().unwrap())
-                                as u64;
+                            let count =
+                                u16::from_be_bytes(payload_bytes[8..10].try_into().unwrap()) as u64;
                             let count = count.min(slay3rd::node::BACKFILL_BATCH_SIZE);
                             for h in start..start + count {
                                 let Some(p) = node.payload_by_height(h).await else {
@@ -1877,7 +1895,9 @@ async fn run_node(
                                     Recipients::One(sender_pk.clone()),
                                     bytes::Bytes::from(msg),
                                     true,
-                                ).await {
+                                )
+                                .await
+                                {
                                     tracing::warn!(error = ?e, "Payload backfill: reply send failed");
                                     // Do NOT abandon the rest of the batch: one
                                     // failed push (slow peer mailbox) used to

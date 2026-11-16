@@ -88,7 +88,9 @@ mod tests {
         );
         shares
             .into_iter()
-            .map(|share| Bls::signer(NAMESPACE, participants.clone(), sharing.clone(), share).unwrap())
+            .map(|share| {
+                Bls::signer(NAMESPACE, participants.clone(), sharing.clone(), share).unwrap()
+            })
             .collect()
     }
 

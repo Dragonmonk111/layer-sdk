@@ -59,16 +59,17 @@ pub fn resolve_genesis(config: &NodeConfig) -> Result<GenesisState, String> {
     let path = config.genesis_path.trim();
     if path.is_empty() {
         if !config.insecure_devnet {
-            return Err("genesis_path is empty. Set it to the network's genesis file; \
+            return Err(
+                "genesis_path is empty. Set it to the network's genesis file; \
                 the built-in genesis funds a key derived from a public constant \
                 (devnets may opt in with insecure_devnet = true)"
-                .to_string());
+                    .to_string(),
+            );
         }
         return Ok(default_genesis());
     }
 
-    let data =
-        std::fs::read(path).map_err(|e| format!("cannot read genesis file {path}: {e}"))?;
+    let data = std::fs::read(path).map_err(|e| format!("cannot read genesis file {path}: {e}"))?;
     let genesis =
         GenesisState::parse(&data).map_err(|e| format!("invalid genesis file {path}: {e}"))?;
 

@@ -29,11 +29,7 @@ use cosmrs::{
 };
 use prost::Message;
 use sha2::{Digest, Sha256};
-use tonic::{
-    codec::ProstCodec,
-    transport::Channel,
-    Request,
-};
+use tonic::{codec::ProstCodec, transport::Channel, Request};
 
 // Use layer-proto types which are compiled with prost 0.13 (workspace version),
 // compatible with tonic 0.12 ProstCodec.
@@ -47,9 +43,8 @@ use layer_proto::cosmos::tx::v1beta1::{
     SimulateRequest,
 };
 use layer_proto::cosmwasm::wasm::v1::{
-    MsgExecuteContract, MsgInstantiateContract, MsgMigrateContract, MsgStoreCode,
-    QueryCodeRequest, QueryCodeResponse,
-    QueryContractsByCodeRequest, QueryContractsByCodeResponse,
+    MsgExecuteContract, MsgInstantiateContract, MsgMigrateContract, MsgStoreCode, QueryCodeRequest,
+    QueryCodeResponse, QueryContractsByCodeRequest, QueryContractsByCodeResponse,
     QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
 use layer_proto::layer::lightclient::v1::{
@@ -102,7 +97,9 @@ fn print_usage() {
     eprintln!("  simulate    Dry-run a MsgSend via cosmos.tx.v1beta1.Service/Simulate");
     eprintln!("  get-tx      Query a committed tx by hash (cosmos.tx.v1beta1.Service/GetTx)");
     eprintln!("  block       Query a finalized block (layer.lightclient.v1.Query/Block), print sha256 fingerprints");
-    eprintln!("  broadcast   Broadcast a pre-signed raw tx (hex TxRaw bytes, e.g. from hybrid-sign)");
+    eprintln!(
+        "  broadcast   Broadcast a pre-signed raw tx (hex TxRaw bytes, e.g. from hybrid-sign)"
+    );
     eprintln!("  query       Query contract state (SmartContractState)");
     eprintln!("  contracts-by-code  List contract addresses for a code id");
     eprintln!("  code-info   Query CodeInfo for a code id");
@@ -159,7 +156,9 @@ fn print_usage() {
     eprintln!();
     eprintln!("broadcast flags:");
     eprintln!("  --tx-hex <hex>       Hex-encoded TxRaw bytes");
-    eprintln!("  --tx-file <path>     File containing hex-encoded TxRaw bytes (preferred for large txs)");
+    eprintln!(
+        "  --tx-file <path>     File containing hex-encoded TxRaw bytes (preferred for large txs)"
+    );
     eprintln!();
     eprintln!("query flags:");
     eprintln!("  --contract <addr>    Contract address (required)");
@@ -399,8 +398,8 @@ fn deployer_key() -> cosmrs::crypto::secp256k1::SigningKey {
         return cosmrs::crypto::secp256k1::SigningKey::from_slice(&bytes)
             .expect("TX_SENDER_KEY_HEX: valid secp256k1 key");
     }
-    let label = std::env::var("TX_SENDER_KEY_SEED")
-        .unwrap_or_else(|_| "junoclaw-deployer-v1".to_string());
+    let label =
+        std::env::var("TX_SENDER_KEY_SEED").unwrap_or_else(|_| "junoclaw-deployer-v1".to_string());
     let seed = Sha256::digest(label.as_bytes());
     cosmrs::crypto::secp256k1::SigningKey::from_slice(&seed[..32])
         .expect("valid secp256k1 key from SHA256 seed")
@@ -421,9 +420,7 @@ fn deployer_address() -> AccountId {
 fn cmd_derive_address(pubkey_hex: &str) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = hex::decode(pubkey_hex.trim().trim_start_matches("0x"))?;
     if bytes.len() != 33 || (bytes[0] != 0x02 && bytes[0] != 0x03) {
-        return Err(
-            "expected 33-byte compressed secp256k1 pubkey (02/03 prefix)".into(),
-        );
+        return Err("expected 33-byte compressed secp256k1 pubkey (02/03 prefix)".into());
     }
     let sha = Sha256::digest(&bytes);
     let ripemd = ripemd::Ripemd160::digest(sha);
@@ -489,9 +486,10 @@ async fn query_account_sequence(
 
     let channel = connect(grpc_addr).await?;
     let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
-    grpc_client.ready().await.map_err(|e| {
-        format!("gRPC channel not ready: {}", e)
-    })?;
+    grpc_client
+        .ready()
+        .await
+        .map_err(|e| format!("gRPC channel not ready: {}", e))?;
 
     let path: http::uri::PathAndQuery = "/cosmos.auth.v1beta1.Query/Account"
         .parse()
@@ -535,10 +533,7 @@ fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-async fn cmd_broadcast(
-    grpc_addr: &str,
-    tx_hex: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_broadcast(grpc_addr: &str, tx_hex: &str) -> Result<(), Box<dyn std::error::Error>> {
     let tx_bytes = decode_hex(tx_hex).map_err(|e| format!("invalid tx hex: {}", e))?;
     println!("Raw tx size: {} bytes", tx_bytes.len());
     let hash = tx_hash_hex(&tx_bytes);
@@ -563,7 +558,10 @@ async fn cmd_broadcast(
             resp.code, resp.raw_log
         );
         if resp.code == 0 {
-            println!("TX submitted — query with: tx-sender get-tx --hash {}", hash);
+            println!(
+                "TX submitted — query with: tx-sender get-tx --hash {}",
+                hash
+            );
         } else {
             println!("Warning: tx returned non-zero code — check node logs");
         }
@@ -924,7 +922,10 @@ async fn cmd_send(
             resp.code, resp.raw_log
         );
         if resp.code == 0 {
-            println!("Send TX submitted successfully: {} {} -> {}", amount, denom, to);
+            println!(
+                "Send TX submitted successfully: {} {} -> {}",
+                amount, denom, to
+            );
         } else {
             println!("Warning: tx returned non-zero code — check node logs");
         }
@@ -1008,7 +1009,9 @@ async fn cmd_bench(
             // serde encodes Vec<u8> as a JSON array of bytes.
             let pk_json = format!(
                 "[{}]",
-                std::iter::repeat_n("0", pk_len).collect::<Vec<_>>().join(",")
+                std::iter::repeat_n("0", pk_len)
+                    .collect::<Vec<_>>()
+                    .join(",")
             );
             let msg_json = format!(
                 r#"{{"bud":{{"parent":"{sender}","child":"{}","child_weight":1,"mayo_pk":{pk_json}}}}}"#,
@@ -1025,9 +1028,7 @@ async fn cmd_bench(
                 value: msg.encode_to_vec(),
             }
         } else {
-            return Err(
-                format!("unknown bench kind {kind} (bank|bud1|bud2|bud3|bud5)").into(),
-            );
+            return Err(format!("unknown bench kind {kind} (bank|bud1|bud2|bud3|bud5)").into());
         };
 
         let tx_bytes = sign_tx(any, sequence);
@@ -1186,8 +1187,7 @@ async fn cmd_get_tx(
         .max_encoding_message_size(10 * 1024 * 1024);
 
     // Q7: --wait polls until the tx is committed (or the timeout expires).
-    let deadline =
-        std::time::Instant::now() + std::time::Duration::from_secs(wait_secs);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(wait_secs);
     let result = loop {
         match client
             .get_tx(GetTxRequest {
@@ -1196,15 +1196,9 @@ async fn cmd_get_tx(
             .await
         {
             Ok(r) => break r.into_inner(),
-            Err(s)
-                if s.code() == tonic::Code::NotFound && wait_secs > 0 =>
-            {
+            Err(s) if s.code() == tonic::Code::NotFound && wait_secs > 0 => {
                 if std::time::Instant::now() >= deadline {
-                    return Err(format!(
-                        "tx {} not committed after {}s",
-                        hash, wait_secs
-                    )
-                    .into());
+                    return Err(format!("tx {} not committed after {}s", hash, wait_secs).into());
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
@@ -1296,7 +1290,11 @@ async fn cmd_query_smart(
     contract: &str,
     query_msg: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    eprintln!("[debug] query_data bytes ({}): {:?}", query_msg.len(), query_msg);
+    eprintln!(
+        "[debug] query_data bytes ({}): {:?}",
+        query_msg.len(),
+        query_msg
+    );
     let req = QuerySmartContractStateRequest {
         address: contract.to_string(),
         query_data: query_msg.as_bytes().to_vec(),
@@ -1304,9 +1302,10 @@ async fn cmd_query_smart(
 
     let channel = connect(grpc_addr).await?;
     let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
-    grpc_client.ready().await.map_err(|e| {
-        format!("gRPC channel not ready: {}", e)
-    })?;
+    grpc_client
+        .ready()
+        .await
+        .map_err(|e| format!("gRPC channel not ready: {}", e))?;
 
     let path: http::uri::PathAndQuery = "/cosmwasm.wasm.v1.Query/SmartContractState"
         .parse()
@@ -1337,9 +1336,10 @@ async fn cmd_contracts_by_code(
 
     let channel = connect(grpc_addr).await?;
     let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
-    grpc_client.ready().await.map_err(|e| {
-        format!("gRPC channel not ready: {}", e)
-    })?;
+    grpc_client
+        .ready()
+        .await
+        .map_err(|e| format!("gRPC channel not ready: {}", e))?;
 
     let path: http::uri::PathAndQuery = "/cosmwasm.wasm.v1.Query/ContractsByCode"
         .parse()
@@ -1364,34 +1364,38 @@ async fn cmd_contracts_by_code(
 // Subcommand: code-info (Code)
 // ---------------------------------------------------------------------------
 
-async fn cmd_code_info(
-    grpc_addr: &str,
-    code_id: u64,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_code_info(grpc_addr: &str, code_id: u64) -> Result<(), Box<dyn std::error::Error>> {
     let req = QueryCodeRequest { code_id };
 
     let channel = connect(grpc_addr).await?;
     let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel)
         .max_decoding_message_size(10 * 1024 * 1024)
         .max_encoding_message_size(10 * 1024 * 1024);
-    grpc_client.ready().await.map_err(|e| {
-        format!("gRPC channel not ready: {}", e)
-    })?;
+    grpc_client
+        .ready()
+        .await
+        .map_err(|e| format!("gRPC channel not ready: {}", e))?;
 
-    let path: http::uri::PathAndQuery = "/cosmwasm.wasm.v1.Query/Code"
-        .parse()
-        .expect("valid path");
-    let codec: ProstCodec<QueryCodeRequest, QueryCodeResponse> =
-        ProstCodec::default();
+    let path: http::uri::PathAndQuery = "/cosmwasm.wasm.v1.Query/Code".parse().expect("valid path");
+    let codec: ProstCodec<QueryCodeRequest, QueryCodeResponse> = ProstCodec::default();
     let response = grpc_client.unary(Request::new(req), path, codec).await?;
 
     let result = response.into_inner();
     match result.code_info {
         Some(info) => {
-            println!("code_id={} creator={} data_hash={} wasm_bytes={}",
-                info.code_id, info.creator, hex::encode(&info.data_hash), result.data.len());
+            println!(
+                "code_id={} creator={} data_hash={} wasm_bytes={}",
+                info.code_id,
+                info.creator,
+                hex::encode(&info.data_hash),
+                result.data.len()
+            );
         }
-        None => println!("No CodeInfo for code_id={} (wasm_bytes={})", code_id, result.data.len()),
+        None => println!(
+            "No CodeInfo for code_id={} (wasm_bytes={})",
+            code_id,
+            result.data.len()
+        ),
     }
 
     Ok(())
@@ -1412,9 +1416,10 @@ async fn cmd_query_balance(
 
     let channel = connect(grpc_addr).await?;
     let mut grpc_client: tonic::client::Grpc<Channel> = tonic::client::Grpc::new(channel);
-    grpc_client.ready().await.map_err(|e| {
-        format!("gRPC channel not ready: {}", e)
-    })?;
+    grpc_client
+        .ready()
+        .await
+        .map_err(|e| format!("gRPC channel not ready: {}", e))?;
 
     let path: http::uri::PathAndQuery = "/cosmos.bank.v1beta1.Query/AllBalances"
         .parse()
@@ -1470,7 +1475,15 @@ async fn main() {
             } else {
                 args.msg
             };
-            cmd_instantiate(&args.grpc, code_id, &args.label, &msg_resolved, args.admin, args.sequence).await
+            cmd_instantiate(
+                &args.grpc,
+                code_id,
+                &args.label,
+                &msg_resolved,
+                args.admin,
+                args.sequence,
+            )
+            .await
         }
         "execute" => {
             let contract = args.contract.unwrap_or_else(|| {
@@ -1483,9 +1496,7 @@ async fn main() {
             } else {
                 args.msg
             };
-            let funds = args
-                .amount
-                .map(|a| (a, args.denom.clone()));
+            let funds = args.amount.map(|a| (a, args.denom.clone()));
             cmd_execute(&args.grpc, &contract, &msg, funds, args.sequence).await
         }
         "migrate" => {
@@ -1497,7 +1508,11 @@ async fn main() {
                 eprintln!("Error: --code-id is required for migrate");
                 std::process::exit(1);
             });
-            let msg = if args.msg.is_empty() { "{}".to_string() } else { args.msg };
+            let msg = if args.msg.is_empty() {
+                "{}".to_string()
+            } else {
+                args.msg
+            };
             cmd_migrate(&args.grpc, &contract, code_id, &msg, args.sequence).await
         }
         "query" => {
@@ -1505,7 +1520,11 @@ async fn main() {
                 eprintln!("Error: --contract is required for query");
                 std::process::exit(1);
             });
-            let msg = if args.msg.is_empty() { "{}".to_string() } else { args.msg };
+            let msg = if args.msg.is_empty() {
+                "{}".to_string()
+            } else {
+                args.msg
+            };
             cmd_query_smart(&args.grpc, &contract, &msg).await
         }
         "contracts-by-code" => {
@@ -1584,7 +1603,10 @@ async fn main() {
                 .unwrap_or("1")
                 .parse()
                 .unwrap_or_else(|_| {
-                    eprintln!("Error: invalid --amount: {}", args.amount.as_deref().unwrap_or(""));
+                    eprintln!(
+                        "Error: invalid --amount: {}",
+                        args.amount.as_deref().unwrap_or("")
+                    );
                     std::process::exit(1);
                 });
             cmd_bench(

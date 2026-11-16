@@ -418,7 +418,8 @@ mod tests {
             observer: None,
         };
         let toml_str = toml::to_string(&cfg).expect("serialization should succeed");
-        let decoded: NodeConfig = toml::from_str(&toml_str).expect("deserialization should succeed");
+        let decoded: NodeConfig =
+            toml::from_str(&toml_str).expect("deserialization should succeed");
         assert_eq!(decoded.validator_index, 1);
         assert_eq!(decoded.chain_id, "test-chain");
         assert_eq!(decoded.peers.len(), 2);

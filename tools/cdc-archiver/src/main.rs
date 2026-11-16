@@ -289,10 +289,7 @@ fn apply_typed(
         ("", b) if b.starts_with("_cert/") => {
             let h: i64 = b[6..].parse().unwrap_or(-1);
             if op == "d" {
-                tx.execute(
-                    "UPDATE blocks SET cert=NULL WHERE height=?1",
-                    params![h],
-                )?;
+                tx.execute("UPDATE blocks SET cert=NULL WHERE height=?1", params![h])?;
             } else if let Some(v) = value {
                 tx.execute(
                     "INSERT INTO blocks(seq,height,cert) VALUES(?1,?2,?3)
@@ -567,14 +564,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         Err(e) => {
                             tx.commit()?;
-                            eprintln!("[cdc-archiver] stream error at seq={last}: {e}; reconnecting");
+                            eprintln!(
+                                "[cdc-archiver] stream error at seq={last}: {e}; reconnecting"
+                            );
                             break;
                         }
                     }
                 }
             }
             Err(e) => {
-                eprintln!("[cdc-archiver] connect failed: {e} (retry in {:?})", backoff);
+                eprintln!(
+                    "[cdc-archiver] connect failed: {e} (retry in {:?})",
+                    backoff
+                );
                 tokio::time::sleep(backoff).await;
                 backoff = (backoff * 2).min(Duration::from_secs(30));
             }

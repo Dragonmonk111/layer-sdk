@@ -1,9 +1,9 @@
 use cosmwasm_schema::cw_serde;
+use cosmwasm_std::Checksum;
 use cosmwasm_std::{
     ensure_eq, to_json_binary, Addr, Binary, BlockInfo, Coin, CosmosMsg, Empty, Env, MessageInfo,
     Order, Reply, ReplyOn, SubMsg, SubMsgResponse,
 };
-use cosmwasm_std::Checksum;
 use cosmwasm_vm::VmError;
 use cw_storage_plus::{Bound, KeyDeserialize};
 
@@ -174,7 +174,12 @@ impl Wasm {
             };
             let id = self.next_id(&mut wasm_store, meter)?;
             CODES.save(&mut wasm_store, meter, id, &info)?;
-            CODE_BYTES.save(&mut wasm_store, meter, checksum.as_slice(), &ROOT_WASM.to_vec())?;
+            CODE_BYTES.save(
+                &mut wasm_store,
+                meter,
+                checksum.as_slice(),
+                &ROOT_WASM.to_vec(),
+            )?;
 
             // now, pin it (copied code from _process_msg / WasmMsg::Pin)
             self.cache
@@ -892,7 +897,11 @@ impl Wasm {
                 // cold caches).
                 let data = if include_wasm {
                     CODE_BYTES
-                        .load(&prefixed_read(storage, NAMESPACE_WASM), meter, hash.as_slice())
+                        .load(
+                            &prefixed_read(storage, NAMESPACE_WASM),
+                            meter,
+                            hash.as_slice(),
+                        )
                         .map_err(|_| WasmError::Vm(format!("no wasm blob for checksum {hash}")))?
                 } else {
                     vec![]
@@ -1067,9 +1076,13 @@ fn cosmwasm_msg_to_layer(
                 amount,
             }
             .into(),
-            other => return Err(WasmError::UnsupportedCosmosMsg(
-                format!("BankMsg variant not supported: {:?}", std::mem::discriminant(&other))
-            ).into()),
+            other => {
+                return Err(WasmError::UnsupportedCosmosMsg(format!(
+                    "BankMsg variant not supported: {:?}",
+                    std::mem::discriminant(&other)
+                ))
+                .into())
+            }
         },
         CosmosMsg::Wasm(wasm) => match wasm {
             cosmwasm_std::WasmMsg::Execute {
@@ -1140,9 +1153,13 @@ fn cosmwasm_msg_to_layer(
                 contract_addr: AccountId::parse_string(&contract_addr)?,
             }
             .into(),
-            other => return Err(WasmError::UnsupportedCosmosMsg(
-                format!("WasmMsg variant not supported: {:?}", std::mem::discriminant(&other))
-            ).into()),
+            other => {
+                return Err(WasmError::UnsupportedCosmosMsg(format!(
+                    "WasmMsg variant not supported: {:?}",
+                    std::mem::discriminant(&other)
+                ))
+                .into())
+            }
         },
         CosmosMsg::Custom(custom) => {
             let root = root_account();
@@ -1192,20 +1209,20 @@ fn cosmwasm_msg_to_layer(
             }
         }
         CosmosMsg::Stargate { type_url, .. } => {
-            return Err(WasmError::UnsupportedCosmosMsg(
-                format!("Stargate({})", type_url)
-            ).into());
+            return Err(WasmError::UnsupportedCosmosMsg(format!("Stargate({})", type_url)).into());
         }
         CosmosMsg::Any(any_msg) => {
-            return Err(WasmError::UnsupportedCosmosMsg(
-                format!("Any({})", any_msg.type_url)
-            ).into());
+            return Err(
+                WasmError::UnsupportedCosmosMsg(format!("Any({})", any_msg.type_url)).into(),
+            );
         }
         // Wildcard for CosmosMsg::Gov, Distribution, IbcMsg, and future #[non_exhaustive] variants:
         other => {
-            return Err(WasmError::UnsupportedCosmosMsg(
-                format!("{:?}", std::mem::discriminant(&other))
-            ).into());
+            return Err(WasmError::UnsupportedCosmosMsg(format!(
+                "{:?}",
+                std::mem::discriminant(&other)
+            ))
+            .into());
         }
     };
     Ok(res)
@@ -1440,7 +1457,8 @@ mod tests {
     /// hackatom's instantiate runs `addr_validate` on the verifier.
     const TEST_SENDER: &str = "juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992";
     const TEST_VERIFIER: &str = "juno1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmdyychx";
-    const TEST_BENEFICIARY: &str = "juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek";
+    const TEST_BENEFICIARY: &str =
+        "juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek";
 
     fn deploy_hackatom(
         store: &mut dyn Storage,
@@ -1509,13 +1527,10 @@ mod tests {
         // 2M SDK gas — finite, well above deploy cost, below the time it
         // would take an uninstrumented loop to look like a hang.
         let meter = GasMeter::new(2_000_000);
-        let sm = StateMachine::new(&AppConfig::new(
-            "/tmp/slay3r/cpu_loop_killed_by_meter",
-        ));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/cpu_loop_killed_by_meter"));
         let sender = AccountId::unchecked(TEST_SENDER);
         let verifier = AccountId::unchecked(TEST_VERIFIER);
-        let contract_addr =
-            deploy_hackatom(&mut store, &meter, &block, &sm, &sender, &verifier);
+        let contract_addr = deploy_hackatom(&mut store, &meter, &block, &sm, &sender, &verifier);
 
         let err = sm
             .wasm
@@ -1551,13 +1566,10 @@ mod tests {
         // generous meter — the failure must come from the memory cap or
         // grow metering, not from a tiny gas budget
         let meter = GasMeter::new(20_000_000);
-        let sm = StateMachine::new(&AppConfig::new(
-            "/tmp/slay3r/large_memory_allocation_fails",
-        ));
+        let sm = StateMachine::new(&AppConfig::new("/tmp/slay3r/large_memory_allocation_fails"));
         let sender = AccountId::unchecked(TEST_SENDER);
         let verifier = AccountId::unchecked(TEST_VERIFIER);
-        let contract_addr =
-            deploy_hackatom(&mut store, &meter, &block, &sm, &sender, &verifier);
+        let contract_addr = deploy_hackatom(&mut store, &meter, &block, &sm, &sender, &verifier);
 
         let err = sm
             .wasm

@@ -93,28 +93,26 @@ pub fn m_vec_multiply_bins<P: ParameterSet>(m_vec_limbs: usize, bins: &mut [u64]
     // Fixed reduction pattern from reference C implementation.
     // Uses split_at_mut to satisfy the borrow checker.
     macro_rules! op {
-        ($src:literal, $dst:literal, $f:ident) => {
-            {
-                let m = m_vec_limbs;
-                let s = $src * m;
-                let s_end = s + m;
-                let d = $dst * m;
-                let d_end = d + m;
-                if s_end <= d {
-                    let (left, right) = bins.split_at_mut(d);
-                    let src = &left[s..s_end];
-                    let dst = &mut right[..m];
-                    $f(m, src, dst);
-                } else if d_end <= s {
-                    let (left, right) = bins.split_at_mut(s);
-                    let src = &right[..m];
-                    let dst = &mut left[d..d_end];
-                    $f(m, src, dst);
-                } else {
-                    panic!("overlapping bins");
-                }
+        ($src:literal, $dst:literal, $f:ident) => {{
+            let m = m_vec_limbs;
+            let s = $src * m;
+            let s_end = s + m;
+            let d = $dst * m;
+            let d_end = d + m;
+            if s_end <= d {
+                let (left, right) = bins.split_at_mut(d);
+                let src = &left[s..s_end];
+                let dst = &mut right[..m];
+                $f(m, src, dst);
+            } else if d_end <= s {
+                let (left, right) = bins.split_at_mut(s);
+                let src = &right[..m];
+                let dst = &mut left[d..d_end];
+                $f(m, src, dst);
+            } else {
+                panic!("overlapping bins");
             }
-        };
+        }};
     }
 
     op!(5, 10, m_vec_mul_add_x_inv);

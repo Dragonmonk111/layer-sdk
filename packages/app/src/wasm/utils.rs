@@ -91,9 +91,9 @@ mod tests {
     // test vectors from cosmwasm-std
     #[test]
     fn build_instantiate_2_address_works() {
-        let checksum1 = Checksum::from(
-            hex!("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5"),
-        );
+        let checksum1 = Checksum::from(hex!(
+            "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5"
+        ));
         let creator1 = AccountId::new(&hex!("9999999999aaaaaaaaaabbbbbbbbbbcccccccccc")).unwrap();
         let salt1 = hex!("61");
         let salt2 = hex!("aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbccddeeffffeeddbbccddaa66551155aaaabbcc787878789900aabbbbcc221100acadae");
@@ -158,10 +158,9 @@ mod tests {
         ));
 
         // Invalid checksum length won't even make a Checksum (compile-time or construction-time)
-        let _ = Checksum::from_hex(
-            "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2",
-        )
-        .unwrap_err();
+        let _ =
+            Checksum::from_hex("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2")
+                .unwrap_err();
         let _ = Checksum::from_hex("").unwrap_err();
         let _ = Checksum::from_hex(
             "13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2aaaa",
@@ -186,16 +185,25 @@ mod tests {
 
         // Different counter produces a different address (no collision)
         let addr_c = build_instantiate_address(sender.as_slice(), code_id, 2).unwrap();
-        assert_ne!(addr_a, addr_c, "different counter must produce different address");
+        assert_ne!(
+            addr_a, addr_c,
+            "different counter must produce different address"
+        );
 
         // Different sender produces a different address
         let other_sender = AccountId::unchecked("other_deployer");
         let addr_d = build_instantiate_address(other_sender.as_slice(), code_id, 1).unwrap();
-        assert_ne!(addr_a, addr_d, "different sender must produce different address");
+        assert_ne!(
+            addr_a, addr_d,
+            "different sender must produce different address"
+        );
 
         // Different code_id produces a different address
         let addr_e = build_instantiate_address(sender.as_slice(), 99, 1).unwrap();
-        assert_ne!(addr_a, addr_e, "different code_id must produce different address");
+        assert_ne!(
+            addr_a, addr_e,
+            "different code_id must produce different address"
+        );
 
         // Verify the address is stable across invocations (deterministic hash)
         // This is the actual regression anchor — if this value ever changes, something broke

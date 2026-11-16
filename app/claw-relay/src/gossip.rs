@@ -27,9 +27,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{
-    connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream,
-};
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 const BACKOFF_INIT: Duration = Duration::from_secs(5);
 const BACKOFF_MAX: Duration = Duration::from_secs(60);
@@ -125,12 +123,7 @@ async fn handle_remote_frame(
 /// Gossip ingress for one remote event: signature + admission identical
 /// to client writes, then store + live fan-out. Duplicates are dropped
 /// silently — id-dedupe is the federation loop guard.
-async fn handle_remote(
-    app: &Shared,
-    peer: &str,
-    ev: Event,
-    first_event_logged: &mut bool,
-) {
+async fn handle_remote(app: &Shared, peer: &str, ev: Event, first_event_logged: &mut bool) {
     if let Err(reason) = admit_event(app, &ev).await {
         tracing::debug!(%peer, id = %ev.id, %reason, "gossip event rejected");
         return;

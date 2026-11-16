@@ -27,8 +27,8 @@ use layer_proto::cosmwasm::wasm::v1::{
 };
 use layer_proto::layer::sync::v1::query_client::QueryClient as SyncQueryClient;
 use layer_proto::layer::sync::v1::QueryLatestSequenceRequest;
-use std::collections::HashMap;
 use serde::Serialize;
+use std::collections::HashMap;
 use tonic::transport::{Channel, ClientTlsConfig};
 
 const PROBE_INTERVAL: Duration = Duration::from_secs(30);
@@ -307,7 +307,9 @@ async fn check_stall(sh: &Shared) {
             for s in sh.seats.lock().unwrap().iter_mut() {
                 s.last_seen = t;
             }
-            Some(format!("JunoClaw RECOVERED: finalizing again at height {height}"))
+            Some(format!(
+                "JunoClaw RECOVERED: finalizing again at height {height}"
+            ))
         } else {
             None
         }
@@ -417,9 +419,16 @@ fn availability(hist: &VecDeque<Snapshot>) -> (f64, f64, f64) {
     }
     let chain_up = hist
         .iter()
-        .filter(|s| s.probes.iter().any(|p| p.name.starts_with("Consensus") && p.ok))
+        .filter(|s| {
+            s.probes
+                .iter()
+                .any(|p| p.name.starts_with("Consensus") && p.ok)
+        })
         .count();
-    let all_up = hist.iter().filter(|s| s.probes.iter().all(|p| p.ok)).count();
+    let all_up = hist
+        .iter()
+        .filter(|s| s.probes.iter().all(|p| p.ok))
+        .count();
     let pct = |n: usize| n as f64 * 100.0 / total as f64;
     (
         total as f64 * PROBE_INTERVAL.as_secs_f64() / 3600.0,
@@ -433,7 +442,9 @@ fn render(sh: &Shared) -> String {
     let (window_h, chain_pct, all_pct) = availability(&hist);
     let height = *sh.height.lock().unwrap();
     let latest = hist.back();
-    let all_ok = latest.map(|s| s.probes.iter().all(|p| p.ok)).unwrap_or(false);
+    let all_ok = latest
+        .map(|s| s.probes.iter().all(|p| p.ok))
+        .unwrap_or(false);
     let tip = *sh.last_tip.lock().unwrap();
     let tip_age = now().saturating_sub(*sh.tip_seen_at.lock().unwrap());
     let banner = if latest.is_none() {
@@ -467,9 +478,7 @@ fn render(sh: &Shared) -> String {
                         p.name,
                         if p.ok { "ok" } else { "bad" },
                         if p.ok { "UP" } else { "DOWN" },
-                        p.detail
-                            .replace('&', "&amp;")
-                            .replace('<', "&lt;"),
+                        p.detail.replace('&', "&amp;").replace('<', "&lt;"),
                         p.ms
                     )
                 })
@@ -602,8 +611,16 @@ fn b64_encode(b: &[u8]) -> String {
             | (*c.get(2).unwrap_or(&0) as u32);
         out.push(A[(n >> 18) as usize & 63] as char);
         out.push(A[(n >> 12) as usize & 63] as char);
-        out.push(if c.len() > 1 { A[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if c.len() > 2 { A[n as usize & 63] as char } else { '=' });
+        out.push(if c.len() > 1 {
+            A[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if c.len() > 2 {
+            A[n as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -628,9 +645,7 @@ async fn wasm_smart(
     if !contract.starts_with("juno1") || contract.len() < 40 || contract.len() > 70 {
         return Err(bad("contract must be a juno1 bech32 address"));
     }
-    let raw = params
-        .get("query")
-        .ok_or_else(|| bad("missing ?query="))?;
+    let raw = params.get("query").ok_or_else(|| bad("missing ?query="))?;
     let query_data = if raw.trim_start().starts_with('{') {
         raw.as_bytes().to_vec()
     } else {
@@ -640,8 +655,8 @@ async fn wasm_smart(
         return Err(bad("query too large"));
     }
 
-    let ep = Channel::from_shared(format!("http://{}", sh.grpc))
-        .map_err(|e| bad(&e.to_string()))?;
+    let ep =
+        Channel::from_shared(format!("http://{}", sh.grpc)).map_err(|e| bad(&e.to_string()))?;
     let conn = tokio::time::timeout(PROBE_TIMEOUT, ep.connect())
         .await
         .map_err(|_| bad("grpc connect timeout"))?
@@ -809,7 +824,10 @@ mod tests {
     #[test]
     fn uncertified_blocks_are_ignored() {
         let sh = shared(&[]);
-        update_seats(&sh, &[serde_json::json!({"height": 5, "participants": 0, "signers": []})]);
+        update_seats(
+            &sh,
+            &[serde_json::json!({"height": 5, "participants": 0, "signers": []})],
+        );
         assert!(sh.seats.lock().unwrap().is_empty());
     }
 
@@ -836,7 +854,10 @@ mod tests {
     #[tokio::test]
     async fn stall_suppresses_seat_alerts_and_recovery_resets_clocks() {
         let sh = shared(&["a"]);
-        update_seats(&sh, &[serde_json::json!({"height": 1, "participants": 1, "signers": [0]})]);
+        update_seats(
+            &sh,
+            &[serde_json::json!({"height": 1, "participants": 1, "signers": [0]})],
+        );
         let old = now() - SEAT_ALERT_SECS - 1;
         sh.seats.lock().unwrap()[0].last_seen = old;
         *sh.height_seen_at.lock().unwrap() = now() - STALL_ALERT_SECS - 1;

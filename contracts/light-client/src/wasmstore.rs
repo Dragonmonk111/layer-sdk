@@ -29,7 +29,11 @@ const CONSENSUS_STATE_TYPE_URL: &str = "/ibc.lightclients.wasm.v1.ConsensusState
 /// `consensusStates/{revision_number}-{revision_height}` — ibc-go
 /// `host.ConsensusStateKey` (`Height.String()` is `{rev}-{height}`).
 fn consensus_state_key(h: &Height) -> Vec<u8> {
-    format!("consensusStates/{}-{}", h.revision_number, h.revision_height).into_bytes()
+    format!(
+        "consensusStates/{}-{}",
+        h.revision_number, h.revision_height
+    )
+    .into_bytes()
 }
 
 // ---------------------------------------------------------------------------

@@ -134,8 +134,7 @@ mod tests {
         let msg_json = br#"{"store_vk":{"vk_base64":"AAAA"}}"#;
         let proto = MsgExecuteContract {
             sender: "juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992".to_string(),
-            contract: "juno17c5ucyukaf9heseh7gnyjgmwd3jtz6gegm039ezkjhnx6zx526hqq0738c"
-                .to_string(),
+            contract: "juno17c5ucyukaf9heseh7gnyjgmwd3jtz6gegm039ezkjhnx6zx526hqq0738c".to_string(),
             msg: msg_json.to_vec(),
             funds: vec![],
         };

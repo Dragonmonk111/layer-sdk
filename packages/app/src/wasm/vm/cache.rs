@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt};
 
-use cosmwasm_std::{Binary, Env, MessageInfo, Reply, Response};
 use cosmwasm_std::Checksum;
+use cosmwasm_std::{Binary, Env, MessageInfo, Reply, Response};
 use cosmwasm_vm::{
     call_execute, call_instantiate, call_migrate, call_query, call_reply, call_sudo,
     AnalysisReport, BackendError, Cache, CacheOptions, InstanceOptions, Size, VmError,
@@ -449,8 +449,7 @@ impl VmCache {
         let mut contract = AppMeter::new(&mut unmetered);
 
         // SAFETY: backend consumed within this function; all pointed-to data lives on this stack frame
-        let backend =
-            unsafe { make_backend(sm, &mut contract, global_storage, meter, &env.block) };
+        let backend = unsafe { make_backend(sm, &mut contract, global_storage, meter, &env.block) };
 
         let mut instance = match self.cache.get_instance(checksum, backend, options) {
             Ok(i) => i,
@@ -823,7 +822,11 @@ mod tests {
             return;
         };
 
-        eprintln!("jolt-cw-verifier wasm size: {} bytes ({:.2} MB)", wasm.len(), wasm.len() as f64 / (1024.0 * 1024.0));
+        eprintln!(
+            "jolt-cw-verifier wasm size: {} bytes ({:.2} MB)",
+            wasm.len(),
+            wasm.len() as f64 / (1024.0 * 1024.0)
+        );
 
         let path = "/tmp/slay3r/test-jolt-cw-verifier-check";
         let _ = std::fs::remove_dir_all(path);
@@ -834,13 +837,19 @@ mod tests {
         match &result {
             Ok((checksum, analysis)) => {
                 eprintln!("jolt-cw-verifier store_code OK, checksum={:?}", checksum);
-                eprintln!("required_capabilities: {:?}", analysis.required_capabilities);
+                eprintln!(
+                    "required_capabilities: {:?}",
+                    analysis.required_capabilities
+                );
             }
             Err(e) => {
                 eprintln!("jolt-cw-verifier store_code FAILED: {e}");
             }
         }
-        assert!(result.is_ok(), "jolt-cw-verifier should pass check_wasm with current limits");
+        assert!(
+            result.is_ok(),
+            "jolt-cw-verifier should pass check_wasm with current limits"
+        );
     }
 
     // ── jclaw-credential v2 check_wasm reproduction ────────────────────────
@@ -855,7 +864,11 @@ mod tests {
     #[test]
     fn jclaw_credential_v2_check_wasm() {
         let wasm_path = std::env::var("JCLAW_CREDENTIAL_WASM").unwrap_or_else(|_| {
-            format!("{}{}", env!("CARGO_MANIFEST_DIR"), JCLAW_CREDENTIAL_WASM_REL)
+            format!(
+                "{}{}",
+                env!("CARGO_MANIFEST_DIR"),
+                JCLAW_CREDENTIAL_WASM_REL
+            )
         });
         let Ok(wasm) = std::fs::read(&wasm_path) else {
             eprintln!("skipping jclaw_credential_v2_check_wasm: wasm not found at {wasm_path}");
@@ -872,7 +885,10 @@ mod tests {
         match vm.store_code(&wasm) {
             Ok((checksum, analysis)) => {
                 eprintln!("jclaw-credential v2 store_code OK, checksum={checksum:?}");
-                eprintln!("required_capabilities: {:?}", analysis.required_capabilities);
+                eprintln!(
+                    "required_capabilities: {:?}",
+                    analysis.required_capabilities
+                );
             }
             Err(e) => panic!("jclaw-credential v2 store_code FAILED: {e}"),
         }
@@ -890,10 +906,16 @@ mod tests {
     #[test]
     fn jclaw_credential_v2_query_roundtrip() {
         let wasm_path = std::env::var("JCLAW_CREDENTIAL_WASM").unwrap_or_else(|_| {
-            format!("{}{}", env!("CARGO_MANIFEST_DIR"), JCLAW_CREDENTIAL_WASM_REL)
+            format!(
+                "{}{}",
+                env!("CARGO_MANIFEST_DIR"),
+                JCLAW_CREDENTIAL_WASM_REL
+            )
         });
         let Ok(wasm) = std::fs::read(&wasm_path) else {
-            eprintln!("skipping jclaw_credential_v2_query_roundtrip: wasm not found at {wasm_path}");
+            eprintln!(
+                "skipping jclaw_credential_v2_query_roundtrip: wasm not found at {wasm_path}"
+            );
             return;
         };
 
@@ -906,7 +928,8 @@ mod tests {
 
         let env = mock_env();
         let genesis = AccountId::unchecked("juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992");
-        let contract = AccountId::unchecked("juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek");
+        let contract =
+            AccountId::unchecked("juno10js5r3j43mhr40ffc8kpfdlntvpf2pl266y092ahqnm4f4wn07fshnhpek");
         let info = mock_info(&genesis.to_string(), &[]);
         let meter = GasMeter::infinite();
         let sm = StateMachine::new(&AppConfig::new(path));
@@ -936,39 +959,27 @@ mod tests {
             br#"{"list_members":{}}"#.as_slice(),
             br#"{"total_weight":{}}"#.as_slice(),
             br#"{"member":{"addr":"juno1df6kume3v3arsde40fnnsuph8pskuur2a8z5w2"}}"#.as_slice(),
-            br#"{"mayo_pk_hash":{"addr":"juno1df6kume3v3arsde40fnnsuph8pskuur2a8z5w2"}}"#.as_slice(),
+            br#"{"mayo_pk_hash":{"addr":"juno1df6kume3v3arsde40fnnsuph8pskuur2a8z5w2"}}"#
+                .as_slice(),
         ] {
-            let (res, gas) = vm.query(
-                &checksum,
-                &env,
-                q,
-                writer.as_ref(),
-                &contract,
-                &meter,
-                &sm,
-            );
+            let (res, gas) = vm.query(&checksum, &env, q, writer.as_ref(), &contract, &meter, &sm);
             match &res {
                 Ok(Ok(data)) => eprintln!(
                     "query {} => OK (gas={gas}): {}",
                     String::from_utf8_lossy(q),
                     String::from_utf8_lossy(data.as_slice())
                 ),
-                Ok(Err(e)) => eprintln!(
-                    "query {} => CONTRACT ERR: {e}",
-                    String::from_utf8_lossy(q)
-                ),
-                Err(e) => eprintln!(
-                    "query {} => VM ERR: {e}",
-                    String::from_utf8_lossy(q)
-                ),
+                Ok(Err(e)) => {
+                    eprintln!("query {} => CONTRACT ERR: {e}", String::from_utf8_lossy(q))
+                }
+                Err(e) => eprintln!("query {} => VM ERR: {e}", String::from_utf8_lossy(q)),
             }
         }
 
         // ── corruption-matrix: which mangled input reproduces the devnet ────
         // "Error parsing into type jclaw_credential::msg::QueryMsg: Invalid type"
         let clean = br#"{"list_members":{}}"#;
-        let double_encoded =
-            to_json_vec(&String::from_utf8_lossy(clean).to_string()).unwrap();
+        let double_encoded = to_json_vec(&String::from_utf8_lossy(clean).to_string()).unwrap();
         let grpc_framed = {
             let mut v = vec![0u8]; // compression flag
             v.extend_from_slice(&(clean.len() as u32).to_be_bytes()); // 4-byte len
@@ -1000,7 +1011,10 @@ mod tests {
             ("grpc 5-byte frame + msg".into(), grpc_framed),
             ("proto QuerySmartContractStateRequest".into(), proto_wrapped),
             ("json byte array".into(), json_byte_array),
-            ("base64 text".into(), Binary::from(clean.to_vec()).to_base64().into_bytes()),
+            (
+                "base64 text".into(),
+                Binary::from(clean.to_vec()).to_base64().into_bytes(),
+            ),
             ("json null".into(), b"null".to_vec()),
             ("json string \"x\"".into(), b"\"x\"".to_vec()),
             ("json number".into(), b"5".to_vec()),
@@ -1014,8 +1028,15 @@ mod tests {
                 v.extend_from_slice(clean);
                 v
             }),
-            ("msg wrapped in Smart".into(), br#"{"smart":{"msg":"e2xpc3RfbWVtYmVyczp7fX0="}}"#.to_vec()),
-            ("QueryRequest json".into(), br#"{"wasm":{"smart":{"contract_addr":"x","msg":"e2xpc3RfbWVtYmVyczp7fX0="}}}"#.to_vec()),
+            (
+                "msg wrapped in Smart".into(),
+                br#"{"smart":{"msg":"e2xpc3RfbWVtYmVyczp7fX0="}}"#.to_vec(),
+            ),
+            (
+                "QueryRequest json".into(),
+                br#"{"wasm":{"smart":{"contract_addr":"x","msg":"e2xpc3RfbWVtYmVyczp7fX0="}}}"#
+                    .to_vec(),
+            ),
         ];
         // every single byte 0x00..=0xFF
         for b in 0u8..=255 {
@@ -1037,14 +1058,16 @@ mod tests {
                 eprintln!("[corrupt:{name}] {outcome}");
             }
         }
-        eprintln!("=== 'Invalid type' hits: {hits} / {} candidates ===", candidates.len());
+        eprintln!(
+            "=== 'Invalid type' hits: {hits} / {} candidates ===",
+            candidates.len()
+        );
     }
 
     #[test]
     fn zk_verifier_bn254_gas() {
-        let wasm_path = std::env::var("ZK_VERIFIER_WASM").unwrap_or_else(|_| {
-            format!("{}{}", env!("CARGO_MANIFEST_DIR"), ZK_VERIFIER_WASM_REL)
-        });
+        let wasm_path = std::env::var("ZK_VERIFIER_WASM")
+            .unwrap_or_else(|_| format!("{}{}", env!("CARGO_MANIFEST_DIR"), ZK_VERIFIER_WASM_REL));
         let Ok(wasm) = std::fs::read(&wasm_path) else {
             eprintln!("skipping zk_verifier_bn254_gas: wasm not found at {wasm_path}");
             return;
@@ -1057,9 +1080,7 @@ mod tests {
         let vm = VmCache::init(path);
         let (checksum, analysis) = vm.store_code(&wasm).unwrap();
         // The artifact must declare the cosmwasm_2_3 capability it relies on.
-        assert!(analysis
-            .required_capabilities
-            .contains("cosmwasm_2_3"));
+        assert!(analysis.required_capabilities.contains("cosmwasm_2_3"));
 
         let env = mock_env();
         let sender = AccountId::unchecked("deployer");
@@ -1085,10 +1106,16 @@ mod tests {
         res.unwrap().unwrap();
 
         // store the verifying key (sender is admin)
-        let store_vk =
-            format!(r#"{{"store_vk":{{"vk_base64":"{ZK_VK_B64}"}}}}"#).into_bytes();
+        let store_vk = format!(r#"{{"store_vk":{{"vk_base64":"{ZK_VK_B64}"}}}}"#).into_bytes();
         let (res, g_vk) = vm.execute(
-            &checksum, &env, &info, &store_vk, &mut writer, &contract, &meter, &sm,
+            &checksum,
+            &env,
+            &info,
+            &store_vk,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
         );
         res.unwrap().unwrap();
 
@@ -1099,7 +1126,14 @@ mod tests {
         )
         .into_bytes();
         let (res, g_verify) = vm.execute(
-            &checksum, &env, &info, &verify, &mut writer, &contract, &meter, &sm,
+            &checksum,
+            &env,
+            &info,
+            &verify,
+            &mut writer,
+            &contract,
+            &meter,
+            &sm,
         );
         res.unwrap().unwrap();
 

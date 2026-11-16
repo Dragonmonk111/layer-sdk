@@ -73,8 +73,7 @@ pub async fn fetch_snapshot(peers: &[String], max_bytes: u64) -> Result<FetchedS
     for peer in peers {
         match fetch_snapshot_from(peer, max_bytes).await {
             Ok(snap) => {
-                tracing::info!(peer, height = snap.height,
-                    "state-sync: snapshot donated");
+                tracing::info!(peer, height = snap.height, "state-sync: snapshot donated");
                 return Ok(snap);
             }
             Err(e) => {
@@ -98,9 +97,7 @@ pub async fn fetch_snapshot(peers: &[String], max_bytes: u64) -> Result<FetchedS
 /// boots before its donor's gRPC is serving.
 /// Connect to a peer's statesync service with brief retries — a joiner
 /// often boots before its donor's gRPC is serving.
-async fn connect_statesync(
-    peer: &str,
-) -> Result<StateSyncClient<tonic::transport::Channel>> {
+async fn connect_statesync(peer: &str) -> Result<StateSyncClient<tonic::transport::Channel>> {
     let mut last_err = None;
     for _attempt in 1..=6 {
         match StateSyncClient::connect(format!("http://{peer}"))
@@ -263,19 +260,18 @@ async fn fetch_certified_payload(
 /// certified: reaching this path means `fetch_certified_payload`
 /// already failed, and silently accepting a cert we did not verify
 /// would widen the trust surface for no benefit.
-async fn fetch_uncertified_tip(
-    peers: &[String],
-    height: u64,
-    min_agree: usize,
-) -> Result<Vec<u8>> {
+async fn fetch_uncertified_tip(peers: &[String], height: u64, min_agree: usize) -> Result<Vec<u8>> {
     let mut payloads: Vec<(String, Vec<u8>)> = Vec::new();
     for peer in peers {
         match fetch_block_retry(peer, height).await {
             Ok(block) => {
                 if !block.certificate_bytes.is_empty() {
-                    tracing::warn!(peer, height,
+                    tracing::warn!(
+                        peer,
+                        height,
                         "state-sync: tip peer served a cert-bearing record after \
-                         certified fetch failed — skipping");
+                         certified fetch failed — skipping"
+                    );
                     continue;
                 }
                 match BlockPayload::from_bytes(&block.payload_bytes) {
@@ -283,9 +279,12 @@ async fn fetch_uncertified_tip(
                         payloads.push((peer.clone(), block.payload_bytes));
                     }
                     _ => {
-                        tracing::warn!(peer, height,
+                        tracing::warn!(
+                            peer,
+                            height,
                             "state-sync: tip peer served a malformed or \
-                             height-mismatched payload — skipping");
+                             height-mismatched payload — skipping"
+                        );
                     }
                 }
             }
@@ -295,9 +294,8 @@ async fn fetch_uncertified_tip(
             }
         }
     }
-    select_anchor(payloads, min_agree).with_context(|| {
-        format!("state-sync: uncertified tip quorum failed at height {height}")
-    })
+    select_anchor(payloads, min_agree)
+        .with_context(|| format!("state-sync: uncertified tip quorum failed at height {height}"))
 }
 
 /// Fetch the finality record for `height` from one peer. The block is often
@@ -313,18 +311,19 @@ async fn fetch_block_retry(peer: &str, height: u64) -> Result<QueryBlockResponse
         match lc.block(QueryBlockRequest { height }).await {
             Ok(r) => return Ok(r.into_inner()),
             Err(e) if e.code() == tonic::Code::NotFound => {
-                tracing::info!(peer, attempt, height,
-                    "state-sync: waiting for certified block");
+                tracing::info!(
+                    peer,
+                    attempt,
+                    height,
+                    "state-sync: waiting for certified block"
+                );
                 last_err = Some(e);
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
-            Err(e) => {
-                return Err(e).with_context(|| format!("Block({height}) failed"))
-            }
+            Err(e) => return Err(e).with_context(|| format!("Block({height}) failed")),
         }
     }
-    Err(last_err.unwrap())
-        .with_context(|| format!("no certified block at height {height}"))
+    Err(last_err.unwrap()).with_context(|| format!("no certified block at height {height}"))
 }
 
 /// Quorum check on the payloads peers served for one height. Every
@@ -508,21 +507,22 @@ where
     // certificate); `halted_chain_anchor` accepts it — byte-identical
     // agreement across `min_anchor_agree` peers plus the decode/height
     // checks below is the same trust level already granted to the donor.
-    let tip_bytes = match fetch_certified_payload(&ss.peers, snap.height, ss.min_anchor_agree, check).await {
-        Ok(b) => b,
-        Err(e) => {
-            if !ss.halted_chain_anchor {
-                return Err(e);
+    let tip_bytes =
+        match fetch_certified_payload(&ss.peers, snap.height, ss.min_anchor_agree, check).await {
+            Ok(b) => b,
+            Err(e) => {
+                if !ss.halted_chain_anchor {
+                    return Err(e);
+                }
+                tracing::warn!(
+                    error = %e,
+                    height = snap.height,
+                    "state-sync: snapshot tip has no finality record — halted-chain \
+                     fallback, fetching uncertified tip payload"
+                );
+                fetch_uncertified_tip(&ss.peers, snap.height, ss.min_anchor_agree).await?
             }
-            tracing::warn!(
-                error = %e,
-                height = snap.height,
-                "state-sync: snapshot tip has no finality record — halted-chain \
-                 fallback, fetching uncertified tip payload"
-            );
-            fetch_uncertified_tip(&ss.peers, snap.height, ss.min_anchor_agree).await?
-        }
-    };
+        };
     let tip_payload = BlockPayload::from_bytes(&tip_bytes)
         .context("state-sync: certified tip payload decode failed")?;
     anyhow::ensure!(

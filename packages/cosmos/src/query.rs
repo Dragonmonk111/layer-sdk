@@ -83,7 +83,8 @@ fn parse_app_query(command: &str, data: Bytes, chain_id: &str) -> Result<Query, 
             Ok(Query::Simulate(tx))
         }
         "version" => Err(QueryError::UnsupportedPath(format!(
-            "{}/version", QUERY_PATH_APP
+            "{}/version",
+            QUERY_PATH_APP
         ))),
         _ => Err(QueryError::UnsupportedPath(format!(
             "{}/{}",

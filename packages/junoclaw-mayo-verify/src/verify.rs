@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 /// AES-128-CTR as used by MAYO-C.
 /// Counter block layout: bytes 0..11 = IV (zeros), bytes 12..15 = 32-bit big-endian counter.
 fn aes128_ctr(key: &[u8], out: &mut [u8]) {
-    use aes::cipher::{BlockEncryptMut, KeyInit, generic_array::GenericArray};
+    use aes::cipher::{generic_array::GenericArray, BlockEncryptMut, KeyInit};
     use aes::Aes128;
     let mut cipher = Aes128::new_from_slice(key).unwrap();
     let mut block = [0u8; 16];
@@ -34,7 +34,7 @@ fn aes128_ctr(key: &[u8], out: &mut [u8]) {
 // ---------------------------------------------------------------------------
 
 fn shake256(out: &mut [u8], data: &[u8]) {
-    use sha3::{Shake256, digest::Update, digest::ExtendableOutput, digest::XofReader};
+    use sha3::{digest::ExtendableOutput, digest::Update, digest::XofReader, Shake256};
     let mut hasher = Shake256::default();
     hasher.update(data);
     let mut reader = hasher.finalize_xof();
@@ -47,7 +47,9 @@ fn shake256(out: &mut [u8], data: &[u8]) {
 
 /// Expand a compact MAYO public key into P1, P2, P3.
 /// Returns `(P1, P2, P3)` as Vec<u64> limbs.
-pub(crate) fn expand_pk<P: ParameterSet>(cpk: &[u8]) -> Result<(Vec<u64>, Vec<u64>, Vec<u64>), Error> {
+pub(crate) fn expand_pk<P: ParameterSet>(
+    cpk: &[u8],
+) -> Result<(Vec<u64>, Vec<u64>, Vec<u64>), Error> {
     if cpk.len() != P::PK_BYTES {
         return Err(Error::InvalidLength {
             expected: P::PK_BYTES,
@@ -78,7 +80,12 @@ pub(crate) fn expand_pk<P: ParameterSet>(cpk: &[u8]) -> Result<(Vec<u64>, Vec<u6
     let mut p3 = vec![0u64; p3_limbs];
 
     unpack_m_vecs(&p1_p2_packed, &mut p1, p1_limbs / m_vec_limbs, P::M);
-    unpack_m_vecs(&p1_p2_packed[p1_packed_bytes..], &mut p2, p2_limbs / m_vec_limbs, P::M);
+    unpack_m_vecs(
+        &p1_p2_packed[p1_packed_bytes..],
+        &mut p2,
+        p2_limbs / m_vec_limbs,
+        P::M,
+    );
     unpack_m_vecs(packed_p3, &mut p3, p3_limbs / m_vec_limbs, P::M);
 
     Ok((p1, p2, p3))
@@ -155,7 +162,7 @@ impl AesCtrStream {
     }
 
     fn refill(&mut self) {
-        use aes::cipher::{BlockEncryptMut, generic_array::GenericArray};
+        use aes::cipher::{generic_array::GenericArray, BlockEncryptMut};
         let mut b = [0u8; 16];
         b[12..16].copy_from_slice(&self.counter.to_be_bytes());
         let mut ga = GenericArray::clone_from_slice(&b);
@@ -184,12 +191,7 @@ impl AesCtrStream {
 /// Optimised: processes one output row at a time, reusing a `k * 16` bin accumulator
 /// instead of allocating the full `n * k * 16` grid.  Peak memory drops from
 /// ~165 KB to ~2 KB for MAYO-2.
-fn calculate_ps<P: ParameterSet>(
-    p1: &[u64],
-    p2: &[u64],
-    p3: &[u64],
-    s: &[u8],
-) -> Vec<u64> {
+fn calculate_ps<P: ParameterSet>(p1: &[u64], p2: &[u64], p3: &[u64], s: &[u8]) -> Vec<u64> {
     let n = P::N;
     let v = P::V;
     let o = P::O;
@@ -205,7 +207,11 @@ fn calculate_ps<P: ParameterSet>(
         for j in row..v {
             for col in 0..k {
                 let idx = (col * 16 + s[col * n + j] as usize) * m_vec_limbs;
-                m_vec_add(m_vec_limbs, &p1[p1_used * m_vec_limbs..], &mut row_acc[idx..]);
+                m_vec_add(
+                    m_vec_limbs,
+                    &p1[p1_used * m_vec_limbs..],
+                    &mut row_acc[idx..],
+                );
             }
             p1_used += 1;
         }
@@ -229,7 +235,11 @@ fn calculate_ps<P: ParameterSet>(
         for j in row..n {
             for col in 0..k {
                 let idx = (col * 16 + s[col * n + j] as usize) * m_vec_limbs;
-                m_vec_add(m_vec_limbs, &p3[p3_used * m_vec_limbs..], &mut row_acc[idx..]);
+                m_vec_add(
+                    m_vec_limbs,
+                    &p3[p3_used * m_vec_limbs..],
+                    &mut row_acc[idx..],
+                );
             }
             p3_used += 1;
         }
@@ -248,11 +258,7 @@ fn calculate_ps<P: ParameterSet>(
 /// materialising the full expanded public key. P3 is unpacked directly from
 /// the compact public key (it is small). Peak memory becomes ~`ps` + a few
 /// small buffers, independent of the (large) P1/P2 size. Used for MAYO-3/5.
-fn calculate_ps_streaming<P: ParameterSet>(
-    seed_pk: &[u8],
-    packed_p3: &[u8],
-    s: &[u8],
-) -> Vec<u64> {
+fn calculate_ps_streaming<P: ParameterSet>(seed_pk: &[u8], packed_p3: &[u8], s: &[u8]) -> Vec<u64> {
     let n = P::N;
     let v = P::V;
     let o = P::O;
@@ -308,7 +314,11 @@ fn calculate_ps_streaming<P: ParameterSet>(
         for j in row..n {
             for col in 0..k {
                 let idx = (col * 16 + s[col * n + j] as usize) * m_vec_limbs;
-                m_vec_add(m_vec_limbs, &p3[p3_used * m_vec_limbs..], &mut row_acc[idx..]);
+                m_vec_add(
+                    m_vec_limbs,
+                    &p3[p3_used * m_vec_limbs..],
+                    &mut row_acc[idx..],
+                );
             }
             p3_used += 1;
         }

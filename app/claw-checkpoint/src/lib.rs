@@ -18,12 +18,8 @@ pub mod sign;
 pub mod state;
 pub mod window;
 
-pub use net::{
-    extract_txhash, find_entry_by_commitment, http_get, smart_query_url, RelayClient,
-};
-pub use package::{
-    anchor_package, canonical_checkpoint_json, AnchorPackage, PackageError,
-};
+pub use net::{extract_txhash, find_entry_by_commitment, http_get, smart_query_url, RelayClient};
+pub use package::{anchor_package, canonical_checkpoint_json, AnchorPackage, PackageError};
 pub use sign::{load_signing_key, make_event, sign_checkpoint, CheckpointSig};
 pub use state::ChannelState;
 pub use window::{fetch_window, PageSource, MAX_PAGES, PAGE_LIMIT};

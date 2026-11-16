@@ -54,10 +54,14 @@ async fn event_req_eose_roundtrip() {
     let bin = env!("CARGO_BIN_EXE_claw-relay");
     let mut child = std::process::Command::new(bin)
         .args([
-            "--listen", &format!("127.0.0.1:{port}"),
-            "--db", db.to_str().unwrap(),
-            "--channels", chan,
-            "--allowlist", allow.to_str().unwrap(),
+            "--listen",
+            &format!("127.0.0.1:{port}"),
+            "--db",
+            db.to_str().unwrap(),
+            "--channels",
+            chan,
+            "--allowlist",
+            allow.to_str().unwrap(),
         ])
         .spawn()
         .expect("spawn claw-relay");
