@@ -17,6 +17,10 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      # wasmer 4.3.7 references __rust_probestack, removed from newer Rust
+      # stdlib. Link docker/shim.o (same shim as Dockerfile.slay3rd).
+      RUSTFLAGS: "-C link-arg=/tmp/shim.o"
     steps:
       # rocksdb takes up a bunch of space... this should help
       - name: Free Disk Space
@@ -55,7 +59,10 @@ jobs:
             target/            
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
-          
+
+      - name: Build probestack shim
+        run: cc -c -o /tmp/shim.o docker/shim.c
+
       - name: Check compilation
         uses: actions-rs/cargo@v1
         timeout-minutes: 40

@@ -12,6 +12,7 @@ use crate::tx::Tx;
 type Checksum = Binary;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Query {
     /// Return the raw binary value stored under that key
     Raw {

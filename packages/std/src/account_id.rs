@@ -171,13 +171,13 @@ impl<'a> PrimaryKey<'a> for AccountId {
     type Suffix = Self;
     type SuperSuffix = Self;
 
-    fn key(&self) -> Vec<Key> {
+    fn key(&self) -> Vec<Key<'_>> {
         vec![Key::Ref(self.deref())]
     }
 }
 
 impl<'a> Prefixer<'a> for AccountId {
-    fn prefix(&self) -> Vec<Key> {
+    fn prefix(&self) -> Vec<Key<'_>> {
         vec![Key::Ref(self.deref())]
     }
 }

@@ -45,7 +45,7 @@ pub struct Block {
     pub certificate: Option<Vec<u8>>,
 }
 
-/**
+/*
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResponseFinalizeBlock {
@@ -67,7 +67,7 @@ pub struct ResponseFinalizeBlock {
     #[prost(bytes = "bytes", tag = "5")]
     pub app_hash: ::prost::bytes::Bytes,
 }
-**/
+*/
 
 pub struct FinalizeBlockResponse<E: std::error::Error> {
     /// set of block events emmitted as part of executing the block
