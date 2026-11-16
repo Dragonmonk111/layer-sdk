@@ -31,7 +31,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.80.0
+          toolchain: 1.98.1
           override: true
 
       - name: Set up cargo cache
@@ -52,7 +52,7 @@ jobs:
         uses: actions-rs/cargo@v1
         timeout-minutes: 40
         with:
-          toolchain: 1.80.0
+          toolchain: 1.98.1
           command: test
           args: --all-features --locked --no-run
         env:
@@ -62,7 +62,7 @@ jobs:
         uses: actions-rs/cargo@v1
         timeout-minutes: 20
         with:
-          toolchain: 1.80.0
+          toolchain: 1.98.1
           command: test
           args: --all-features --locked
         env:
@@ -83,7 +83,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.80.0
+          toolchain: 1.98.1
           override: true
           components: rustfmt, clippy
 
@@ -104,7 +104,7 @@ jobs:
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
         with:
-          toolchain: 1.80.0
+          toolchain: 1.98.1
           command: fmt
           args: --all -- --check
 
@@ -112,6 +112,6 @@ jobs:
         uses: actions-rs/cargo@v1
         timeout-minutes: 30
         with:
-          toolchain: 1.80.0
+          toolchain: 1.98.1
           command: clippy
           args: --all-targets --all-features --no-deps --locked -- -D warnings
