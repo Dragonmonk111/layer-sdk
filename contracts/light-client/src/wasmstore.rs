@@ -86,7 +86,7 @@ fn read_varint(bz: &[u8], mut i: usize) -> Option<(u64, usize)> {
 }
 
 /// Extract the bytes of a length-delimited field by field number.
-fn get_len_field<'a>(bz: &'a [u8], want: u32) -> Option<&'a [u8]> {
+fn get_len_field(bz: &[u8], want: u32) -> Option<&[u8]> {
     let mut i = 0usize;
     while i < bz.len() {
         let (tag, ni) = read_varint(bz, i)?;

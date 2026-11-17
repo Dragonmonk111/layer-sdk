@@ -137,6 +137,7 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
                 // empty reply, we just want to get the address
                 // We do it the old way (1.x style) to ensure we can still parse it
                 #[allow(deprecated)]
+                #[allow(deprecated)]
                 let init_data = parse_instantiate_response_data(&r.data.unwrap())?;
                 ECHO.save(deps.storage, &init_data.contract_address)?;
                 Response::new()
@@ -150,6 +151,7 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
                 //     "/cosmwasm.wasm.v1.MsgInstantiateContractResponse"
                 // );
                 // let init_data = parse_instantiate_response_data(&resp.value)?;
+                #[allow(deprecated)]
                 let init_data = parse_instantiate_response_data(&r.data.unwrap())?;
 
                 ECHO.save(deps.storage, &init_data.contract_address)?;
@@ -168,6 +170,7 @@ pub fn reply(mut deps: DepsMut, _env: Env, reply: Reply) -> Result<Response, Con
                 //     "/cosmwasm.wasm.v1.MsgExecuteContractResponse"
                 // );
                 // let exec_data = parse_execute_response_data(&resp.value)?;
+                #[allow(deprecated)]
                 let exec_data = parse_execute_response_data(&r.data.unwrap())?;
 
                 if let Some(data) = exec_data.data {

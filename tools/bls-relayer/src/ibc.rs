@@ -9,8 +9,8 @@
 //!
 //! 2. **Counterparty side** — real ibc-go messages (connection/channel handshake
 //!    + `MsgRecvPacket`) hand-defined as prost structs, wire-compatible with
-//!    ibc-go v8+. These carry Merkle membership proofs that the counterparty's
-//!    08-wasm BLS light client verifies against JunoClaw's committed state.
+//!      ibc-go v8+. These carry Merkle membership proofs that the counterparty's
+//!      08-wasm BLS light client verifies against JunoClaw's committed state.
 //!
 //! The counterparty `MerklePrefix` is set to `"ibc/"` so that
 //! `concat(key_path) == "ibc/<ics24_path>"` matches JunoClaw's storage key.

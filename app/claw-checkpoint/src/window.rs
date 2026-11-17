@@ -113,7 +113,7 @@ mod tests {
                 .filter(|e| e.created_at >= since && e.created_at <= until)
                 .cloned()
                 .collect();
-            page.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // newest first
+            page.sort_by_key(|e| std::cmp::Reverse(e.created_at)); // newest first
             page.truncate(limit);
             Box::pin(async move { Ok(page) })
         }

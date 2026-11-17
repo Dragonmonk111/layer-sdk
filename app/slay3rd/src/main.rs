@@ -1715,9 +1715,7 @@ async fn run_node(
             // drop, throttled so a spamming peer produces one line per
             // 10s per reason instead of per-message spam.
             let mut drops = DropThrottle::new(Duration::from_secs(10));
-            loop {
-                match tx_p2p_receiver.recv().await {
-                    Ok((peer, message)) => {
+            while let Ok((peer, message)) = tx_p2p_receiver.recv().await {
                         let peer_prefix: String = peer.to_string().chars().take(8).collect();
                         let raw: bytes::Bytes = message.into();
                         let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id) else {
@@ -1758,9 +1756,6 @@ async fn run_node(
                             continue;
                         }
                         let _ = mempool.lock().await.submit_checked(raw, Some(meta));
-                    }
-                    Err(_) => break,
-                }
             }
         });
     }

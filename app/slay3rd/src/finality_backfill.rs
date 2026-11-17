@@ -244,7 +244,8 @@ async fn fetch_finality(
     local_payload: &[u8],
 ) -> Option<(Vec<u8>, Vec<u8>, u64)> {
     // (prop, cert, ts) -> donor count backing it
-    let mut candidates: Vec<((Vec<u8>, Vec<u8>, u64), usize)> = Vec::new();
+    type FinalityCandidate = (Vec<u8>, Vec<u8>, u64);
+    let mut candidates: Vec<(FinalityCandidate, usize)> = Vec::new();
     for (donor, client) in clients {
         let resp = match tokio::time::timeout(
             DONOR_TIMEOUT,

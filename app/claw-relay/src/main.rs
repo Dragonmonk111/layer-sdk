@@ -240,7 +240,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
         uuid::Uuid::new_v4().simple()
     );
     let _ = out_tx.unbounded_send(Message::Text(
-        serde_json::json!(["AUTH", challenge]).to_string().into(),
+        serde_json::json!(["AUTH", challenge]).to_string(),
     ));
 
     // subscription registry: sub_id -> filters
@@ -259,7 +259,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
                             if filters.iter().any(|f| f.matches(&ev))
                                 && out_tx
                                     .unbounded_send(Message::Text(
-                                        serde_json::json!(["EVENT", sub, *ev]).to_string().into(),
+                                        serde_json::json!(["EVENT", sub, *ev]).to_string(),
                                     ))
                                     .is_err()
                             {
@@ -280,8 +280,7 @@ async fn handle_conn(sock: WebSocket, app: Shared) {
                                 "NOTICE",
                                 format!("error: lagged {n} events — resubscribe")
                             ])
-                            .to_string()
-                            .into(),
+                            .to_string(),
                         ));
                         return;
                     }
@@ -316,7 +315,7 @@ async fn handle_frame(
     challenge: &str,
 ) {
     let send = |v: serde_json::Value| {
-        let _ = out.unbounded_send(Message::Text(v.to_string().into()));
+        let _ = out.unbounded_send(Message::Text(v.to_string()));
     };
     let Some(kind) = v.get(0).and_then(|x| x.as_str()) else {
         return send(serde_json::json!(["NOTICE", "error: unknown frame"]));
@@ -490,7 +489,7 @@ fn verify_nip98(
             } else {
                 hh
             };
-            nuh.eq_ignore_ascii_case(nhh) && hp.map_or(true, |p| Some(p) == up)
+            nuh.eq_ignore_ascii_case(nhh) && hp.is_none_or(|p| Some(p) == up)
         })
         .unwrap_or(false);
     if !u_ok {

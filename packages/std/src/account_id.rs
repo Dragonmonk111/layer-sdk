@@ -239,7 +239,7 @@ mod tests {
         // re-encoded — decode to canonical bytes then encode under the alt hrp
         let (_, data, _) = bech32::decode(&juno).unwrap();
         let mut alt = String::new();
-        bech32::encode_to_fmt(&mut alt, "junoclaw", &data, Variant::Bech32).unwrap();
+        let _ = bech32::encode_to_fmt(&mut alt, "junoclaw", &data, Variant::Bech32).unwrap();
         assert!(alt.starts_with("junoclaw1"));
         let reparsed = AccountId::parse_string(&alt).unwrap();
         assert_eq!(id, reparsed);
@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(reparsed.to_string(), juno);
         // an unrelated prefix is still rejected
         let mut bad = String::new();
-        bech32::encode_to_fmt(&mut bad, "cosmos", &data, Variant::Bech32).unwrap();
+        let _ = bech32::encode_to_fmt(&mut bad, "cosmos", &data, Variant::Bech32).unwrap();
         assert!(AccountId::parse_string(&bad).is_err());
     }
 

@@ -74,7 +74,7 @@ async fn peer_session(
             format!("gossip-{chan}"),
             {"#h": [chan], "kinds": ALLOWED_KINDS},
         ]);
-        ws.send(Message::Text(req.to_string().into()))
+        ws.send(Message::Text(req.to_string()))
             .await
             .map_err(|e| format!("send REQ for {chan}: {e}"))?;
     }

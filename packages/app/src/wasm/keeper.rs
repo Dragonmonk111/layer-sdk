@@ -1059,6 +1059,9 @@ fn map_cache_result<T>(result: Result<Result<T, String>, VmError>) -> Result<T, 
     result.map_err(map_vm_error)?.map_err(map_contract_error)
 }
 
+// `CosmosMsg::Stargate` is deprecated upstream in favour of `Any`, but we
+// still route it so old binaries get a deterministic unsupported-msg error.
+#[allow(deprecated)]
 fn cosmwasm_msg_to_layer(
     msg: CosmosMsg<super::vm::CustomMsg>,
     sender: &AccountId,
@@ -1549,7 +1552,7 @@ mod tests {
             )
             .unwrap_err();
         assert!(
-            matches!(err, PulsarError::Gas(GasError::OutOfGas { .. })),
+            matches!(err, PulsarError::Gas(GasError::OutOfGas)),
             "CpuLoop must die with OutOfGas, got: {err:?}"
         );
     }
@@ -1593,13 +1596,16 @@ mod tests {
         assert!(
             matches!(
                 err,
-                PulsarError::Gas(GasError::OutOfGas { .. }) | PulsarError::Wasm(_)
+                PulsarError::Gas(GasError::OutOfGas) | PulsarError::Wasm(_)
             ),
             "64MiB alloc must fail gracefully (gas or contract error), got: {err:?}"
         );
     }
 
     /// This is copied from https://github.com/CosmWasm/cosmwasm/blob/v1.2.6/contracts/hackatom/src/msg.rs
+    // Wire-schema mirror — variants the host tests never serialize are still
+    // part of the contract's API surface.
+    #[allow(dead_code)]
     pub mod hackatom_msgs {
         use cosmwasm_schema::{cw_serde, QueryResponses};
 

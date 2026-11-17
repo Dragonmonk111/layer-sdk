@@ -106,6 +106,8 @@ pub fn execute(
     }
 }
 
+// CosmWasm execute handlers unpack msg fields as arguments by convention.
+#[allow(clippy::too_many_arguments)]
 fn execute_update_attestation(
     deps: DepsMut,
     env: Env,
@@ -274,6 +276,7 @@ fn execute_update_config(
         .add_attribute("dao_core_addr", config.dao_core_addr))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_submit_evidence(
     deps: DepsMut,
     env: Env,
@@ -404,10 +407,10 @@ fn member_weight(deps: Deps, config: &Config, addr: &cosmwasm_std::Addr) -> StdR
             addr: addr.to_string(),
         })?,
     });
-    match deps.querier.query::<Cw4MemberResponse>(&member_query) {
-        Ok(resp) => return Ok(resp.weight.unwrap_or_default()),
-        Err(_) => {} // fall through to the list_members scan
+    if let Ok(resp) = deps.querier.query::<Cw4MemberResponse>(&member_query) {
+        return Ok(resp.weight.unwrap_or_default());
     }
+    // fall through to the list_members scan
 
     let mut start_after: Option<String> = None;
     for _ in 0..LIST_MEMBERS_MAX_PAGES {

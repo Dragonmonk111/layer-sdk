@@ -109,7 +109,7 @@ async fn gossip_replicates_signed_event() {
     let ev = sign("federated hello", chan, 1_700_000_000, &key);
     let want_id = ev.id.clone();
     wa.send(Message::Text(
-        serde_json::json!(["EVENT", ev]).to_string().into(),
+        serde_json::json!(["EVENT", ev]).to_string(),
     ))
     .await
     .unwrap();
@@ -130,8 +130,7 @@ async fn gossip_replicates_signed_event() {
         let sub = format!("probe-{attempt}");
         wb.send(Message::Text(
             serde_json::json!(["REQ", sub, {"#h": [chan], "kinds": [9]}])
-                .to_string()
-                .into(),
+                .to_string(),
         ))
         .await
         .unwrap();
@@ -163,6 +162,8 @@ async fn gossip_replicates_signed_event() {
     assert!(found, "event written to A never appeared on B via gossip");
 
     let _ = relay_a.kill();
+    let _ = relay_a.wait();
     let _ = relay_b.kill();
+    let _ = relay_b.wait();
     std::fs::remove_dir_all(&dir).ok();
 }

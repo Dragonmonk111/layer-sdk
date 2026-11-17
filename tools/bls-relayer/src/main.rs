@@ -2429,6 +2429,9 @@ async fn serve_health(addr: String, stats: Arc<Mutex<RelayStats>>) {
 
 /// One daemon iteration: fee preflight → relay pending packets (ack → timeout
 /// → recv, in that order) → keepalive-update the 08-wasm client.
+// Relay loop state is threaded explicitly; grouping it would just rename
+// the same eight parameters.
+#[allow(clippy::too_many_arguments)]
 async fn relay_tick(
     a: &Args,
     client_id: &str,
@@ -2483,8 +2486,9 @@ async fn relay_tick(
 
     // Counterparty tip once per tick — needed for timeout detection.
     let (cp_height, cp_time_nanos) = cp_latest(&a.grpc).await.unwrap_or((0, 0));
+    let jc_height = latest_height(&a.layer_grpc).await.unwrap_or(0);
     if let Ok(mut s) = stats.lock() {
-        s.jc_height = latest_height(&a.layer_grpc).await.unwrap_or(0);
+        s.jc_height = jc_height;
         s.cp_height = cp_height;
     }
 
@@ -2670,9 +2674,9 @@ async fn cmd_relay(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
             a,
             client_id,
             &jc_port,
-            &jc_channel,
+            jc_channel,
             &cp_port,
-            &cp_channel,
+            cp_channel,
             &mut state,
             &stats,
         ))

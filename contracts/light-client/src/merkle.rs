@@ -9,6 +9,7 @@
 //! The proof format carries one entry per level, bottom-up: `Some(sibling)`
 //! hashes the pair, `None` promotes the node unchanged.
 
+#[cfg(test)]
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -34,7 +35,7 @@ pub fn compute_root(leaf: [u8; 32], leaf_index: u64, siblings: &[Option<[u8; 32]
         if let Some(sib) = s {
             let mut h = Sha256::new();
             h.update([0x01u8]);
-            if idx % 2 == 0 {
+            if idx.is_multiple_of(2) {
                 h.update(cur);
                 h.update(sib);
             } else {
@@ -90,7 +91,7 @@ mod tests {
         }
         let mut level = leaves.to_vec();
         while level.len() > 1 {
-            let mut next = Vec::with_capacity((level.len() + 1) / 2);
+            let mut next = Vec::with_capacity(level.len().div_ceil(2));
             let mut i = 0;
             while i < level.len() {
                 if i + 1 < level.len() {
@@ -115,13 +116,13 @@ mod tests {
         let mut level = leaves.to_vec();
         let mut idx = index;
         while level.len() > 1 {
-            let sibling = if idx % 2 == 0 { idx + 1 } else { idx - 1 };
+            let sibling = if idx.is_multiple_of(2) { idx + 1 } else { idx - 1 };
             siblings.push(if sibling < level.len() {
                 Some(level[sibling])
             } else {
                 None
             });
-            let mut next = Vec::with_capacity((level.len() + 1) / 2);
+            let mut next = Vec::with_capacity(level.len().div_ceil(2));
             let mut i = 0;
             while i < level.len() {
                 if i + 1 < level.len() {

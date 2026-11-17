@@ -485,9 +485,7 @@ impl CertificateScheme for HybridScheme {
 
     fn me(&self) -> Option<Participant> {
         // Verifier-only if we have no MAYO material to sign with.
-        if self.mayo_seed.is_none() {
-            return None;
-        }
+        self.mayo_seed.as_ref()?;
         self.inner.me()
     }
 
@@ -514,7 +512,7 @@ impl CertificateScheme for HybridScheme {
             }
         };
         let attestation = self.inner.sign(subject)?;
-        let classical = attestation.signature.get()?.clone();
+        let classical = *attestation.signature.get()?;
         Some(Attestation {
             signer: attestation.signer,
             signature: Lazy::new(HybridSignature { classical, pq }),
@@ -539,11 +537,11 @@ impl CertificateScheme for HybridScheme {
         // Classical half first (cheap batchable verify upstream).
         let classical_att = Attestation::<InnerScheme> {
             signer: attestation.signer,
-            signature: Lazy::new(sig.classical.clone()),
+            signature: Lazy::new(sig.classical),
         };
         if !self
             .inner
-            .verify_attestation::<R, D>(rng, subject.clone(), &classical_att, strategy)
+            .verify_attestation::<R, D>(rng, subject, &classical_att, strategy)
         {
             return false;
         }
@@ -579,7 +577,7 @@ impl CertificateScheme for HybridScheme {
                 Some(sig) => {
                     inner_atts.push(Attestation::<InnerScheme> {
                         signer: att.signer,
-                        signature: Lazy::new(sig.classical.clone()),
+                        signature: Lazy::new(sig.classical),
                     });
                     orig.insert(att.signer, att);
                 }
@@ -589,7 +587,7 @@ impl CertificateScheme for HybridScheme {
 
         let inner_res =
             self.inner
-                .verify_attestations::<R, D, _>(rng, subject.clone(), inner_atts, strategy);
+                .verify_attestations::<R, D, _>(rng, subject, inner_atts, strategy);
         invalid.extend(inner_res.invalid.iter().copied());
 
         // MAYO-verify each classically-valid attestation.
@@ -667,7 +665,7 @@ impl CertificateScheme for HybridScheme {
         // Classical half.
         if !self.inner.verify_certificate::<_, _, M>(
             rng,
-            subject.clone(),
+            subject,
             &certificate.classical,
             strategy,
         ) {

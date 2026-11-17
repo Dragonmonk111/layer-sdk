@@ -45,10 +45,14 @@ use tonic::transport::Channel;
 /// Wire-mirror of app/slay3rd/src/block.rs `BlockPayload` (bincode field order).
 #[derive(Deserialize)]
 struct BlockPayload {
+    // Decode-alignment fields — present in the wire layout, unread locally.
+    #[allow(dead_code)]
     height: u64,
+    #[allow(dead_code)]
     timestamp_nanos: u64,
     proposer: Vec<u8>,
     txs: Vec<Vec<u8>>,
+    #[allow(dead_code)]
     parent_digest: [u8; 32],
     state_root: [u8; 32],
 }
@@ -158,9 +162,9 @@ fn archive_lookup(conn: &rusqlite::Connection, height: u64) -> Option<ArchiveBlo
             Ok(ArchiveBlock {
                 seq: r.get::<_, i64>(0)? as u64,
                 height: r.get::<_, i64>(1)? as u64,
-                app_hash: r.get::<_, Option<Vec<u8>>>(2)?.map(|b| hex::encode(b)),
-                state_root: r.get::<_, Option<Vec<u8>>>(3)?.map(|b| hex::encode(b)),
-                proposer: r.get::<_, Option<Vec<u8>>>(4)?.map(|b| hex::encode(b)),
+                app_hash: r.get::<_, Option<Vec<u8>>>(2)?.map(hex::encode),
+                state_root: r.get::<_, Option<Vec<u8>>>(3)?.map(hex::encode),
+                proposer: r.get::<_, Option<Vec<u8>>>(4)?.map(hex::encode),
                 cert_bytes: cert.len(),
                 finalized: !cert.is_empty(),
                 hybrid_cert: hybrid,
@@ -698,7 +702,7 @@ async fn address_page(
     };
 
     Ok(page(
-        &format!("Address"),
+        "Address",
         &format!(
             "<h1><a href='/'>←</a> Address</h1>\
              <div class=card><div class=kv><div>address</div><div class=hash>{}</div></div></div>\

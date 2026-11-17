@@ -18,14 +18,11 @@ impl FastHasher {
     }
 
     fn ensure_hasher(&mut self) -> &mut Sha256 {
-        if self.tally.is_some() {
-            self.tally.as_mut().unwrap()
-        } else {
+        self.tally.get_or_insert_with(|| {
             let mut hasher = Sha256::new();
             hasher.update(&self.old_hash);
-            self.tally = Some(hasher);
-            self.tally.as_mut().unwrap()
-        }
+            hasher
+        })
     }
 
     pub fn set(&mut self, key: &[u8], value: &[u8]) {

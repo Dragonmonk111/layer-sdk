@@ -472,6 +472,9 @@ impl VmCache {
 }
 
 #[cfg(test)]
+// `mock_info` is deprecated upstream; migrating to `message_info` is a
+// separate cleanup — the call shape differs (Addr vs &str).
+#[allow(deprecated)]
 mod tests {
     use cosmwasm_std::{
         coin, from_json,
@@ -923,7 +926,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(path);
         std::fs::create_dir_all(path).unwrap();
 
-        let mut vm = VmCache::init(path);
+        let vm = VmCache::init(path);
         let (checksum, _) = vm.store_code(&wasm).unwrap();
 
         let env = mock_env();

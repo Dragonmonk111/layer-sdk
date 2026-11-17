@@ -204,6 +204,9 @@ impl VmQuerier {
     }
 }
 
+// `BankQuery::AllBalances` is deprecated upstream for being unbounded, but
+// contracts on devnet still issue it — keep routing it through.
+#[allow(deprecated)]
 fn cosmwasm_query_to_layer(
     query: QueryRequest<CustomQuery>,
 ) -> Result<layer_std::Query, QueryError> {
@@ -345,7 +348,7 @@ unsafe impl Send for VmStore {}
 
 pub(crate) fn out_of_gas(err: GasError) -> BackendError {
     match err {
-        GasError::OutOfGas { .. } => BackendError::OutOfGas {},
+        GasError::OutOfGas => BackendError::OutOfGas {},
     }
 }
 

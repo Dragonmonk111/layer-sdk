@@ -316,6 +316,8 @@ impl Ibc {
 
     // ---- ICS-3 connection handshake ----
 
+    // Arg list mirrors the ICS-3 ConnOpenInit message fields.
+    #[allow(clippy::too_many_arguments)]
     fn conn_open_init(
         &self,
         storage: &mut dyn Storage,
@@ -608,6 +610,8 @@ impl Ibc {
     /// amount come from the stored packet data — never from the message — so a
     /// relayer cannot redirect the refund.
     /// (devnet: timeout proof carried, not verified.)
+    // Arg list mirrors the ICS-4 timeout message fields.
+    #[allow(clippy::too_many_arguments)]
     fn timeout(
         &self,
         storage: &mut dyn Storage,

@@ -94,7 +94,7 @@ impl MinGasPrice {
         // Decimal::one().atomics() == 10^18 (DECIMAL_FRACTIONAL is private).
         let frac = Decimal::one().atomics().u128();
         let atomics = self.price.atomics().u128();
-        let req = (atomics.saturating_mul(gas_wanted as u128) + (frac - 1)) / frac;
+        let req = atomics.saturating_mul(gas_wanted as u128).div_ceil(frac);
         Uint128::from(req)
     }
 
@@ -1558,7 +1558,7 @@ pub(crate) fn merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
     }
     let mut level: Vec<[u8; 32]> = leaves.to_vec();
     while level.len() > 1 {
-        let mut next = Vec::with_capacity((level.len() + 1) / 2);
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
         let mut i = 0;
         while i < level.len() {
             if i + 1 < level.len() {
@@ -1588,7 +1588,7 @@ pub(crate) fn merkle_path(leaves: &[[u8; 32]], index: usize) -> Vec<Option<[u8; 
     let mut level: Vec<[u8; 32]> = leaves.to_vec();
     let mut idx = index;
     while level.len() > 1 {
-        let sibling = if idx % 2 == 0 { idx + 1 } else { idx - 1 };
+        let sibling = if idx.is_multiple_of(2) { idx + 1 } else { idx - 1 };
         if sibling < level.len() {
             siblings.push(Some(level[sibling]));
         } else {
@@ -1596,7 +1596,7 @@ pub(crate) fn merkle_path(leaves: &[[u8; 32]], index: usize) -> Vec<Option<[u8; 
             siblings.push(None);
         }
         // build next level
-        let mut next = Vec::with_capacity((level.len() + 1) / 2);
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
         let mut i = 0;
         while i < level.len() {
             if i + 1 < level.len() {

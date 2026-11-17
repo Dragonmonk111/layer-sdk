@@ -100,7 +100,7 @@ async fn event_req_eose_roundtrip() {
     auth.sig = hex::encode(sk.sign_raw(&aid, &[0u8; 32]).unwrap().to_bytes());
     let auth_id = auth.id.clone();
     ws.send(Message::Text(
-        serde_json::json!(["AUTH", auth]).to_string().into(),
+        serde_json::json!(["AUTH", auth]).to_string(),
     ))
     .await
     .unwrap();
@@ -114,7 +114,7 @@ async fn event_req_eose_roundtrip() {
     let ev = sign("hello sovereign relay", chan, 1_700_000_000, &key);
     let want_id = ev.id.clone();
     ws.send(Message::Text(
-        serde_json::json!(["EVENT", ev]).to_string().into(),
+        serde_json::json!(["EVENT", ev]).to_string(),
     ))
     .await
     .unwrap();
@@ -129,7 +129,7 @@ async fn event_req_eose_roundtrip() {
     bad.sig = "00".repeat(64);
     let bad_id = bad.id.clone();
     ws.send(Message::Text(
-        serde_json::json!(["EVENT", bad]).to_string().into(),
+        serde_json::json!(["EVENT", bad]).to_string(),
     ))
     .await
     .unwrap();
@@ -142,8 +142,7 @@ async fn event_req_eose_roundtrip() {
     // 3. REQ on the channel -> our event back + EOSE
     ws.send(Message::Text(
         serde_json::json!(["REQ", "s1", {"#h": [chan], "kinds": [9]}])
-            .to_string()
-            .into(),
+            .to_string(),
     ))
     .await
     .unwrap();
@@ -172,7 +171,7 @@ async fn event_req_eose_roundtrip() {
     let outsider = sign("intruder", chan, 1_700_000_002, &[9u8; 32]);
     let out_id = outsider.id.clone();
     ws.send(Message::Text(
-        serde_json::json!(["EVENT", outsider]).to_string().into(),
+        serde_json::json!(["EVENT", outsider]).to_string(),
     ))
     .await
     .unwrap();
@@ -183,5 +182,6 @@ async fn event_req_eose_roundtrip() {
     assert_eq!(reply[2], false);
 
     let _ = child.kill();
+    let _ = child.wait();
     std::fs::remove_dir_all(&dir).ok();
 }

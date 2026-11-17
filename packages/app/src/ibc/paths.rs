@@ -19,6 +19,7 @@ pub fn client_state_path(client_id: &str) -> Vec<u8> {
 }
 
 /// `ibc/clients/{client_id}/consensusStates/{revision}-{height}`
+#[allow(dead_code)]
 pub fn consensus_state_path(client_id: &str, revision: u64, height: u64) -> Vec<u8> {
     format!(
         "{}clients/{}/consensusStates/{}-{}",
@@ -51,6 +52,7 @@ pub fn packet_commitment_path(port_id: &str, channel_id: &str, sequence: u64) ->
 }
 
 /// `ibc/acks/ports/{port_id}/channels/{channel_id}/sequences/{sequence}`
+#[allow(dead_code)]
 pub fn packet_ack_path(port_id: &str, channel_id: &str, sequence: u64) -> Vec<u8> {
     format!(
         "{}acks/ports/{}/channels/{}/sequences/{}",
@@ -60,6 +62,7 @@ pub fn packet_ack_path(port_id: &str, channel_id: &str, sequence: u64) -> Vec<u8
 }
 
 /// `ibc/receipts/ports/{port_id}/channels/{channel_id}/sequences/{sequence}`
+#[allow(dead_code)]
 pub fn packet_receipt_path(port_id: &str, channel_id: &str, sequence: u64) -> Vec<u8> {
     format!(
         "{}receipts/ports/{}/channels/{}/sequences/{}",

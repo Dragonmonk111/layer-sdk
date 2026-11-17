@@ -99,13 +99,13 @@ impl LayerRelay {
             Ok(payload) => {
                 let digest = payload.digest();
                 let mut pending = self.pending_payloads.lock().await;
-                if !pending.contains_key(&digest) {
+                if let std::collections::btree_map::Entry::Vacant(e) = pending.entry(digest) {
                     debug!(
                         height = payload.height,
                         digest = hex::encode(digest),
                         "Relay received payload from peer, inserting into pending_payloads"
                     );
-                    pending.insert(digest, payload);
+                    e.insert(payload);
                 }
                 true
             }
@@ -189,7 +189,9 @@ mod tests {
             .unwrap()
     }
 
-    fn make_relay() -> (LayerRelay, Arc<Mutex<BTreeMap<[u8; 32], BlockPayload>>>) {
+    type PendingMap = BTreeMap<[u8; 32], BlockPayload>;
+
+    fn make_relay() -> (LayerRelay, Arc<Mutex<PendingMap>>) {
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
         // Pass None for broadcast_tx — in-process test mode, no P2P needed.
         let relay = LayerRelay::new(pending.clone(), None);

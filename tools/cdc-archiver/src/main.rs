@@ -165,6 +165,9 @@ fn amount_str(value: &[u8]) -> String {
 
 /// Fold one archived event into the typed projection tables. Call inside the
 /// same transaction as the raw insert so the two never drift.
+// Event fields map 1:1 onto the projection row — a params struct would just
+// rename the same eight columns.
+#[allow(clippy::too_many_arguments)]
 fn apply_typed(
     tx: &Connection,
     seq: i64,

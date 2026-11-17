@@ -33,7 +33,8 @@ pub fn merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
     let mut level: Vec<[u8; 32]> = leaves.to_vec();
     while level.len() > 1 {
         let mut next = Vec::with_capacity(level.len() / 2 + 1);
-        for pair in level.chunks_exact(2) {
+        // as_chunks yields only full pairs; the odd tail is pushed below.
+        for pair in level.as_chunks::<2>().0 {
             let mut h = Sha256::new();
             h.update([0x01]);
             h.update(pair[0]);

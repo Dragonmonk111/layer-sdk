@@ -68,8 +68,10 @@ pub const PEER_PAYLOAD_LOOKAHEAD: u64 = 64;
 pub const MAX_PENDING_PAYLOADS: usize = 256;
 /// Outstanding fetch requests remembered (so replies bypass the lookahead).
 const MAX_REQUESTED_DIGESTS: usize = 65_536;
+
+/// Per-digest pending exec notification: last fire time + throttle count.
+type EnsureExecMap = HashMap<[u8; 32], (Instant, u32)>;
 /// Outstanding height-ranged backfill requests remembered.
-const MAX_REQUESTED_HEIGHTS: usize = 65_536;
 /// Heights covered by a single `FetchRequest::HeightRange` message.
 pub const BACKFILL_BATCH_SIZE: u64 = 64;
 /// How far above the executed tip one backfill tick may reach. Larger spans
@@ -245,7 +247,7 @@ impl CertifiedDigests {
     fn ready_to_request(&self, digest: [u8; 32]) -> bool {
         self.last_requested
             .get(&digest)
-            .map_or(true, |t| t.elapsed() >= DIGEST_REASK_AFTER)
+            .is_none_or(|t| t.elapsed() >= DIGEST_REASK_AFTER)
     }
 
     fn note_requested(&mut self, digest: [u8; 32]) {
@@ -295,7 +297,7 @@ pub struct LayerNode<T: PersistentStorage + Send + Sync + 'static, P: PublicKey>
     /// exec_lock task queue across thousands of nullified views while a
     /// certified-but-unexecuted parent blocks progress; the count feeds
     /// same-digest log dedup (first sighting + every 50th repeat).
-    ensure_exec: Arc<std::sync::Mutex<HashMap<[u8; 32], (Instant, u32)>>>,
+    ensure_exec: Arc<std::sync::Mutex<EnsureExecMap>>,
     /// Per-digest count of certify() wait-window timeouts. One-shot misses
     /// are normal catch-up churn and stay at INFO; the same digest timing
     /// out repeatedly across views is the #5378-class stall signature and
@@ -769,7 +771,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
             for h in (tip + 1)..=target {
                 let in_flight = req
                     .get(&h)
-                    .map_or(false, |t| t.elapsed() < HEIGHT_REASK_AFTER);
+                    .is_some_and(|t| t.elapsed() < HEIGHT_REASK_AFTER);
                 let need = !held.contains(&h) && !in_flight;
                 match (need, run_start) {
                     (true, None) => run_start = Some(h),
@@ -1084,7 +1086,7 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
                         );
                         return None;
                     }
-                    if last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY) {
+                    if last_request.is_none_or(|t| t.elapsed() >= FETCH_RETRY) {
                         self.request_payload(cursor);
                         last_request = Some(Instant::now());
                     }
@@ -1577,7 +1579,7 @@ where
                     .cloned();
                 if candidate.is_none()
                     && start.elapsed() >= FETCH_RETRY
-                    && last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY)
+                    && last_request.is_none_or(|t| t.elapsed() >= FETCH_RETRY)
                 {
                     node.request_payload(digest_bytes);
                     last_request = Some(Instant::now());
@@ -1714,7 +1716,7 @@ where
                     }
                     break false;
                 }
-                if last_request.map_or(true, |t| t.elapsed() >= FETCH_RETRY) {
+                if last_request.is_none_or(|t| t.elapsed() >= FETCH_RETRY) {
                     node.request_payload(digest_bytes);
                     last_request = Some(Instant::now());
                 }

@@ -104,6 +104,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> LayerGrpcService<T> {
     /// Latest offered snapshot: generated lazily, cached until the chain
     /// tip advances SNAPSHOT_INTERVAL blocks past its height. The export
     /// covers committed state at `SnapshotExport.height`.
+    #[allow(clippy::result_large_err)]
     async fn cached_snapshot(&self) -> Result<Arc<SnapshotExport>, Status> {
         let mut cache = self.snapshot_cache.lock().await;
         if let Some(exp) = &*cache {
@@ -424,6 +425,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
     }
 
     /// Streams the full current state as a series of `WriteData` messages.
+    #[allow(clippy::result_large_err)]
     async fn current_state(
         &self,
         _request: Request<StreamCurrentStateRequest>,
@@ -437,6 +439,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> SyncQuery for LayerGrpcServic
     }
 
     /// Streams all block writes since the given sequence number.
+    #[allow(clippy::result_large_err)]
     async fn changes_since(
         &self,
         request: Request<StreamChangesSinceRequest>,
@@ -669,6 +672,7 @@ impl<T: PersistentStorage + Send + Sync + 'static> StateSyncQuery for LayerGrpcS
 ///
 /// Returns `Status::invalid_argument` if the path or query bytes cannot be parsed.
 /// Returns `Status::internal` if the response cannot be encoded.
+#[allow(clippy::result_large_err)]
 pub async fn handle_cosmos_query<T: PersistentStorage + Send + Sync + 'static>(
     app: &Arc<RwLock<App<T>>>,
     chain_id: &str,
@@ -1229,8 +1233,8 @@ mod tests {
             // --- Empty tx_bytes → invalid_argument ---
             let err = svc
                 .simulate(Request::new(SimulateRequest {
-                    tx: None,
                     tx_bytes: vec![],
+                    ..Default::default()
                 }))
                 .await
                 .expect_err("empty tx_bytes must be rejected");
@@ -1239,8 +1243,8 @@ mod tests {
             // --- Garbage bytes → invalid_argument ---
             let err = svc
                 .simulate(Request::new(SimulateRequest {
-                    tx: None,
                     tx_bytes: vec![0xFF_u8; 32],
+                    ..Default::default()
                 }))
                 .await
                 .expect_err("garbage bytes must be rejected");
@@ -1249,7 +1253,10 @@ mod tests {
             // --- Valid signed tx, unfunded account → non-OK + error text ---
             let tx_bytes = build_signed_tx_bytes();
             let err = svc
-                .simulate(Request::new(SimulateRequest { tx: None, tx_bytes }))
+                .simulate(Request::new(SimulateRequest {
+                    tx_bytes,
+                    ..Default::default()
+                }))
                 .await
                 .expect_err("failed simulation must not return Ok");
             assert_eq!(err.code(), tonic::Code::Internal);

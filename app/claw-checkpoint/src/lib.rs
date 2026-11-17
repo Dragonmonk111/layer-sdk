@@ -38,7 +38,7 @@ pub enum Error {
     #[error(transparent)]
     Package(#[from] PackageError),
     #[error("websocket: {0}")]
-    Ws(#[from] tokio_tungstenite::tungstenite::Error),
+    Ws(Box<tokio_tungstenite::tungstenite::Error>),
     #[error("relay: {0}")]
     Relay(String),
     #[error("http: {0}")]
@@ -53,4 +53,12 @@ pub enum Error {
     Key(String),
     #[error("config: {0}")]
     Config(String),
+}
+
+// Boxed so Result<_, Error> stays small on the hot return paths
+// (clippy::result_large_err); ? keeps working via this impl.
+impl From<tokio_tungstenite::tungstenite::Error> for Error {
+    fn from(e: tokio_tungstenite::tungstenite::Error) -> Self {
+        Error::Ws(Box::new(e))
+    }
 }
