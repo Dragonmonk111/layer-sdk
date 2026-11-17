@@ -51,36 +51,45 @@ mod tests {
         ($name:ident, $p:ty, $c:ty) => {
             #[test]
             fn $name() {
-                use rand_chacha::ChaCha20Rng;
-                use rand_core::SeedableRng;
+                // MAYO-3/5 verify frames exceed the default 2 MiB test
+                // stack on Linux — run the body on a 64 MiB thread.
+                std::thread::Builder::new()
+                    .stack_size(64 * 1024 * 1024)
+                    .spawn(move || {
+                        use rand_chacha::ChaCha20Rng;
+                        use rand_core::SeedableRng;
 
-                let mut rng = ChaCha20Rng::from_seed([42; 32]);
-                let msg = b"hello mayo pure-rust verifier";
+                        let mut rng = ChaCha20Rng::from_seed([42; 32]);
+                        let msg = b"hello mayo pure-rust verifier";
 
-                let (pk, sk) = sriracha_mayo::SecretKey::<$c>::random(&mut rng).unwrap();
-                let sig = sk.sign(msg).unwrap();
+                        let (pk, sk) = sriracha_mayo::SecretKey::<$c>::random(&mut rng).unwrap();
+                        let sig = sk.sign(msg).unwrap();
 
-                // C impl should accept
-                assert!(
-                    sig.verify(&pk, msg),
-                    "{}: C verify rejected own sig",
-                    <$p as ParameterSet>::NAME
-                );
+                        // C impl should accept
+                        assert!(
+                            sig.verify(&pk, msg),
+                            "{}: C verify rejected own sig",
+                            <$p as ParameterSet>::NAME
+                        );
 
-                // Our verifier should accept the signature
-                assert!(
-                    verify::<$p>(msg, sig.as_ref(), pk.as_ref()).unwrap(),
-                    "{}: pure-Rust verifier rejected valid sig",
-                    <$p as ParameterSet>::NAME
-                );
+                        // Our verifier should accept the signature
+                        assert!(
+                            verify::<$p>(msg, sig.as_ref(), pk.as_ref()).unwrap(),
+                            "{}: pure-Rust verifier rejected valid sig",
+                            <$p as ParameterSet>::NAME
+                        );
 
-                // Tampered message should fail
-                let bad_msg = b"tampered message";
-                assert!(
-                    !verify::<$p>(bad_msg, sig.as_ref(), pk.as_ref()).unwrap(),
-                    "{}: pure-Rust verifier accepted tampered msg",
-                    <$p as ParameterSet>::NAME
-                );
+                        // Tampered message should fail
+                        let bad_msg = b"tampered message";
+                        assert!(
+                            !verify::<$p>(bad_msg, sig.as_ref(), pk.as_ref()).unwrap(),
+                            "{}: pure-Rust verifier accepted tampered msg",
+                            <$p as ParameterSet>::NAME
+                        );
+                    })
+                    .unwrap()
+                    .join()
+                    .unwrap();
             }
         };
     }

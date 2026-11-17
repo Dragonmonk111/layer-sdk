@@ -1,3 +1,8 @@
+// Generated prost/tonic code: large Err variants and doc-list indentation
+// are artifacts of codegen — allow lints here rather than editing
+// generated files on every regen. Hand-written extensions stay strict.
+#![allow(clippy::all)]
+
 pub mod cosmos {
     pub mod auth {
         pub mod v1beta1 {
