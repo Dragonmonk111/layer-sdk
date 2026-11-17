@@ -2671,14 +2671,7 @@ async fn cmd_relay(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         // count it and keep the loop alive (external restart policies only
         // help on process exit; a recovered tick loop is strictly better).
         let res = AssertUnwindSafe(relay_tick(
-            a,
-            client_id,
-            &jc_port,
-            jc_channel,
-            &cp_port,
-            cp_channel,
-            &mut state,
-            &stats,
+            a, client_id, &jc_port, jc_channel, &cp_port, cp_channel, &mut state, &stats,
         ))
         .catch_unwind()
         .await;

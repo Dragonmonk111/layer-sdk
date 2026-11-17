@@ -116,7 +116,11 @@ mod tests {
         let mut level = leaves.to_vec();
         let mut idx = index;
         while level.len() > 1 {
-            let sibling = if idx.is_multiple_of(2) { idx + 1 } else { idx - 1 };
+            let sibling = if idx.is_multiple_of(2) {
+                idx + 1
+            } else {
+                idx - 1
+            };
             siblings.push(if sibling < level.len() {
                 Some(level[sibling])
             } else {

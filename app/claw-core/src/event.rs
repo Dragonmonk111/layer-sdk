@@ -78,7 +78,8 @@ impl Event {
     /// still means a bad event.
     pub fn verify_sig(&self) -> Result<(), EventError> {
         let pk_bytes = hex::decode(&self.pubkey).map_err(|_| EventError::BadHex("pubkey"))?;
-        let vk = VerifyingKey::from_bytes(pk_bytes.as_slice()).map_err(|_| EventError::BadPubkey)?;
+        let vk =
+            VerifyingKey::from_bytes(pk_bytes.as_slice()).map_err(|_| EventError::BadPubkey)?;
         let sig_bytes = hex::decode(&self.sig).map_err(|_| EventError::BadHex("sig"))?;
         let sig =
             Signature::try_from(sig_bytes.as_slice()).map_err(|_| EventError::BadSignature)?;

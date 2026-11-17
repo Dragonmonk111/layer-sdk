@@ -585,9 +585,9 @@ impl CertificateScheme for HybridScheme {
             }
         }
 
-        let inner_res =
-            self.inner
-                .verify_attestations::<R, D, _>(rng, subject, inner_atts, strategy);
+        let inner_res = self
+            .inner
+            .verify_attestations::<R, D, _>(rng, subject, inner_atts, strategy);
         invalid.extend(inner_res.invalid.iter().copied());
 
         // MAYO-verify each classically-valid attestation.
@@ -663,12 +663,10 @@ impl CertificateScheme for HybridScheme {
         M: Faults,
     {
         // Classical half.
-        if !self.inner.verify_certificate::<_, _, M>(
-            rng,
-            subject,
-            &certificate.classical,
-            strategy,
-        ) {
+        if !self
+            .inner
+            .verify_certificate::<_, _, M>(rng, subject, &certificate.classical, strategy)
+        {
             return false;
         }
 

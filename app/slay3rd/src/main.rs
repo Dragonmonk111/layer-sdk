@@ -1716,46 +1716,46 @@ async fn run_node(
             // 10s per reason instead of per-message spam.
             let mut drops = DropThrottle::new(Duration::from_secs(10));
             while let Ok((peer, message)) = tx_p2p_receiver.recv().await {
-                        let peer_prefix: String = peer.to_string().chars().take(8).collect();
-                        let raw: bytes::Bytes = message.into();
-                        let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id) else {
-                            if let Some(suppressed) = drops.should_log("tx-gossip-undecodable") {
-                                tracing::warn!(
-                                    peer = %peer_prefix,
-                                    suppressed,
-                                    "Tx gossip: dropped undecodable tx bytes from peer"
-                                );
-                            }
-                            continue;
-                        };
-                        // Admission metadata — captured before check_tx
-                        // consumes the tx (M4 ordering, M7 caps).
-                        let layer_std::Tx::Signed(ref signed) = tx;
-                        let meta = slay3rd::mempool::TxMeta {
-                            sender: signed.signer.to_string(),
-                            sequence: signed.signing_info.sequence,
-                            store_code: signed.msgs.iter().any(|m| {
-                                matches!(
-                                    m,
-                                    layer_std::Msg::Wasm(layer_std::WasmMsg::StoreCode { .. })
-                                )
-                            }),
-                        };
-                        let ok = {
-                            let app = app.read().await;
-                            app.info().is_some() && app.check_tx(tx).result.is_ok()
-                        };
-                        if !ok {
-                            if let Some(suppressed) = drops.should_log("tx-gossip-checktx") {
-                                tracing::warn!(
-                                    peer = %peer_prefix,
-                                    suppressed,
-                                    "Tx gossip: dropped peer tx failing check_tx"
-                                );
-                            }
-                            continue;
-                        }
-                        let _ = mempool.lock().await.submit_checked(raw, Some(meta));
+                let peer_prefix: String = peer.to_string().chars().take(8).collect();
+                let raw: bytes::Bytes = message.into();
+                let Ok(tx) = layer_cosmos::parse_cosmos_tx(raw.clone(), &chain_id) else {
+                    if let Some(suppressed) = drops.should_log("tx-gossip-undecodable") {
+                        tracing::warn!(
+                            peer = %peer_prefix,
+                            suppressed,
+                            "Tx gossip: dropped undecodable tx bytes from peer"
+                        );
+                    }
+                    continue;
+                };
+                // Admission metadata — captured before check_tx
+                // consumes the tx (M4 ordering, M7 caps).
+                let layer_std::Tx::Signed(ref signed) = tx;
+                let meta = slay3rd::mempool::TxMeta {
+                    sender: signed.signer.to_string(),
+                    sequence: signed.signing_info.sequence,
+                    store_code: signed.msgs.iter().any(|m| {
+                        matches!(
+                            m,
+                            layer_std::Msg::Wasm(layer_std::WasmMsg::StoreCode { .. })
+                        )
+                    }),
+                };
+                let ok = {
+                    let app = app.read().await;
+                    app.info().is_some() && app.check_tx(tx).result.is_ok()
+                };
+                if !ok {
+                    if let Some(suppressed) = drops.should_log("tx-gossip-checktx") {
+                        tracing::warn!(
+                            peer = %peer_prefix,
+                            suppressed,
+                            "Tx gossip: dropped peer tx failing check_tx"
+                        );
+                    }
+                    continue;
+                }
+                let _ = mempool.lock().await.submit_checked(raw, Some(meta));
             }
         });
     }

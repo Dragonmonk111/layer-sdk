@@ -99,11 +99,9 @@ async fn event_req_eose_roundtrip() {
     auth.id = hex::encode(aid);
     auth.sig = hex::encode(sk.sign_raw(&aid, &[0u8; 32]).unwrap().to_bytes());
     let auth_id = auth.id.clone();
-    ws.send(Message::Text(
-        serde_json::json!(["AUTH", auth]).to_string(),
-    ))
-    .await
-    .unwrap();
+    ws.send(Message::Text(serde_json::json!(["AUTH", auth]).to_string()))
+        .await
+        .unwrap();
     let reply = ws.next().await.unwrap().unwrap().into_text().unwrap();
     let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert_eq!(reply[0], "OK");
@@ -113,11 +111,9 @@ async fn event_req_eose_roundtrip() {
     // 1. signed EVENT -> OK true
     let ev = sign("hello sovereign relay", chan, 1_700_000_000, &key);
     let want_id = ev.id.clone();
-    ws.send(Message::Text(
-        serde_json::json!(["EVENT", ev]).to_string(),
-    ))
-    .await
-    .unwrap();
+    ws.send(Message::Text(serde_json::json!(["EVENT", ev]).to_string()))
+        .await
+        .unwrap();
     let reply = ws.next().await.unwrap().unwrap().into_text().unwrap();
     let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert_eq!(reply[0], "OK");
@@ -128,11 +124,9 @@ async fn event_req_eose_roundtrip() {
     let mut bad = sign("forged", chan, 1_700_000_001, &key);
     bad.sig = "00".repeat(64);
     let bad_id = bad.id.clone();
-    ws.send(Message::Text(
-        serde_json::json!(["EVENT", bad]).to_string(),
-    ))
-    .await
-    .unwrap();
+    ws.send(Message::Text(serde_json::json!(["EVENT", bad]).to_string()))
+        .await
+        .unwrap();
     let reply = ws.next().await.unwrap().unwrap().into_text().unwrap();
     let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert_eq!(reply[0], "OK");
@@ -141,8 +135,7 @@ async fn event_req_eose_roundtrip() {
 
     // 3. REQ on the channel -> our event back + EOSE
     ws.send(Message::Text(
-        serde_json::json!(["REQ", "s1", {"#h": [chan], "kinds": [9]}])
-            .to_string(),
+        serde_json::json!(["REQ", "s1", {"#h": [chan], "kinds": [9]}]).to_string(),
     ))
     .await
     .unwrap();

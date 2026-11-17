@@ -108,11 +108,9 @@ async fn gossip_replicates_signed_event() {
     let _ = wa.next().await;
     let ev = sign("federated hello", chan, 1_700_000_000, &key);
     let want_id = ev.id.clone();
-    wa.send(Message::Text(
-        serde_json::json!(["EVENT", ev]).to_string(),
-    ))
-    .await
-    .unwrap();
+    wa.send(Message::Text(serde_json::json!(["EVENT", ev]).to_string()))
+        .await
+        .unwrap();
     let reply = wa.next().await.unwrap().unwrap().into_text().unwrap();
     let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert_eq!(reply[0], "OK");
@@ -129,8 +127,7 @@ async fn gossip_replicates_signed_event() {
     'poll: for attempt in 0..40 {
         let sub = format!("probe-{attempt}");
         wb.send(Message::Text(
-            serde_json::json!(["REQ", sub, {"#h": [chan], "kinds": [9]}])
-                .to_string(),
+            serde_json::json!(["REQ", sub, {"#h": [chan], "kinds": [9]}]).to_string(),
         ))
         .await
         .unwrap();

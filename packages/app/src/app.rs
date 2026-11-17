@@ -1588,7 +1588,11 @@ pub(crate) fn merkle_path(leaves: &[[u8; 32]], index: usize) -> Vec<Option<[u8; 
     let mut level: Vec<[u8; 32]> = leaves.to_vec();
     let mut idx = index;
     while level.len() > 1 {
-        let sibling = if idx.is_multiple_of(2) { idx + 1 } else { idx - 1 };
+        let sibling = if idx.is_multiple_of(2) {
+            idx + 1
+        } else {
+            idx - 1
+        };
         if sibling < level.len() {
             siblings.push(Some(level[sibling]));
         } else {
