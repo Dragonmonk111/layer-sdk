@@ -466,9 +466,20 @@ fn sign_tx(msg: cosmrs::Any, sequence: u64) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 
 async fn connect(grpc_addr: &str) -> Result<Channel, Box<dyn std::error::Error>> {
-    let channel = Channel::from_shared(format!("http://{}", grpc_addr))?
-        .connect()
-        .await?;
+    // Bare "host:port" stays plaintext (local node / seat gRPC). A full
+    // "https://host:port" URI enables TLS for public gateways such as
+    // api.junoclaw.xyz:443.
+    let uri = if grpc_addr.starts_with("http://") || grpc_addr.starts_with("https://") {
+        grpc_addr.to_string()
+    } else {
+        format!("http://{}", grpc_addr)
+    };
+    let mut endpoint = Channel::from_shared(uri)?;
+    if endpoint.uri().scheme_str() == Some("https") {
+        endpoint = endpoint
+            .tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots())?;
+    }
+    let channel = endpoint.connect().await?;
     Ok(channel)
 }
 

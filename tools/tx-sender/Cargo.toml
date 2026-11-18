@@ -18,8 +18,8 @@ cosmrs = { workspace = true }
 layer-proto = { workspace = true, features = ["server", "client"] }
 prost = { workspace = true }
 
-# gRPC client
-tonic = { workspace = true }
+# gRPC client (tls features for public https gateways; plaintext unaffected)
+tonic = { workspace = true, features = ["tls", "tls-native-roots"] }
 tokio = { workspace = true, features = ["full"] }
 http = { workspace = true }
 
