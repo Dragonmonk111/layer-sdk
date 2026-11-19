@@ -47,9 +47,10 @@
 </pre>
 <div class="sys">boot: every line below is signed. the relay admits keys bound on-chain.</div>
 <div id="keyrow">
-  <input id="nsec" type="password" placeholder="paste nsec1… or 64-char hex (stays in this tab, never sent anywhere)">
+  <input id="nsec" type="password" placeholder="paste nsec1… or 64-char hex (stays on this machine, never sent anywhere)">
   <button id="connect">CONNECT</button>
 </div>
+<div class="sys"><label><input id="remember" type="checkbox" style="width:auto"> keep me signed in on this machine (stores key in this browser — your own device only)</label></div>
 <div class="sys" id="rooms"></div>
 <div id="log"></div>
 <div id="in">
@@ -197,6 +198,9 @@ function connect() {
     }
     pk = hex(schnorrPubX(sk));
   } catch { sys("bad key — needs nsec1… bech32 or 64-char hex"); return; }
+  sessionStorage.setItem("jc-key", v);
+  if ($("remember").checked) localStorage.setItem("jc-key", v);
+  else localStorage.removeItem("jc-key");
   ws = new WebSocket(RELAY);
   ws.onopen = () => sys("link up — waiting for auth challenge…");
   ws.onclose = () => { sys("link down"); $("say").disabled = true; };
@@ -217,7 +221,8 @@ function connect() {
 }
 
 async function say(text) {
-  if (text === "/quit") { ws && ws.close(); return; }
+  if (text === "/quit") { sessionStorage.removeItem("jc-key"); localStorage.removeItem("jc-key");
+    ws && ws.close(); sys("signed out — key wiped from this browser"); return; }
   const r = text.match(/^\/room\s+(\S+)/);
   if (r) { if (!ROOMS[r[1]]) { sys("unknown room"); return; }
     room = r[1]; $("log").innerHTML = ""; ws.send(JSON.stringify(["CLOSE", "r"]));
@@ -232,6 +237,9 @@ async function say(text) {
 $("connect").onclick = connect;
 $("say").onkeydown = e => { if (e.key === "Enter" && e.target.value.trim()) { say(e.target.value.trim()); e.target.value = ""; } };
 $("nsec").onkeydown = e => { if (e.key === "Enter") connect(); };
+{ const saved = localStorage.getItem("jc-key") || sessionStorage.getItem("jc-key");
+  if (saved) { $("nsec").value = saved; $("remember").checked = !!localStorage.getItem("jc-key");
+    sys("key restored — press CONNECT (or enter) to go back in"); } }
 </script>
 </body>
 </html>
