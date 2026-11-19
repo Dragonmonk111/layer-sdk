@@ -12,7 +12,7 @@
 #
 # Requires: buzz-cli, bls-relayer, curl, python3, openssl;
 #           /opt/dao-keys/dao-key.pem, $B/my-npub.hex, $B/my-juno1.txt,
-#           $B/status-bot.sec.
+#           $B/gov-bot.sec.
 # Committed state (get_vote) is verified before announcing — "broadcast OK"
 # is never reported as a cast vote.
 set -e
@@ -26,7 +26,7 @@ GRPC=${GRPC:-127.0.0.1:9090}
 API=${API:-http://127.0.0.1:8082}
 touch $SEEN
 
-MSGS=$(BUZZ_PRIVATE_KEY=$(sudo cat $B/status-bot.sec) BUZZ_RELAY_URL=wss://relay.junoclaw.xyz \
+MSGS=$(BUZZ_PRIVATE_KEY=$(sudo cat $B/gov-bot.sec) BUZZ_RELAY_URL=ws://127.0.0.1:7070 \
   /opt/buzz/bin/buzz-cli messages get --channel $CH --limit 50 2>/dev/null) || exit 0
 
 echo "$MSGS" | python3 -c "
@@ -46,8 +46,8 @@ print('\n'.join(out))
 " "$NPUB_HEX" "$SEEN" > /tmp/.vote-intents.$$
 
 post() {
-  printf "%b" "$1" | sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/status-bot.sec)" \
-    BUZZ_RELAY_URL=wss://relay.junoclaw.xyz \
+  printf "%b" "$1" | sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/gov-bot.sec)" \
+    BUZZ_RELAY_URL=ws://127.0.0.1:7070 \
     /opt/buzz/bin/buzz-cli messages send --channel $CH --content - >> $B/vote-daemon.log 2>&1
 }
 

@@ -11,5 +11,5 @@ STATE=$(echo "$OUT" | tail -1)
 LAST=$(cat $B/last-bot-state 2>/dev/null || echo none)
 M=$(date +%M)
 if [ "$STATE" != "$LAST" ] || [ "$M" -lt 30 ]; then
-  echo "status-bot | $MSG" | BUZZ_PRIVATE_KEY=$(cat $B/status-bot.sec)     BUZZ_RELAY_URL=wss://relay.junoclaw.xyz     /opt/buzz/bin/buzz-cli messages send --channel $CH --content -     && echo "$STATE" > $B/last-bot-state
+  echo "status-bot | $MSG" | BUZZ_PRIVATE_KEY=$(cat $B/status-bot.sec)     BUZZ_RELAY_URL=ws://127.0.0.1:7070     /opt/buzz/bin/buzz-cli messages send --channel $CH --content -     && echo "$STATE" > $B/last-bot-state
 fi

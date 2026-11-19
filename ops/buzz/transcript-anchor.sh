@@ -14,7 +14,7 @@
 # Cron: hourly (e.g.  17 * * * *)
 #
 # Requires: buzz-cli, bls-relayer, curl, python3, openssl, jq-free (python
-#           does JSON); /opt/dao-keys/dao-key.pem, $B/status-bot.sec.
+#           does JSON); /opt/dao-keys/dao-key.pem, $B/ops-bot.sec.
 # Committed-state discipline like buzz-vote-daemon: the receipt is posted
 # only after the entry is read back from chain state — never on
 # "broadcast OK".
@@ -34,12 +34,12 @@ DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 CHANNELS=${ANCHOR_CHANNELS:-"governance:2a6c9ad2-9da8-406c-8aa3-cd2f1e33af38 validator-ops:810d3c45-acb5-44f8-9155-8bc94b3a12b3 agents:7b4f3765-8494-4de8-bf7a-b2595da827e0"}
 
 buzz() { # read path — bot identity only used for auth to the relay
-  sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/status-bot.sec)" \
-    BUZZ_RELAY_URL=wss://relay.junoclaw.xyz /opt/buzz/bin/buzz-cli "$@"
+  sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/ops-bot.sec)" \
+    BUZZ_RELAY_URL=ws://127.0.0.1:7070 /opt/buzz/bin/buzz-cli "$@"
 }
 post() { # $1=channel uuid, stdin=content
-  printf "%b" "$(cat)" | sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/status-bot.sec)" \
-    BUZZ_RELAY_URL=wss://relay.junoclaw.xyz \
+  printf "%b" "$(cat)" | sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/ops-bot.sec)" \
+    BUZZ_RELAY_URL=ws://127.0.0.1:7070 \
     /opt/buzz/bin/buzz-cli messages send --channel "$1" --content - >> $B/anchor.log 2>&1
 }
 

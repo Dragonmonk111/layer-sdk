@@ -10,7 +10,7 @@ Q=$(python3 -c 'import base64;print(base64.urlsafe_b64encode(b"{\"list_proposals
 RESP=$(curl -fsS -m 10 "http://127.0.0.1:8082/api/wasm/smart/$PM?query=$Q" 2>/dev/null) || exit 0
 while IFS= read -r line; do
   [ -z "$line" ] && continue
-  printf "%b" "$line" | sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/status-bot.sec)" BUZZ_RELAY_URL=wss://relay.junoclaw.xyz /opt/buzz/bin/buzz-cli messages send --channel $CH --content - >> $B/proposal-watch.log 2>&1 \
+  printf "%b" "$line" | sudo env BUZZ_PRIVATE_KEY="$(sudo cat $B/gov-bot.sec)" BUZZ_RELAY_URL=ws://127.0.0.1:7070 /opt/buzz/bin/buzz-cli messages send --channel $CH --content - >> $B/proposal-watch.log 2>&1 \
     && echo "$(date -Is) posted" >> $B/proposal-watch.log
 done < <(echo "$RESP" | python3 /opt/buzz/proposal-diff.py $B/proposals-seen.json)
 exit 0

@@ -8,8 +8,8 @@ B=/opt/buzz/state
 CH=7b4f3765-8494-4de8-bf7a-b2595da827e0
 
 post() {
-  printf 'infra | %s' "$1" | BUZZ_PRIVATE_KEY=$(cat $B/status-bot.sec) \
-    BUZZ_RELAY_URL=wss://relay.junoclaw.xyz \
+  printf 'infra | %s' "$1" | BUZZ_PRIVATE_KEY=$(cat $B/ops-bot.sec) \
+    BUZZ_RELAY_URL=ws://127.0.0.1:7070 \
     /opt/buzz/bin/buzz-cli messages send --channel $CH --content -
 }
 

@@ -5,6 +5,6 @@
 set -e
 B=/opt/buzz/state
 CH=810d3c45-acb5-44f8-9155-8bc94b3a12b3
-{ printf 'alert | '; cat; } | BUZZ_PRIVATE_KEY=$(cat $B/status-bot.sec) \
-  BUZZ_RELAY_URL=wss://relay.junoclaw.xyz \
+{ printf 'alert | '; cat; } | BUZZ_PRIVATE_KEY=$(cat $B/ops-bot.sec) \
+  BUZZ_RELAY_URL=ws://127.0.0.1:7070 \
   /opt/buzz/bin/buzz-cli messages send --channel $CH --content - >> $B/jc-alert.log 2>&1

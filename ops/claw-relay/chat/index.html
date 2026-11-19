@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JUNOCLAW OPS ROOM</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { --g: #33ff66; --dim: #1d8a3d; --amber: #ffb000; }
+  * { box-sizing: border-box; }
+  body { background: #0a0f0a; color: var(--g); font-family: "Courier New", monospace;
+         margin: 0; padding: 18px; font-size: 15px;
+         background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+  #screen { max-width: 860px; margin: 0 auto; }
+  pre.banner { color: var(--amber); font-size: 12px; line-height: 1.15; }
+  .dim { color: var(--dim); }
+  .sys { color: var(--dim); }
+  .err { color: #ff5555; }
+  .me { color: var(--amber); }
+  #log { white-space: pre-wrap; word-break: break-word; min-height: 300px; }
+  #log .msg { margin: 2px 0; }
+  #log .who { color: var(--amber); }
+  #log .sig { color: var(--dim); font-size: 12px; }
+  #log .t { color: #2a6; font-size: 12px; }
+  #in { display: flex; gap: 8px; margin-top: 10px; }
+  #in input, #keyrow input { background: #061206; border: 1px solid var(--dim); color: var(--g);
+    font-family: inherit; font-size: 15px; padding: 6px 8px; width: 100%; outline: none; }
+  #in input:focus, #keyrow input:focus { border-color: var(--g); }
+  #keyrow { display: flex; gap: 8px; margin: 10px 0; }
+  button { background: #061206; border: 1px solid var(--dim); color: var(--g);
+    font-family: inherit; padding: 6px 14px; cursor: pointer; }
+  button:hover { border-color: var(--g); background: #0a1f0a; }
+  .cursor::after { content: "█"; animation: bl 1s steps(1) infinite; }
+  @keyframes bl { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="screen">
+<pre class="banner">
+     _ _   _ _   _  ___   ____ _      ___      __  __
+    | | | | | \ | |/ _ \ / ___| |    / _ \ \ / / \ \
+ _  | | | | |  \| | | | | |   | |   | | | \ V /   | |
+| |_| | |_| | |\  | |_| | |___| |___| |_| |\_/    |_|
+ \___/ \___/|_| \_|\___/ \____|_____\___/        (_)
+   O P S   R O O M   —   r e l a y . j u n o c l a w . x y z
+</pre>
+<div class="sys">boot: every line below is signed. the relay admits keys bound on-chain.</div>
+<div id="keyrow">
+  <input id="nsec" type="password" placeholder="paste nsec1… (stays in this tab, never sent anywhere)">
+  <button id="connect">CONNECT</button>
+</div>
+<div class="sys" id="rooms"></div>
+<div id="log"></div>
+<div id="in">
+  <input id="say" placeholder="type and press enter — your npub signs it" disabled>
+</div>
+<div class="sys">/quit to disconnect · /room &lt;name&gt; to switch · keys never leave this page</div>
+</div>
+<script type="module">
+import { schnorr } from "https://cdn.jsdelivr.net/npm/@noble/curves@1.4.2/secp256k1.js";
+import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@1.4.0/sha256.js";
+
+const RELAY = "wss://relay.junoclaw.xyz";
+const ROOMS = {
+  "governance":    "2a6c9ad2-9da8-406c-8aa3-cd2f1e33af38",
+  "agents":        "7b4f3765-8494-4de8-bf7a-b2595da827e0",
+  "validator-ops": "810d3c45-acb5-44f8-9155-8bc94b3a12b3",
+  "dm":            "bf2d0485-0e8e-4822-820f-f6cc11d9c408",
+};
+let room = "validator-ops", ws = null, sk = null, pk = null;
+
+const $ = id => document.getElementById(id);
+const log = (cls, s) => { const d = document.createElement("div"); d.className = cls; d.textContent = s;
+  $("log").appendChild(d); d.scrollIntoView(); };
+const sys = s => log("msg sys", ":: " + s);
+
+$("rooms").textContent = "rooms: " + Object.keys(ROOMS).map(r => r === room ? `[${r}]` : r).join("  ");
+
+// --- bech32 decode (nsec -> 32-byte secret) ---
+const CS = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+function bech32Decode(s) {
+  const pos = s.lastIndexOf("1"); const hrp = s.slice(0, pos);
+  const d = [...s.slice(pos + 1)].map(c => CS.indexOf(c));
+  let acc = 0, bits = 0; const out = [];
+  for (const v of d.slice(0, -6)) { acc = (acc << 5) | v; bits += 5;
+    if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 255); } }
+  return { hrp, bytes: new Uint8Array(out) };
+}
+const hex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+const unhex = s => new Uint8Array(s.match(/../g).map(h => parseInt(h, 16)));
+
+async function sign(ev) {
+  ev.pubkey = pk;
+  const id = sha256(new TextEncoder().encode(
+    JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content])));
+  ev.id = hex(id);
+  ev.sig = hex(await schnorr.sign(unhex(ev.id), sk));
+  return ev;
+}
+
+function render(ev) {
+  if (ev.kind !== 9) return;
+  const t = new Date(ev.created_at * 1000).toISOString().slice(5, 16).replace("T", " ");
+  const who = ev.pubkey.slice(0, 8);
+  const cls = ev.pubkey === pk ? "msg me" : "msg";
+  const line = document.createElement("div"); line.className = cls;
+  const w = document.createElement("span"); w.className = "who"; w.textContent = who;
+  const tt = document.createElement("span"); tt.className = "t"; tt.textContent = ` ${t} `;
+  const s = document.createElement("span"); s.className = "sig";
+  s.textContent = `[sig ${ev.sig.slice(0, 8)}…] `;
+  const c = document.createElement("span"); c.textContent = ev.content;
+  line.append(w, tt, s, c); $("log").appendChild(line); line.scrollIntoView();
+}
+
+function connect() {
+  const v = $("nsec").value.trim();
+  try {
+    const d = bech32Decode(v);
+    if (d.hrp !== "nsec" || d.bytes.length !== 32) throw 0;
+    sk = d.bytes; pk = hex(schnorr.getPublicKey(sk));
+  } catch { sys("bad nsec — needs nsec1… bech32"); return; }
+  ws = new WebSocket(RELAY);
+  ws.onopen = () => sys("link up — waiting for auth challenge…");
+  ws.onclose = () => { sys("link down"); $("say").disabled = true; };
+  ws.onmessage = async m => {
+    const a = JSON.parse(m.data);
+    if (a[0] === "AUTH") {
+      const ev = await sign({ kind: 22242, created_at: Math.floor(Date.now() / 1000),
+        tags: [["relay", RELAY], ["challenge", a[1]]], content: "" });
+      ws.send(JSON.stringify(["AUTH", ev]));
+      sys(`authed as npub ${pk.slice(0, 12)}…`);
+      ws.send(JSON.stringify(["REQ", "r", { kinds: [9], "#h": [ROOMS[room]], limit: 80 }]));
+      $("say").disabled = false; $("say").focus();
+    } else if (a[0] === "EVENT") render(a[2]);
+    else if (a[0] === "EOSE") sys(`--- end of #${room} history — live ---`);
+    else if (a[0] === "NOTICE") log("msg err", "NOTICE: " + a[1]);
+    else if (a[0] === "OK" && a[3] === false) log("msg err", "rejected: " + a[3 + 1]);
+  };
+}
+
+async function say(text) {
+  if (text === "/quit") { ws && ws.close(); return; }
+  const r = text.match(/^\/room\s+(\S+)/);
+  if (r) { if (!ROOMS[r[1]]) { sys("unknown room"); return; }
+    room = r[1]; $("log").innerHTML = ""; ws.send(JSON.stringify(["CLOSE", "r"]));
+    ws.send(JSON.stringify(["REQ", "r", { kinds: [9], "#h": [ROOMS[room]], limit: 80 }]));
+    $("rooms").textContent = "rooms: " + Object.keys(ROOMS).map(x => x === room ? `[${x}]` : x).join("  ");
+    return; }
+  const ev = await sign({ kind: 9, created_at: Math.floor(Date.now() / 1000),
+    tags: [["h", ROOMS[room]]], content: text });
+  ws.send(JSON.stringify(["EVENT", ev]));
+}
+
+$("connect").onclick = connect;
+$("say").onkeydown = e => { if (e.key === "Enter" && e.target.value.trim()) { say(e.target.value.trim()); e.target.value = ""; } };
+$("nsec").onkeydown = e => { if (e.key === "Enter") connect(); };
+</script>
+</body>
+</html>
