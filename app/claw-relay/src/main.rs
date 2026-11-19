@@ -35,6 +35,7 @@
 
 mod admission;
 mod gossip;
+mod meta;
 mod store;
 
 use axum::{
@@ -61,9 +62,12 @@ use std::{
 use store::Store;
 use tokio::sync::{broadcast, mpsc, RwLock};
 
-/// Kinds accepted for channel writes — mirrors the set buzz-cli reads by
-/// default: 9 chat, 40002/40008 channel msgs, 45001/45003 mod events.
-const ALLOWED_KINDS: &[u64] = &[9, 40002, 40008, 45001, 45003];
+/// Kinds accepted for writes: 9 chat, 40002/40008 channel msgs,
+/// 45001/45003 mod events, and kind-0 member profiles (channel-less —
+/// admitted pubkeys self-publish their own metadata). NIP-29 group
+/// kinds (39000/39002) stay OUT of the write set: they're relay-
+/// authored synthesized state, not member content.
+const ALLOWED_KINDS: &[u64] = &[0, 9, 40002, 40008, 45001, 45003];
 
 // ─── abuse limits (DoS tranche) ──────────────────────────────────────────
 // Everything an unauthenticated or authenticated client can make the relay
@@ -146,6 +150,9 @@ struct App {
     /// loopback/door address.
     http_write: Mutex<HashMap<String, Bucket>>,
     http_read: Mutex<HashMap<String, Bucket>>,
+    /// Relay's own pubkey (x-only hex) from --identity-key — advertised
+    /// in the NIP-11 document and signs synthesized NIP-29 metadata.
+    relay_npub: Option<String>,
 }
 
 /// Decrements the per-IP/total counts when the connection task ends.
@@ -248,6 +255,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(60)
         .max(5);
 
+    // Relay identity + display-name maps for synthesized NIP-29 metadata.
+    // --identity-key: 64-hex secp256k1 secret file (operator-protected).
+    // --channel-name <uuid>=<name> / --profile <npub>=<name>: repeatable.
+    let identity = opt("--identity-key").map(PathBuf::from).and_then(|p| {
+        match meta::load_identity(&p) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                tracing::warn!(error = %e, "identity key unusable — NIP-11 pubkey + NIP-29 metadata disabled");
+                None
+            }
+        }
+    });
+    let parse_kv = |flag: &str| -> HashMap<String, String> {
+        args.iter()
+            .enumerate()
+            .filter(|(_, a)| a.as_str() == flag)
+            .filter_map(|(i, _)| args.get(i + 1))
+            .filter_map(|v| {
+                v.split_once('=')
+                    .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            })
+            .collect()
+    };
+    let channel_names = parse_kv("--channel-name");
+    let profiles = parse_kv("--profile");
+
     let app = Arc::new(App {
         store: Store::open(&db)?,
         channels,
@@ -256,6 +289,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conns: Mutex::new(ConnTable::default()),
         http_write: Mutex::new(HashMap::new()),
         http_read: Mutex::new(HashMap::new()),
+        relay_npub: identity.as_ref().map(|i| i.npub.clone()),
     });
 
     // Admission source precedence: --attestation-contract is the
@@ -299,6 +333,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Relay-synthesized NIP-29 metadata (39000 channel docs, 39002
+    // member lists, relay kind-0) — inserted into the store directly,
+    // bypassing write admission. Re-runs when the effective admitted
+    // set changes so member lists track cw4/allowlist updates without
+    // a restart. No identity → adapters get empty discovery, same as
+    // before, with a boot-time warning already logged.
+    if let Some(id) = identity {
+        tokio::spawn(meta::sync_loop(
+            app.clone(),
+            id,
+            channel_names,
+            profiles,
+            Duration::from_secs(cw4_refresh_secs),
+        ));
+    }
+
     let router = Router::new()
         .route("/", get(ws_handler))
         .route("/events", axum::routing::post(http_events))
@@ -340,13 +390,13 @@ async fn ws_handler(
         .and_then(|v| v.to_str().ok())
         .is_some_and(|a| a.contains("application/nostr+json"))
     {
-        return axum::Json(serde_json::json!({
+        let mut doc = serde_json::json!({
             "name": "J-Claw Relay",
             "description": "JunoClaw sovereign coordination relay — write admission is a live view of the DAO's cw4 membership contract. HTTP endpoints require a NIP-98-signed request (kind-27235); reads additionally require an allowlisted signer.",
             "contact": "https://junoclaw.xyz",
             "software": "https://github.com/Dragonmonk111/layer-sdk/tree/commonware/app/claw-relay",
             "version": env!("CARGO_PKG_VERSION"),
-            "supported_nips": [1, 15, 42, 98],
+            "supported_nips": [1, 15, 29, 42, 98],
             "limitation": {
                 "max_message_length": MAX_WS_MSG,
                 "max_content_length": MAX_EVENT_CONTENT,
@@ -359,8 +409,13 @@ async fn ws_handler(
                 "auth_required": false,
                 "payment_required": false
             }
-        }))
-        .into_response();
+        });
+        if let Some(pk) = &app.relay_npub {
+            doc.as_object_mut()
+                .unwrap()
+                .insert("pubkey".into(), pk.clone().into());
+        }
+        return axum::Json(doc).into_response();
     }
     // Connection caps are enforced BEFORE the upgrade so an over-limit
     // client gets an HTTP rejection, not a half-open socket.
@@ -986,11 +1041,15 @@ async fn admit_event(app: &App, ev: &Event) -> Result<(), String> {
     if !ALLOWED_KINDS.contains(&ev.kind) {
         return Err("restricted: kind not allowed".into());
     }
-    let Some(chan) = ev.tag_value("h") else {
-        return Err("restricted: missing channel h tag".into());
-    };
-    if !app.channels.is_empty() && !app.channels.contains(chan) {
-        return Err("restricted: unknown channel".into());
+    // kind-0 profiles are channel-less — an admitted member publishes
+    // its own metadata without an `h` tag.
+    if ev.kind != 0 {
+        let Some(chan) = ev.tag_value("h") else {
+            return Err("restricted: missing channel h tag".into());
+        };
+        if !app.channels.is_empty() && !app.channels.contains(chan) {
+            return Err("restricted: unknown channel".into());
+        }
     }
     if !app.allowlist.read().await.contains(&ev.pubkey) {
         return Err("restricted: pubkey not allowlisted".into());
@@ -1081,6 +1140,7 @@ mod tests {
             conns: Mutex::new(ConnTable::default()),
             http_write: Mutex::new(HashMap::new()),
             http_read: Mutex::new(HashMap::new()),
+            relay_npub: None,
         });
         let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -1131,6 +1191,7 @@ mod tests {
             conns: Mutex::new(ConnTable::default()),
             http_write: Mutex::new(HashMap::new()),
             http_read: Mutex::new(HashMap::new()),
+            relay_npub: None,
         });
 
         let key = [7u8; 32];
@@ -1161,6 +1222,10 @@ mod tests {
             "restricted: missing channel h tag"
         );
 
+        // kind-0 profile is channel-less -> admitted without an h tag
+        let profile = signed_event_ex(r#"{"name":"ops"}"#, None, 5, 0, &key);
+        assert!(admit_event(&app, &profile).await.is_ok());
+
         // h tag naming an unconfigured channel -> restricted
         let wrong_chan = signed_event_ex("x", Some("chan-b"), 5, 9, &key);
         assert_eq!(
@@ -1177,6 +1242,7 @@ mod tests {
             conns: Mutex::new(ConnTable::default()),
             http_write: Mutex::new(HashMap::new()),
             http_read: Mutex::new(HashMap::new()),
+            relay_npub: None,
         });
         let any_chan = signed_event_ex("x", Some("chan-b"), 6, 9, &key);
         assert!(admit_event(&app_open, &any_chan).await.is_ok());
@@ -1205,6 +1271,7 @@ mod tests {
             conns: Mutex::new(ConnTable::default()),
             http_write: Mutex::new(HashMap::new()),
             http_read: Mutex::new(HashMap::new()),
+            relay_npub: None,
         });
         let ev = signed_event_ex("hi", Some("chan-a"), 1, 9, &[7u8; 32]);
         app.allowlist.write().await.insert(ev.pubkey.clone());
@@ -1255,6 +1322,7 @@ mod tests {
             conns: Mutex::new(ConnTable::default()),
             http_write: Mutex::new(HashMap::new()),
             http_read: Mutex::new(HashMap::new()),
+            relay_npub: None,
         });
         let subs: Arc<RwLock<HashMap<String, Vec<Filter>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -1348,6 +1416,7 @@ mod tests {
             conns: Mutex::new(ConnTable::default()),
             http_write: Mutex::new(HashMap::new()),
             http_read: Mutex::new(HashMap::new()),
+            relay_npub: None,
         });
         let ip: IpAddr = "10.0.0.1".parse().unwrap();
         let mut guards = Vec::new();
