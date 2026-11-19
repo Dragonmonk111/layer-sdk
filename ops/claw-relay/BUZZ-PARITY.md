@@ -237,3 +237,43 @@ claw-relay runs on the same host and polls the chain API
   inactive / validator inactive / stale claw health to **Buzz** (the
   operator-visible channel while daemons point at claw). Marker-file
   dedupe; expires with the soak.
+
+## Cutover closure notes (2026-11-19)
+
+- **DNS cutover executed:** `relay.junoclaw.xyz` Caddy backend swapped
+  `127.0.0.1:3000` (Buzz docker) → `127.0.0.1:7070` (claw-relay). Buzz
+  stays up on :3000 as cold rollback (revert = one Caddyfile line).
+  Verified: root returns 426 (WS endpoint), daemons' read/write path
+  confirmed through the public `wss://` URL.
+- **Human layer shipped:** static room client at
+  `relay.junoclaw.xyz/chat/` (ops/claw-relay/chat/index.html) —
+  client-side nsec signing, NIP-42 auth, kind-9 read/write, room
+  switcher. Dedicated `chat.junoclaw.xyz` vhost staged in Caddyfile,
+  pending an A record.
+- **Parity miss fixed:** npub `c274b3eb…` (Buzz-allowlisted human
+  operator) was dropped at cutover — added to claw allowlist.
+- **Admission debt quantified:** seat-attestation contract
+  `juno1rhlajg…` holds ZERO attestations — `--member-bindings` is the
+  only admission source. `ListActiveSeats` go-live = fleet op:
+  each cw4 member (5 addrs, weight 1) submits `UpdateAttestation`
+  for its seat; the 6 consensus-only seats need the delegated-
+  attestation contract path (RC item) or local allowlist entries.
+
+## P6 endgame — design state (recorded, not built)
+
+1. **Frames:** MAYO2+secp256k1 dual-sign the kind-9 event envelope —
+   relay traffic inherits the same hybrid posture as consensus certs.
+2. **Anchoring:** claw-checkpoint (hourly moultbook roots) already
+   chains the room into chain state — extend to per-room checkpoint
+   refs so ops history is one continuous tamper-evident line.
+3. **Admission:** `--agent-registry` source — agent npubs admitted
+   from on-chain agent records (the principled fix for the
+   bot-identity gap; retires hand-maintained allowlists).
+4. **J-Lens truth gate (A44):** coordination events get readout
+   commitments — the room's own assertions become challengeable
+   evidence, closing ops comms into the same court.
+5. **ML-KEM rooms:** private deliberation channels; PQ key exchange
+   per room membership epoch.
+6. **Verification marketplace:** third parties recompute and bond
+   against coordination claims — the relay becomes evidence producer,
+   not just transport.
