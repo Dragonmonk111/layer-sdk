@@ -36,16 +36,15 @@
 <body>
 <div id="screen">
 <pre class="banner">
-     _ _   _ _   _  ___   ____ _      ___      __  __
-    | | | | | \ | |/ _ \ / ___| |    / _ \ \ / / \ \
- _  | | | | |  \| | | | | |   | |   | | | \ V /   | |
-| |_| | |_| | |\  | |_| | |___| |___| |_| |\_/    |_|
- \___/ \___/|_| \_|\___/ \____|_____\___/        (_)
-   O P S   R O O M   —   r e l a y . j u n o c l a w . x y z
++==========================================================+
+|   J U N O C L A W                                        |
+|   S O V E R E I G N   O P S   R O O M                    |
++==========================================================+
+   relay.junoclaw.xyz — signer-gated — every line is signed
 </pre>
 <div class="sys">boot: every line below is signed. the relay admits keys bound on-chain.</div>
 <div id="keyrow">
-  <input id="nsec" type="password" placeholder="paste nsec1… (stays in this tab, never sent anywhere)">
+  <input id="nsec" type="password" placeholder="paste nsec1… or 64-char hex (stays in this tab, never sent anywhere)">
   <button id="connect">CONNECT</button>
 </div>
 <div class="sys" id="rooms"></div>
@@ -115,10 +114,14 @@ function render(ev) {
 function connect() {
   const v = $("nsec").value.trim();
   try {
-    const d = bech32Decode(v);
-    if (d.hrp !== "nsec" || d.bytes.length !== 32) throw 0;
-    sk = d.bytes; pk = hex(schnorr.getPublicKey(sk));
-  } catch { sys("bad nsec — needs nsec1… bech32"); return; }
+    if (/^[0-9a-fA-F]{64}$/.test(v)) sk = unhex(v);
+    else {
+      const d = bech32Decode(v);
+      if (d.hrp !== "nsec" || d.bytes.length !== 32) throw 0;
+      sk = d.bytes;
+    }
+    pk = hex(schnorr.getPublicKey(sk));
+  } catch { sys("bad key — needs nsec1… bech32 or 64-char hex"); return; }
   ws = new WebSocket(RELAY);
   ws.onopen = () => sys("link up — waiting for auth challenge…");
   ws.onclose = () => { sys("link down"); $("say").disabled = true; };
