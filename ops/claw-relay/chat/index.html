@@ -61,12 +61,13 @@ import { sha256 } from "https://cdn.jsdelivr.net/npm/@noble/hashes@1.4.0/sha256.
 
 const RELAY = "wss://relay.junoclaw.xyz";
 const ROOMS = {
+  "veridya-ops":   "60d46212-86f4-4a93-a6c2-e055aa61842a",
+  "validator-ops": "810d3c45-acb5-44f8-9155-8bc94b3a12b3",
   "governance":    "2a6c9ad2-9da8-406c-8aa3-cd2f1e33af38",
   "agents":        "7b4f3765-8494-4de8-bf7a-b2595da827e0",
-  "validator-ops": "810d3c45-acb5-44f8-9155-8bc94b3a12b3",
   "dm":            "bf2d0485-0e8e-4822-820f-f6cc11d9c408",
 };
-let room = "validator-ops", ws = null, sk = null, pk = null;
+let room = "veridya-ops", ws = null, sk = null, pk = null;
 
 const $ = id => document.getElementById(id);
 const log = (cls, s) => { const d = document.createElement("div"); d.className = cls; d.textContent = s;
