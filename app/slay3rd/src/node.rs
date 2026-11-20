@@ -1426,7 +1426,7 @@ where
             // skipping this proposal is the correct (nullify) outcome.
             node.ensure_executed(parent);
             let start = Instant::now();
-            let (height, state_root, parent_time) = loop {
+            let (height, state_root, parent_time, eff_parent) = loop {
                 {
                     let h = node.current_height.lock().await;
                     let last = node.last_digest.lock().await;
@@ -1436,6 +1436,7 @@ where
                             *h + 1,
                             app.state_root().unwrap_or([0u8; 32]),
                             app.info().map_or(0, |b| b.time.nanos()),
+                            parent,
                         );
                     }
                 }
@@ -1446,16 +1447,40 @@ where
                 // (The h/last guards dropped above, so re-locking is safe.)
                 let tip = *node.last_digest.lock().await;
                 if let Some(staged) = node.staged_parent(parent, tip).await {
-                    break (staged.height + 1, staged.root, staged.time_nanos);
+                    break (staged.height + 1, staged.root, staged.time_nanos, parent);
                 }
                 if start.elapsed() >= PROPOSE_WAIT_MAX {
-                    tracing::info!(
+                    // rc18 wedge escape: context.parent is certified but
+                    // unreachable — a dead variant, or a dead-variant gap
+                    // deeper than single-level staging bridges (2026-11-19
+                    // g1 halt: a view nullified between notarization and
+                    // finalization atop another dead variant; every leader
+                    // skipped, fleet stalled ~18min until livelock
+                    // self-recovery wiped journals). Build on the executed
+                    // tip instead — it is finalized by definition and always
+                    // a legal Simplex parent; skipping a certified view is
+                    // what nullification already authorizes. Voters accept
+                    // a payload naming their own executed tip (verify()).
+                    // The wire Proposal still cites context.parent's view —
+                    // execution follows payload-internal parent_digest only.
+                    let (h, tip) = {
+                        let h = node.current_height.lock().await;
+                        let last = node.last_digest.lock().await;
+                        (*h, *last)
+                    };
+                    let app = node.app.read().await;
+                    tracing::warn!(
                         parent = %hex::encode(parent),
+                        fallback_tip = %hex::encode(tip),
                         view = view_num,
-                        "propose: parent not executed in time — skipping proposal for this view"
+                        "propose: certified parent unreachable — building on executed tip (dead-variant wedge escape)"
                     );
-                    // Dropping `tx` tells consensus there is no proposal.
-                    return;
+                    break (
+                        h + 1,
+                        app.state_root().unwrap_or([0u8; 32]),
+                        app.info().map_or(0, |b| b.time.nanos()),
+                        tip,
+                    );
                 }
                 tokio::time::sleep(POLL_INTERVAL).await;
             };
@@ -1480,7 +1505,7 @@ where
                 timestamp_nanos: proposal_timestamp_nanos(parent_time, now_nanos()),
                 proposer,
                 txs: raw_txs,
-                parent_digest: parent,
+                parent_digest: eff_parent,
                 state_root,
             };
             // Chaos testing only: emit a corrupted proposal so honest
@@ -1553,6 +1578,28 @@ where
                 if let Some(p) = candidate {
                     let h = node.current_height.lock().await;
                     let last = node.last_digest.lock().await;
+                    // rc18 wedge-escape acceptance: a payload naming OUR
+                    // executed tip — the leader's certified parent was
+                    // unreachable (dead variant or unbridgeable dead-variant
+                    // gap), so it built on the last finalized block. The
+                    // executed tip is finalized by definition; extending it
+                    // is always legal — this check deliberately accepts ONLY
+                    // our own tip, never an arbitrary certified ancestor.
+                    let tip = *last;
+                    if tip == p.parent_digest {
+                        let app = node.app.read().await;
+                        let root = app.state_root().unwrap_or([0u8; 32]);
+                        let parent_time = app.info().map_or(0, |b| b.time.nanos());
+                        break validate_payload(
+                            &p,
+                            &tip,
+                            *h + 1,
+                            &root,
+                            parent_time,
+                            now_nanos(),
+                            &leader,
+                        );
+                    }
                     if *last == parent {
                         let app = node.app.read().await;
                         let root = app.state_root().unwrap_or([0u8; 32]);
@@ -2917,5 +2964,118 @@ mod tests {
             result3,
             "execute_block with empty txs should still succeed (finalize_block works)"
         );
+    }
+
+    /// Build a Simplex context whose certified parent sits at `parent_view`.
+    /// The leader key is random per call; payloads must set
+    /// `proposer: ctx.leader.as_ref().to_vec()` to pass the leader check.
+    fn make_ctx(
+        seed: u64,
+        parent_view: u64,
+        parent: [u8; 32],
+    ) -> Context<sha256::Digest, ed25519::PublicKey> {
+        use commonware_cryptography::Signer;
+        use commonware_math::algebra::Random;
+        use rand::SeedableRng;
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+        let leader: ed25519::PublicKey = ed25519::PrivateKey::random(&mut rng).public_key();
+        Context {
+            round: Round::new(
+                Epoch::new(0),
+                commonware_consensus::types::View::new(parent_view + 1),
+            ),
+            leader,
+            parent: (
+                commonware_consensus::types::View::new(parent_view),
+                sha256::Digest::from(parent),
+            ),
+        }
+    }
+
+    /// rc18 wedge escape, voter side (third post-rc14 wedge, 2026-11-19 g1
+    /// halt ~18min): context.parent is certified but unreachable — a dead
+    /// variant, or a dead-variant gap deeper than staged_parent bridges.
+    /// A payload naming OUR executed tip must verify: the tip is finalized
+    /// by definition, and Simplex permits extending an older parent once
+    /// each discarded view holds a nullification.
+    #[test]
+    fn test_verify_accepts_executed_tip_child_when_context_parent_dead() {
+        let mut node = make_layer_node();
+        let (_, tip) = rt().block_on(node.executed_tip());
+        assert_eq!(tip, genesis_parent());
+        // [7u8;32] was never inserted: unreachable as certified parent AND
+        // unstageable (its own parent is unknown), i.e. the wedge shape.
+        let ctx = make_ctx(18, 5, [7u8; 32]);
+        let p = BlockPayload {
+            height: 1,
+            timestamp_nanos: view_timestamp_nanos(1),
+            proposer: ctx.leader.as_ref().to_vec(),
+            txs: vec![],
+            parent_digest: tip,
+            state_root: local_state_root(&node),
+        };
+        let d = insert_payload_sync(&node, p);
+        let ok = rt().block_on(async {
+            node.verify(ctx, sha256::Digest::from(d)).await.await.unwrap()
+        });
+        assert!(
+            ok,
+            "payload naming the executed tip must verify when context.parent is a dead variant"
+        );
+    }
+
+    /// Companion guard for the wedge escape: the relaxation must accept ONLY
+    /// our executed tip. A payload naming a third unknown ancestor (not the
+    /// tip, not context.parent, not stageable) still cannot verify.
+    #[test]
+    fn test_verify_rejects_payload_naming_unknown_ancestor() {
+        let mut node = make_layer_node();
+        let ctx = make_ctx(18, 5, [7u8; 32]);
+        let p = BlockPayload {
+            height: 1,
+            timestamp_nanos: view_timestamp_nanos(1),
+            proposer: ctx.leader.as_ref().to_vec(),
+            txs: vec![],
+            parent_digest: [9u8; 32],
+            state_root: local_state_root(&node),
+        };
+        let d = insert_payload_sync(&node, p);
+        let ok = rt().block_on(async {
+            node.verify(ctx, sha256::Digest::from(d)).await.await.unwrap()
+        });
+        assert!(
+            !ok,
+            "payload naming an unknown ancestor must not verify"
+        );
+    }
+
+    /// rc18 wedge escape, leader side: when context.parent never becomes
+    /// executable within PROPOSE_WAIT_MAX, propose() must still emit a
+    /// payload — built on the executed tip — instead of dropping the
+    /// proposal and stalling the view for the whole fleet.
+    #[test]
+    fn test_propose_falls_back_to_executed_tip_when_context_parent_dead() {
+        let mut node = make_layer_node();
+        let (_, tip) = rt().block_on(node.executed_tip());
+        assert_eq!(tip, genesis_parent());
+        let ctx = make_ctx(18, 5, [7u8; 32]);
+        // One runtime, one block_on: propose() tokio::spawn's the proposer
+        // task; dropping the runtime between calls would orphan it.
+        let d = rt()
+            .block_on(async {
+                let rx = node.propose(ctx).await;
+                rx.await
+            })
+            .expect("propose must emit a digest via the executed-tip fallback");
+        let payloads = rt().block_on(async { node.pending_payloads.lock().await.clone() });
+        let p = payloads
+            .get(&d.0)
+            .expect("proposed payload must land in pending_payloads");
+        assert_eq!(
+            p.parent_digest, tip,
+            "fallback proposal must name the executed tip"
+        );
+        assert_eq!(p.height, 1);
+        assert_eq!(p.state_root, local_state_root(&node));
     }
 }
