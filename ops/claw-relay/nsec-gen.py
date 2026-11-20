@@ -42,7 +42,7 @@ def _pm(v):
     return chk
 
 def bech32(hrp, payload):
-    d = [0]
+    d = []
     acc, bits = 0, 0
     for b in payload:
         acc = (acc << 8) | b; bits += 8
