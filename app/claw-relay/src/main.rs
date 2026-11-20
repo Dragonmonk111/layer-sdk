@@ -385,11 +385,15 @@ async fn ws_handler(
     State(app): State<Shared>,
 ) -> axum::response::Response {
     // NIP-11: relay information document on `Accept: application/nostr+json`
-    if headers
-        .get(axum::http::header::ACCEPT)
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|a| a.contains("application/nostr+json"))
-    {
+    // — and on ANY non-upgrade GET. Clients probe relay info with varying
+    // Accept conventions; a bare 426 left Buzz reporting "relay did not
+    // advertise its identity".
+    let wants_info_doc = ws.is_none()
+        || headers
+            .get(axum::http::header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|a| a.contains("application/nostr+json"));
+    if wants_info_doc {
         let mut doc = serde_json::json!({
             "name": "J-Claw Relay",
             "description": "JunoClaw sovereign coordination relay — write admission is a live view of the DAO's cw4 membership contract. HTTP endpoints require a NIP-98-signed request (kind-27235); reads additionally require an allowlisted signer.",
