@@ -1,9 +1,9 @@
 # JunoClaw public TLS edge — hardened.
 #
-# DEPLOYED 2026-10-14 on OVH (51.195.201.74) to /etc/caddy/Caddyfile.
+# DEPLOYED 2026-11-21 on OVH (51.195.201.74) to /etc/caddy/Caddyfile.
 # This file mirrors the live config — the upstreams below are the real
-# service bindings on that host. Backups on the host:
-#   /etc/caddy/Caddyfile.bak-jc  /usr/bin/caddy.stock-bak
+# service bindings on that host. Backup on the host:
+#   /etc/caddy/Caddyfile.bak-20261121 (pre-relay-ALPN-fix)
 #
 # The caddy binary is a custom xcaddy build (caddy v2.11.7 +
 # github.com/mholt/caddy-ratelimit) — stock caddy has no rate_limit
@@ -45,9 +45,77 @@ status.junoclaw.xyz {
 	reverse_proxy 127.0.0.1:8082 # jc-status.service
 }
 
+faucet.junoclaw.xyz {
+	rate_limit {
+		zone faucet_per_ip {
+			key    {http.request.remote.host}
+			events 30
+			window 1m
+		}
+	}
+	reverse_proxy 127.0.0.1:8083 # jc-faucet.service
+}
+
+relay.junoclaw.xyz {
+	# Force HTTP/1.1 for this hostname only: `protocols` is server-wide,
+	# but TLS ALPN is per-SNI — clients that offer h2 get h1 anyway, so
+	# the classic WebSocket upgrade path always applies. h2+ WS would
+	# need RFC 8441 extended CONNECT, which this relay does not speak —
+	# h2 clients previously got 426. Alt-Svc is stripped so no client is
+	# lured onto HTTP/3/QUIC either.
+	tls {
+		alpn http/1.1
+	}
+	header -Alt-Svc
+	redir /chat /chat/ 308
+	handle_path /chat/* {
+		root * /srv/www/chat
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:7070 # claw-relay.service
+	}
+}
+
+share.junoclaw.xyz {
+	rate_limit {
+		zone share_per_ip {
+			key    {http.request.remote.host}
+			events 120
+			window 1m
+		}
+	}
+	reverse_proxy 127.0.0.1:8088 # jc-share.service
+}
+
+chat.junoclaw.xyz {
+	rate_limit {
+		zone chat_per_ip {
+			key    {http.request.remote.host}
+			events 120
+			window 1m
+		}
+	}
+	root * /srv/www/chat
+	file_server
+}
+
+dao.junoclaw.xyz {
+	rate_limit {
+		zone dao_per_ip {
+			key    {http.request.remote.host}
+			events 120
+			window 1m
+		}
+	}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8082 # jc-status.service DAO API
+	}
+	handle {
+		root * /srv/www/dao
+		file_server
+	}
+}
+
 # junoclaw.xyz is Cloudflare-fronted (own edge/absorption layer) — not
 # proxied through this Caddy.
-#
-# faucet.junoclaw.xyz gets a block here when jc-faucet deploys
-# (reverse_proxy to its listen port + a ~30 events/min zone; the service
-# has its own address/IP cooldowns — the edge zone is a blunt outer cap).
