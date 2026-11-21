@@ -25,6 +25,16 @@ on anyone's behalf: the contract binds `seat_index` to `info.sender` and
 requires sender weight > 0 (`NotMember`). There is no admin path —
 every member signs their own tx.
 
+## ⚠ seat_index = live validator_index, NOT the roster column (verified 2026-11-21)
+
+`seat-roster.json`'s `seat_index` column is **stale**: it assigns ovh-uk1's
+key (`62e51f5e…`) to seat 5, but OVH's live `node.toml` and `keys.json` both
+say `validator_index = 6`. The contract's `seat_index` must equal the
+consensus participant index (what `SubmitEvidence` resolves partial sigs
+against). **Each member must read `validator_index` from their own live
+keys.json/node.toml** — do not copy the roster's index column. The roster's
+hot_ed25519 values can be used to sanity-check which row is yours.
+
 ## Per-member procedure (the only path)
 
 1. Find your seat + addr:
@@ -54,6 +64,12 @@ every member signs their own tx.
 - [ ] When 5 records land: `{"list_active_seats":{}}` → 5 seats → relay admission refresh picks them up (`admission source=attestation refreshed seats=5` in claw-relay logs).
 - [ ] Consensus-only seats (utsa, 79anvi, blockpro, LuckyStar, ALXY, ANODE) → `--allowlist` npubs, per TUESDAY-WINDOW.
 - [ ] Then the relay flip: drop `--member-bindings`, add `--attestation-contract`, restart, smoke 403 on unlisted npub.
+
+## Our submissions (broadcast 2026-11-21, in mempool pending finalization)
+
+- **Seat 6 (ovh-uk1, member juno134zsp2…)** — tx `4F05E27C55750A3C5D6FC94872D722555F73813183728FD91727CD09706DA9B3`; seat_index 6 per live config (roster's "5" was stale). npub nsec at `/opt/dao-keys/npub-seat6.sec` on OVH.
+- **Seat 3 (home-vb, member juno1wjtmj0…)** — tx `3A6C7A4A917D7BF8DC8822F44B518A5563000E17910192EA6028A63F9EB5A65D`; signed on the VB guest with the dao-key.pem moved off the retired WSL env (now at `/mnt/extdrive/junoclaw-node/keys/dao-key.pem`); npub nsec at `keys/npub-seat3.sec` alongside. Broadcast via `https://api.junoclaw.xyz` — the public h2c path works for jc-execute.
+- Both sit in mempool — the wedge means execution lands when finalization resumes. `get_seat` still returns null; verify after recovery, don't rebroadcast.
 
 ## Delegated-attestation gap (unchanged)
 
