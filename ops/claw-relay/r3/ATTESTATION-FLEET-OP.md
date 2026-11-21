@@ -4,12 +4,18 @@ Verified on-chain this date via `tx-sender query` against
 `127.0.0.1:9090` (OVH donor gRPC):
 
 - `list_active_seats` on `juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm` → **empty** — no seat is attested.
-- `list_members` on cw4 `juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj` → exactly 5 members, weight 1:
-  - `juno134zsp2umr4vkhkvrn35uy3fv4n5uss233vnraz` (our transcript-anchor wallet — **flagged InsufficientFunds in BUZZ-PARITY**)
-  - `juno1p3suqqsdzz0wd30asz3uzd0u3pfwsg36g6el8e`
-  - `juno1wjtmj0fekn4fkdpf8ttgctr537txvarae225a0`
-  - `juno1xqyqszj0nppyhjlnywm8jwd7ye9hrphnz0vawk`
-  - `juno1yzte2lj9mtn2jlquj28apg82aedrxwywjt0k0m`
+- `list_members` on cw4 `juno1u0l6ddahjn88v4usdrk33vk4k53qsjmmun45n9ssvfl5sg5xnj3qul37pj` → exactly 5 members, weight 1 (mapping per `docs/AGENTS-DAO-PLAN.md`):
+
+  | member addr | seat | key location | funded |
+  |---|---|---|---|
+  | `juno134zsp2umr4vkhkvrn35uy3fv4n5uss233vnraz` | ovh-uk1 (seat 5) | `/opt/dao-keys/dao-key.pem` on OVH | 42.59 JCLAW ✓ |
+  | `juno1wjtmj0fekn4fkdpf8ttgctr537txvarae225a0` | home-vb (seat 3) | `/opt/g1-node/keys/dao-key.pem` on retired WSL env — needs moving to the VB guest | ~1.0 JCLAW ✓ |
+  | `juno1yzte2lj9mtn2jlquj28apg82aedrxwywjt0k0m` | posthuman (seat 2) | operator | ? |
+  | `juno1p3suqqsdzz0wd30asz3uzd0u3pfwsg36g6el8e` | anatoly (seat 0) | operator | ? |
+  | `juno1xqyqszj0nppyhjlnywm8jwd7ye9hrphnz0vawk` | vahana/Ravi (seat 6) | operator | ? |
+
+  Note: `juno134zsp2…` doubles as the transcript-anchor wallet; its
+  BUZZ-PARITY InsufficientFunds flag is stale — topped up since.
 
 ## Correction to R3-ATTESTATION-RUNBOOK "Path A"
 
@@ -42,8 +48,8 @@ every member signs their own tx.
 ## Coordinator checklist
 
 - [ ] Fill remaining npub fields in seat-roster.json as members publish theirs (or members fill locally — roster is theirs to complete).
-- [ ] Top up `juno134zsp2…nraz` (anchor wallet, our member) — InsufficientFunds already observed on anchor txs.
-- [ ] Decide our second member: we hold two seats (3 home-vb, 5 ovh-uk1); anchor wallet can bind ONE. Second seat's member addr must be identified/funded.
+- [x] Top up `juno134zsp2…nraz` — already holds 42.59 JCLAW; InsufficientFunds flag was stale. (Faucet had a stale-sequence bug — provided 0 vs expected 196; fixed by restart 2026-11-21.)
+- [x] Our second member identified: `juno1wjtmj0…` = home-vb, key at `/opt/g1-node/keys/dao-key.pem` on the retired WSL env — move to VB guest `/mnt/extdrive/` at op time. No new addr needed — DO NOT create one (a third member would need a DAO UpdateMembers vote anyway).
 - [ ] After each member tx: `{"get_seat":{"seat_index":N}}` → member_addr + 4 keys + attested_at.
 - [ ] When 5 records land: `{"list_active_seats":{}}` → 5 seats → relay admission refresh picks them up (`admission source=attestation refreshed seats=5` in claw-relay logs).
 - [ ] Consensus-only seats (utsa, 79anvi, blockpro, LuckyStar, ALXY, ANODE) → `--allowlist` npubs, per TUESDAY-WINDOW.
