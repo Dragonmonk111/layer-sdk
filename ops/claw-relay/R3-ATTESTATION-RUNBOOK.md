@@ -53,16 +53,12 @@ evidence signed under superseded keys still resolves.
 }
 ```
 
-## Path A — member is the deployer/ops account (coordinator runs it)
+## Path A — STALE, do not use (verified 2026-11-21)
 
-```bash
-tx-sender execute --grpc <donor>:9090 \
-  --contract juno1rhlajgcuufadqwhjdw29fh4tged8cyxrtry4lt9luv54ex6emvdq44t7qm \
-  --msg "$(cat attest-seat-N.json)"
-```
-
-(tx-sender derives the deterministic deployer key — the juno1dz87…
-account that holds contract-deploy weight.)
+The tx-sender deployer key `juno1dz875zg8p78anpjv3f0qt4gu5a3awpjfhtw992`
+is **not** a cw4 member — `list_members` returns 5 other addresses. The
+contract rejects a deployer-submitted UpdateAttestation with NotMember.
+See `r3/ATTESTATION-FLEET-OP.md` — every member self-signs via Path B.
 
 ## Path B — member is the operator's own wallet
 
