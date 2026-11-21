@@ -67,10 +67,35 @@ if [ -z "$SEATS" ]; then
   done
 fi
 
+# Moniker -> ed25519_public_hex[:8] resolution. Priv files are named by
+# pubkey prefix (dealing-priv-<dealer>-for-<prefix>.json), NOT by request
+# basename — matching on basename ships empty-privs bundles (caught in the
+# R4 dry-run). python3 -> python fallback + CR strip (Windows-safe).
+declare -A PREFIX_OF=()
+resolve_prefix() {
+  local f=$1 py
+  for py in python3 python; do
+    command -v "$py" >/dev/null 2>&1 || continue
+    "$py" - "$f" <<'PY' 2>/dev/null
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(d.get("ed25519_public_hex", "")[:8])
+PY
+    return
+  done
+  die "no python found for request parsing"
+}
+for seat in $SEATS; do
+  pfx=$(resolve_prefix "$REQUESTS_DIR/$seat.json" | tr -d '\r')
+  [ -n "$pfx" ] || die "cannot resolve ed25519 prefix for seat $seat"
+  PREFIX_OF[$seat]=$pfx
+done
+
 mkdir -p "$OUT"
 : > "$OUT/MANIFEST-bundles.txt"
 
 for seat in $SEATS; do
+  pfx=${PREFIX_OF[$seat]}
   tmp=$(mktemp -d)
   mkdir -p "$tmp/logs" "$tmp/share-requests" "$tmp/privs"
   cp "$INFO" "$tmp/dkg-info.json"
@@ -79,19 +104,19 @@ for seat in $SEATS; do
   cp "$REQUESTS_DIR"/*.json "$tmp/share-requests/"
 
   n=0
-  for f in "$PRIV_DIR"/dealing-priv-*-for-"$seat".json; do
+  for f in "$PRIV_DIR"/dealing-priv-*-for-"$pfx".json; do
     [ -e "$f" ] || continue
     cp "$f" "$tmp/privs/"
     n=$((n+1))
   done
-  [ "$n" -gt 0 ] || echo "!! WARN: no privs for $seat — bundle will be public-only"
+  [ "$n" -gt 0 ] || die "no privs for $seat (prefix $pfx) — refusing to pack a public-only bundle"
 
   # mispack guard: every priv in this bundle must be sealed for THIS seat
   for f in "$tmp"/privs/*; do
     [ -e "$f" ] || continue
     case "$(basename "$f")" in
-      *-for-"$seat".json) ;;
-      *) die "mispack: $(basename "$f") is not sealed for $seat — aborting" ;;
+      *-for-"$pfx".json) ;;
+      *) die "mispack: $(basename "$f") is not sealed for $seat ($pfx) — aborting" ;;
     esac
   done
 
