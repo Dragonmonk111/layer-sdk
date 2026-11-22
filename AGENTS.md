@@ -427,3 +427,18 @@ these ship without a deterministic repro harness first:
 Non-goals deliberately deferred: consensus-semantics changes without
 the repro harness; any change to "never execute a merely-notarized
 ancestor" (that invariant is what saved the chain on Oct-21).
+
+## Windows recursive-delete safety (2026-11-22 junction incident)
+
+16. **Check for NTFS junctions before any recursive delete.** An
+    `rm -rf` on a directory containing a junction traversed into the
+    live repo and deleted it. `readlink` does NOT detect junctions.
+    Before deleting: `fsutil reparsepoint query <path>` or look for
+    `<JUNCTION>` in `dir` output — and treat any nested repo-shaped
+    path as suspect. Prefer targeted deletes of known files/dirs over
+    `rm -rf` on anything you did not create in this session.
+17. **Everything important is pushed before any cleanup.** The repo was
+    fully recoverable because every commit was on the remote
+    (`layer-sdk` branch `commonware`). Untracked `dist/` binaries and
+    ceremony scratch were the only losses — all had live copies on
+    operator hosts or were rebuildable.
