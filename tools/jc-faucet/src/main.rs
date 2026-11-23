@@ -318,18 +318,33 @@ async fn drip(
             hex::encode_upper(h)
         };
 
-        let resp = client
+        let resp = match client
             .broadcast_tx(BroadcastTxRequest {
                 tx_bytes,
                 mode: 1, // BROADCAST_MODE_SYNC
             })
             .await
-            .map_err(|e| {
-                bad(
+        {
+            Ok(r) => r,
+            Err(s) => {
+                // gRPC-level CheckTx rejection (e.g. FailedPrecondition
+                // InvalidSequence) — same resync-and-retry path as a
+                // code-bearing rejection.
+                let seq_err = s.code() == tonic::Code::FailedPrecondition
+                    || s.message().contains("InvalidSequence")
+                    || s.message().contains("doesn't match");
+                if seq_err && attempt == 0 {
+                    resync_sequence(st.as_ref()).await.map_err(|e| {
+                        bad(axum::http::StatusCode::BAD_GATEWAY, &e)
+                    })?;
+                    continue;
+                }
+                return Err(bad(
                     axum::http::StatusCode::BAD_GATEWAY,
-                    &format!("broadcast failed: {e}"),
-                )
-            })?;
+                    &format!("broadcast failed: {s}"),
+                ));
+            }
+        };
 
         if let Some(r) = resp.into_inner().tx_response {
             if r.code != 0 {
