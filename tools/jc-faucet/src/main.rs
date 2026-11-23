@@ -7,7 +7,7 @@
 //!
 //! Endpoints:
 //!   GET  /health              -> {"ok":true, "address":..., "sequence":...}
-//!   POST /drip {"address": "juno1..."}  -> {"txhash": "..."} or 429/400
+//!   POST /drip {"address": "juno1..."}  -> {"txhash": "..."} (commit-verified) or 429/400/502/504
 //!
 //! Rate limits (in-memory; restart resets):
 //!   - per-address cooldown  (FAUCET_ADDR_COOLDOWN_SECS, default 6h)
@@ -45,7 +45,7 @@ use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, Query
 use layer_proto::cosmos::bank::v1beta1::MsgSend;
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
 use layer_proto::cosmos::tx::v1beta1::{
-    service_client::ServiceClient as TxServiceClient, BroadcastTxRequest,
+    service_client::ServiceClient as TxServiceClient, BroadcastTxRequest, GetTxRequest,
 };
 
 const TYPE_URL_MSG_SEND: &str = "/cosmos.bank.v1beta1.MsgSend";
@@ -142,6 +142,44 @@ async fn query_sequence(grpc_addr: &str, address: &str) -> Result<u64, Box<dyn s
             .map(|a| a.sequence)
             .unwrap_or(0)),
         None => Ok(0),
+    }
+}
+
+/// Re-read the account sequence from the chain and store it. The chain is
+/// authoritative — txs signed elsewhere (or a committed drip) advance the
+/// sequence out from under this process.
+async fn resync_sequence(st: &FaucetState) -> Result<(), String> {
+    let chain_seq = query_sequence(&st.grpc, &st.address)
+        .await
+        .map_err(|e| format!("sequence resync query failed: {e}"))?;
+    st.sequence.store(chain_seq, Ordering::Relaxed);
+    Ok(())
+}
+
+/// Poll GetTx until the tx commits or the deadline passes. Returns the
+/// committed TxResponse, or Err(()) on timeout (tx may still commit later).
+async fn wait_committed(
+    client: &mut TxServiceClient<Channel>,
+    txhash: &str,
+    wait: Duration,
+) -> Result<layer_proto::cosmos::base::abci::v1beta1::TxResponse, ()> {
+    let deadline = Instant::now() + wait;
+    loop {
+        match client
+            .get_tx(GetTxRequest {
+                hash: txhash.to_string(),
+            })
+            .await
+        {
+            Ok(r) => return r.into_inner().tx_response.ok_or(()),
+            Err(s) if s.code() == tonic::Code::NotFound => {
+                if Instant::now() >= deadline {
+                    return Err(());
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+            Err(_) => return Err(()),
+        }
     }
 }
 
@@ -257,12 +295,6 @@ async fn drip(
 
     // Sign + broadcast under the sequence lock so two drips can't collide.
     let _seq_guard = st.seq_lock.lock().await;
-    let sequence = st.sequence.load(Ordering::Relaxed);
-    let mut tx_bytes = sign_send_tx(&st.key_seed, &req.address, st.amount, sequence, &st.chain_id);
-    let mut txhash = {
-        let h = Sha256::digest(&tx_bytes);
-        hex::encode_upper(h)
-    };
 
     let mut client = TxServiceClient::new(
         connect(&st.grpc).await.map_err(|e| {
@@ -272,63 +304,87 @@ async fn drip(
             )
         })?,
     );
-    let mut resp = client
-        .broadcast_tx(BroadcastTxRequest {
-            tx_bytes,
-            mode: 1, // BROADCAST_MODE_SYNC
-        })
-        .await
-        .map_err(|e| {
-            bad(
-                axum::http::StatusCode::BAD_GATEWAY,
-                &format!("broadcast failed: {e}"),
-            )
-        })?;
 
-    if let Some(r) = resp.into_inner().tx_response {
-        if r.code != 0 {
-            // The faucet key is shared with the deployer account, so txs
-            // signed elsewhere advance the chain sequence out from under
-            // this process. The chain is authoritative — resync and retry
-            // once before failing (previously: every drip failed forever
-            // once drift happened).
-            let chain_seq = query_sequence(&st.grpc, &st.address)
-                .await
-                .map_err(|e| {
-                    bad(
-                        axum::http::StatusCode::BAD_GATEWAY,
-                        &format!("sequence resync query failed: {e}"),
-                    )
-                })?;
-            st.sequence.store(chain_seq, Ordering::Relaxed);
-            tx_bytes =
-                sign_send_tx(&st.key_seed, &req.address, st.amount, chain_seq, &st.chain_id);
-            txhash = {
-                let h = Sha256::digest(&tx_bytes);
-                hex::encode_upper(h)
-            };
-            resp = client
-                .broadcast_tx(BroadcastTxRequest {
-                    tx_bytes,
-                    mode: 1, // BROADCAST_MODE_SYNC
-                })
-                .await
-                .map_err(|e| {
-                    bad(
-                        axum::http::StatusCode::BAD_GATEWAY,
-                        &format!("broadcast retry failed: {e}"),
-                    )
-                })?;
-            if let Some(r) = resp.into_inner().tx_response {
-                if r.code != 0 {
-                    return Err(bad(
-                        axum::http::StatusCode::BAD_GATEWAY,
-                        &format!(
-                            "check_tx rejected after resync (code {}): {}",
-                            r.code, r.raw_log
-                        ),
-                    ));
+    // Up to two attempts: initial + one resync-retry. This chain's CheckTx
+    // accepts stale-sequence txs (sequence is only verified at deliver time),
+    // so a "successful" broadcast can still commit with code != 0. The drip
+    // is only reported to the caller after the tx commits with code == 0.
+    let mut txhash = String::new();
+    for attempt in 0..2 {
+        let sequence = st.sequence.load(Ordering::Relaxed);
+        let tx_bytes = sign_send_tx(&st.key_seed, &req.address, st.amount, sequence, &st.chain_id);
+        txhash = {
+            let h = Sha256::digest(&tx_bytes);
+            hex::encode_upper(h)
+        };
+
+        let resp = client
+            .broadcast_tx(BroadcastTxRequest {
+                tx_bytes,
+                mode: 1, // BROADCAST_MODE_SYNC
+            })
+            .await
+            .map_err(|e| {
+                bad(
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    &format!("broadcast failed: {e}"),
+                )
+            })?;
+
+        if let Some(r) = resp.into_inner().tx_response {
+            if r.code != 0 {
+                // CheckTx rejection — resync and retry once.
+                if attempt == 0 {
+                    resync_sequence(st.as_ref()).await.map_err(|e| {
+                        bad(axum::http::StatusCode::BAD_GATEWAY, &e)
+                    })?;
+                    continue;
                 }
+                return Err(bad(
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    &format!(
+                        "check_tx rejected after resync (code {}): {}",
+                        r.code, r.raw_log
+                    ),
+                ));
+            }
+        }
+
+        // Broadcast accepted — now verify the tx actually commits.
+        match wait_committed(&mut client, &txhash, Duration::from_secs(30)).await {
+            Ok(r) if r.code == 0 => break, // confirmed on-chain
+            Ok(r) => {
+                // The faucet key is shared with the deployer account, so txs
+                // signed elsewhere advance the chain sequence out from under
+                // this process. The chain is authoritative — resync and retry
+                // once on sequence mismatch; any other committed failure is
+                // reported honestly instead of a fake success.
+                if r.raw_log.contains("doesn't match") && attempt == 0 {
+                    resync_sequence(st.as_ref()).await.map_err(|e| {
+                        bad(axum::http::StatusCode::BAD_GATEWAY, &e)
+                    })?;
+                    continue;
+                }
+                return Err(bad(
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    &format!(
+                        "drip tx committed with error (code {}): {}",
+                        r.code, r.raw_log
+                    ),
+                ));
+            }
+            Err(()) => {
+                // Not committed within the wait window — the tx may still
+                // land later. Resync the cached sequence from the chain (it
+                // reflects the tx if it already committed) and report the
+                // pending txhash honestly rather than claiming success.
+                let _ = resync_sequence(st.as_ref()).await;
+                return Err(bad(
+                    axum::http::StatusCode::GATEWAY_TIMEOUT,
+                    &format!(
+                        "tx {txhash} accepted but not committed within 30s — check the hash before retrying"
+                    ),
+                ));
             }
         }
     }
