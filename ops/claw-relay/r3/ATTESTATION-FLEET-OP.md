@@ -65,11 +65,11 @@ hot_ed25519 values can be used to sanity-check which row is yours.
 - [ ] Consensus-only seats (utsa, 79anvi, blockpro, LuckyStar, ALXY, ANODE) → `--allowlist` npubs, per TUESDAY-WINDOW.
 - [ ] Then the relay flip: drop `--member-bindings`, add `--attestation-contract`, restart, smoke 403 on unlisted npub.
 
-## Our submissions (broadcast 2026-11-21, in mempool pending finalization)
+## Our submissions (broadcast 2026-11-21, finalized 2026-11-23 after wedge recovery)
 
-- **Seat 6 (ovh-uk1, member juno134zsp2…)** — tx `4F05E27C55750A3C5D6FC94872D722555F73813183728FD91727CD09706DA9B3`; seat_index 6 per live config (roster's "5" was stale). npub nsec at `/opt/dao-keys/npub-seat6.sec` on OVH.
-- **Seat 3 (home-vb, member juno1wjtmj0…)** — tx `3A6C7A4A917D7BF8DC8822F44B518A5563000E17910192EA6028A63F9EB5A65D`; signed on the VB guest with the dao-key.pem moved off the retired WSL env (now at `/mnt/extdrive/junoclaw-node/keys/dao-key.pem`); npub nsec at `keys/npub-seat3.sec` alongside. Broadcast via `https://api.junoclaw.xyz` — the public h2c path works for jc-execute.
-- Both sit in mempool — the wedge means execution lands when finalization resumes. `get_seat` still returns null; verify after recovery, don't rebroadcast.
+- **Seat 6 (ovh-uk1, member juno134zsp2…)** — original tx `4F05E27C55750A3C5D6FC94872D722555F73813183728FD91727CD09706DA9B3` was included at h8623544 but **failed code 1** (stale sequence 1882 vs expected 1883 — the tx was built pre-halt and its sequence went stale in mempool). Re-broadcast 2026-11-23 as tx `840500F73B767284853EB9F16BF6BA424C0D4464A4A497E3D91BB8FF02E91B5F` → **code 0 at h8637376**, `list_active_seats` shows seat 6. npub nsec at `/opt/dao-keys/npub-seat6.sec` on OVH. Rebuilt msg recovered from the failed tx's on-chain payload (exact field-for-field copy) → `/home/ubuntu/attest-ovh-v2.json` — NOT `/tmp`, which systemd-tmpfiles cleans mid-op.
+- **Seat 3 (home-vb, member juno1wjtmj0…)** — tx `3A6C7A4A917D7BF8DC8822F44B518A5563000E17910192EA6028A63F9EB5A65D` → **code 0 at h8623544** when finalization resumed. Signed on the VB guest with the dao-key.pem moved off the retired WSL env (now at `/mnt/extdrive/junoclaw-node/keys/dao-key.pem`); npub nsec at `keys/npub-seat3.sec` alongside.
+- **Lesson:** a tx broadcast during a consensus halt can land with a stale sequence once finalization resumes — `get_tx` the hash before assuming success, and rebuild + re-sign rather than resubmitting the same signed bytes.
 
 ## Delegated-attestation gap (unchanged)
 
