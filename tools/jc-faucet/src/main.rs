@@ -156,8 +156,11 @@ async fn resync_sequence(st: &FaucetState) -> Result<(), String> {
     Ok(())
 }
 
-/// Poll GetTx until the tx commits or the deadline passes. Returns the
-/// committed TxResponse, or Err(()) on timeout (tx may still commit later).
+/// Poll GetTx until the tx is actually committed (height > 0) or the
+/// deadline passes. A pending/mempool response carries height 0 — and on
+/// this chain a pending response also reports code 0 (proto3 default),
+/// so height is the commit signal, not code. Returns Err(()) on timeout
+/// (tx may still commit later).
 async fn wait_committed(
     client: &mut TxServiceClient<Channel>,
     txhash: &str,
@@ -171,7 +174,15 @@ async fn wait_committed(
             })
             .await
         {
-            Ok(r) => return r.into_inner().tx_response.ok_or(()),
+            Ok(r) => match r.into_inner().tx_response {
+                Some(t) if t.height > 0 => return Ok(t),
+                Some(_) | None => {
+                    if Instant::now() >= deadline {
+                        return Err(());
+                    }
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+            },
             Err(s) if s.code() == tonic::Code::NotFound => {
                 if Instant::now() >= deadline {
                     return Err(());
