@@ -372,6 +372,7 @@ struct Args {
     contract: Option<String>,
     msg_json: Option<String>,
     label: Option<String>,
+    funds: Option<String>,
 }
 
 fn print_usage() {
@@ -399,7 +400,7 @@ fn print_usage() {
     eprintln!("JunoClaw CosmWasm (signs with deployer key, or --jc-key-file/--jc-key-hex):");
     eprintln!("  jc-store-code     MsgStoreCode — upload a .wasm to JunoClaw");
     eprintln!("  jc-instantiate    MsgInstantiateContract --code-id <n> [--label <l>] [--msg <json>]");
-    eprintln!("  jc-execute        MsgExecuteContract --contract <addr> --msg <json|@file>");
+    eprintln!("  jc-execute        MsgExecuteContract --contract <addr> --msg <json|@file> [--funds <amt><denom>]");
     eprintln!("  jc-query          Query/SmartContractState --contract <addr> --msg <json|@file>");
     eprintln!("  jc-contracts      Query/ContractsByCode --code-id <n>");
     eprintln!("  jc-codes          Query/Codes — list stored code ids + checksums");
@@ -500,6 +501,7 @@ fn parse_args() -> Result<Args, String> {
         contract: None,
         msg_json: None,
         label: None,
+        funds: None,
     };
     let mut i = 2;
     while i < args.len() {
@@ -592,6 +594,7 @@ fn parse_args() -> Result<Args, String> {
             "--contract" => a.contract = Some(val(&mut i)?),
             "--msg" => a.msg_json = Some(val(&mut i)?),
             "--label" => a.label = Some(val(&mut i)?),
+            "--funds" => a.funds = Some(val(&mut i)?),
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
@@ -1520,11 +1523,24 @@ async fn cmd_jc_execute(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
             .as_deref()
             .ok_or("jc-execute requires --msg <json|@file>")?,
     )?;
+    let funds = match &a.funds {
+        Some(f) => {
+            let (amount, denom) = f
+                .find(|c: char| c.is_alphabetic())
+                .map(|i| f.split_at(i))
+                .ok_or("invalid --funds (expected <amount><denom>)")?;
+            vec![ProtoCoin {
+                denom: denom.to_string(),
+                amount: amount.to_string(),
+            }]
+        }
+        None => vec![],
+    };
     let msg = MsgExecuteContract {
         sender: layer_sender(a)?.to_string(),
         contract: contract.clone(),
         msg: msg_json.into_bytes(),
-        funds: vec![],
+        funds,
     };
     let hash =
         submit_layer_any_sim(a, any_of(TYPE_URL_MSG_EXECUTE_CONTRACT, &msg)).await?;
