@@ -10,12 +10,15 @@
 //! implementation and needs cmake + a C toolchain.
 //!
 //! Subcommands:
-//!   keygen --variant <mayo1|mayo2|mayo3|mayo5>
-//!   sign   --variant <v> --secp-sk <hex> --mayo-sk <hex>
-//!          --to <juno...> --amount <N> [--denom ujclaw]
-//!          --sequence <N> [--chain-id junoclaw-1] [--account-number 17]
-//!          [--gas 5000000] [--fee-amount 100000] [--memo <s>]
-//!          [--out <path>]
+//!   keygen   --variant <mayo1|mayo2|mayo3|mayo5>
+//!   sign     --variant <v> --secp-sk <hex> --mayo-sk <hex>
+//!            --to <juno...> --amount <N> [--denom ujclaw]
+//!            --sequence <N> [--chain-id junoclaw-1] [--account-number 17]
+//!            [--gas 5000000] [--fee-amount 100000] [--memo <s>]
+//!            [--out <path>]
+//!   raw-sign --variant <v> --secp-sk <hex> --mayo-sk <hex>
+//!            --body-hex <hex>   pre-encoded TxBody bytes (any messages)
+//!            --sequence <N> [same optional flags as sign, minus --to/--amount]
 
 use std::process::exit;
 
@@ -41,8 +44,9 @@ fn print_usage() {
     eprintln!("Usage: hybrid-sign <subcommand> [flags]");
     eprintln!();
     eprintln!("Subcommands:");
-    eprintln!("  keygen   Generate a secp256k1 + MAYO keypair, print hybrid address");
-    eprintln!("  sign     Sign a MsgSend, print hex-encoded TxRaw bytes");
+    eprintln!("  keygen    Generate a secp256k1 + MAYO keypair, print hybrid address");
+    eprintln!("  sign      Sign a MsgSend, print hex-encoded TxRaw bytes");
+    eprintln!("  raw-sign  Sign arbitrary pre-encoded TxBody bytes (--body-hex)");
     eprintln!();
     eprintln!("keygen flags:");
     eprintln!("  --variant <mayo1|mayo2|mayo3|mayo5>   MAYO parameter set (required)");
@@ -61,6 +65,10 @@ fn print_usage() {
     eprintln!("  --fee-amount <N>       Fee amount in --denom (default: 100000)");
     eprintln!("  --memo <str>           Tx memo (default: empty)");
     eprintln!("  --out <path>           Write hex tx to file instead of stdout");
+    eprintln!();
+    eprintln!("raw-sign flags:");
+    eprintln!("  --body-hex <hex>       pre-encoded TxBody bytes, any message types");
+    eprintln!("                         (replaces --to/--amount/--memo; other flags apply)");
 }
 
 #[derive(Default)]
@@ -70,6 +78,7 @@ struct Flags {
     mayo_sk: Option<String>,
     to: Option<String>,
     amount: Option<String>,
+    body_hex: Option<String>,
     denom: String,
     chain_id: String,
     account_number: u64,
@@ -97,6 +106,7 @@ fn parse_flags(args: &[String]) -> Result<Flags, String> {
             "--mayo-sk" => f.mayo_sk = Some(next_val(args, &mut i, "--mayo-sk")?),
             "--to" => f.to = Some(next_val(args, &mut i, "--to")?),
             "--amount" => f.amount = Some(next_val(args, &mut i, "--amount")?),
+            "--body-hex" => f.body_hex = Some(next_val(args, &mut i, "--body-hex")?),
             "--denom" => f.denom = next_val(args, &mut i, "--denom")?,
             "--chain-id" => f.chain_id = next_val(args, &mut i, "--chain-id")?,
             "--account-number" => {
@@ -239,13 +249,19 @@ fn cmd_keygen(variant: MayoVariant) -> Result<(), String> {
     Ok(())
 }
 
-fn cmd_sign(f: Flags) -> Result<(), String> {
+/// Parsed signer: dual key material plus the derived hybrid pubkey/address.
+struct Signer {
+    variant: MayoVariant,
+    secp_sk: SigningKey,
+    mayo_seed: Vec<u8>,
+    pubkey_any_value: Vec<u8>,
+    address: String,
+}
+
+fn signer_from_flags(f: &Flags) -> Result<Signer, String> {
     let variant = parse_variant(f.variant.as_deref().ok_or("--variant is required")?)?;
     let secp_sk_bytes = decode_hex(f.secp_sk.as_deref().ok_or("--secp-sk is required")?)?;
     let mayo_seed = decode_hex(f.mayo_sk.as_deref().ok_or("--mayo-sk is required")?)?;
-    let to = f.to.ok_or("--to is required")?;
-    let amount = f.amount.ok_or("--amount is required")?;
-    let sequence = f.sequence.ok_or("--sequence is required")?;
 
     let secp_sk =
         SigningKey::from_slice(&secp_sk_bytes).map_err(|e| format!("invalid secp-sk: {}", e))?;
@@ -254,7 +270,7 @@ fn cmd_sign(f: Flags) -> Result<(), String> {
 
     // Hybrid pubkey + sender address (domain-separated derivation, matches chain).
     let pk = PubKey::hybrid(secp_pk, variant, mayo_pk);
-    let from = pk
+    let address = pk
         .account_id()
         .map_err(|e| format!("account id: {}", e))?
         .to_string();
@@ -262,33 +278,24 @@ fn cmd_sign(f: Flags) -> Result<(), String> {
         .to_hybrid_any_bytes()
         .ok_or("failed to encode hybrid pubkey")?;
 
-    // TxBody: single MsgSend from the hybrid account.
-    let msg = MsgSend {
-        from_address: from.clone(),
-        to_address: to,
-        amount: vec![Coin {
-            denom: f.denom.clone(),
-            amount,
-        }],
-    };
-    let msg_any = Any {
-        type_url: "/cosmos.bank.v1beta1.MsgSend".to_string(),
-        value: msg.encode_to_vec(),
-    };
-    let tx_body = TxBody {
-        messages: vec![msg_any],
-        memo: f.memo,
-        timeout_height: 0,
-        extension_options: vec![],
-        non_critical_extension_options: vec![],
-    };
-    let body_bytes = tx_body.encode_to_vec();
+    Ok(Signer {
+        variant,
+        secp_sk,
+        mayo_seed,
+        pubkey_any_value,
+        address,
+    })
+}
+
+/// Wrap `body_bytes` in hybrid-signed TxRaw and emit hex (stdout or --out).
+fn emit_tx(f: Flags, s: &Signer, body_bytes: Vec<u8>) -> Result<(), String> {
+    let sequence = f.sequence.ok_or("--sequence is required")?;
 
     // AuthInfo: hybrid pubkey + SIGN_MODE_DIRECT + fee.
     let signer_info = SignerInfo {
         public_key: Some(Any {
             type_url: HYBRID_PUBKEY_TYPE_URL.to_string(),
-            value: pubkey_any_value,
+            value: s.pubkey_any_value.clone(),
         }),
         mode_info: Some(ModeInfo {
             sum: Some(mode_info::Sum::Single(mode_info::Single {
@@ -323,13 +330,14 @@ fn cmd_sign(f: Flags) -> Result<(), String> {
     let message_hash: [u8; 32] = Sha256::digest(&sign_doc_bytes).into();
 
     // secp256k1: sign the 32-byte hash, emit 64-byte r||s compact signature.
-    let secp_sig: SecpSig = secp_sk
+    let secp_sig: SecpSig = s
+        .secp_sk
         .sign_prehash(&message_hash)
         .map_err(|e| format!("secp signing failed: {}", e))?;
     let secp_sig_bytes = secp_sig.to_bytes().to_vec();
 
     // MAYO: sign the same hash; pack [64B secp | mayo sig].
-    let mayo_sig = mayo_sign(variant, &mayo_seed, &message_hash)?;
+    let mayo_sig = mayo_sign(s.variant, &s.mayo_seed, &message_hash)?;
     let packed = PubKey::pack_hybrid_signature(&secp_sig_bytes, &mayo_sig);
 
     // TxRaw carries the same byte encodings used in the SignDoc.
@@ -340,7 +348,7 @@ fn cmd_sign(f: Flags) -> Result<(), String> {
     };
     let tx_bytes = tx_raw.encode_to_vec();
 
-    eprintln!("sender: {}", from);
+    eprintln!("sender: {}", s.address);
     eprintln!("tx size: {} bytes", tx_bytes.len());
     eprintln!("txhash: {}", hex::encode(Sha256::digest(&tx_bytes)));
 
@@ -353,6 +361,46 @@ fn cmd_sign(f: Flags) -> Result<(), String> {
         None => println!("{}", hex_out),
     }
     Ok(())
+}
+
+fn cmd_sign(f: Flags) -> Result<(), String> {
+    let to = f.to.clone().ok_or("--to is required")?;
+    let amount = f.amount.clone().ok_or("--amount is required")?;
+    let s = signer_from_flags(&f)?;
+
+    // TxBody: single MsgSend from the hybrid account.
+    let msg = MsgSend {
+        from_address: s.address.clone(),
+        to_address: to,
+        amount: vec![Coin {
+            denom: f.denom.clone(),
+            amount,
+        }],
+    };
+    let msg_any = Any {
+        type_url: "/cosmos.bank.v1beta1.MsgSend".to_string(),
+        value: msg.encode_to_vec(),
+    };
+    let tx_body = TxBody {
+        messages: vec![msg_any],
+        memo: f.memo.clone(),
+        timeout_height: 0,
+        extension_options: vec![],
+        non_critical_extension_options: vec![],
+    };
+    emit_tx(f, &s, tx_body.encode_to_vec())
+}
+
+fn cmd_raw_sign(f: Flags) -> Result<(), String> {
+    let body_bytes = decode_hex(f.body_hex.as_deref().ok_or("--body-hex is required")?)?;
+    // Sanity: the bytes must decode as a TxBody with at least one message.
+    let body = TxBody::decode(body_bytes.as_slice())
+        .map_err(|e| format!("--body-hex does not decode as TxBody: {}", e))?;
+    if body.messages.is_empty() {
+        return Err("TxBody carries no messages".to_string());
+    }
+    let s = signer_from_flags(&f)?;
+    emit_tx(f, &s, body_bytes)
 }
 
 fn main() {
@@ -374,6 +422,7 @@ fn main() {
             }
         }
         "sign" => parse_flags(&args[1..]).and_then(cmd_sign),
+        "raw-sign" => parse_flags(&args[1..]).and_then(cmd_raw_sign),
         other => Err(format!("unknown subcommand: {}", other)),
     };
     if let Err(e) = result {
