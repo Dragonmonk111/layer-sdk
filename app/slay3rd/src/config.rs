@@ -240,6 +240,19 @@ pub struct StateSyncConfig {
     /// untouched. Default false.
     #[serde(default)]
     pub force: bool,
+    /// Self-rescue from the donor-retention-floor wedge: when the
+    /// executed tip stalls below the heights donors can still serve
+    /// (validators retain ~540k payload heights; a deeper gap can never
+    /// be filled by backfill), the node arms a force-re-sync sentinel
+    /// and exits for the supervisor to restart it into state sync.
+    /// Requires a supervisor/watchdog that restarts the process.
+    /// Default true when [state_sync] is configured.
+    #[serde(default = "default_auto_rescue")]
+    pub auto_rescue: bool,
+}
+
+fn default_auto_rescue() -> bool {
+    true
 }
 
 /// Set-change restart anchor: the agreed parent every seat builds on when

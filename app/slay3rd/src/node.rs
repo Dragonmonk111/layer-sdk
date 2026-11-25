@@ -814,29 +814,40 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         if !solicited && !within_observed && payload.height > tip + PEER_PAYLOAD_LOOKAHEAD {
             return (Err("unsolicited payload beyond lookahead window"), false);
         }
-        if pending.len() >= MAX_PENDING_PAYLOADS_TOTAL {
-            if !solicited {
+        // Window admission above the unsolicited soft cap: pending always
+        // keeps the lowest known heights — the material execution consumes
+        // first. An entry is admitted only if it improves the window
+        // (closer to the executed tip than the map's current maximum);
+        // solicited replies always qualify. Admission displaces the entry
+        // furthest above the tip — refetchable via backfill — so far-tip
+        // push spam can never crowd out the links execution needs next,
+        // and unsolicited pushes can never grow the map into the solicited
+        // reserve (net length unchanged when they evict).
+        let len = pending.len();
+        if len >= MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE {
+            let improves = solicited
+                || pending
+                    .values()
+                    .map(|p| p.height)
+                    .max()
+                    .map_or(true, |m| payload.height < m);
+            if !improves {
                 return (Err("pending payload capacity reached"), false);
             }
-            // Solicited reply at capacity: evict the pending entry furthest
-            // above the executed tip. Rejecting a payload we explicitly asked
-            // for wedges catch-up permanently — pending only drains via
-            // execution, and execution halts on exactly the link being
-            // refused (rc11 soak: home-vb deadlocked 4.5h on this). The
-            // evicted entry is refetchable via the same backfill paths.
-            let Some(victim) = pending
-                .iter()
-                .max_by_key(|(_, p)| p.height)
-                .map(|(d, _)| *d)
-            else {
-                return (Err("pending payload capacity reached"), false);
-            };
-            pending.remove(&victim);
-        } else if !solicited && pending.len() >= MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE {
-            // Keep headroom for solicited replies so unsolicited pushes can
-            // never fill the buffer to the point the rule above engages on
-            // every catch-up reply.
-            return (Err("pending payload capacity reached"), false);
+            if len >= MAX_PENDING_PAYLOADS_TOTAL || !solicited {
+                // Rejecting a payload we explicitly asked for wedges catch-up
+                // permanently — pending only drains via execution, and
+                // execution halts on exactly the link being refused (rc11
+                // soak: home-vb deadlocked 4.5h on this).
+                let Some(victim) = pending
+                    .iter()
+                    .max_by_key(|(_, p)| p.height)
+                    .map(|(d, _)| *d)
+                else {
+                    return (Err("pending payload capacity reached"), false);
+                };
+                pending.remove(&victim);
+            }
         }
         pending.insert(digest, payload);
         (Ok(true), !solicited)
@@ -855,6 +866,20 @@ impl<T: PersistentStorage + Send + Sync + 'static, P: PublicKey> LayerNode<T, P>
         let h = self.current_height.lock().await;
         let d = self.last_digest.lock().await;
         (*h, *d)
+    }
+
+    /// Highest payload height observed on the relay so far — the
+    /// backfill fetch-target hint. Purely observational; never used to
+    /// advance execution.
+    pub fn max_seen_height(&self) -> u64 {
+        self.max_seen_height
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Payloads buffered pending execution — diagnostics for stall
+    /// detection (saturated buffer + stalled tip is the wedge signature).
+    pub async fn pending_len(&self) -> usize {
+        self.pending_payloads.lock().await.len()
     }
 
     /// Compare a payload candidate against the executed chain.
@@ -2436,6 +2461,73 @@ mod tests {
             assert_eq!(pending.len(), MAX_PENDING_PAYLOADS_TOTAL);
             assert!(pending.contains_key(&tip_link_digest));
             assert!(!pending.contains_key(&victim), "furthest entry evicted for solicited reply");
+        });
+    }
+
+    /// rc20: above the unsolicited soft cap, a push that improves the
+    /// window (closer to the executed tip than the map's maximum)
+    /// displaces the furthest entry instead of being refused — far-tip
+    /// spam can never crowd out the material execution needs next, and
+    /// unsolicited pushes never grow the map into the solicited reserve.
+    #[test]
+    fn test_window_improving_push_displaces_far_entry() {
+        let node = make_layer_node();
+        let at = |height: u64| BlockPayload {
+            height,
+            timestamp_nanos: view_timestamp_nanos(height),
+            proposer: vec![1u8; 32],
+            txs: vec![],
+            parent_digest: [height as u8; 32],
+            state_root: [0u8; 32],
+        };
+        rt().block_on(async {
+            // Fill to the reserve boundary with unsolicited near-tip spam.
+            let mut inserted = 0usize;
+            loop {
+                let mut p = at(2);
+                p.timestamp_nanos += inserted as u64;
+                if node.accept_peer_payload(p).await.is_err() {
+                    break;
+                }
+                inserted += 1;
+            }
+            let soft_cap = MAX_PENDING_PAYLOADS_TOTAL - PENDING_SOLICITED_RESERVE;
+            assert_eq!(node.pending_payloads.lock().await.len(), soft_cap);
+
+            // Park a far entry via a solicited insert — it is now the
+            // map's maximum and the displacement victim.
+            let far = at(PEER_PAYLOAD_LOOKAHEAD + 1_000);
+            let far_digest = far.digest();
+            node.request_payload(far_digest);
+            assert_eq!(node.accept_peer_payload(far).await, Ok(true));
+            assert_eq!(node.pending_payloads.lock().await.len(), soft_cap + 1);
+
+            // An unsolicited push closer to the tip than the far entry
+            // displaces it — net length unchanged, window improved.
+            let near = at(3);
+            let near_digest = near.digest();
+            assert_eq!(
+                node.accept_peer_payload(near).await,
+                Ok(true),
+                "window-improving unsolicited push must be admitted"
+            );
+            let pending = node.pending_payloads.lock().await;
+            assert_eq!(pending.len(), soft_cap + 1, "displacement is net-neutral");
+            assert!(pending.contains_key(&near_digest));
+            assert!(
+                !pending.contains_key(&far_digest),
+                "furthest entry evicted for the improving push"
+            );
+            drop(pending);
+
+            // A non-improving push at the same max height is refused —
+            // far-tip spam cannot churn the window.
+            let mut same_height = at(3);
+            same_height.timestamp_nanos += 9_999;
+            assert!(
+                node.accept_peer_payload(same_height).await.is_err(),
+                "non-improving unsolicited push above the soft cap rejected"
+            );
         });
     }
 

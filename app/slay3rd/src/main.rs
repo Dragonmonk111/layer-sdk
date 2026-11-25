@@ -1054,12 +1054,28 @@ async fn run_node(
     // the sync path below fires even when state exists (G2 lesson: a
     // node that booted once on a stale config holds genesis state
     // forever — load_from_storage() returns Ok and sync never runs).
+    // The auto-rescue sentinel counts as force: a previous run detected
+    // an unserveable gap (executed tip below the donors' payload
+    // retention floor), armed this file, and exited for the supervisor
+    // to restart it into a forced re-sync.
+    let force_sync_sentinel = format!("{}.force-sync", app_data_path);
     #[cfg(feature = "rocksdb")]
-    if config.state_sync.as_ref().is_some_and(|s| s.force)
-        && std::path::Path::new(&app_data_path).exists()
-    {
+    let force_sync = config.state_sync.as_ref().is_some_and(|s| {
+        if s.force {
+            return true;
+        }
+        if std::path::Path::new(&force_sync_sentinel).exists() {
+            let _ = std::fs::remove_file(&force_sync_sentinel);
+            warn!(sentinel = %force_sync_sentinel,
+                "state-sync auto-rescue sentinel found — forcing re-sync");
+            return true;
+        }
+        false
+    });
+    #[cfg(feature = "rocksdb")]
+    if force_sync && std::path::Path::new(&app_data_path).exists() {
         warn!(path = %app_data_path,
-            "state-sync force=true — removing stored app state before open");
+            "state-sync force — removing stored app state before open");
         std::fs::remove_dir_all(&app_data_path)
             .expect("force_state_sync: failed to remove app data directory");
     }
@@ -1820,11 +1836,27 @@ async fn run_node(
 
     // Task C: ask peers for payloads this node is missing (certify/finalize
     // digest requests, plus bulk height-range backfill requests).
+    // rc20: requests go to a ROTATING SUBSET of the peer set, not
+    // Recipients::All — every request used to draw up to one reply per
+    // peer (≈10× reply traffic during deep catch-up, the flood that
+    // saturates both pending and the peers' serve loops). Rotation
+    // spreads the load; re-requests land on the next subset when these
+    // peers can't serve.
+    let fetch_peers: Vec<ed25519::PublicKey> = peer_entries
+        .iter()
+        .map(|(pk, _)| pk.clone())
+        .filter(|pk| *pk != our_ed25519_pk)
+        .collect();
     {
         let mut sender = payload_p2p_sender.clone();
         let mut rx = payload_fetch_rx;
         let mesh_reached = mesh_reached.clone();
+        let fetch_peers = fetch_peers;
         tokio::spawn(async move {
+            /// Peers asked per request — big enough that one donor holding
+            //  the height usually answers, small enough to kill the flood.
+            const FETCH_FANOUT: usize = 3;
+            let mut rr = 0usize;
             while let Some(req) = rx.recv().await {
                 let msg = match req {
                     FetchRequest::Digest(digest) => {
@@ -1841,7 +1873,17 @@ async fn run_node(
                         msg
                     }
                 };
-                match P2pSender::send(&mut sender, Recipients::All, bytes::Bytes::from(msg), true).await {
+                let recipients = if fetch_peers.len() <= FETCH_FANOUT {
+                    Recipients::All
+                } else {
+                    let n = fetch_peers.len();
+                    let picks: Vec<ed25519::PublicKey> = (0..FETCH_FANOUT)
+                        .map(|i| fetch_peers[(rr + i) % n].clone())
+                        .collect();
+                    rr = (rr + 1) % n;
+                    Recipients::Some(picks)
+                };
+                match P2pSender::send(&mut sender, recipients, bytes::Bytes::from(msg), true).await {
                     Ok(sent_to) => {
                         let mut m = mesh_reached.lock().await;
                         let now = std::time::Instant::now();
@@ -1868,6 +1910,72 @@ async fn run_node(
             loop {
                 tokio::time::sleep(BACKFILL_TICK).await;
                 node.backfill_tick().await;
+            }
+        });
+    }
+
+    // Task E: catch-up stall watch + donor-floor self-rescue. Two jobs:
+    //  - WARN when the executed tip stops advancing while the network is
+    //    ahead — the rc11 wedge signature (pending saturated, zero
+    //    finalizes) that used to run silently for hours.
+    //  - When the gap exceeds the donor retention floor (validators keep
+    //    ~540k payload heights; a deeper gap can never be backfilled), a
+    //    stalled node can never self-recover via payloads — arm the
+    //    force-sync sentinel and exit so the supervisor restarts it into
+    //    state sync (the manual runbook, automated).
+    {
+        let node = p2p_node.clone();
+        let auto_rescue = config
+            .state_sync
+            .as_ref()
+            .map(|s| s.auto_rescue && !s.peers.is_empty())
+            .unwrap_or(false);
+        let sentinel = force_sync_sentinel.clone();
+        tokio::spawn(async move {
+            const STALL_CHECK: Duration = Duration::from_secs(30);
+            const STALL_WARN_AFTER: Duration = Duration::from_secs(120);
+            /// Rescue only past the donors' serveable floor with margin —
+            /// gaps beyond ~540k heights cannot be filled by backfill at all.
+            const SERVE_FLOOR_GAP: u64 = 480_000;
+            /// A fresh boot is allowed to look stalled while the mesh and
+            /// backfill establish — rescues only arm after this.
+            const RESCUE_GRACE: Duration = Duration::from_secs(600);
+            let booted = std::time::Instant::now();
+            let mut last_tip = 0u64;
+            let mut last_advance = std::time::Instant::now();
+            loop {
+                tokio::time::sleep(STALL_CHECK).await;
+                let (tip, _) = node.executed_tip().await;
+                if tip != last_tip {
+                    last_tip = tip;
+                    last_advance = std::time::Instant::now();
+                    continue;
+                }
+                let max_seen = node.max_seen_height();
+                let gap = max_seen.saturating_sub(tip);
+                if gap == 0 || last_advance.elapsed() < STALL_WARN_AFTER {
+                    continue;
+                }
+                let stalled_secs = last_advance.elapsed().as_secs();
+                let pending = node.pending_len().await;
+                if gap >= SERVE_FLOOR_GAP && auto_rescue && booted.elapsed() >= RESCUE_GRACE {
+                    tracing::error!(
+                        tip, max_seen, gap, pending, stalled_secs,
+                        "catch-up impossible: executed tip below donor \
+                         payload retention floor — arming forced state-sync \
+                         and exiting for supervisor restart"
+                    );
+                    let _ = std::fs::write(
+                        &sentinel,
+                        format!("tip={} max_seen={} gap={}\n", tip, max_seen, gap),
+                    );
+                    std::process::exit(2);
+                }
+                tracing::warn!(
+                    tip, max_seen, gap, pending, stalled_secs,
+                    "catch-up stall: executed tip not advancing while \
+                     network is ahead (pending-payload wedge signature)"
+                );
             }
         });
     }
