@@ -89,6 +89,8 @@ COPY tools/jc-status/Cargo.toml /myapp/tools/jc-status/Cargo.toml
 COPY dummy.rs /myapp/tools/jc-status/src/main.rs
 COPY tools/jc-faucet/Cargo.toml /myapp/tools/jc-faucet/Cargo.toml
 COPY dummy.rs /myapp/tools/jc-faucet/src/main.rs
+COPY tools/jc-share/Cargo.toml /myapp/tools/jc-share/Cargo.toml
+COPY dummy.rs /myapp/tools/jc-share/src/main.rs
 # rocksdb feature => persistent RockStore at {data_dir}/app (survives restarts).
 # Build it here too so the dep cache covers the rocksdb C++ compile.
 RUN cargo build --release -p slay3rd -p jc-status --features slay3rd/rocksdb
