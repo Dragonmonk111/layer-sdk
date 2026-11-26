@@ -171,6 +171,9 @@ Phase 2 is **live in production**, not a design target:
 | Signing tooling | `tools/hybrid-sign` — keygen / sign / raw-sign / mayo-sign / mayo-verify | Built (needs cmake + C toolchain — Docker/CI only) |
 | Service signing | jc-faucet `--hybrid` env mode; bls-relayer `--jc-mayo-*` flags; clinical-evidence dual-signed bundles | In-tree, rolling out |
 | PQ signature verify | `junoclaw-mayo-verify` (pure Rust, WASM-ready) | Live — charges its own gas line |
+| Contract-layer sig verify | `mayo_verify` VM host function + `deps.api.mayo_verify()` | **Live in-tree** — contracts can require MAYO-2 alongside classical checks; classical-only contract sig checks are documented as quantum-forgeable |
+| Ceremony file transit | jc-share `x25519-mlkem768-xchacha20poly1305-v2` — AEAD key from BOTH X25519 DH and ML-KEM-768 | In-tree — harvest-now resistant; `--kem-to` flag, `kem-keygen` derives KEM keypair from existing seed |
+| Release authenticity | `junoclaw-release` MAYO key signs release manifests; pubkey anchored in-repo (`docs/RELEASE-KEY.json`) | Live — slay3rd-rc20 signed retroactively (`docs/release-sigs/`) |
 
 ### Surfaces that remain classical (documented, not hidden)
 
@@ -178,7 +181,7 @@ Phase 2 is **live in production**, not a design target:
 |---|---|---|
 | ed25519 P2P transport auth | Session MITM/censorship — **cannot forge finalized state**: certs are hybrid-verified, state-sync anchors are finality-checked independent of transport | Track commonware upstream for a hybrid X25519+ML-KEM handshake; chain safety does not depend on it |
 | TLS on edge endpoints (faucet/API/explorer) | Session interception of public data | Deploy hybrid TLS groups when infra supports; not chain-forging |
-| X25519 ceremony file transit | Harvest-now on DKG dealing material | Move to hybrid KEM wrap before mainnet (see AGENTS.md trust ceiling) |
+| Ceremony transit via v1 seals | Pre-v2 envelopes are classical-only | Operators adopt `--kem-to` v2 sealing; v1 decrypt path retained for archives |
 | Plain secp256k1/ed25519 accounts | Still accepted by the app | Hybrid = documented default for new agent/service accounts; existing accounts migrate by rotation |
 
 ### Design property worth stating plainly
