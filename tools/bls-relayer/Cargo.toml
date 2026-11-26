@@ -42,4 +42,9 @@ futures = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
+# Hybrid secp256k1+MAYO JunoClaw signing (--jc-mayo-hex/JUNOCLAW_MAYO_SK).
+# Vendored AVX-safe build via patch.crates-io; needs cmake + C toolchain.
+sriracha-mayo = "0.0.4"
+k256 = { version = "0.13", features = ["ecdsa"] }
+
 # CLI: manual argument parsing (no clap — proc-macro2 version conflicts in workspace)

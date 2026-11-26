@@ -34,7 +34,7 @@ use layer_std::{MayoVariant, PubKey, HYBRID_PUBKEY_TYPE_URL};
 use prost::Message;
 use sha2::{Digest, Sha256};
 
-const DEFAULT_CHAIN_ID: &str = "junoclaw-1";
+const DEFAULT_CHAIN_ID: &str = "junoclaw-g1";
 const DEFAULT_ACCOUNT_NUMBER: u64 = 17;
 const DEFAULT_DENOM: &str = "ujclaw";
 const DEFAULT_GAS_LIMIT: u64 = 5_000_000;
@@ -59,7 +59,7 @@ fn print_usage() {
     eprintln!("  --amount <N>           Amount to send (required)");
     eprintln!("  --sequence <N>         Account sequence (required)");
     eprintln!("  --denom <str>          Denom (default: ujclaw)");
-    eprintln!("  --chain-id <str>       Chain id (default: junoclaw-1)");
+    eprintln!("  --chain-id <str>       Chain id (default: junoclaw-g1)");
     eprintln!("  --account-number <N>   Account number (default: 17)");
     eprintln!("  --gas <N>              Gas limit (default: 5000000)");
     eprintln!("  --fee-amount <N>       Fee amount in --denom (default: 100000)");

@@ -349,6 +349,9 @@ struct Args {
     // IBC handshake / transfer fields
     jc_key_hex: Option<String>,
     jc_key_file: Option<String>,
+    jc_mayo_hex: Option<String>,
+    jc_mayo_file: Option<String>,
+    jc_mayo_variant: String,
     connection_id: Option<String>,
     port_id: Option<String>,
     channel_id: Option<String>,
@@ -420,6 +423,10 @@ fn print_usage() {
     eprintln!("  --key-hex <hex>            Counterparty secp256k1 private key (or RELAYER_KEY_HEX env)");
     eprintln!("  --jc-key-file <path>       JunoClaw secp256k1 key file (or JUNOCLAW_KEY_FILE env)");
     eprintln!("                             preferred over --jc-key-hex — hex args show in ps/history");
+    eprintln!("  --jc-mayo-file <path>      MAYO secret-seed hex file (or JUNOCLAW_MAYO_SK env):");
+    eprintln!("                             enables hybrid secp256k1+MAYO signing on JunoClaw txs;");
+    eprintln!("                             the sender becomes the domain-separated hybrid account");
+    eprintln!("  --jc-mayo-variant <v>      mayo1|mayo2|mayo3|mayo5 (default mayo2, or JUNOCLAW_MAYO_VARIANT)");
     eprintln!("  --mnemonic <words>         Counterparty BIP39 mnemonic (or RELAYER_MNEMONIC env)");
     eprintln!("  --cp-chain-id <id>         Counterparty chain id (default uni-7)");
     eprintln!("  --bech32-prefix <p>        Counterparty bech32 prefix (default juno)");
@@ -480,6 +487,10 @@ fn parse_args() -> Result<Args, String> {
         sequence: None,
         jc_key_hex: std::env::var("JUNOCLAW_KEY_HEX").ok(),
         jc_key_file: std::env::var("JUNOCLAW_KEY_FILE").ok(),
+        jc_mayo_hex: std::env::var("JUNOCLAW_MAYO_SK").ok(),
+        jc_mayo_file: std::env::var("JUNOCLAW_MAYO_FILE").ok(),
+        jc_mayo_variant: std::env::var("JUNOCLAW_MAYO_VARIANT")
+            .unwrap_or_else(|_| "mayo2".into()),
         connection_id: None,
         port_id: None,
         channel_id: None,
@@ -545,6 +556,9 @@ fn parse_args() -> Result<Args, String> {
             }
             "--jc-key-hex" => a.jc_key_hex = Some(val(&mut i)?),
             "--jc-key-file" => a.jc_key_file = Some(val(&mut i)?),
+            "--jc-mayo-hex" => a.jc_mayo_hex = Some(val(&mut i)?),
+            "--jc-mayo-file" => a.jc_mayo_file = Some(val(&mut i)?),
+            "--jc-mayo-variant" => a.jc_mayo_variant = val(&mut i)?,
             "--connection-id" => a.connection_id = Some(val(&mut i)?),
             "--port-id" => a.port_id = Some(val(&mut i)?),
             "--channel-id" => a.channel_id = Some(val(&mut i)?),
@@ -1265,50 +1279,261 @@ fn layer_fee_amount(gas_limit: u64) -> u128 {
 }
 
 /// JunoClaw signer — the funded deployer account by default; --jc-key-file
-/// (or JUNOCLAW_KEY_FILE env), --jc-key-hex, or JUNOCLAW_KEY_HEX env
-/// overrides for a different funded account. Prefer the file form:
-/// `--jc-key-hex <hex>` exposes the private key in `ps` output and shell
-/// history on any multi-user host (POSTHUMAN g1 finding).
-fn layer_signer_key(a: &Args) -> Result<SigningKey, Box<dyn std::error::Error>> {
-    if let Some(path) = a.jc_key_file.as_ref() {
+/// JunoClaw signing context: secp key always; MAYO material when the
+/// operator supplies --jc-mayo-hex/--jc-mayo-file or JUNOCLAW_MAYO_* env —
+/// the sender then becomes the domain-separated hybrid account.
+/// Key resolution: --jc-key-file (or JUNOCLAW_KEY_FILE env), --jc-key-hex,
+/// or JUNOCLAW_KEY_HEX env overrides for a different funded account. Prefer
+/// the file form: `--jc-key-hex <hex>` exposes the private key in `ps`
+/// output and shell history on any multi-user host (POSTHUMAN g1 finding).
+struct LayerSigner {
+    key: SigningKey,
+    secp_bytes: [u8; 32],
+    mayo_seed: Option<Vec<u8>>,
+    mayo_variant: layer_std::MayoVariant,
+}
+
+fn parse_mayo_variant(s: &str) -> Result<layer_std::MayoVariant, String> {
+    match s {
+        "mayo1" | "1" => Ok(layer_std::MayoVariant::Mayo1),
+        "mayo2" | "2" => Ok(layer_std::MayoVariant::Mayo2),
+        "mayo3" | "3" => Ok(layer_std::MayoVariant::Mayo3),
+        "mayo5" | "5" => Ok(layer_std::MayoVariant::Mayo5),
+        other => Err(format!("unknown mayo variant: {other}")),
+    }
+}
+
+fn mayo_pk_from_seed(
+    variant: layer_std::MayoVariant,
+    seed: &[u8],
+) -> Result<Vec<u8>, String> {
+    macro_rules! pk {
+        ($p:ty) => {{
+            let (pk, _sk) = sriracha_mayo::SecretKey::<$p>::from_seed(seed)
+                .map_err(|e| format!("invalid mayo secret seed: {:?}", e))?;
+            AsRef::<[u8]>::as_ref(&pk).to_vec()
+        }};
+    }
+    Ok(match variant {
+        layer_std::MayoVariant::Mayo1 => pk!(sriracha_mayo::Mayo1),
+        layer_std::MayoVariant::Mayo2 => pk!(sriracha_mayo::Mayo2),
+        layer_std::MayoVariant::Mayo3 => pk!(sriracha_mayo::Mayo3),
+        layer_std::MayoVariant::Mayo5 => pk!(sriracha_mayo::Mayo5),
+    })
+}
+
+fn mayo_sign(
+    variant: layer_std::MayoVariant,
+    seed: &[u8],
+    message_hash: &[u8],
+) -> Result<Vec<u8>, String> {
+    macro_rules! sign {
+        ($p:ty) => {{
+            let (_pk, sk) = sriracha_mayo::SecretKey::<$p>::from_seed(seed)
+                .map_err(|e| format!("invalid mayo secret seed: {:?}", e))?;
+            let sig = sk
+                .sign(message_hash)
+                .map_err(|e| format!("mayo signing failed: {:?}", e))?;
+            AsRef::<[u8]>::as_ref(&sig).to_vec()
+        }};
+    }
+    Ok(match variant {
+        layer_std::MayoVariant::Mayo1 => sign!(sriracha_mayo::Mayo1),
+        layer_std::MayoVariant::Mayo2 => sign!(sriracha_mayo::Mayo2),
+        layer_std::MayoVariant::Mayo3 => sign!(sriracha_mayo::Mayo3),
+        layer_std::MayoVariant::Mayo5 => sign!(sriracha_mayo::Mayo5),
+    })
+}
+
+fn layer_signer(a: &Args) -> Result<LayerSigner, Box<dyn std::error::Error>> {
+    let secp_bytes: [u8; 32] = if let Some(path) = a.jc_key_file.as_ref() {
         let contents = std::fs::read_to_string(path)
             .map_err(|e| format!("--jc-key-file {path}: {e}"))?;
         let bytes = hex::decode(contents.trim().trim_start_matches("0x"))
             .map_err(|e| format!("--jc-key-file {path}: not hex: {e}"))?;
-        return Ok(SigningKey::from_slice(&bytes)?);
-    }
-    if let Some(h) = a.jc_key_hex.as_ref() {
+        bytes
+            .try_into()
+            .map_err(|_| "--jc-key-file: expected 32-byte secp256k1 key".to_string())?
+    } else if let Some(h) = a.jc_key_hex.as_ref() {
         let bytes = hex::decode(h.trim_start_matches("0x"))?;
-        return Ok(SigningKey::from_slice(&bytes)?);
+        bytes
+            .try_into()
+            .map_err(|_| "--jc-key-hex: expected 32-byte secp256k1 key".to_string())?
+    } else {
+        let seed = Sha256::digest(b"junoclaw-deployer-v1");
+        let mut b = [0u8; 32];
+        b.copy_from_slice(&seed[..32]);
+        b
+    };
+    let key = SigningKey::from_slice(&secp_bytes)?;
+    let mayo_seed = if let Some(path) = a.jc_mayo_file.as_ref() {
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| format!("--jc-mayo-file {path}: {e}"))?;
+        Some(
+            hex::decode(contents.trim().trim_start_matches("0x"))
+                .map_err(|e| format!("--jc-mayo-file {path}: not hex: {e}"))?,
+        )
+    } else {
+        a.jc_mayo_hex
+            .as_ref()
+            .map(|h| hex::decode(h.trim_start_matches("0x")))
+            .transpose()?
+    };
+    let mayo_variant = parse_mayo_variant(&a.jc_mayo_variant)?;
+    Ok(LayerSigner {
+        key,
+        secp_bytes,
+        mayo_seed,
+        mayo_variant,
+    })
+}
+
+impl LayerSigner {
+    /// Hybrid pubkey Any bytes + juno1 address (None in secp-only mode).
+    fn hybrid_pubkey(&self) -> Result<Option<(Vec<u8>, String)>, String> {
+        let Some(seed) = &self.mayo_seed else {
+            return Ok(None);
+        };
+        let mayo_pk = mayo_pk_from_seed(self.mayo_variant, seed)?;
+        let pk = layer_std::PubKey::hybrid(
+            self.key.public_key().to_bytes().to_vec(),
+            self.mayo_variant,
+            mayo_pk,
+        );
+        let any_bytes = pk
+            .to_hybrid_any_bytes()
+            .ok_or("failed to encode hybrid pubkey")?;
+        let addr = pk
+            .account_id()
+            .map_err(|e| format!("hybrid account id: {e}"))?
+            .to_string();
+        Ok(Some((any_bytes, addr)))
     }
-    let seed = Sha256::digest(b"junoclaw-deployer-v1");
-    Ok(SigningKey::from_slice(&seed[..32])?)
+
+    /// Sender address for account queries / msg sender fields — hybrid-derived
+    /// when MAYO material is present, plain secp256k1 otherwise.
+    fn sender_addr(&self) -> Result<String, Box<dyn std::error::Error>> {
+        if let Some((_any, addr)) = self.hybrid_pubkey()? {
+            return Ok(addr);
+        }
+        Ok(self.key.public_key().account_id(LAYER_BECH32)?.to_string())
+    }
 }
 
 /// The JunoClaw sender as a `layer_std::AccountId` (bech32 "juno1…").
+/// In hybrid mode this is the hybrid-derived address, not the secp-only one.
 fn layer_sender(a: &Args) -> Result<layer_std::AccountId, Box<dyn std::error::Error>> {
-    let key = layer_signer_key(a)?;
-    let addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let signer = layer_signer(a)?;
+    if let Some((_any, addr)) = signer.hybrid_pubkey()? {
+        return Ok(layer_std::AccountId::parse_string(&addr)?);
+    }
+    let addr = signer.key.public_key().account_id(LAYER_BECH32)?.to_string();
     Ok(layer_std::AccountId::parse_string(&addr)?)
 }
 
 fn sign_and_encode_layer(
-    key: &SigningKey,
+    signer: &LayerSigner,
     msg: cosmrs::Any,
     account: &AccountInfo,
     gas_limit: u64,
     chain_id: &str,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    if signer.mayo_seed.is_some() {
+        return sign_and_encode_layer_hybrid(signer, msg, account, gas_limit, chain_id);
+    }
     let chain_id: ChainId = chain_id.parse()?;
     let fee_coin = Coin {
         amount: layer_fee_amount(gas_limit),
         denom: LAYER_FEE_DENOM.parse()?,
     };
     let body = tx::Body::new(vec![msg], "", 0u16);
-    let info = SignerInfo::single_direct(Some(key.public_key()), account.sequence);
+    let info = SignerInfo::single_direct(Some(signer.key.public_key()), account.sequence);
     let auth = info.auth_info(Fee::from_amount_and_gas(fee_coin, gas_limit));
     let doc = SignDoc::new(&body, &auth, &chain_id, account.account_number)?;
-    Ok(doc.sign(key)?.to_bytes()?)
+    Ok(doc.sign(&signer.key)?.to_bytes()?)
+}
+
+/// Hybrid secp256k1+MAYO JunoClaw signing: same TxBody/AuthInfo shape as the
+/// secp path but SignerInfo carries the hybrid Any pubkey and the signature
+/// is [64B secp256k1 | MAYO] over sha256(SignDoc). Mirrors hybrid-sign's
+/// emit path — the chain AND-verifies both halves.
+fn sign_and_encode_layer_hybrid(
+    signer: &LayerSigner,
+    msg: cosmrs::Any,
+    account: &AccountInfo,
+    gas_limit: u64,
+    chain_id: &str,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    use k256::ecdsa::{signature::hazmat::PrehashSigner, Signature as SecpSig, SigningKey as K256SigningKey};
+    use layer_proto::cosmos::tx::signing::v1beta1::SignMode;
+    use layer_proto::cosmos::tx::v1beta1::{
+        mode_info, AuthInfo, Fee as ProtoFee, ModeInfo, SignDoc as ProtoSignDoc,
+        SignerInfo as ProtoSignerInfo, TxRaw,
+    };
+    use layer_proto::google::protobuf::Any as ProtoAny;
+
+    let (pubkey_any_value, _addr) = signer
+        .hybrid_pubkey()?
+        .ok_or("hybrid signing without mayo material")?;
+    let mayo_seed = signer.mayo_seed.as_ref().unwrap();
+
+    let tx_body = layer_proto::cosmos::tx::v1beta1::TxBody {
+        messages: vec![ProtoAny {
+            type_url: msg.type_url.clone(),
+            value: msg.value.clone(),
+        }],
+        memo: String::new(),
+        timeout_height: 0,
+        extension_options: vec![],
+        non_critical_extension_options: vec![],
+    };
+    let body_bytes = prost::Message::encode_to_vec(&tx_body);
+
+    let auth_info = AuthInfo {
+        signer_infos: vec![ProtoSignerInfo {
+            public_key: Some(ProtoAny {
+                type_url: layer_std::HYBRID_PUBKEY_TYPE_URL.to_string(),
+                value: pubkey_any_value,
+            }),
+            mode_info: Some(ModeInfo {
+                sum: Some(mode_info::Sum::Single(mode_info::Single {
+                    mode: SignMode::Direct as i32,
+                })),
+            }),
+            sequence: account.sequence,
+        }],
+        fee: Some(ProtoFee {
+            amount: vec![layer_proto::cosmos::base::v1beta1::Coin {
+                denom: LAYER_FEE_DENOM.to_string(),
+                amount: layer_fee_amount(gas_limit).to_string(),
+            }],
+            gas_limit,
+            payer: String::new(),
+            granter: String::new(),
+        }),
+        tip: None,
+    };
+    let auth_info_bytes = prost::Message::encode_to_vec(&auth_info);
+
+    let sign_doc = ProtoSignDoc {
+        body_bytes: body_bytes.clone(),
+        auth_info_bytes: auth_info_bytes.clone(),
+        chain_id: chain_id.to_string(),
+        account_number: account.account_number,
+    };
+    let message_hash: [u8; 32] =
+        Sha256::digest(prost::Message::encode_to_vec(&sign_doc)).into();
+
+    let k256_key = K256SigningKey::from_slice(&signer.secp_bytes)?;
+    let secp_sig: SecpSig = k256_key.sign_prehash(&message_hash)?;
+    let mayo_sig = mayo_sign(signer.mayo_variant, mayo_seed, &message_hash)?;
+    let packed = layer_std::PubKey::pack_hybrid_signature(&secp_sig.to_bytes(), &mayo_sig);
+
+    Ok(prost::Message::encode_to_vec(&TxRaw {
+        body_bytes,
+        auth_info_bytes,
+        signatures: vec![packed.to_vec()],
+    }))
 }
 
 /// Broadcast a proto `Any` signed with the JunoClaw deployer/--jc-key-hex key.
@@ -1320,13 +1545,13 @@ async fn submit_layer_any(
     any: cosmrs::Any,
     gas_limit: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let key = layer_signer_key(a)?;
-    let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let signer = layer_signer(a)?;
+    let signer_addr = signer.sender_addr()?;
     let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
     if account.account_number == 0 {
         account.account_number = LAYER_ACCOUNT_NUMBER;
     }
-    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas_limit, &a.chain_id)?;
+    let tx_bytes = sign_and_encode_layer(&signer, any, &account, gas_limit, &a.chain_id)?;
     if a.simulate {
         simulate_report(&a.layer_grpc, tx_bytes).await?;
         return Ok("simulated".into());
@@ -1347,8 +1572,8 @@ async fn submit_layer_any_sim(
     a: &Args,
     any: cosmrs::Any,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let key = layer_signer_key(a)?;
-    let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let signer = layer_signer(a)?;
+    let signer_addr = signer.sender_addr()?;
     let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
     if account.account_number == 0 {
         account.account_number = LAYER_ACCOUNT_NUMBER;
@@ -1356,14 +1581,14 @@ async fn submit_layer_any_sim(
     // Probe bound is deliberately generous — gas_wanted caps the
     // simulation, so a msg needing >LAYER_GAS would fail the probe
     // instead of reporting its real usage.
-    let probe = sign_and_encode_layer(&key, any.clone(), &account, 20_000_000, &a.chain_id)?;
+    let probe = sign_and_encode_layer(&signer, any.clone(), &account, 20_000_000, &a.chain_id)?;
     let used = simulate(&a.layer_grpc, probe).await?;
     let gas = used.saturating_mul(6) / 5;
     if a.simulate {
         println!("simulate: gas_used={used} → gas_limit {gas}");
         return Ok("simulated".into());
     }
-    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas, &a.chain_id)?;
+    let tx_bytes = sign_and_encode_layer(&signer, any, &account, gas, &a.chain_id)?;
     let hash = broadcast(&a.layer_grpc, tx_bytes).await?;
     wait_tx(&a.layer_grpc, &hash).await?;
     Ok(hash)
@@ -1396,14 +1621,14 @@ async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
     // Two-phase gas: the byte formula misses wasm compile/instrumentation
     // cost (~15.6 gas/byte observed). Simulate with the formula estimate,
     // then re-sign with 20% headroom over the real gas_used.
-    let key = layer_signer_key(a)?;
-    let signer_addr = key.public_key().account_id(LAYER_BECH32)?.to_string();
+    let signer = layer_signer(a)?;
+    let signer_addr = signer.sender_addr()?;
     let mut account = query_account(&a.layer_grpc, &signer_addr).await?;
     if account.account_number == 0 {
         account.account_number = LAYER_ACCOUNT_NUMBER;
     }
     let probe = sign_and_encode_layer(
-        &key,
+        &signer,
         any.clone(),
         &account,
         store_code_gas(wasm_len),
@@ -1415,7 +1640,7 @@ async fn cmd_jc_store_code(a: &Args) -> Result<(), Box<dyn std::error::Error>> {
         println!("simulate: gas_used={used} → gas_limit {gas}");
         return Ok(());
     }
-    let tx_bytes = sign_and_encode_layer(&key, any, &account, gas, &a.chain_id)?;
+    let tx_bytes = sign_and_encode_layer(&signer, any, &account, gas, &a.chain_id)?;
     let hash = broadcast(&a.layer_grpc, tx_bytes).await?;
     wait_tx(&a.layer_grpc, &hash).await?;
     println!("jc-store-code committed — txhash {hash} (gas_limit {gas}, simulated {used})");
