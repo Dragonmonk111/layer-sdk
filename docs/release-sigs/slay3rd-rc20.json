@@ -1,0 +1,8 @@
+{
+  "release": "slay3rd-rc20",
+  "manifest_sha256_of_text": "b2b3b6dc8e40ab38e37fcecc511a3d246e220b0e1aac517bacfbbee26ea966fd",
+  "manifest": "slay3rd-rc20 release manifest\nslay3rd sha256 a0db50176172ac19c2ac28bc0da81300dbeb631290500928b81a8f8d77037e19\n",
+  "mayo_sig": "8421f17fa8b608d4d210a64469e191b3699c36aa17b76ecb8545311b26b51c10dcae997050864b720849f83bef402b98fb533c22e9fd4af126c7d346ca103a3fcd70e7a33bcad037855c6d8d14f065310acbed2986a094f725bfa77c42f944195a794aff57b0021278e00d8e9754a36aa05d1bdbdf82c43dac01b4231b1cdfc3329f80f056fa3443bc578ce93d57c0efe4f795a02a8d293e5ddda10420c0d97008fa2ff210b15efc405d53c9c39ff65935dd8a353da457718a0a",
+  "signer_key_id": "junoclaw-release",
+  "verify": "hybrid-sign mayo-verify --variant mayo2 --mayo-pk <mayo_pubkey from docs/RELEASE-KEY.json> --sig-hex <mayo_sig> --msg-hex <hex-encoded manifest text>"
+}
