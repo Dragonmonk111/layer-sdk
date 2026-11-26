@@ -28,8 +28,10 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SCHEME: &str = "x25519-xchacha20poly1305-v1";
+const SCHEME_V2: &str = "x25519-mlkem768-xchacha20poly1305-v2";
 const DOMAIN_SHARE: &[u8] = b"junoclaw-share-v1";
 const DOMAIN_DEALING: &[u8] = b"junoclaw-dealing-v1";
+const DOMAIN_KEM_SEED: &[u8] = b"junoclaw-kem-v1";
 
 fn unix_now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
@@ -47,6 +49,76 @@ struct EncField {
     ephem_hex: String,
     nonce_hex: String,
     ct_hex: String,
+    #[serde(default)]
+    kem_ct_hex: Option<String>,
+}
+
+// Deterministic RNG seeded from SHA-256 — used ONLY for reproducing a
+// recipient's ML-KEM keypair from their seed (keygen is the one place a
+// deterministic stream is correct). Never used for ephemeral randomness.
+struct SeedRng {
+    state: [u8; 32],
+    ctr: u64,
+    buf: [u8; 32],
+    pos: usize,
+}
+
+impl SeedRng {
+    fn new(state: [u8; 32]) -> Self {
+        SeedRng { state, ctr: 0, buf: [0u8; 32], pos: 32 }
+    }
+    fn next_block(&mut self) {
+        self.buf = sha2::Sha256::new()
+            .chain_update(self.state)
+            .chain_update(self.ctr.to_le_bytes())
+            .finalize()
+            .into();
+        self.ctr += 1;
+        self.pos = 0;
+    }
+}
+
+impl rand::RngCore for SeedRng {
+    fn next_u32(&mut self) -> u32 {
+        let mut b = [0u8; 4];
+        self.fill_bytes(&mut b);
+        u32::from_le_bytes(b)
+    }
+    fn next_u64(&mut self) -> u64 {
+        let mut b = [0u8; 8];
+        self.fill_bytes(&mut b);
+        u64::from_le_bytes(b)
+    }
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        for b in dest.iter_mut() {
+            if self.pos == 32 {
+                self.next_block();
+            }
+            *b = self.buf[self.pos];
+            self.pos += 1;
+        }
+    }
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        self.fill_bytes(dest);
+        Ok(())
+    }
+}
+
+impl rand::CryptoRng for SeedRng {}
+
+fn kem_keys_from_seed(
+    seed: &[u8],
+) -> (
+    ml_kem::kem::DecapsulationKey<ml_kem::MlKem768Params>,
+    ml_kem::kem::EncapsulationKey<ml_kem::MlKem768Params>,
+) {
+    use ml_kem::KemCore;
+    let state: [u8; 32] = sha2::Sha256::new()
+        .chain_update(DOMAIN_KEM_SEED)
+        .chain_update(seed)
+        .finalize()
+        .into();
+    ml_kem::MlKem768::generate(&mut SeedRng::new(state))
 }
 
 fn x25519_scalar_from_ed_seed(seed: &[u8]) -> [u8; 32] {
@@ -75,27 +147,73 @@ fn aead_key(domain: &[u8], shared: &[u8; 32]) -> [u8; 32] {
     k
 }
 
+// v2: key = sha256(domain || x25519_shared || mlkem_shared) — recovering the
+// plaintext requires breaking BOTH KEMs. A harvest-now/decrypt-later attacker
+// with a quantum machine still cannot open the envelope.
+fn aead_key_v2(domain: &[u8], x_shared: &[u8; 32], kem_shared: &[u8]) -> [u8; 32] {
+    let mut k = [0u8; 32];
+    k.copy_from_slice(
+        &sha2::Sha256::new()
+            .chain_update(domain)
+            .chain_update(x_shared)
+            .chain_update(kem_shared)
+            .finalize(),
+    );
+    k
+}
+
 fn seal_bytes(domain: &[u8], recipient_ed_hex: &str, plaintext: &[u8]) -> EncField {
+    seal_inner(domain, recipient_ed_hex, None, plaintext)
+}
+
+fn seal_inner(
+    domain: &[u8],
+    recipient_ed_hex: &str,
+    recipient_kem_hex: Option<&str>,
+    plaintext: &[u8],
+) -> EncField {
     use chacha20poly1305::aead::{Aead, KeyInit};
     let ed = hex::decode(recipient_ed_hex).expect("bad recipient ed25519 hex");
     let recip = x25519_dalek::PublicKey::from(x25519_pub_from_ed_pub(&ed));
     let eph = x25519_dalek::StaticSecret::random_from_rng(OsRng);
     let shared = eph.diffie_hellman(&recip);
-    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&aead_key(
-        domain,
-        shared.as_bytes(),
-    ))
-    .expect("key length");
+
+    let (key, scheme, kem_ct_hex) = match recipient_kem_hex {
+        Some(kem_hex) => {
+            use ml_kem::kem::Encapsulate;
+            use ml_kem::EncodedSizeUser;
+            let ek_bytes = hex::decode(kem_hex).expect("bad recipient kem pub hex");
+            let ek_arr: &ml_kem::Encoded<
+                ml_kem::kem::EncapsulationKey<ml_kem::MlKem768Params>,
+            > = ek_bytes
+                .as_slice()
+                .try_into()
+                .expect("bad recipient kem pub length");
+            let ek = ml_kem::kem::EncapsulationKey::<ml_kem::MlKem768Params>::from_bytes(ek_arr);
+            let (kem_ct, kem_ss) = ek
+                .encapsulate(&mut rand::rngs::OsRng)
+                .expect("mlkem encapsulate failed");
+            (
+                aead_key_v2(domain, shared.as_bytes(), &kem_ss),
+                SCHEME_V2,
+                Some(hex::encode(kem_ct.as_slice())),
+            )
+        }
+        None => (aead_key(domain, shared.as_bytes()), SCHEME, None),
+    };
+
+    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&key).expect("key length");
     let mut nonce = [0u8; 24];
     OsRng.fill_bytes(&mut nonce);
     let ct = cipher
         .encrypt(chacha20poly1305::XNonce::from_slice(&nonce), plaintext)
         .expect("aead encrypt");
     EncField {
-        scheme: SCHEME.to_string(),
+        scheme: scheme.to_string(),
         ephem_hex: hex::encode(x25519_dalek::PublicKey::from(&eph).to_bytes()),
         nonce_hex: hex::encode(nonce),
         ct_hex: hex::encode(ct),
+        kem_ct_hex,
     }
 }
 
@@ -104,11 +222,20 @@ fn unseal_with(domain: &[u8], enc: &EncField, my_seed: &[u8]) -> Option<Vec<u8>>
     let me = x25519_dalek::StaticSecret::from(x25519_scalar_from_ed_seed(my_seed));
     let eph_bytes: [u8; 32] = hex::decode(&enc.ephem_hex).ok()?.try_into().ok()?;
     let shared = me.diffie_hellman(&x25519_dalek::PublicKey::from(eph_bytes));
-    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&aead_key(
-        domain,
-        shared.as_bytes(),
-    ))
-    .ok()?;
+
+    let key = if enc.scheme == SCHEME_V2 {
+        use ml_kem::kem::Decapsulate;
+        let (dk, _ek) = kem_keys_from_seed(my_seed);
+        let ct_bytes = hex::decode(enc.kem_ct_hex.as_deref()?).ok()?;
+        let kem_ct: ml_kem::Ciphertext<ml_kem::MlKem768> =
+            ct_bytes.as_slice().try_into().ok()?;
+        let kem_ss = dk.decapsulate(&kem_ct).ok()?;
+        aead_key_v2(domain, shared.as_bytes(), &kem_ss)
+    } else {
+        aead_key(domain, shared.as_bytes())
+    };
+
+    let cipher = chacha20poly1305::XChaCha20Poly1305::new_from_slice(&key).ok()?;
     let nonce = hex::decode(&enc.nonce_hex).ok()?;
     let ct = hex::decode(&enc.ct_hex).ok()?;
     cipher
@@ -117,7 +244,10 @@ fn unseal_with(domain: &[u8], enc: &EncField, my_seed: &[u8]) -> Option<Vec<u8>>
 }
 
 fn unseal_bytes(enc: &EncField, my_seed: &[u8]) -> Vec<u8> {
-    assert_eq!(enc.scheme, SCHEME, "unknown seal scheme");
+    assert!(
+        enc.scheme == SCHEME || enc.scheme == SCHEME_V2,
+        "unknown seal scheme"
+    );
     unseal_with(DOMAIN_SHARE, enc, my_seed)
         .or_else(|| unseal_with(DOMAIN_DEALING, enc, my_seed))
         .expect("unseal failed — wrong seed, or file not addressed to this key")
@@ -320,11 +450,16 @@ fn take(args: &[String], flag: &str) -> Option<String> {
 fn usage() -> ! {
     eprintln!(
         "jc-share — sealed blob exchange\n\
-         serve   --dir <dir> --bind <addr> [--put-token T] [--access-log f]\n\
-         seal    --to <ed25519-pubhex> --in <f> --out <f>\n\
-         unseal  --seed <hex|@file> --in <f> --out <f>\n\
-         publish --relay <url> --file <f> [--ttl-secs N] [--downloads N] [--put-token T]\n\
-         fetch   <url> --out <f> [--unseal --seed <hex|@file>]"
+         serve      --dir <dir> --bind <addr> [--put-token T] [--access-log f]\n\
+         seal       --to <ed25519-pubhex> --in <f> --out <f> [--kem-to <mlkem768-pubhex>]\n\
+         unseal     --seed <hex|@file> --in <f> --out <f>\n\
+         kem-keygen --seed <hex|@file>   (prints your ML-KEM-768 pubkey for the roster)\n\
+         publish    --relay <url> --file <f> [--ttl-secs N] [--downloads N] [--put-token T]\n\
+         fetch      <url> --out <f> [--unseal --seed <hex|@file>]\n\
+         \n\
+         seal with --kem-to produces the PQ-hybrid v2 envelope\n\
+         (x25519-mlkem768-xchacha20poly1305-v2): breaking it requires\n\
+         defeating BOTH X25519 and ML-KEM-768."
     );
     std::process::exit(2);
 }
@@ -381,12 +516,25 @@ async fn main() {
         }
         "seal" => {
             let to = take(rest, "--to").expect("--to required");
+            let kem_to = take(rest, "--kem-to");
             let inp = take(rest, "--in").expect("--in required");
             let out = take(rest, "--out").expect("--out required");
             let pt = std::fs::read(&inp).expect("cannot read --in");
-            let enc = seal_bytes(DOMAIN_SHARE, &to, &pt);
+            let enc = seal_inner(DOMAIN_SHARE, &to, kem_to.as_deref(), &pt);
             std::fs::write(&out, serde_json::to_string_pretty(&enc).unwrap()).unwrap();
-            println!("sealed {} -> {} ({} bytes)", inp, out, pt.len());
+            println!(
+                "sealed {} -> {} ({} bytes, {})",
+                inp,
+                out,
+                pt.len(),
+                enc.scheme
+            );
+        }
+        "kem-keygen" => {
+            use ml_kem::EncodedSizeUser;
+            let seed = load_seed(&take(rest, "--seed").expect("--seed required"));
+            let (_dk, ek) = kem_keys_from_seed(&seed);
+            println!("{}", hex::encode(ek.as_bytes()));
         }
         "unseal" => {
             let seed = load_seed(&take(rest, "--seed").expect("--seed required"));
@@ -503,6 +651,41 @@ mod tests {
         let enc = seal_bytes(DOMAIN_DEALING, &hex::encode(ed_pub), b"dealing blob");
         let back = unseal_bytes(&enc, &seed);
         assert_eq!(back, b"dealing blob");
+    }
+
+    #[test]
+    fn seal_v2_hybrid_roundtrip() {
+        use curve25519_dalek_ng::scalar::Scalar;
+        use ml_kem::EncodedSizeUser;
+        let seed = [11u8; 32];
+        let s = Scalar::from_bytes_mod_order(x25519_scalar_from_ed_seed(&seed));
+        let ed_pub = (&s * &curve25519_dalek_ng::constants::ED25519_BASEPOINT_TABLE)
+            .compress()
+            .0;
+        let (_dk, ek) = kem_keys_from_seed(&seed);
+        let kem_pub = hex::encode(ek.as_bytes());
+        let pt = b"dealing-priv for idx3";
+        let enc = seal_inner(
+            DOMAIN_DEALING,
+            &hex::encode(ed_pub),
+            Some(&kem_pub),
+            pt,
+        );
+        assert_eq!(enc.scheme, SCHEME_V2);
+        assert!(enc.kem_ct_hex.is_some());
+        let back = unseal_bytes(&enc, &seed);
+        assert_eq!(back, pt);
+        // wrong seed must fail (different kem dk AND different x25519 scalar)
+        assert!(std::panic::catch_unwind(|| unseal_bytes(&enc, &[12u8; 32])).is_err());
+    }
+
+    #[test]
+    fn kem_keygen_is_deterministic() {
+        use ml_kem::EncodedSizeUser;
+        let seed = [5u8; 32];
+        let (_d1, e1) = kem_keys_from_seed(&seed);
+        let (_d2, e2) = kem_keys_from_seed(&seed);
+        assert_eq!(e1.as_bytes(), e2.as_bytes());
     }
 
     #[test]
