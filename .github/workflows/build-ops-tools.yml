@@ -22,6 +22,10 @@ on:
         description: "Standalone manifest path (e.g. tools/generate-testnet-keys/Cargo.toml)"
         required: false
         default: ""
+      c_toolchain:
+        description: "Install cmake + C toolchain (needed for sriracha-mayo deps, e.g. jc-faucet hybrid mode)"
+        required: false
+        default: "false"
 
 jobs:
   build:
@@ -33,6 +37,9 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install C toolchain (sriracha-mayo)
+        if: inputs.c_toolchain == 'true'
+        run: sudo apt-get update && sudo apt-get install -y clang g++ libclang-dev cmake
       - name: Resolve build target
         id: cfg
         run: |

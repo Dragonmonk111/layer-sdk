@@ -21,6 +21,11 @@
 //!   FAUCET_KEY_SEED      key seed label           (default junoclaw-deployer-v1)
 //!   FAUCET_CHAIN_ID      chain id                 (default junoclaw-1)
 //!   FAUCET_ADDR_COOLDOWN_SECS / FAUCET_IP_COOLDOWN_SECS / FAUCET_DAILY_CAP
+//!   FAUCET_MAYO_SK       MAYO secret-seed hex     (optional: enables hybrid
+//!                        secp256k1+MAYO signing — the drip account becomes
+//!                        the domain-separated hybrid address, which must be
+//!                        funded separately before enabling)
+//!   FAUCET_MAYO_VARIANT  mayo1|mayo2|mayo3|mayo5  (default mayo2)
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -36,6 +41,7 @@ use axum::{Json, Router};
 use cosmrs::crypto::secp256k1::SigningKey;
 use cosmrs::tx::{Fee, SignDoc, SignerInfo};
 use cosmrs::{AccountId, Coin};
+use k256::ecdsa::{signature::hazmat::PrehashSigner, Signature as SecpSig, SigningKey as K256SigningKey};
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -44,9 +50,14 @@ use tonic::transport::Channel;
 use layer_proto::cosmos::auth::v1beta1::{BaseAccount, QueryAccountRequest, QueryAccountResponse};
 use layer_proto::cosmos::bank::v1beta1::MsgSend;
 use layer_proto::cosmos::base::v1beta1::Coin as ProtoCoin;
+use layer_proto::cosmos::tx::signing::v1beta1::SignMode;
 use layer_proto::cosmos::tx::v1beta1::{
-    service_client::ServiceClient as TxServiceClient, BroadcastTxRequest, GetTxRequest,
+    mode_info, service_client::ServiceClient as TxServiceClient, AuthInfo, BroadcastTxRequest,
+    Fee as ProtoFee, GetTxRequest, ModeInfo, SignDoc as ProtoSignDoc, SignerInfo as ProtoSignerInfo,
+    TxRaw,
 };
+use layer_proto::google::protobuf::Any;
+use layer_std::{MayoVariant, PubKey, HYBRID_PUBKEY_TYPE_URL};
 
 const TYPE_URL_MSG_SEND: &str = "/cosmos.bank.v1beta1.MsgSend";
 /// Fixed account number used by the chain (matches FIXED_ACCOUNT_NUMBER in layer_cosmos).
@@ -78,13 +89,199 @@ fn faucet_key(seed: &[u8; 32]) -> SigningKey {
     SigningKey::from_slice(seed).expect("valid secp256k1 key from SHA256 seed")
 }
 
+// ---------------------------------------------------------------------------
+// Hybrid (PQ) signing — enabled by FAUCET_MAYO_SK + FAUCET_MAYO_VARIANT
+// ---------------------------------------------------------------------------
+
+/// Dual key material for HybridSecp256k1Mayo drips. When set, the faucet
+/// account address is the domain-separated hybrid derivation — it must be
+/// funded separately from the plain-secp256k1 account.
+struct HybridSigner {
+    secp: K256SigningKey,
+    mayo_seed: Vec<u8>,
+    variant: MayoVariant,
+    pubkey_any_value: Vec<u8>,
+    address: String,
+}
+
+fn parse_mayo_variant(s: &str) -> Result<MayoVariant, String> {
+    match s {
+        "mayo1" | "1" => Ok(MayoVariant::Mayo1),
+        "mayo2" | "2" => Ok(MayoVariant::Mayo2),
+        "mayo3" | "3" => Ok(MayoVariant::Mayo3),
+        "mayo5" | "5" => Ok(MayoVariant::Mayo5),
+        other => Err(format!("unknown mayo variant: {other}")),
+    }
+}
+
+fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    if s.len() % 2 != 0 {
+        return Err("hex string has odd length".to_string());
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+/// Restore the MAYO public key from its compact secret seed.
+fn mayo_pk_from_seed(variant: MayoVariant, seed: &[u8]) -> Result<Vec<u8>, String> {
+    macro_rules! pk {
+        ($p:ty) => {{
+            let (pk, _sk) = sriracha_mayo::SecretKey::<$p>::from_seed(seed)
+                .map_err(|e| format!("invalid mayo secret seed: {:?}", e))?;
+            AsRef::<[u8]>::as_ref(&pk).to_vec()
+        }};
+    }
+    Ok(match variant {
+        MayoVariant::Mayo1 => pk!(sriracha_mayo::Mayo1),
+        MayoVariant::Mayo2 => pk!(sriracha_mayo::Mayo2),
+        MayoVariant::Mayo3 => pk!(sriracha_mayo::Mayo3),
+        MayoVariant::Mayo5 => pk!(sriracha_mayo::Mayo5),
+    })
+}
+
+/// MAYO-sign `message_hash` with the compact secret seed.
+fn mayo_sign(variant: MayoVariant, seed: &[u8], message_hash: &[u8]) -> Result<Vec<u8>, String> {
+    macro_rules! sign {
+        ($p:ty) => {{
+            let (_pk, sk) = sriracha_mayo::SecretKey::<$p>::from_seed(seed)
+                .map_err(|e| format!("invalid mayo secret seed: {:?}", e))?;
+            let sig = sk
+                .sign(message_hash)
+                .map_err(|e| format!("mayo signing failed: {:?}", e))?;
+            AsRef::<[u8]>::as_ref(&sig).to_vec()
+        }};
+    }
+    Ok(match variant {
+        MayoVariant::Mayo1 => sign!(sriracha_mayo::Mayo1),
+        MayoVariant::Mayo2 => sign!(sriracha_mayo::Mayo2),
+        MayoVariant::Mayo3 => sign!(sriracha_mayo::Mayo3),
+        MayoVariant::Mayo5 => sign!(sriracha_mayo::Mayo5),
+    })
+}
+
+impl HybridSigner {
+    fn new(seed: &[u8; 32]) -> Result<Option<Self>, String> {
+        let mayo_sk = match std::env::var("FAUCET_MAYO_SK") {
+            Ok(v) if !v.is_empty() => v,
+            _ => return Ok(None),
+        };
+        let variant = parse_mayo_variant(&env_or("FAUCET_MAYO_VARIANT", "mayo2"))?;
+        let mayo_seed = hex_decode(&mayo_sk)?;
+        let secp =
+            K256SigningKey::from_slice(seed).map_err(|e| format!("invalid secp key: {e}"))?;
+        let mayo_pk = mayo_pk_from_seed(variant, &mayo_seed)?;
+        let pk = PubKey::hybrid(secp.verifying_key().to_sec1_bytes().to_vec(), variant, mayo_pk);
+        let pubkey_any_value = pk
+            .to_hybrid_any_bytes()
+            .ok_or("failed to encode hybrid pubkey")?;
+        let address = pk
+            .account_id()
+            .map_err(|e| format!("hybrid account id: {e}"))?
+            .to_string();
+        Ok(Some(Self {
+            secp,
+            mayo_seed,
+            variant,
+            pubkey_any_value,
+            address,
+        }))
+    }
+}
+
+/// Hybrid-signed MsgSend -> TxRaw bytes (mirrors hybrid-sign's emit path):
+/// SignerInfo carries the hybrid Any pubkey; signature is [64B secp | MAYO]
+/// over sha256(SignDoc).
+fn sign_send_tx_hybrid(
+    s: &HybridSigner,
+    to: &str,
+    amount: u128,
+    sequence: u64,
+    chain_id: &str,
+) -> Result<Vec<u8>, String> {
+    let msg = MsgSend {
+        from_address: s.address.clone(),
+        to_address: to.to_string(),
+        amount: vec![ProtoCoin {
+            denom: FEE_DENOM.to_string(),
+            amount: amount.to_string(),
+        }],
+    };
+    let tx_body = layer_proto::cosmos::tx::v1beta1::TxBody {
+        messages: vec![Any {
+            type_url: TYPE_URL_MSG_SEND.to_string(),
+            value: msg.encode_to_vec(),
+        }],
+        memo: String::new(),
+        timeout_height: 0,
+        extension_options: vec![],
+        non_critical_extension_options: vec![],
+    };
+    let body_bytes = tx_body.encode_to_vec();
+
+    let auth_info = AuthInfo {
+        signer_infos: vec![ProtoSignerInfo {
+            public_key: Some(Any {
+                type_url: HYBRID_PUBKEY_TYPE_URL.to_string(),
+                value: s.pubkey_any_value.clone(),
+            }),
+            mode_info: Some(ModeInfo {
+                sum: Some(mode_info::Sum::Single(mode_info::Single {
+                    mode: SignMode::Direct as i32,
+                })),
+            }),
+            sequence,
+        }],
+        fee: Some(ProtoFee {
+            amount: vec![ProtoCoin {
+                denom: FEE_DENOM.to_string(),
+                amount: FEE_AMOUNT.to_string(),
+            }],
+            gas_limit: GAS_LIMIT,
+            payer: String::new(),
+            granter: String::new(),
+        }),
+        tip: None,
+    };
+    let auth_info_bytes = auth_info.encode_to_vec();
+
+    let sign_doc = ProtoSignDoc {
+        body_bytes: body_bytes.clone(),
+        auth_info_bytes: auth_info_bytes.clone(),
+        chain_id: chain_id.to_string(),
+        account_number: FIXED_ACCOUNT_NUMBER,
+    };
+    let message_hash: [u8; 32] = Sha256::digest(sign_doc.encode_to_vec()).into();
+
+    let secp_sig: SecpSig = s
+        .secp
+        .sign_prehash(&message_hash)
+        .map_err(|e| format!("secp signing failed: {e}"))?;
+    let mayo_sig = mayo_sign(s.variant, &s.mayo_seed, &message_hash)?;
+    let packed = PubKey::pack_hybrid_signature(&secp_sig.to_bytes(), &mayo_sig);
+
+    Ok(TxRaw {
+        body_bytes,
+        auth_info_bytes,
+        signatures: vec![packed.to_vec()],
+    }
+    .encode_to_vec())
+}
+
 fn sign_send_tx(
     seed: &[u8; 32],
+    hybrid: Option<&HybridSigner>,
     to: &str,
     amount: u128,
     sequence: u64,
     chain_id: &str,
 ) -> Vec<u8> {
+    if let Some(h) = hybrid {
+        return sign_send_tx_hybrid(h, to, amount, sequence, chain_id)
+            .expect("hybrid signing failed");
+    }
     let key = faucet_key(seed);
     let from = key
         .public_key()
@@ -207,6 +404,7 @@ struct RateLimit {
 
 struct FaucetState {
     key_seed: [u8; 32],
+    hybrid: Option<HybridSigner>,
     address: String,
     grpc: String,
     chain_id: String,
@@ -323,7 +521,7 @@ async fn drip(
     let mut txhash = String::new();
     for attempt in 0..2 {
         let sequence = st.sequence.load(Ordering::Relaxed);
-        let tx_bytes = sign_send_tx(&st.key_seed, &req.address, st.amount, sequence, &st.chain_id);
+        let tx_bytes = sign_send_tx(&st.key_seed, st.hybrid.as_ref(), &req.address, st.amount, sequence, &st.chain_id);
         txhash = {
             let h = Sha256::digest(&tx_bytes);
             hex::encode_upper(h)
@@ -445,10 +643,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cap = env_u64("FAUCET_DAILY_CAP", 1000);
 
     let seed_bytes = faucet_seed(&seed);
-    let address = faucet_key(&seed_bytes)
-        .public_key()
-        .account_id(BECH32_PREFIX)?
-        .to_string();
+    // Hybrid (PQ) mode: FAUCET_MAYO_SK + FAUCET_MAYO_VARIANT switch the
+    // faucet account to the domain-separated hybrid address. That account
+    // must be funded BEFORE the env is set — the plain-secp balance does
+    // not carry over.
+    let hybrid = HybridSigner::new(&seed_bytes).map_err(|e| format!("hybrid setup: {e}"))?;
+    let address = match &hybrid {
+        Some(h) => h.address.clone(),
+        None => faucet_key(&seed_bytes)
+            .public_key()
+            .account_id(BECH32_PREFIX)?
+            .to_string(),
+    };
+    if hybrid.is_some() {
+        tracing::info!(address = %address, "hybrid (secp256k1+MAYO) drip mode enabled");
+    }
     let sequence = query_sequence(&grpc, &address).await.unwrap_or_else(|e| {
         eprintln!("warning: initial sequence query failed ({e}) — starting at 0; first failed drip will resync");
         0
@@ -464,6 +673,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = Arc::new(FaucetState {
         key_seed: seed_bytes,
+        hybrid,
         address,
         grpc,
         chain_id,

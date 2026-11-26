@@ -26,3 +26,10 @@ bytes = { workspace = true }
 axum = "0.7"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+
+# Hybrid secp256k1+MAYO signing (PQ drip mode: FAUCET_MAYO_SK env).
+# sriracha-mayo is the vendored AVX-safe crate (needs cmake + C toolchain
+# at build time — see build-ops-tools.yml needs_c_toolchain input).
+sriracha-mayo = "0.0.4"
+layer-std = { workspace = true }
+k256 = { version = "0.13", features = ["ecdsa"] }
