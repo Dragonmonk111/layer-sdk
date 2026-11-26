@@ -454,6 +454,7 @@ fn usage() -> ! {
          seal       --to <ed25519-pubhex> --in <f> --out <f> [--kem-to <mlkem768-pubhex>]\n\
          unseal     --seed <hex|@file> --in <f> --out <f>\n\
          kem-keygen --seed <hex|@file>   (prints your ML-KEM-768 pubkey for the roster)\n\
+         ed-pub     --seed <hex|@file>   (prints your ed25519 pubkey)\n\
          publish    --relay <url> --file <f> [--ttl-secs N] [--downloads N] [--put-token T]\n\
          fetch      <url> --out <f> [--unseal --seed <hex|@file>]\n\
          \n\
@@ -535,6 +536,15 @@ async fn main() {
             let seed = load_seed(&take(rest, "--seed").expect("--seed required"));
             let (_dk, ek) = kem_keys_from_seed(&seed);
             println!("{}", hex::encode(ek.as_bytes()));
+        }
+        "ed-pub" => {
+            use curve25519_dalek_ng::scalar::Scalar;
+            let seed = load_seed(&take(rest, "--seed").expect("--seed required"));
+            let s = Scalar::from_bytes_mod_order(x25519_scalar_from_ed_seed(&seed));
+            let ed_pub = (&s * &curve25519_dalek_ng::constants::ED25519_BASEPOINT_TABLE)
+                .compress()
+                .0;
+            println!("{}", hex::encode(ed_pub));
         }
         "unseal" => {
             let seed = load_seed(&take(rest, "--seed").expect("--seed required"));
