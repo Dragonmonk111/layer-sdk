@@ -44,9 +44,11 @@ fn print_usage() {
     eprintln!("Usage: hybrid-sign <subcommand> [flags]");
     eprintln!();
     eprintln!("Subcommands:");
-    eprintln!("  keygen    Generate a secp256k1 + MAYO keypair, print hybrid address");
-    eprintln!("  sign      Sign a MsgSend, print hex-encoded TxRaw bytes");
-    eprintln!("  raw-sign  Sign arbitrary pre-encoded TxBody bytes (--body-hex)");
+    eprintln!("  keygen      Generate a secp256k1 + MAYO keypair, print hybrid address");
+    eprintln!("  sign        Sign a MsgSend, print hex-encoded TxRaw bytes");
+    eprintln!("  raw-sign    Sign arbitrary pre-encoded TxBody bytes (--body-hex)");
+    eprintln!("  mayo-sign   Detached MAYO sig over raw msg bytes (--msg-hex)");
+    eprintln!("  mayo-verify Verify detached MAYO sig (--mayo-pk/--sig-hex/--msg-hex)");
     eprintln!();
     eprintln!("keygen flags:");
     eprintln!("  --variant <mayo1|mayo2|mayo3|mayo5>   MAYO parameter set (required)");
@@ -76,6 +78,9 @@ struct Flags {
     variant: Option<String>,
     secp_sk: Option<String>,
     mayo_sk: Option<String>,
+    mayo_pk: Option<String>,
+    sig_hex: Option<String>,
+    msg_hex: Option<String>,
     to: Option<String>,
     amount: Option<String>,
     body_hex: Option<String>,
@@ -104,6 +109,9 @@ fn parse_flags(args: &[String]) -> Result<Flags, String> {
             "--variant" => f.variant = Some(next_val(args, &mut i, "--variant")?),
             "--secp-sk" => f.secp_sk = Some(next_val(args, &mut i, "--secp-sk")?),
             "--mayo-sk" => f.mayo_sk = Some(next_val(args, &mut i, "--mayo-sk")?),
+            "--mayo-pk" => f.mayo_pk = Some(next_val(args, &mut i, "--mayo-pk")?),
+            "--sig-hex" => f.sig_hex = Some(next_val(args, &mut i, "--sig-hex")?),
+            "--msg-hex" => f.msg_hex = Some(next_val(args, &mut i, "--msg-hex")?),
             "--to" => f.to = Some(next_val(args, &mut i, "--to")?),
             "--amount" => f.amount = Some(next_val(args, &mut i, "--amount")?),
             "--body-hex" => f.body_hex = Some(next_val(args, &mut i, "--body-hex")?),
@@ -225,6 +233,49 @@ fn mayo_sign(variant: MayoVariant, seed: &[u8], message_hash: &[u8]) -> Result<V
         MayoVariant::Mayo3 => sign!(sriracha_mayo::Mayo3),
         MayoVariant::Mayo5 => sign!(sriracha_mayo::Mayo5),
     })
+}
+
+/// MAYO-sign arbitrary message bytes (not a tx sighash — used by off-chain
+/// evidence bundles that sign the Merkle root directly, like ed25519 does).
+fn cmd_mayo_sign(f: &Flags) -> Result<(), String> {
+    let variant = parse_variant(f.variant.as_deref().ok_or("--variant is required")?)?;
+    let mayo_seed = decode_hex(f.mayo_sk.as_deref().ok_or("--mayo-sk is required")?)?;
+    let msg = decode_hex(f.msg_hex.as_deref().ok_or("--msg-hex is required")?)?;
+    let sig = mayo_sign(variant, &mayo_seed, &msg)?;
+    let pk = mayo_pk_from_seed(variant, &mayo_seed)?;
+    println!("sig={}", hex::encode(sig));
+    println!("pubkey={}", hex::encode(pk));
+    Ok(())
+}
+
+/// Verify a detached MAYO signature over raw message bytes.
+/// Prints "valid" or "invalid"; invalid exits nonzero.
+fn cmd_mayo_verify(f: &Flags) -> Result<(), String> {
+    let variant = parse_variant(f.variant.as_deref().ok_or("--variant is required")?)?;
+    let pk_bytes = decode_hex(f.mayo_pk.as_deref().ok_or("--mayo-pk is required")?)?;
+    let sig_bytes = decode_hex(f.sig_hex.as_deref().ok_or("--sig-hex is required")?)?;
+    let msg = decode_hex(f.msg_hex.as_deref().ok_or("--msg-hex is required")?)?;
+
+    macro_rules! verify {
+        ($p:ty) => {{
+            let pk = sriracha_mayo::PublicKey::<$p>::try_from(pk_bytes.as_slice())
+                .map_err(|e| format!("invalid mayo pubkey: {:?}", e))?;
+            let sig = sriracha_mayo::Signature::<$p>::try_from(sig_bytes.as_slice())
+                .map_err(|e| format!("invalid mayo signature: {:?}", e))?;
+            sig.verify(&pk, &msg)
+        }};
+    }
+    let ok = match variant {
+        MayoVariant::Mayo1 => verify!(sriracha_mayo::Mayo1),
+        MayoVariant::Mayo2 => verify!(sriracha_mayo::Mayo2),
+        MayoVariant::Mayo3 => verify!(sriracha_mayo::Mayo3),
+        MayoVariant::Mayo5 => verify!(sriracha_mayo::Mayo5),
+    };
+    println!("{}", if ok { "valid" } else { "invalid" });
+    if !ok {
+        return Err("signature verification failed".to_string());
+    }
+    Ok(())
 }
 
 fn cmd_keygen(variant: MayoVariant) -> Result<(), String> {
@@ -423,6 +474,8 @@ fn main() {
         }
         "sign" => parse_flags(&args[1..]).and_then(cmd_sign),
         "raw-sign" => parse_flags(&args[1..]).and_then(cmd_raw_sign),
+        "mayo-sign" => parse_flags(&args[1..]).and_then(|f| cmd_mayo_sign(&f)),
+        "mayo-verify" => parse_flags(&args[1..]).and_then(|f| cmd_mayo_verify(&f)),
         other => Err(format!("unknown subcommand: {}", other)),
     };
     if let Err(e) = result {
