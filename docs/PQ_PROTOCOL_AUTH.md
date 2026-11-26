@@ -156,3 +156,36 @@ making it configurable is a config change in `key material`/`GenesisValidator`.
 - **2c**: light-client story for the PQ half (§6.1).
 - **Gate**: enable hybrid only after a devnet run shows fork-free finality with
   all validators on hybrid sigs.
+
+## 8. Status — shipped surfaces (2026-11-26)
+
+Phase 2 is **live in production**, not a design target:
+
+| Surface | Scheme | Status |
+|---|---|---|
+| Consensus votes + certs | BLS12-381 threshold + k-of-n MAYO2, AND'd | **Live** — `0x01` envelope on every finalized block (`app/slay3rd/src/hybrid_scheme.rs`) |
+| Cert envelope versioning | 1-byte tag (`0x00` legacy / `0x01` hybrid) | Live — future schemes enter as `0x02` without wire changes |
+| Account signatures | `PubKey::HybridSecp256k1Mayo` — spend requires BOTH halves | **Live on g1** — hybrid txs committed 2026-11-26; chain charges `GAS_COST_PQ_SIG_VALIDATION` |
+| Hybrid address space | domain-separated `junoclaw-hybrid-v1` derivation | Live — cannot collide with plain secp256k1 accounts |
+| State-sync anchors | verified against hybrid finality regardless of transport | Live |
+| Signing tooling | `tools/hybrid-sign` — keygen / sign / raw-sign / mayo-sign / mayo-verify | Built (needs cmake + C toolchain — Docker/CI only) |
+| Service signing | jc-faucet `--hybrid` env mode; bls-relayer `--jc-mayo-*` flags; clinical-evidence dual-signed bundles | In-tree, rolling out |
+| PQ signature verify | `junoclaw-mayo-verify` (pure Rust, WASM-ready) | Live — charges its own gas line |
+
+### Surfaces that remain classical (documented, not hidden)
+
+| Surface | Blast radius | Plan |
+|---|---|---|
+| ed25519 P2P transport auth | Session MITM/censorship — **cannot forge finalized state**: certs are hybrid-verified, state-sync anchors are finality-checked independent of transport | Track commonware upstream for a hybrid X25519+ML-KEM handshake; chain safety does not depend on it |
+| TLS on edge endpoints (faucet/API/explorer) | Session interception of public data | Deploy hybrid TLS groups when infra supports; not chain-forging |
+| X25519 ceremony file transit | Harvest-now on DKG dealing material | Move to hybrid KEM wrap before mainnet (see AGENTS.md trust ceiling) |
+| Plain secp256k1/ed25519 accounts | Still accepted by the app | Hybrid = documented default for new agent/service accounts; existing accounts migrate by rotation |
+
+### Design property worth stating plainly
+
+The composition is `max(classical, PQ)`, not `min`. If secp256k1 or BLS12-381
+falls to any future break — quantum or classical — MAYO still holds every
+finalized block and every hybrid account spend. If MAYO is found flawed, the
+classical halves still hold. We are not betting on a scheme; we are betting on
+a structure that survives scheme turnover, with a versioned envelope ready for
+whatever NIST certifies next.
